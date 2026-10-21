@@ -5,11 +5,11 @@ Thanks for helping improve Walkthrough Studio.
 ## Development
 
 ```bash
-./studio --no-open
+./studio --dev
 # → http://127.0.0.1:4747/
 ```
 
-Kit source lives under `kit/`. The Studio UI is static files in `kit/studio/` served by the CLI. After UI changes, refresh the browser (no rebuild step).
+Kit source lives under `kit/`. The Studio UI is static files in `kit/studio/` served by the CLI. In dev mode, saving those files reloads the browser (CSS updates in place). Saving `kit/lib/` or `kit/cli.mjs` restarts the server and reloads the page. Server logs and browser warnings stay in the terminal. A normal `./studio` has no watcher — refresh the browser yourself. Changing `scripts/studio.mjs` needs a new `./studio` process.
 
 ```bash
 cd kit

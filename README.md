@@ -153,10 +153,26 @@ The launcher:
 ./studio walkthrough-studio   # open a project
 ./studio --port 4750          # another port
 ./studio --no-open            # start without opening a browser
+./studio --dev                # live log, UI reload, server restart
 ./studio --help
 ```
 
 Stop with `Ctrl+C`. If the port is taken, stop the other Studio or pass `--port`.
+
+### Develop
+
+```bash
+./studio --dev
+./studio --dev --no-open
+```
+
+Dev mode keeps the server log in the terminal, including browser warnings and errors.
+
+- Saving a file in `kit/studio/` reloads the open Studio tab. CSS updates in place; HTML and JS reload the page.
+- Saving `kit/lib/` or `kit/cli.mjs` restarts the server, then reloads the browser once it is back.
+- Changing `scripts/studio.mjs` needs a fresh `./studio` process.
+
+A normal `./studio` stays quiet after the Ready card. The card lists each check on its own row, including how to start dev mode.
 
 ---
 

@@ -7,6 +7,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { promptLanguageLine, requireVideoLanguage } from './languages.mjs';
 import { PURPOSES, PURPOSE_IDS, resolvePurpose } from './narrative.mjs';
 import { BRANDS, VIDEOS, brandReadiness, scaffoldVideo, slugify, upsertDotEnv } from './project.mjs';
 
@@ -74,6 +75,7 @@ function placeholderBrand(id, { name, url, appUrl }) {
 export function createProject(input = {}) {
   const title = String(input.title || '').trim();
   if (!title) throw new Error('Give the video a title');
+  const language = requireVideoLanguage(input.language).code;
   const slug = slugify(input.slug || title);
   if (!slug) throw new Error('Could not derive a slug from the title');
   if (existsSync(join(VIDEOS, slug))) throw new Error(`A video called "${slug}" already exists`);
@@ -126,6 +128,7 @@ export function createProject(input = {}) {
     version: 1,
     createdAt: new Date().toISOString(),
     title,
+    language,
     product: String(input.product || '').trim(),
     audience: String(input.audience || '').trim(),
     outcome: String(input.outcome || '').trim(),
@@ -161,6 +164,7 @@ export function createProject(input = {}) {
   const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
   cfg.audience = brief.audience || cfg.audience;
   cfg.purpose = brief.purpose;
+  cfg.language = language;
   cfg.brand = brandId;
   cfg.record = { ...cfg.record, startUrl };
   cfg.env = env;
@@ -176,6 +180,7 @@ export function draftNote(brief) {
   return [
     `## Brief`,
     `Product: ${brief.product || brief.title}`,
+    promptLanguageLine(brief.language),
     `Audience: ${brief.audience || '—'}`,
     `After watching, the viewer can: ${brief.outcome || '—'}`,
     `Purpose: ${PURPOSES[brief.purpose]?.label || PURPOSES.overview.label} — follow its story spine`,

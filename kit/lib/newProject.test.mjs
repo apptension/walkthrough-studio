@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -9,7 +9,7 @@ process.env.WALKTHROUGH_BRANDS = join(root, 'brands');
 process.env.WALKTHROUGH_VIDEOS = join(root, 'videos');
 process.env.WALKTHROUGH_OUT = join(root, 'out');
 
-const { createProject } = await import('./newProject.mjs');
+const { createProject, draftNote } = await import('./newProject.mjs');
 const { brandReadiness, loadVideo } = await import('./project.mjs');
 const { buildPlates } = await import('./plates.mjs');
 
@@ -31,6 +31,51 @@ test('new projects use an unrenderable neutral brand until discovery completes',
   assert.equal(brand.colors.gold, '#94a3b8');
   assert.equal(brandReadiness('acme').ready, false);
   assert.throws(() => buildPlates(loadVideo(result.slug)), /Brand pack "acme" is not ready/);
+});
+
+test('video language is stored, and the brief wins when the config copy disagrees', () => {
+  const result = createProject({
+    title: 'Polish tour',
+    language: 'pl',
+    audience: 'Admins',
+    brand: { mode: 'new', name: 'Polski', url: 'https://example.com' },
+    app: { startUrl: 'https://example.com' },
+    story: { mustShow: ['Home'] },
+  });
+  const dir = join(root, 'videos', result.slug);
+  const brief = JSON.parse(readFileSync(join(dir, 'brief.json'), 'utf8'));
+  const cfg = JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8'));
+  assert.equal(brief.language, 'pl');
+  assert.equal(cfg.language, 'pl');
+  assert.match(draftNote(brief), /Video language: Polish \(pl\)/);
+  assert.match(draftNote(brief), /in Polish/);
+  cfg.language = 'en';
+  writeFileSync(join(dir, 'video.config.json'), JSON.stringify(cfg));
+  assert.equal(loadVideo(result.slug).config.language, 'pl');
+});
+
+test('a missing video language is English and an unknown code is rejected', () => {
+  const result = createProject({
+    title: 'English tour',
+    audience: 'Admins',
+    brand: { mode: 'new', name: 'Angielski', url: 'https://example.com' },
+    app: { startUrl: 'https://example.com' },
+    story: { mustShow: ['Home'] },
+  });
+  const brief = JSON.parse(readFileSync(join(root, 'videos', result.slug, 'brief.json'), 'utf8'));
+  assert.equal(brief.language, 'en');
+  assert.equal(loadVideo(result.slug).config.language, 'en');
+  assert.throws(
+    () =>
+      createProject({
+        title: 'Unknown language',
+        language: 'xx',
+        brand: { mode: 'new', name: 'Nope', url: 'https://example.com' },
+        app: { startUrl: 'https://example.com' },
+        story: { mustShow: ['Home'] },
+      }),
+    /Eleven v4/,
+  );
 });
 
 test('placeholder packs cannot be selected as an existing brand', () => {

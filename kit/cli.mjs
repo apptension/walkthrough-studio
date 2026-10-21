@@ -58,7 +58,7 @@
  *                                          add --deliver to build captions + poster + handoff after validate
  *   node cli.mjs manual                    manuals/<set>.html from every video with a `manual` block
  *   node cli.mjs publish                   copy delivered lessons into the webapp Help Center (public/help + content json)
- *   node cli.mjs studio [slug] [--port N]  local web panel: player, timeline, captions, QC, versions, critic, agent
+ *   node cli.mjs studio [slug] [--port N] [--dev]  local web panel: player, timeline, captions, QC, versions, critic, agent
  *   node cli.mjs snapshot <slug> [--label] save a version (delivery + settings) under tmp/videos/<slug>/versions/
  *
  * Env: WALKTHROUGH_OUT (default <repo>/tmp/videos), WALKTHROUGH_VIDEOS, WALKTHROUGH_BRANDS.
@@ -886,8 +886,9 @@ async function main() {
       const studioArgs = [slug, ...rest].filter(Boolean);
       const portFlag = studioArgs.indexOf('--port');
       const port = Number(portFlag >= 0 ? studioArgs[portFlag + 1] : 4747) || 4747;
+      const dev = studioArgs.includes('--dev') || process.env.WALKTHROUGH_DEV === '1';
       const openSlug = studioArgs.find((a, i) => !String(a).startsWith('-') && i !== portFlag + 1) || null;
-      await startStudio({ port, openSlug });
+      await startStudio({ port, openSlug, dev });
       // keep process alive
       await new Promise(() => {});
       return;

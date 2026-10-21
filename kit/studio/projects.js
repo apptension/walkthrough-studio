@@ -6,6 +6,7 @@ import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
 import { draftFromDescription } from './shortBrief.js';
 import { maskCredentials, revisePlan } from './briefRevise.js';
+import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = 5;
@@ -26,6 +27,51 @@ export function initProjects(ctx) {
   const val = (name) => form.elements[name]?.value?.trim() || '';
   const checked = (name) => Boolean(form.elements[name]?.checked);
   const radio = (name) => form.querySelector(`input[name="${name}"]:checked`)?.value || '';
+
+  function fillLanguageOptions() {
+    const select = form.elements.language;
+    if (!select || select.options.length) return;
+    for (const lang of VIDEO_LANGUAGES) {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = lang.name;
+      opt.title = lang.code;
+      select.append(opt);
+    }
+    select.value = 'en';
+  }
+
+  /** The same control sits on the short brief and on Basics. */
+  function placeLanguage() {
+    const field = $('languageField');
+    if (!field) return;
+    const host = form.dataset.mode === 'short' ? $('languageSlotShort') : $('languageSlotBasics');
+    if (host && field.parentElement !== host) host.append(field);
+  }
+
+  function filterLanguages() {
+    const select = form.elements.language;
+    const filter = $('languageFilter');
+    if (!select || !filter || document.documentElement.classList.contains('has-custom-select')) return;
+    const q = filter.value.trim().toLowerCase();
+    for (const opt of select.options) {
+      const hay = `${opt.textContent} ${opt.value}`.toLowerCase();
+      opt.hidden = Boolean(q) && opt.value !== select.value && !hay.includes(q);
+    }
+  }
+
+  fillLanguageOptions();
+
+  const PROJECT_DIALOG_SUB_NEW =
+    'The agent drafts the script from this brief. Nothing is recorded until you approve it.';
+  const PROJECT_DIALOG_SUB_SETTINGS = 'Edit the brief, then save to replan the script from your changes.';
+
+  function setProjectDialogMode(mode) {
+    const settings = mode === 'settings';
+    dialog.classList.toggle('is-project-settings', settings);
+    const sub = $('projectDialogSub');
+    if (sub) sub.textContent = settings ? PROJECT_DIALOG_SUB_SETTINGS : PROJECT_DIALOG_SUB_NEW;
+  }
 
   function clearError() {
     $('wizardError').hidden = true;
@@ -68,6 +114,7 @@ export function initProjects(ctx) {
     form.scrollTop = 0;
     if (step === 3) paintPlateStills();
     if (step === STEPS - 1) renderSummary();
+    placeLanguage();
     if (focus && step !== 3) {
       form
         .querySelector(`fieldset[data-step="${step}"] input:not([type=radio]):not([type=checkbox]), fieldset[data-step="${step}"] textarea`)
@@ -87,6 +134,7 @@ export function initProjects(ctx) {
     $('wizardStepMeta').textContent = 'One description';
     $('wizardProgressBar').style.width = '8%';
     clearError();
+    placeLanguage();
   }
 
   function applyDraft(draft) {
@@ -148,6 +196,7 @@ export function initProjects(ctx) {
         if (!url(val('brandUrl') || val('marketingUrl'))) return ['Brand website must be a full https:// URL.', 'brandUrl'];
       } else if (!val('brandId')) return ['Pick a brand pack, or discover a new one.', 'brandId'];
     }
+    if (n === 0 && !videoLanguage(val('language'))) return ['Choose a video language.', 'language'];
     if (n === 1) {
       if (!url(val('startUrl'))) return ['Start URL must be a full https:// URL.', 'startUrl'];
       for (const k of ['appUrl', 'marketingUrl']) {
@@ -162,6 +211,7 @@ export function initProjects(ctx) {
     const isNew = radio('brandMode') === 'new';
     return {
       title: val('title'),
+      language: val('language') || 'en',
       slug: val('slug') || undefined,
       product: val('product'),
       audience: val('audience'),
@@ -214,6 +264,7 @@ export function initProjects(ctx) {
         step: 0,
         rows: [
           ['Title', p.title],
+          ['Language', resolveVideoLanguage(p.language).name],
           ['Audience', p.audience],
           ['Outcome', p.outcome],
           ['Story', form.querySelector('input[name="purpose"]:checked')?.dataset.label || p.purpose],
@@ -419,6 +470,10 @@ export function initProjects(ctx) {
       if (el && value != null) el.value = value;
     };
     set('title', masked.title || '');
+    if (form.elements.language) form.elements.language.value = resolveVideoLanguage(masked.language).code;
+    const filter = $('languageFilter');
+    if (filter) filter.value = '';
+    filterLanguages();
     set('product', masked.product || '');
     set('audience', masked.audience || '');
     set('outcome', masked.outcome || '');
@@ -481,6 +536,7 @@ export function initProjects(ctx) {
       if (dialog.open) dialog.close();
       if (form.elements.slug) form.elements.slug.disabled = false;
       $('projectDialogTitle').textContent = 'New video';
+      setProjectDialogMode('new');
       await openVideo(slug);
       openScript();
     } catch (err) {
@@ -505,6 +561,7 @@ export function initProjects(ctx) {
     form.dataset.mode = 'settings';
     fillFromBrief(settingsBrief, video.slug);
     $('projectDialogTitle').textContent = 'Project settings';
+    setProjectDialogMode('settings');
     showStep(0);
     dialog.showModal();
   }
@@ -516,6 +573,7 @@ export function initProjects(ctx) {
     }
     if (form.elements.slug) form.elements.slug.disabled = false;
     $('projectDialogTitle').textContent = 'New video';
+    setProjectDialogMode('new');
     settingsBrief = null;
     try {
       const { brands } = await api('/api/brands');
@@ -570,6 +628,7 @@ export function initProjects(ctx) {
     } else showStep(step + 1);
   }
 
+  $('languageFilter')?.addEventListener('input', filterLanguages);
   form.addEventListener('change', syncConditional);
   form.addEventListener('input', (e) => {
     if (e.target.getAttribute('aria-invalid') === 'true') {
@@ -579,7 +638,7 @@ export function initProjects(ctx) {
   });
   form.addEventListener('submit', (e) => e.preventDefault());
   form.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.matches('input:not([type=checkbox]):not([type=radio])')) {
+    if (e.key === 'Enter' && e.target.matches('input:not([type=checkbox]):not([type=radio])') && !e.target.classList.contains('sel-search') && !e.target.classList.contains('lang-filter')) {
       e.preventDefault();
       next();
     }

@@ -129,6 +129,8 @@ import {
   writeBranchIdeas,
 } from './branch.mjs';
 import { createProject, draftNote } from './newProject.mjs';
+import { resolveVideoLanguage } from './languages.mjs';
+import { createDevHub, injectDevClient } from './devServer.mjs';
 import { brandReadiness, listBrands, listVideos, loadVideo, OUT_ROOT } from './project.mjs';
 import { suggestPlates, applyPlateSuggestions } from './suggestPlates.mjs';
 import { listVersions, restoreVersion, snapshotVersion, versionMediaPath } from './versions.mjs';
@@ -341,6 +343,7 @@ function videoSummary(slug) {
     slug,
     title: video.config.title,
     audience: video.config.audience || '',
+    language: resolveVideoLanguage(video.config.language),
     brand: video.config.brand,
     brandFoundation: {
       name: video.brand.name || video.config.brand,
@@ -417,6 +420,8 @@ function videoSummary(slug) {
       vttUrl: existsSync(vtt) ? `/media/${slug}/captions/${slug}.vtt` : null,
       cueCount: captionsMeta?.cueCount || null,
       hash: captionsMeta?.hash || null,
+      language: resolveVideoLanguage(captionsMeta?.language || video.config.language).code,
+      languageName: resolveVideoLanguage(captionsMeta?.language || video.config.language).name,
     },
     qc: qc
       ? {
@@ -1441,14 +1446,18 @@ async function handleApi(req, res, url) {
 
   if (rest === '/brief' && req.method === 'POST') {
     const body = await readBody(req);
-    const current = readJsonSafe(join(video.dir, 'brief.json')) || {};
-    const plan = revisePlan(current, body);
-    if (!plan.changed.length) return json(res, 200, { ok: true, plan, revision: null });
-    const secrets = [body.app?.password].filter((value) => value && String(value).length >= 4);
-    const revision = saveSourceRevision(video, { secrets });
-    const written = applyBriefRevision(video, nextBrief(current, body), { secrets });
-    const stored = storeCredential(video, { email: body.app?.email, password: body.app?.password });
-    return json(res, 200, { ok: true, plan, revision: revision.id, brief: written, stored: stored.includes(`${video.slug.replace(/-/g, '_').toUpperCase()}_PASSWORD`) ? ['password'] : [] });
+    try {
+      const current = readJsonSafe(join(video.dir, 'brief.json')) || {};
+      const plan = revisePlan(current, body);
+      if (!plan.changed.length) return json(res, 200, { ok: true, plan, revision: null });
+      const secrets = [body.app?.password].filter((value) => value && String(value).length >= 4);
+      const revision = saveSourceRevision(video, { secrets });
+      const written = applyBriefRevision(video, nextBrief(current, body), { secrets });
+      const stored = storeCredential(video, { email: body.app?.email, password: body.app?.password });
+      return json(res, 200, { ok: true, plan, revision: revision.id, brief: written, stored: stored.includes(`${video.slug.replace(/-/g, '_').toUpperCase()}_PASSWORD`) ? ['password'] : [] });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
   }
 
   if (rest === '/script/approve' && req.method === 'POST') {
@@ -2477,7 +2486,7 @@ function serveMedia(req, res, url) {
   return true;
 }
 
-function serveStatic(req, res, url) {
+function serveStatic(req, res, url, { dev = false } = {}) {
   let rel = url.pathname === '/' ? '/index.html' : url.pathname;
   if (rel.includes('..')) {
     res.writeHead(400);
@@ -2487,13 +2496,19 @@ function serveStatic(req, res, url) {
   const file = join(STUDIO_DIR, rel.replace(/^\//, ''));
   if (!existsSync(file) || !file.startsWith(STUDIO_DIR)) return false;
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
-  const fresh = /\.(html|js|css|mjs)$/i.test(file);
-  res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': fresh ? 'no-store' : 'public, max-age=3600' });
-  res.end(readFileSync(file));
+  const raw = readFileSync(file);
+  const payload = dev && /\.html?$/i.test(file) ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
+  const fresh = dev || /\.(html|js|css|mjs)$/i.test(file);
+  res.writeHead(200, {
+    'Content-Type': mime,
+    'Content-Length': payload.length,
+    'Cache-Control': fresh ? 'no-store' : 'public, max-age=3600',
+  });
+  res.end(payload);
   return true;
 }
 
-export async function startStudio({ port = 4747, openSlug = null } = {}) {
+export async function startStudio({ port = 4747, openSlug = null, dev = false } = {}) {
   // Surface fatal async failures — otherwise a rejected promise can kill the process with no log.
   if (!globalThis.__wtStudioHandlers) {
     globalThis.__wtStudioHandlers = true;
@@ -2501,9 +2516,12 @@ export async function startStudio({ port = 4747, openSlug = null } = {}) {
     process.on('unhandledRejection', (err) => console.error('Studio unhandledRejection', err));
   }
 
+  const devHub = dev ? createDevHub({ studioDir: STUDIO_DIR, kitDir: join(STUDIO_DIR, '..') }) : null;
+
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || '/', `http://127.0.0.1:${port}`);
+      if (devHub && (await devHub.handle(req, res, url))) return;
       if (url.pathname.startsWith('/api/')) {
         await handleApi(req, res, url);
         return;
@@ -2511,7 +2529,7 @@ export async function startStudio({ port = 4747, openSlug = null } = {}) {
       if (url.pathname.startsWith('/media/') || url.pathname.startsWith('/version-media/')) {
         if (serveMedia(req, res, url)) return;
       }
-      if (serveStatic(req, res, url)) return;
+      if (serveStatic(req, res, url, { dev: Boolean(devHub) })) return;
       res.writeHead(404);
       res.end('Not found');
     } catch (err) {

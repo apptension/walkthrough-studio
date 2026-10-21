@@ -371,6 +371,33 @@ export function initEditor(ctx) {
     const atmLabels = { waves: 'Waves', mesh: 'Mesh', blobs: 'Blobs', none: 'None' };
     const seatLabels = { 'bottom-center': 'Bottom center', 'bottom-left': 'Bottom left', 'bottom-right': 'Bottom right' };
     const kindLabel = kind === 'caption' ? 'captions' : 'chapters';
+    // Backdrop: the solid fill behind the atmosphere. `auto` = template fill, `none` = clear,
+    // a brand role or a custom #hex = that colour at `backdropOpacity` %.
+    const backdrops = cat.backdrops || [
+      { id: 'auto', label: 'Auto' },
+      { id: 'none', label: 'None' },
+      { id: 'ink', label: 'Ink' },
+      { id: 'surface', label: 'Surface' },
+      { id: 'gold', label: 'Accent' },
+      { id: 'amber', label: 'Secondary' },
+      { id: 'teal', label: 'Support' },
+      { id: 'custom', label: 'Custom…' },
+    ];
+    const bd = String(slot.backdrop || 'auto');
+    const bdCustom = bd.startsWith('#');
+    const bdChoice = bdCustom ? 'custom' : bd;
+    const bdColored = bdChoice !== 'auto' && bdChoice !== 'none';
+    const brandHex = (role) => state.video?.direction?.colors?.[role] || state.video?.brandFoundation?.colors?.[role] || null;
+    const bdHex = bdCustom ? bd : bdColored ? brandHex(bd) || brandHex('ink') || '#0a0a0a' : brandHex('ink') || '#0a0a0a';
+    const bdAlpha = Math.max(0, Math.min(100, Math.round(Number(slot.backdropOpacity ?? 100))));
+    const backdropRows =
+      `<div class="ins-row"><span>Backdrop</span><div class="ins-backdrop">` +
+      `<select class="ins-select" data-overlay-backdrop aria-label="Backdrop colour behind the background" title="Solid fill behind the background. Auto keeps the template’s own fill, None lets the recording show through, or pick a brand colour / custom colour and set its opacity.">${opt(backdrops, bdChoice)}</select>` +
+      `<span class="ins-swatch${bdColored ? '' : ' is-off'}" style="--sw:${escapeHtml(bdHex)}" title="${bdColored ? 'Pick a custom colour' : 'Pick a colour to paint a backdrop'}">` +
+      `<input type="color" value="${escapeHtml(bdHex)}" data-overlay-backdrop-color aria-label="Custom backdrop colour" /></span></div></div>` +
+      (bdColored
+        ? `<label class="ins-row"><span>Opacity</span><div class="ins-inline-range"><input type="range" min="0" max="100" step="5" value="${bdAlpha}" data-overlay-backdrop-opacity aria-label="Backdrop opacity" /><output>${bdAlpha}%</output></div></label>`
+        : '');
     const toggles =
       kind === 'chapter'
         ? row(
@@ -401,6 +428,7 @@ export function initEditor(ctx) {
     return (
       row('Preset', `<select class="ins-select" data-overlay-preset>${opt(presets, look.preset || 'plateMatch')}</select>`) +
       row('Background', `<select class="ins-select" data-overlay="atmosphere">${opt(atmospheres, slot.atmosphere || 'waves', atmLabels)}</select>`) +
+      backdropRows +
       row('Entrance', `<select class="ins-select" data-overlay="energy">${opt(energies, slot.energy || 'clear', energyLabels)}</select>`) +
       toggles +
       `<p class="ins-note subtle">Look applies to all ${kindLabel} (same as Direction → Live cards). Timing above is this card only. Double-click the block to edit copy.</p>`
@@ -5245,6 +5273,38 @@ export function initEditor(ctx) {
       const key = el.dataset.overlay;
       if (!key) return;
       saveCardOverlays({ [cardKind]: { [key]: el.value } }, `${cardKind} · ${key}`);
+    });
+    on('[data-overlay-backdrop]', 'change', (el) => {
+      if (!cardKind) return;
+      const v = el.value;
+      if (v === 'custom') {
+        // Hand off to the swatch; the colour input's change saves the hex.
+        const picker = root.querySelector('[data-overlay-backdrop-color]');
+        if (picker) {
+          picker.click();
+          return;
+        }
+      }
+      saveCardOverlays({ [cardKind]: { backdrop: v === 'auto' ? null : v } }, `${cardKind} · backdrop ${v}`);
+    });
+    on('[data-overlay-backdrop-color]', 'input', (el) => {
+      const sw = el.closest('.ins-swatch');
+      if (sw) {
+        sw.style.setProperty('--sw', el.value);
+        sw.classList.remove('is-off');
+      }
+    });
+    on('[data-overlay-backdrop-color]', 'change', (el) => {
+      if (!cardKind) return;
+      saveCardOverlays({ [cardKind]: { backdrop: el.value } }, `${cardKind} · backdrop ${el.value}`);
+    });
+    on('[data-overlay-backdrop-opacity]', 'input', (el) => {
+      const out = el.parentElement?.querySelector('output');
+      if (out) out.textContent = `${el.value}%`;
+    });
+    on('[data-overlay-backdrop-opacity]', 'change', (el) => {
+      if (!cardKind) return;
+      saveCardOverlays({ [cardKind]: { backdropOpacity: Number(el.value) } }, `${cardKind} · backdrop ${el.value}%`);
     });
     on('[data-overlay-bool]', 'click', (el) => {
       if (!cardKind) return;

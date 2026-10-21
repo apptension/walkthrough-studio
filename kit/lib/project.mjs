@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { applyDirection } from './direction.mjs';
 import { loadDotEnv, refreshDotEnv } from './dotenv.mjs';
 import { DELIVERY } from './format.mjs';
+import { resolveVideoLanguage } from './languages.mjs';
 
 export { loadDotEnv, refreshDotEnv };
 
@@ -154,6 +155,16 @@ const DEFAULTS = {
   env: {},
 };
 
+function readBriefLanguage(dir) {
+  const path = join(dir, 'brief.json');
+  if (!existsSync(path)) return '';
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')).language || '';
+  } catch {
+    return '';
+  }
+}
+
 export function loadVideo(slug) {
   if (!slug) throw new Error('Missing <slug>. Known videos: ' + (listVideos().join(', ') || 'none'));
   const dir = join(VIDEOS, slug);
@@ -168,6 +179,8 @@ export function loadVideo(slug) {
     record: { ...DEFAULTS.record, ...raw.record },
     env: { ...DEFAULTS.env, ...raw.env },
     slug,
+    // Brief is the project setting. The config copy is a fallback when no brief exists yet.
+    language: resolveVideoLanguage(readBriefLanguage(dir) || raw.language).code,
   };
   for (const [key, value] of Object.entries(config.env)) {
     if (typeof value === 'string' && value.startsWith('$')) {

@@ -6,6 +6,7 @@
  *   ./studio walkthrough-studio
  *   ./studio --port 4750
  *   ./studio --no-open
+ *   ./studio --dev
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
@@ -13,62 +14,34 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdout as output } from 'node:process';
+import { launchStudio } from './studioSession.mjs';
+import { box, createTheme, formatCheckRow, frameWidth, visibleWidth, wrapAnsi } from './studioDisplay.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(ROOT, 'kit');
 const MIN_NODE = [20, 0, 0];
 const MIN_NPM = [11, 17, 0];
-const LABEL_W = 14;
 
 const args = process.argv.slice(2);
 const noOpen = args.includes('--no-open');
+const dev = args.includes('--dev');
 const portFlag = args.indexOf('--port');
 const port = Number(portFlag >= 0 ? args[portFlag + 1] : 4747) || 4747;
 const openSlug =
   args.find((a, i) => !String(a).startsWith('-') && i !== portFlag + 1) || null;
 
 const tty = Boolean(output.isTTY);
-const useColor =
-  tty &&
-  !process.env.NO_COLOR &&
-  process.env.TERM !== 'dumb' &&
-  process.env.FORCE_COLOR !== '0';
-
-const ansi = (code) => (useColor ? `\x1b[${code}m` : '');
-const c = {
-  reset: ansi(0),
-  bold: ansi(1),
-  dim: ansi(2),
-  italic: ansi(3),
-  under: ansi(4),
-  red: ansi(31),
-  green: ansi(32),
-  amber: ansi(33),
-  soft: ansi(90),
-  ink: ansi(37),
-  // warm film accent — not purple
-  accent: useColor ? '\x1b[38;5;216m' : '',
-  line: useColor ? '\x1b[38;5;240m' : '',
-  ok: useColor ? '\x1b[38;5;114m' : '',
-  warn: useColor ? '\x1b[38;5;178m' : '',
-  bad: useColor ? '\x1b[38;5;203m' : '',
-};
+const c = createTheme(
+  tty && !process.env.NO_COLOR && process.env.TERM !== 'dumb' && process.env.FORCE_COLOR !== '0'
+);
 
 const startedAt = Date.now();
-const notes = []; // soft warnings collected during checks
-let agentCheck = null; // result of checkAgents() for the Ready card
+const notes = [];
+let agentCheck = null;
+let audioDetail = null;
 let spinnerTimer = null;
 let spinnerFrame = 0;
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
-function stripAnsi(s) {
-  return String(s).replace(/\x1b\[[0-9;]*m/g, '');
-}
-
-function padLabel(label) {
-  const plain = stripAnsi(label);
-  return label + ' '.repeat(Math.max(0, LABEL_W - plain.length));
-}
 
 function write(msg = '') {
   output.write(msg + (msg.endsWith('\n') ? '' : '\n'));
@@ -78,44 +51,30 @@ function writeErr(msg = '') {
   process.stderr.write(msg + (msg.endsWith('\n') ? '' : '\n'));
 }
 
-function hr(width = 44) {
-  return `${c.line}${'─'.repeat(width)}${c.reset}`;
-}
-
-function box(lines, { width = 48 } = {}) {
-  const inner = width - 4;
-  const top = `${c.line}┌${'─'.repeat(width - 2)}┐${c.reset}`;
-  const bot = `${c.line}└${'─'.repeat(width - 2)}┘${c.reset}`;
-  const body = lines.map((line) => {
-    const plain = stripAnsi(line);
-    const pad = Math.max(0, inner - plain.length);
-    return `${c.line}│${c.reset} ${line}${' '.repeat(pad)} ${c.line}│${c.reset}`;
-  });
-  return [top, ...body, bot].join('\n');
-}
-
 function section(title) {
   write();
   write(`${c.soft}${c.bold}${title}${c.reset}`);
 }
 
 function row(label, status, detail = '') {
-  const glyph =
-    status === 'ok'
-      ? `${c.ok}●${c.reset}`
-      : status === 'warn'
-        ? `${c.warn}●${c.reset}`
-        : status === 'bad'
-          ? `${c.bad}●${c.reset}`
-          : status === 'skip'
-            ? `${c.soft}○${c.reset}`
-            : `${c.soft}·${c.reset}`;
-  const detailPart = detail ? `  ${c.soft}${detail}${c.reset}` : '';
-  write(`  ${glyph}  ${padLabel(label)}${detailPart}`);
+  write(
+    formatCheckRow({
+      theme: c,
+      columns: output.columns || 100,
+      label,
+      status,
+      detail,
+    })
+  );
 }
 
 function tip(msg) {
-  write(`     ${c.soft}${msg}${c.reset}`);
+  const cols = output.columns || 100;
+  const head = '     ';
+  const lines = wrapAnsi(`${c.soft}${msg}${c.reset}`, Math.max(16, cols - head.length));
+  lines.forEach((line, index) => {
+    write(index === 0 ? head + line : `${' '.repeat(head.length)}${line}`);
+  });
 }
 
 function note(msg, fix) {
@@ -123,26 +82,31 @@ function note(msg, fix) {
 }
 
 function banner() {
+  const subtitle = dev ? 'check → setup → launch → watch' : 'check → setup → launch';
+  const project = openSlug ? `   ${c.soft}·${c.reset}   ${openSlug}` : '';
   write();
   write(
     box(
       [
-        `${c.bold}${c.accent}Walkthrough Studio${c.reset}`,
-        `${c.soft}check → setup → launch${c.reset}${openSlug ? `  ${c.soft}·${c.reset}  ${c.ink}${openSlug}${c.reset}` : ''}`,
+        `${c.bold}${c.accent}Walkthrough Studio${c.reset}${dev ? `   ${c.accent}dev${c.reset}` : ''}`,
+        `${c.soft}${subtitle}${c.reset}${project}`,
       ],
-      { width: 48 }
+      { width: frameWidth(output.columns), theme: c }
     )
   );
 }
 
 function footerFail(fixes) {
   write();
-  write(hr());
   write(`${c.bad}${c.bold}Couldn't start Studio${c.reset}`);
   write(`${c.soft}Fix the items below, then run ${c.reset}${c.bold}./studio${c.reset}${c.soft} again.${c.reset}`);
   write();
-  fixes.forEach((f, i) => {
-    write(`  ${c.accent}${i + 1}.${c.reset}  ${f}`);
+  const cols = output.columns || 100;
+  fixes.forEach((fix, index) => {
+    const head = `  ${c.accent}${String(index + 1).padStart(2, ' ')}.${c.reset}  `;
+    const lines = wrapAnsi(fix, Math.max(16, cols - visibleWidth(head)));
+    const indent = ' '.repeat(visibleWidth(head));
+    lines.forEach((line, lineIndex) => write(lineIndex === 0 ? head + line : indent + line));
   });
   write();
 }
@@ -150,9 +114,13 @@ function footerFail(fixes) {
 function printNotes() {
   if (!notes.length) return;
   section('Notes');
-  for (const n of notes) {
-    write(`  ${c.warn}!${c.reset}  ${n.msg}`);
-    if (n.fix) tip(n.fix);
+  const cols = output.columns || 100;
+  for (const item of notes) {
+    const head = `  ${c.warn}!${c.reset}  `;
+    const lines = wrapAnsi(item.msg, Math.max(16, cols - visibleWidth(head)));
+    const indent = ' '.repeat(visibleWidth(head));
+    lines.forEach((line, index) => write(index === 0 ? head + line : indent + line));
+    if (item.fix) tip(item.fix);
   }
 }
 
@@ -161,7 +129,7 @@ function startSpinner(label) {
   if (!tty) return; // final row is printed by stopSpinner only
   const tick = () => {
     const frame = SPINNER[spinnerFrame++ % SPINNER.length];
-    output.write(`\r  ${c.accent}${frame}${c.reset}  ${padLabel(label)}${c.soft}working${c.reset}   `);
+    output.write(`\r\x1b[2K  ${c.accent}${frame}${c.reset}  ${label.padEnd(14, ' ')}${c.soft}working${c.reset}`);
   };
   tick();
   spinnerTimer = setInterval(tick, 80);
@@ -356,19 +324,24 @@ function ensureEnv() {
   if (st.state === 'missing') {
     if (!st.example) {
       row('env', 'warn', 'no .env.example');
+      audioDetail = { label: 'Audio', value: 'no .env', tone: 'warn' };
       return true;
     }
     copyFileSync(join(KIT, '.env.example'), join(KIT, '.env'));
     row('env', 'ok', 'created kit/.env');
+    audioDetail = { label: 'Audio', value: 'no API key', tone: 'warn' };
     note('Add ELEVENLABS_API_KEY for voice, music, and Regenerate', 'edit kit/.env  ·  or set WALKTHROUGH_AUDIO_STUB=1');
     return true;
   }
   if (st.keyed) {
     row('env', 'ok', 'ElevenLabs key set');
+    audioDetail = { label: 'Audio', value: 'ElevenLabs key', tone: 'ok' };
   } else if (st.stub) {
     row('env', 'ok', 'audio stub on');
+    audioDetail = { label: 'Audio', value: 'stub on', tone: 'ok' };
   } else {
     row('env', 'warn', 'no API key');
+    audioDetail = { label: 'Audio', value: 'no API key', tone: 'warn' };
     note('Studio UI works without a key; voice / music / Regenerate need one', 'ELEVENLABS_API_KEY in kit/.env  ·  or WALKTHROUGH_AUDIO_STUB=1');
   }
   return true;
@@ -421,210 +394,36 @@ async function checkAgents() {
   return status;
 }
 
-function agentReadyMeta(status, fallbackLine) {
-  if (status) {
-    const parts = [];
-    for (const key of ['cursor', 'claude']) {
-      const r = status.runners[key];
-      if (!r.available) continue;
-      const name = key === 'cursor' ? 'Cursor' : 'Claude';
-      if (status.ready && status.provider === key) parts.push(`${name} ready`);
-      else if (r.authenticated && !r.soft) parts.push(`${name} ready`);
-      else parts.push(`${name} needs login`);
-    }
-    if (parts.length) {
-      return {
-        status: status.ready ? 'ok' : 'warn',
-        text: parts.join(' · '),
-      };
-    }
-  }
-  return agentShort(fallbackLine);
-}
-
-function parseStudioBoot(text) {
-  const url = text.match(/Walkthrough Studio → (http:\/\/127\.0\.0\.1:\d+\/\S*)/)?.[1] || null;
-  const agentLine = text.match(/agent CLI:\s*(.+)/)?.[1]?.trim() || null;
-  const videosMatch = text.match(/videos:\s*(.+?)\s*[·•]\s*out:/);
-  const videosLine = videosMatch?.[1]?.trim() || null;
-  let videoCount = 0;
-  if (videosLine && videosLine !== '(none)') {
-    videoCount = videosLine.split(',').map((s) => s.trim()).filter(Boolean).length;
-  }
-  // URL prints first; agent + videos follow on the next ticks — wait for a full banner.
-  const complete = Boolean(url && agentLine && videosLine !== null);
-  return { url, agentLine, videoCount, complete };
-}
-
-function agentShort(line) {
-  if (!line) return null;
-  if (line.startsWith('ready')) {
-    // Keep "ready · Cursor agent …" compact for the Ready card.
-    const short = line
-      .replace(/^ready\s*·\s*/i, 'ready · ')
-      .replace(/\s*\(.*?\)/g, '')
-      .replace(/\s*·\s*.*also available.*$/i, '');
-    return { status: 'ok', text: short.trim() || 'ready' };
-  }
-  if (line.includes('not found')) return { status: 'warn', text: 'not installed' };
-  if (/claude/i.test(line) && /login|anthropic/i.test(line)) return { status: 'warn', text: 'Claude login needed' };
-  return { status: 'warn', text: 'needs login' };
+function clearSpinner() {
+  if (!spinnerTimer) return;
+  clearInterval(spinnerTimer);
+  spinnerTimer = null;
+  if (tty) output.write('\r\x1b[2K');
 }
 
 async function launch() {
-  if (!portFree(port)) {
-    section('Launch');
-    row('port', 'bad', `${port} in use`);
-    footerFail([
-      `Stop the other Studio (Ctrl+C in that terminal), or`,
-      `Use another port:  ${c.bold}./studio --port 4750${c.reset}`,
-    ]);
-    process.exit(1);
-  }
-
-  section('Launch');
-  startSpinner('server');
-
-  const studioArgs = ['cli.mjs', 'studio', '--port', String(port)];
-  if (openSlug) studioArgs.push(openSlug);
-
-  const child = spawn(process.execPath, studioArgs, {
-    cwd: KIT,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env,
+  await launchStudio({
+    port,
+    dev,
+    noOpen,
+    openSlug,
+    theme: c,
+    kit: KIT,
+    nodePath: process.execPath,
+    startedAt,
+    getAgentCheck: () => agentCheck,
+    getAudioDetail: () => audioDetail,
+    row,
+    section,
+    printNotes,
+    startSpinner,
+    stopSpinner,
+    clearSpinner,
+    footerFail,
+    write,
+    openBrowser,
+    portFree,
   });
-
-  let buffer = '';
-  let booted = false;
-  let shuttingDown = false;
-  let settleTimer = null;
-
-  const presentReady = (info) => {
-    if (booted) return;
-    booted = true;
-    if (settleTimer) {
-      clearTimeout(settleTimer);
-      settleTimer = null;
-    }
-    stopSpinner('server', 'ok', `127.0.0.1:${port}`);
-
-    printNotes();
-
-    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-    const agent = agentReadyMeta(agentCheck, info.agentLine);
-    const openLine = noOpen
-      ? `${c.soft}browser left closed  ·  --no-open${c.reset}`
-      : `${c.soft}opening browser…${c.reset}`;
-    const meta = [
-      `${c.soft}videos${c.reset}  ${info.videoCount}`,
-      agent
-        ? `${c.soft}agent${c.reset}   ${agent.status === 'ok' ? c.ok : c.warn}${stripAnsi(agent.text)}${c.reset}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('    ');
-
-    write();
-    write(
-      box(
-        [
-          `${c.bold}${c.accent}Ready${c.reset}  ${c.soft}${elapsed}s${c.reset}`,
-          '',
-          `${c.bold}${info.url}${c.reset}`,
-          openLine,
-          '',
-          meta,
-          `${c.soft}stop${c.reset}    Ctrl+C`,
-        ],
-        { width: 52 }
-      )
-    );
-    write();
-
-    if (!noOpen) openBrowser(info.url);
-  };
-
-  const onChunk = (chunk) => {
-    buffer += chunk.toString();
-    if (booted) return;
-    const info = parseStudioBoot(buffer);
-    if (!info.url) return;
-    if (info.complete) {
-      presentReady(info);
-      return;
-    }
-    // URL arrived; give the rest of the banner a moment, then show what we have.
-    if (!settleTimer) {
-      settleTimer = setTimeout(() => presentReady(parseStudioBoot(buffer)), 250);
-    }
-  };
-
-  child.stdout.on('data', onChunk);
-  child.stderr.on('data', onChunk);
-
-  const shutdown = (signal) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    if (settleTimer) {
-      clearTimeout(settleTimer);
-      settleTimer = null;
-    }
-    if (spinnerTimer) {
-      clearInterval(spinnerTimer);
-      spinnerTimer = null;
-      if (tty) output.write('\r\x1b[2K');
-    }
-    write();
-    write(`${c.soft}Stopped Studio${c.reset}${signal === 'SIGINT' ? `  ${c.soft}(Ctrl+C)${c.reset}` : ''}`);
-    write();
-    try {
-      child.kill('SIGTERM');
-    } catch {
-      /* ignore */
-    }
-    // Force exit shortly if child hangs
-    setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 400).unref();
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-  // Boot timeout
-  const bootTimer = setTimeout(() => {
-    if (!booted) {
-      stopSpinner('server', 'bad', 'no ready signal');
-      footerFail([
-        'Studio process started but never printed its URL.',
-        `Try manually:  ${c.bold}cd kit && node cli.mjs studio${c.reset}`,
-      ]);
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        /* ignore */
-      }
-      process.exit(1);
-    }
-  }, 15000);
-
-  const code = await new Promise((resolve) => {
-    child.on('exit', (code, signal) => {
-      clearTimeout(bootTimer);
-      if (shuttingDown) resolve(signal === 'SIGINT' ? 130 : 0);
-      else resolve(code ?? (signal ? 1 : 0));
-    });
-  });
-
-  if (!shuttingDown && !booted) {
-    stopSpinner('server', 'bad', 'exited early');
-    const tail = buffer.trim().split('\n').slice(-8).join('\n');
-    if (tail) {
-      write();
-      write(`${c.soft}${tail}${c.reset}`);
-    }
-    footerFail([`Run from kit/:  ${c.bold}node cli.mjs studio${c.reset}`]);
-  }
-
-  process.exit(code);
 }
 
 async function main() {
@@ -637,6 +436,12 @@ ${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}one-command setup + l
   ${c.bold}./studio${c.reset} <slug>               open a project
   ${c.bold}./studio${c.reset} --port 4750          use another port
   ${c.bold}./studio${c.reset} --no-open            start without opening a browser
+  ${c.bold}./studio${c.reset} --dev                live log, UI reload, server restart
+
+${c.soft}Dev mode prints the server log. Saving kit/studio reloads the browser${c.reset}
+${c.soft}(CSS updates in place). Saving kit/lib or kit/cli.mjs restarts the server,${c.reset}
+${c.soft}then reloads the browser. Browser warnings and errors appear in the log.${c.reset}
+${c.soft}Restart ./studio itself after changing scripts/studio.mjs.${c.reset}
 
 ${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Claude Code for Improve jobs.${c.reset}
 `);

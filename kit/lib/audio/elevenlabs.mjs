@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { refreshDotEnv } from '../dotenv.mjs';
+import { modelAcceptsLanguageCode } from '../languages.mjs';
 
 const API = 'https://api.elevenlabs.io/v1';
 
@@ -69,16 +70,28 @@ export async function listVoices({ force = false } = {}) {
   return list;
 }
 
+/**
+ * Body for `POST /text-to-speech/{voice}/with-timestamps`.
+ * `language_code` is sent only for models that accept it (`eleven_v4` and the v3 family).
+ */
+export function speechBody({ text, voice }) {
+  const model = voice.model || 'eleven_v4';
+  const body = {
+    text,
+    model_id: model,
+    voice_settings: voice.settings,
+    apply_text_normalization: 'auto',
+  };
+  const code = String(voice.languageCode || '').trim().toLowerCase();
+  if (code && modelAcceptsLanguageCode(model)) body.language_code = code;
+  return body;
+}
+
 /** Narration clip → mp3 file. Returns { alignment } (character timings) when the API provides them. */
 export async function synthesize({ text, voice, outFile }) {
   if (audioMode() !== 'live') return stubSpeech({ text, outFile, speed: voice.settings?.speed });
   const format = voice.outputFormat || 'mp3_44100_128';
-  const data = await post(`/text-to-speech/${voice.voiceId}/with-timestamps?output_format=${format}`, {
-    text,
-    model_id: voice.model || 'eleven_v4',
-    voice_settings: voice.settings,
-    apply_text_normalization: 'auto',
-  });
+  const data = await post(`/text-to-speech/${voice.voiceId}/with-timestamps?output_format=${format}`, speechBody({ text, voice }));
   writeFileSync(outFile, Buffer.from(data.audio_base64, 'base64'));
   return { alignment: data.alignment || null };
 }

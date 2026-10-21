@@ -247,6 +247,30 @@
   pointer-events: none;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.34));
 }
+/* —— Backdrop (direction.overlays.<slot>.backdrop) ——
+   The solid fill *behind* the atmosphere. `auto` is whatever the rules above paint; `none`
+   clears it so only the atmosphere + copy sit over the take; `color` paints --wt-backdrop
+   (an rgba() with the chosen opacity baked in) — for a chapter that is the .dim sheet, pushed
+   under the WebGL field, for a caption it is the card's own fill. Same specificity as the
+   :has(.plate-field) rules above, so source order decides. */
+.wt-ch[data-backdrop='none'] .dim {
+  display: none !important;
+}
+.wt-ch[data-backdrop='color'] .dim {
+  display: block !important;
+  z-index: -1;
+  background: var(--wt-backdrop);
+}
+.wt-cap[data-backdrop='none'] .card {
+  background: transparent;
+}
+.wt-cap[data-backdrop='color'] .card {
+  background: var(--wt-backdrop);
+}
+.wt-cap[data-backdrop='none'] .card::before,
+.wt-cap[data-backdrop='color'] .card::before {
+  display: none;
+}
 .wt-cap .num,
 .wt-cap .rail,
 .wt-cap .timer {

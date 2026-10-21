@@ -2152,6 +2152,12 @@ video.hidden { display: none; }
   border: 0;
   display: block;
   background: #000;
+  /* Live cards composite over the recording through this iframe. Chrome paints an opaque canvas
+     (white / #121212) when the iframe's color-scheme differs from the embedded root's, and it
+     records `light` for an iframe that was display:none when the document loaded (the layer is
+     hidden until a card is ready). Pin `light` here and in the card HTML so they always match —
+     inheriting the page's `dark` is exactly what blanked the take behind captions. */
+  color-scheme: light;
   /* Prevent the iframe from scrolling; plate body is already 1920×1080 */
   overflow: hidden;
 }
@@ -2680,7 +2686,7 @@ video.hidden { display: none; }
   gap: 4px;
   text-align: center;
   padding: 16px;
-  background: #0e1014;
+  background: var(--well);
   color: var(--muted);
   font-size: 11px;
 }
@@ -4198,13 +4204,15 @@ body.tl-collapsed:not(.is-editor) .tl-toolbar { border-bottom-color: transparent
    ========================================================================== */
 :root {
   color-scheme: dark;
-  --field-bg: #0f1116;
-  --field-line: rgba(255, 255, 255, 0.1);
+  --field-bg: var(--well);
+  --field-bg-hover: var(--bg);
+  --field-bg-focus: color-mix(in srgb, var(--accent) 5%, var(--well));
+  --field-line: var(--line-2);
   --field-line-hover: rgba(255, 255, 255, 0.18);
   --card-bg: rgba(255, 255, 255, 0.022);
   --card-line: rgba(255, 255, 255, 0.085);
-  --placeholder: #636b63;
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a6' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --placeholder: color-mix(in srgb, var(--muted) 88%, var(--well));
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237f8880' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --check-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230a0a0a' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 10 17 19 7'/%3E%3C/svg%3E");
   --check-accent: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2342F272' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 10 17 19 7'/%3E%3C/svg%3E");
 }
@@ -4242,7 +4250,7 @@ select {
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
-select:hover { border-color: var(--field-line-hover); background-color: #12151b; }
+select:hover { border-color: var(--field-line-hover); background-color: var(--field-bg-hover); }
 select:focus { outline: none; }
 select:focus-visible,
 select:open {
@@ -4250,7 +4258,7 @@ select:open {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 select:disabled { opacity: 0.45; cursor: not-allowed; }
-select option { background-color: #1c1f1c; color: var(--ink); }
+select option { background-color: var(--panel-2); color: var(--ink); }
 
 .pane-tag select,
 .var-row select,
@@ -4333,7 +4341,7 @@ select option { background-color: #1c1f1c; color: var(--ink); }
     border-radius: 12px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 60px),
-      color-mix(in srgb, #1c1f1c 94%, transparent);
+      color-mix(in srgb, var(--panel-2) 94%, transparent);
     backdrop-filter: blur(14px) saturate(1.2);
     color: var(--ink);
     box-shadow:
@@ -4375,8 +4383,8 @@ select option { background-color: #1c1f1c; color: var(--ink); }
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
     background:
-      var(--search-glyph, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b93a7' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M16.5 16.5 21 21'/%3E%3C/svg%3E")) 10px center / 12px no-repeat,
-      linear-gradient(180deg, #161816, #111411);
+      var(--search-glyph, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237f8880' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M16.5 16.5 21 21'/%3E%3C/svg%3E")) 10px center / 12px no-repeat,
+      linear-gradient(180deg, color-mix(in srgb, var(--elev-1) 70%, var(--well)), var(--well));
     color: var(--ink);
     font: 500 12px/1.2 var(--font);
     outline: none;
@@ -4540,6 +4548,14 @@ select option { background-color: #1c1f1c; color: var(--ink); }
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent), 0 6px 18px -6px var(--accent-glow);
 }
+.project-dialog-icon { grid-template-areas: "icon"; }
+.project-dialog-icon svg {
+  grid-area: icon;
+  display: block;
+}
+.project-dialog-icon [data-project-icon="cog"] { display: none; }
+#projectDialog.is-project-settings .project-dialog-icon [data-project-icon="add"] { display: none; }
+#projectDialog.is-project-settings .project-dialog-icon [data-project-icon="cog"] { display: block; }
 .sheet-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-top: 1px; }
 .sheet-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sheet-titles h2 { margin: 0; font-size: 16px; line-height: 1.25; font-weight: 700; letter-spacing: -0.02em; }
@@ -4697,7 +4713,7 @@ kbd {
 .sheet-dialog :is(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  background-color: #111411;
+  background-color: var(--field-bg-focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 .sheet-dialog :is(input, textarea)::placeholder { color: var(--placeholder); }
@@ -5617,9 +5633,9 @@ body.ss-is-dragging * {
   width: 100%;
   min-width: 0;
   padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--field-line);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.28);
+  background-color: var(--field-bg);
   color: var(--ink);
   font-size: 12.5px;
 }
@@ -5669,12 +5685,13 @@ body.ss-is-dragging * {
   width: 100%;
   min-width: 0;
   padding: 8px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--field-line);
   border-radius: 9px;
-  background: rgba(0, 0, 0, 0.28);
+  background-color: var(--field-bg);
   color: var(--ink);
   font-size: 13px;
   line-height: 1.4;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 .sheet-dialog .ss-field textarea { min-height: 48px; resize: vertical; }
 .sheet-dialog .ss-field input:focus,
@@ -5988,6 +6005,19 @@ body.ss-is-dragging * {
 .wz-head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 .wf { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .wf small { font-size: 11px; color: var(--muted); }
+#wizardLanguage { --sel-h: 44px; width: 100%; }
+.lang-filter { display: none; min-height: 44px; }
+html:not(.has-custom-select) .lang-filter { display: block; }
+@supports (appearance: base-select) {
+  #wizardLanguage option {
+    min-height: 0;
+    padding-block: 9px;
+    line-height: 1.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #wizardLanguage, #wizardLanguage option { transition: none; }
+}
 .wf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .wf-note { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 11.5px; color: var(--muted); }
 .wf-note svg { flex-shrink: 0; color: var(--good); }
@@ -6684,9 +6714,6 @@ body.is-editor.is-live-card .fhd-fit,
 body.is-editor.is-live-card .fhd-canvas,
 body.is-editor.is-live-card .fhd-canvas iframe {
   background: transparent !important;
-  /* Parent :root is color-scheme: dark. Without this, Chrome gives the iframe an
-     opaque white canvas and the recording disappears behind a caption. */
-  color-scheme: dark;
   box-shadow: none;
 }
 body.is-editor.is-live-card .fhd-fit {
@@ -8007,6 +8034,16 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
 
 .ins-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; font: 12px var(--font); color: var(--muted); }
 .ins-select { width: 100%; }
+/* Live-card backdrop: select + colour swatch, then an opacity slider. */
+.ins-backdrop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ins-backdrop .ins-select { flex: 1; min-width: 0; }
+.ins-swatch { position: relative; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--sw, #000); border: 2px solid rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.3); cursor: pointer; transition: transform .15s var(--ease-out), border-color .15s; }
+.ins-swatch:hover { transform: scale(1.08); border-color: #fff; }
+.ins-swatch.is-off { opacity: 0.45; background-image: linear-gradient(135deg, transparent 46%, rgba(255, 255, 255, 0.7) 46% 54%, transparent 54%); }
+.ins-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.ins-inline-range { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ins-inline-range input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.ins-inline-range output { font: 500 10.5px var(--mono); color: var(--muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
 
 .ins-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px; margin-bottom: 4px; }
 .ins-swatches .sw { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; }
@@ -8745,14 +8782,16 @@ button.var-reset:hover { color: var(--accent); }
   resize: vertical;
   padding: 9px 11px;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--field-line);
+  background-color: var(--field-bg);
   color: var(--ink);
   font: 13.5px/1.45 var(--font);
   outline: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 .ins-textarea:focus {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background-color: var(--field-bg-focus);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 

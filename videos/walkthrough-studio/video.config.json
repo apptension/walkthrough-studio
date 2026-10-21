@@ -8,7 +8,15 @@
       "This is",
       "*Walkthrough Studio.*"
     ],
-    "sub": "The desk we use to ship every walkthrough — *brief to master*"
+    "sub": "The desk we use to ship every walkthrough — *brief to master*",
+    "motion": {
+      "atmosphere": "shaft"
+    },
+    "style": {
+      "--open-logo-top": "50%",
+      "--open-lift-scale": "0.84",
+      "--open-lift-y": "-200%"
+    }
   },
   "interstitials": [
     {
@@ -43,7 +51,10 @@
           "note": "Master, captions, chapters, poster",
           "icon": "export"
         }
-      ]
+      ],
+      "motion": {
+        "atmosphere": "silk"
+      }
     },
     {
       "id": "path",
@@ -163,9 +174,15 @@
     "overlays": {
       "chapter": {
         "ghost": false,
-        "atmosphere": "waves"
+        "atmosphere": "bend",
+        "blobs": true,
+        "rail": false,
+        "sheen": true,
+        "energy": "clear",
+        "backdrop": "#050505"
       },
-      "caption": {}
+      "caption": {},
+      "preset": "editorial"
     }
   },
   "transitions": {
@@ -173,6 +190,14 @@
   },
   "edit": {
     "zooms": [
+      {
+        "id": "z24",
+        "t": 2.379,
+        "dur": 2.741,
+        "zoom": 1.75,
+        "x": 549,
+        "y": 309
+      },
       {
         "id": "z556",
         "t": 55.594,
@@ -184,9 +209,28 @@
     ],
     "zoomSkips": [
       {
+        "from": 2.379,
+        "to": 5.12
+      },
+      {
         "from": 55.594,
         "to": 58.645
       }
-    ]
+    ],
+    "cards": [
+      {
+        "key": "chapter:5.420:Meet Studio",
+        "t": 6.336,
+        "dur": 4.986
+      }
+    ],
+    "audio": {
+      "voice": [
+        {
+          "key": "intro",
+          "at": 3.052
+        }
+      ]
+    }
   }
 }

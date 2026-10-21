@@ -204,6 +204,8 @@ Never put emojis, ticket keys or internal names on screen.
 
 ### Narration (`narration.mjs`)
 
+The project's video language (`brief.json` → `language`, copied onto `video.config.json`) is the language of every viewer-facing string: plates, chapter titles, captions, and narration. Keep must-say lines, stats, and quotes verbatim. Playwright selectors stay on the live app's own labels. Do not change `language` unless the director changed the project setting.
+
 ```js
 export default {
   intro: 'One sentence over the opening plate.',

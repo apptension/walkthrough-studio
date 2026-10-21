@@ -22,6 +22,7 @@ import { buildEditPlan } from '../edit.mjs';
 import { platePaths } from '../plates.mjs';
 import { duration, run } from '../produce.mjs';
 import { livePath } from '../record.mjs';
+import { resolveVideoLanguage } from '../languages.mjs';
 import { audioMode, ensureDir, synthesize } from './elevenlabs.mjs';
 import { normalizeTo } from './mix.mjs';
 import { normalizeAudio, voiceLineSpec, voiceShape } from './desk.mjs';
@@ -67,21 +68,22 @@ function prepareText(line, voice) {
 
 /**
  * Synthesized clips live in a cache shared by every take and every video (<out root>/.cache/voice),
- * keyed by what ElevenLabs is asked for: text, voice, model, settings. A new take, a re-fit or a
+ * keyed by what ElevenLabs is asked for: text, voice, model, settings, language. A new take, a re-fit or a
  * deleted video folder never pays for the same line twice. Fitting is a local time-stretch.
  */
 export function voiceCacheDir(video) {
   return ensureDir(join(dirname(video.out), '.cache', 'voice'));
 }
 
-function clipKey(video, line) {
+export function clipKey(video, line) {
   const voice = video.audio.voice;
   const settings = { ...voice.settings, speed: Number((line.speed ?? voice.settings?.speed ?? 1).toFixed(2)) };
   const text = prepareText(line, voice);
+  const language = resolveVideoLanguage(video.config?.language).code;
   // `take` > 1 asks ElevenLabs for the same line again; every take keeps its own cache entry so
   // the Editor can step back to an earlier one without paying for it twice.
-  const stamp = JSON.stringify({ text, voiceId: voice.voiceId, model: voice.model, settings, mode: audioMode(), post: TRIM, ...(line.take > 1 ? { take: line.take } : {}) });
-  return { text, settings, hash: createHash('sha1').update(stamp).digest('hex').slice(0, 8) };
+  const stamp = JSON.stringify({ text, voiceId: voice.voiceId, model: voice.model, settings, language, mode: audioMode(), post: TRIM, ...(line.take > 1 ? { take: line.take } : {}) });
+  return { text, settings, language, hash: createHash('sha1').update(stamp).digest('hex').slice(0, 8) };
 }
 
 /** The desk's per-line edits (`edit.audio.voice`), keyed by line. */
@@ -169,7 +171,7 @@ async function baseClip(video, line, { force, stats }) {
       if (process.env.WALKTHROUGH_AUDIO_OFFLINE === '1') {
         throw new Error(`WALKTHROUGH_AUDIO_OFFLINE=1 and no cached clip for: ${line.text}`);
       }
-      const { alignment } = await synthesize({ text, voice: { ...voice, settings }, outFile: mp3 });
+      const { alignment } = await synthesize({ text, voice: { ...voice, settings, languageCode: resolveVideoLanguage(video.config?.language).code }, outFile: mp3 });
       if (alignment) writeFileSync(mp3.replace(/\.mp3$/, '.alignment.json'), JSON.stringify(alignment));
       stats.synthesized += 1;
       stats.chars += text.length;

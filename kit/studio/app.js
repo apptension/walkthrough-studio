@@ -2384,28 +2384,35 @@ function recreatePlateAnimations(doc) {
 }
 
 /**
+ * Color scheme shared by the plate iframe and every live-card document it embeds.
+ * Chrome paints an opaque canvas (white or #121212) over the recording whenever the iframe's
+ * used color-scheme differs from the embedded root's — and it records `light` for an iframe
+ * that was display:none when the document was created, which is how cards load (the layer
+ * stays hidden until the card is ready). `light` on both sides is the only pairing that is
+ * transparent no matter when the card loaded; `dark` matched only on paper and blanked the take.
+ */
+const LIVE_COMPOSITE_SCHEME = 'light';
+
+/**
  * Mark overlay HTML for transparent composite over the recording (Editor + bake).
- * Chrome paints an opaque white iframe canvas when the parent page is color-scheme: dark
- * and the card document does not opt into the same scheme — the caption then hides the take.
+ * The scheme is pinned on every overlay document, composited or not, so older card HTML built
+ * with `color-scheme: dark` cannot reintroduce the opaque canvas.
  */
 function plateSetLiveComposite(on = true) {
   const doc = plateFrameDoc();
   if (!doc?.body) return false;
   const overlay = String(doc.body.dataset.cardId || state.activePlateId || '').startsWith('overlay:');
   const frame = $('plateFrame');
+  if (frame) frame.style.colorScheme = LIVE_COMPOSITE_SCHEME;
+  if (overlay) doc.documentElement.style.colorScheme = LIVE_COMPOSITE_SCHEME;
   if (on && overlay) {
     doc.body.dataset.composite = '1';
-    // Both sides of the embed declare the same scheme, so the canvas stays transparent.
-    doc.documentElement.style.colorScheme = 'dark';
-    if (frame) frame.style.colorScheme = 'dark';
     doc.documentElement.style.background = 'transparent';
     doc.body.style.background = 'transparent';
     const stage = doc.querySelector('.preview-stage');
     if (stage) stage.style.background = 'transparent';
   } else {
     delete doc.body.dataset.composite;
-    doc.documentElement.style.colorScheme = '';
-    if (frame) frame.style.colorScheme = '';
     doc.documentElement.style.background = '';
     doc.body.style.background = '';
   }
@@ -4085,8 +4092,8 @@ async function loadVideo(slug, { play = false } = {}) {
       if (v.captions?.vttUrl) {
         const track = document.createElement('track');
         track.kind = 'captions';
-        track.label = 'English';
-        track.srclang = 'en';
+        track.label = v.language?.name || v.captions?.languageName || 'English';
+        track.srclang = v.language?.code || v.captions?.language || 'en';
         track.src = v.captions.vttUrl + `?t=${Date.now()}`;
         player.appendChild(track);
       }
@@ -4288,6 +4295,13 @@ function renderOverlays(overlays) {
   const atmospheres = look.catalog?.atmospheres;
   fillOverlayAtmospheres('overlayChapterAtm', atmospheres, look.chapter?.atmosphere || 'waves');
   fillOverlayAtmospheres('overlayCaptionAtm', atmospheres, look.caption?.atmosphere || 'waves');
+  // Backdrop: Direction offers the fixed choices; a custom #hex (set in the Editor) is shown as its own option.
+  for (const slot of ['chapter', 'caption']) {
+    const id = slot === 'chapter' ? 'overlayChapterBackdrop' : 'overlayCaptionBackdrop';
+    const value = look[slot]?.backdrop || 'auto';
+    const choices = (look.catalog?.backdrops || []).filter((c) => c.id !== 'custom');
+    fillOverlayAtmospheres(id, value.startsWith('#') ? [...choices, { id: value, label: `Custom ${value}` }] : choices, value);
+  }
   set('overlayPreset', look.preset || 'plateMatch');
   set('overlayCaptionSeat', look.caption?.seat || 'bottom-center');
   set('overlayCaptionAlign', look.caption?.align || 'left');
@@ -4296,9 +4310,10 @@ function renderOverlays(overlays) {
 async function applyOverlaysLook() {
   const body = {
     preset: $('overlayPreset')?.value || 'plateMatch',
-    chapter: { atmosphere: $('overlayChapterAtm')?.value || 'waves' },
+    chapter: { atmosphere: $('overlayChapterAtm')?.value || 'waves', backdrop: $('overlayChapterBackdrop')?.value || null },
     caption: {
       atmosphere: $('overlayCaptionAtm')?.value || 'waves',
+      backdrop: $('overlayCaptionBackdrop')?.value || null,
       seat: $('overlayCaptionSeat')?.value || 'bottom-center',
       align: $('overlayCaptionAlign')?.value || 'left',
     },

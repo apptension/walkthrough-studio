@@ -14,6 +14,7 @@ import { readOverlayReport } from './overlayRetry.mjs';
 import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
 import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
+import { promptLanguageLine } from './languages.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
@@ -327,7 +328,7 @@ export function agentAuthStatus() {
   return status;
 }
 
-function buildPrompt(video, goal, extra = '', opts = {}) {
+export function buildPrompt(video, goal, extra = '', opts = {}) {
   const skillPath = SKILL;
   const config = join(video.dir, 'video.config.json');
   const narration = join(video.dir, 'narration.mjs');
@@ -468,7 +469,7 @@ Studio will inspect exactly which sources changed, present the relevant review s
 
   const storyGoals = new Set(['draft', 'branch', 'script', 'narration', 'plates', 'critic', 'full']);
   const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video))) : '';
-  return [goals[goal] || goals.full, spine, extra].filter(Boolean).join('\n\n').trim();
+  return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, spine, extra].filter(Boolean).join('\n\n').trim();
 }
 
 function readBrief(video) {

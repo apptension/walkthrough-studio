@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveVideoLanguage } from './languages.mjs';
 
 const stripDirection = (text) =>
   String(text || '')
@@ -79,8 +80,11 @@ export function writeCaptions(video) {
   writeFileSync(srt, buildSrt(clips));
   writeFileSync(vtt, buildVtt(clips, video.config.title || video.slug));
   writeFileSync(txt, buildTranscript(clips));
+  const language = resolveVideoLanguage(video.config?.language);
   const meta = {
     slug: video.slug,
+    language: language.code,
+    languageName: language.name,
     cueCount: clips.length,
     generatedAt: new Date().toISOString(),
     hash: createHash('sha1').update(buildSrt(clips)).digest('hex').slice(0, 12),

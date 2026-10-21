@@ -1,7 +1,9 @@
 /** Compare two briefs and name the preparation that has to run again. Passwords are never part of the diff. */
+import { requireVideoLanguage } from './languages.js';
 
 const STORY = new Set([
   'title',
+  'language',
   'product',
   'audience',
   'outcome',
@@ -22,6 +24,7 @@ const BRAND = new Set(['brand']);
 
 const LABEL = {
   title: 'Title',
+  language: 'Language',
   product: 'Product',
   audience: 'Audience',
   outcome: 'Outcome',
@@ -58,6 +61,8 @@ export function comparable(input = {}) {
   const brand = input.brand || {};
   return {
     title: String(input.title || '').trim(),
+    // Missing stays English. An unknown code stays unknown so the save can reject it.
+    language: String(input.language || '').trim().toLowerCase() || 'en',
     product: String(input.product || '').trim(),
     audience: String(input.audience || '').trim(),
     outcome: String(input.outcome || '').trim(),
@@ -131,6 +136,7 @@ export function nextBrief(current = {}, payload = {}) {
     ...current,
     revisedAt: new Date().toISOString(),
     title: payload.title ?? current.title,
+    language: requireVideoLanguage(payload.language ?? current.language).code,
     product: payload.product ?? current.product,
     audience: payload.audience ?? current.audience,
     outcome: payload.outcome ?? current.outcome,

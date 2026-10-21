@@ -33,6 +33,7 @@ export function applyBriefRevision(video, brief, { secrets = [] } = {}) {
   cfg.title = safe.title || cfg.title;
   cfg.audience = safe.audience || cfg.audience;
   cfg.purpose = safe.purpose || cfg.purpose;
+  cfg.language = safe.language || 'en';
   if (safe.brand?.id) cfg.brand = safe.brand.id;
   cfg.record = { ...(cfg.record || {}), startUrl: safe.app?.startUrl || cfg.record?.startUrl };
   if (safe.app && 'loginRequired' in safe.app) cfg.record.loginRequired = Boolean(safe.app.loginRequired);

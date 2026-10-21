@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { agentAuthStatus, agentPreference, setAgentPreference } from './agentRunner.mjs';
+import { agentAuthStatus, agentPreference, buildPrompt, setAgentPreference } from './agentRunner.mjs';
 import { KIT } from './project.mjs';
 
 function restoreAgentPreference(prev) {
@@ -20,6 +20,21 @@ function restoreAgentPreference(prev) {
     .replace(/\n*$/, '\n');
   writeFileSync(file, next);
 }
+
+test('draft and voice prompts write in the video language, and a missing language stays English', () => {
+  const video = {
+    slug: 'demo',
+    dir: '/tmp/walkthrough-language-prompt',
+    out: '/tmp/walkthrough-language-prompt',
+    config: { language: 'pl', purpose: 'feature' },
+    brand: { dir: '/tmp/walkthrough-language-brand', motionBrief: 'motion-brief.md', logo: 'logo.html' },
+  };
+  const draft = buildPrompt(video, 'draft');
+  assert.match(draft, /^Video language: Polish \(pl\)/);
+  assert.match(draft, /in Polish/);
+  assert.match(buildPrompt(video, 'voice'), /Video language: Polish \(pl\)/);
+  assert.match(buildPrompt({ ...video, config: { purpose: 'overview' } }, 'script'), /^Video language: English \(en\)/);
+});
 
 test('agentPreference reads WALKTHROUGH_AGENT', () => {
   const prev = process.env.WALKTHROUGH_AGENT;

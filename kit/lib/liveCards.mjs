@@ -4,8 +4,13 @@
  *
  * Config: video.config.json → direction.overlays
  *   preset?: plateMatch | editorial | punchy | minimal | spotlight
- *   chapter?: { atmosphere, energy, sheen, ghost, blobs, rail }
- *   caption?: { atmosphere, energy, sheen, seat, maxWidth, bottom, inset, align }
+ *   chapter?: { atmosphere, energy, sheen, ghost, blobs, rail, backdrop, backdropOpacity }
+ *   caption?: { atmosphere, energy, sheen, seat, maxWidth, bottom, inset, align, backdrop, backdropOpacity }
+ *
+ * `backdrop` is the solid fill painted *behind* the atmosphere: `auto` keeps each template's own
+ * fill (the ink dim / caption gradient, which turns translucent under a WebGL field so the take
+ * shows through), `none` is fully transparent, a brand role (ink · surface · gold · amber · teal)
+ * or a #hex picks a colour; `backdropOpacity` (0–100) is how solid that colour is.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +38,30 @@ export const OVERLAY_ATMOSPHERE_CHOICES = Object.freeze(
 export const OVERLAY_SEATS = Object.freeze(['bottom-center', 'bottom-left', 'bottom-right']);
 export const OVERLAY_ALIGNS = Object.freeze(['left', 'center']);
 export const OVERLAY_ENERGIES = Object.freeze(['calm', 'clear', 'punchy']);
+/** Brand roles a card backdrop can name (resolved against brand.colors at fill time). */
+export const OVERLAY_BACKDROP_ROLES = Object.freeze(['ink', 'surface', 'gold', 'amber', 'teal']);
+/** Fixed backdrop choices; a `#rrggbb` custom colour is also accepted. */
+export const OVERLAY_BACKDROPS = Object.freeze(['auto', 'none', ...OVERLAY_BACKDROP_ROLES]);
+export const OVERLAY_BACKDROP_CHOICES = Object.freeze([
+  { id: 'auto', label: 'Auto', hint: 'The template’s own fill — ink sheet behind a chapter, dark gradient behind a caption' },
+  { id: 'none', label: 'None', hint: 'Transparent — only the atmosphere and copy sit over the take' },
+  { id: 'ink', label: 'Ink' },
+  { id: 'surface', label: 'Surface' },
+  { id: 'gold', label: 'Accent' },
+  { id: 'amber', label: 'Secondary' },
+  { id: 'teal', label: 'Support' },
+  { id: 'custom', label: 'Custom…', hint: 'Pick any colour with the swatch' },
+]);
+const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** Normalise a backdrop value: a known choice or a `#rrggbb` colour; null when invalid. */
+export function normalizeBackdrop(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (OVERLAY_BACKDROPS.includes(s)) return s;
+  if (HEX_COLOR.test(s)) return s.length === 4 ? `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}` : s;
+  return null;
+}
 
 /** Named looks — expand into chapter + caption defaults (video may still override keys). */
 export const OVERLAY_PRESETS = Object.freeze({
@@ -116,6 +145,7 @@ function palette(brand) {
     surface: c.surface || c.ink,
     gold: c.gold,
     amber: c.amber,
+    teal: c.teal || c.amber,
     text: c.text || '#f8fafc',
     muted: c.muted || '#94a3b8',
     onAccent: c.onAccent || '#111',
@@ -164,6 +194,22 @@ function cardField(brand, atmosphere, kind) {
     height: kind === 'caption' ? 420 : 1080,
   });
   return { FIELD: snippet.markup, FIELD_SCRIPT: snippet.script };
+}
+
+/**
+ * Resolve a slot's backdrop to template tokens.
+ * `mode` drives the CSS (`data-backdrop`): `auto` keeps the template fill, `none` clears it,
+ * `color` paints `--wt-backdrop` (an rgba() string so the opacity bakes into the colour itself
+ * and never fights the reveal animations, which animate `opacity`).
+ */
+export function resolveBackdrop(slot, p) {
+  const choice = normalizeBackdrop(slot?.backdrop) || 'auto';
+  const alpha = clampNum(slot?.backdropOpacity, 100, 0, 100) / 100;
+  if (choice === 'auto' || choice === 'none') return { mode: choice, color: 'transparent', hex: null, alpha };
+  const hex = OVERLAY_BACKDROP_ROLES.includes(choice) ? normalizeBackdrop(p?.[choice]) || p?.ink || '#000000' : choice;
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return { mode: 'color', hex, alpha, color: `rgba(${rgb.join(', ')}, ${Number(alpha.toFixed(3))})` };
 }
 
 function brandTokens(p) {
@@ -219,9 +265,13 @@ export function resolveOverlays(brand, direction = {}) {
   chapter.blobs = boolFrom(chapter.blobs, true);
   chapter.rail = boolFrom(chapter.rail, true);
   chapter.sheen = boolFrom(chapter.sheen, true);
+  chapter.backdrop = normalizeBackdrop(chapter.backdrop) || 'auto';
+  chapter.backdropOpacity = clampNum(chapter.backdropOpacity, 100, 0, 100);
 
   const caption = inherit('caption');
   caption.sheen = boolFrom(caption.sheen, true);
+  caption.backdrop = normalizeBackdrop(caption.backdrop) || 'auto';
+  caption.backdropOpacity = clampNum(caption.backdropOpacity, 100, 0, 100);
   caption.seat = OVERLAY_SEATS.includes(caption.seat) ? caption.seat : 'bottom-center';
   caption.align = OVERLAY_ALIGNS.includes(caption.align) ? caption.align : 'left';
   caption.maxWidth = clampNum(caption.maxWidth, 560, 360, 800);
@@ -238,6 +288,7 @@ export function resolveOverlays(brand, direction = {}) {
       seats: OVERLAY_SEATS,
       aligns: OVERLAY_ALIGNS,
       energies: OVERLAY_ENERGIES,
+      backdrops: OVERLAY_BACKDROP_CHOICES,
     },
   };
 }
@@ -286,6 +337,22 @@ export function patchOverlays(current = {}, patch = {}) {
       if (src[key] === null) delete dest[key];
       else dest[key] = boolFrom(src[key], true);
     }
+    if ('backdrop' in src) {
+      if (src.backdrop == null || src.backdrop === '' || src.backdrop === 'auto') delete dest.backdrop;
+      else {
+        const b = normalizeBackdrop(src.backdrop);
+        if (!b) throw new Error(`overlays.${slot}.backdrop must be one of ${OVERLAY_BACKDROPS.join(', ')} or a #rrggbb colour`);
+        dest.backdrop = b;
+      }
+    }
+    if ('backdropOpacity' in src) {
+      if (src.backdropOpacity === null) delete dest.backdropOpacity;
+      else {
+        const n = clampNum(src.backdropOpacity, 100, 0, 100);
+        if (n === 100) delete dest.backdropOpacity;
+        else dest.backdropOpacity = n;
+      }
+    }
     if (slot === 'caption') {
       if ('seat' in src) {
         if (src.seat == null) delete dest.seat;
@@ -332,6 +399,7 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
   const flowIndex = props.flowIndex != null ? String(props.flowIndex) : '';
   const tpl = readFileSync(join(TEMPLATES, kind === 'caption' ? 'caption.html' : 'chapter.html'), 'utf8');
 
+  const backdrop = resolveBackdrop(slot, p);
   const common = {
     ...brandTokens(p),
     ...cardField(brand, slot.atmosphere, kind),
@@ -339,6 +407,8 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
     ATMOSPHERE: slot.atmosphere,
     ENERGY: slot.energy,
     SHEEN: onOff(slot.sheen, true),
+    BACKDROP_MODE: backdrop.mode,
+    BACKDROP: backdrop.color,
     NUM: chrome.num,
     NUM_RAW: escAttr(chrome.num),
     KICKER: esc(chrome.kicker),

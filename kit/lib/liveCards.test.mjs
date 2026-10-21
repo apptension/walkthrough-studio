@@ -81,6 +81,63 @@ test('patchOverlays: validates enums and merges slots', () => {
   assert.throws(() => patchOverlays({}, { chapter: { atmosphere: 'lava' } }), /atmosphere must be/);
 });
 
+test('patchOverlays + resolveOverlays: backdrop colour and opacity', () => {
+  const next = patchOverlays({}, {
+    chapter: { backdrop: 'surface', backdropOpacity: 60 },
+    caption: { backdrop: '#ABC', backdropOpacity: 100 },
+  });
+  assert.equal(next.chapter.backdrop, 'surface');
+  assert.equal(next.chapter.backdropOpacity, 60);
+  assert.equal(next.caption.backdrop, '#aabbcc');
+  assert.equal('backdropOpacity' in next.caption, false, '100% is the default and is dropped');
+  assert.throws(() => patchOverlays({}, { caption: { backdrop: 'red' } }), /backdrop must be/);
+  assert.throws(() => patchOverlays({}, { caption: { backdrop: '#12345' } }), /backdrop must be/);
+  const cleared = patchOverlays(next, { chapter: { backdrop: 'auto', backdropOpacity: null } });
+  assert.equal('backdrop' in cleared.chapter, false);
+  assert.equal('backdropOpacity' in cleared.chapter, false);
+  const clamped = patchOverlays({}, { chapter: { backdrop: 'none', backdropOpacity: 180 } });
+  assert.equal(clamped.chapter.backdrop, 'none');
+  assert.equal('backdropOpacity' in clamped.chapter, false);
+
+  const look = resolveOverlays(brand, { overlays: next });
+  assert.equal(look.chapter.backdrop, 'surface');
+  assert.equal(look.chapter.backdropOpacity, 60);
+  assert.equal(look.caption.backdrop, '#aabbcc');
+  assert.equal(look.caption.backdropOpacity, 100);
+  const plain = resolveOverlays(brand, { overlays: { chapter: { backdrop: 'bogus' } } });
+  assert.equal(plain.chapter.backdrop, 'auto');
+  assert.equal(plain.caption.backdropOpacity, 100);
+  assert.ok(look.catalog.backdrops.some((b) => b.id === 'none'));
+});
+
+test('renderLiveCardHtml: backdrop drives data-backdrop and --wt-backdrop', () => {
+  const auto = renderLiveCardHtml(brand, 'chapter', { title: 'A', ms: 2400 });
+  assert.match(auto, /data-backdrop="auto"/);
+  assert.match(auto, /--wt-backdrop: transparent;/);
+
+  const none = renderLiveCardHtml({ ...brand, direction: { overlays: { caption: { backdrop: 'none' } } } }, 'caption', { title: 'A', ms: 2000 });
+  assert.match(none, /data-backdrop="none"/);
+
+  const role = renderLiveCardHtml(
+    { ...brand, direction: { overlays: { chapter: { backdrop: 'surface', backdropOpacity: 60 } } } },
+    'chapter',
+    { title: 'A', ms: 2400 }
+  );
+  assert.match(role, /data-backdrop="color"/);
+  assert.match(role, /--wt-backdrop: rgba\(18, 20, 18, 0\.6\);/, 'brand surface #121412 at 60%');
+
+  const custom = renderLiveCardHtml(
+    { ...brand, direction: { overlays: { caption: { backdrop: '#ff8800' } } } },
+    'caption',
+    { title: 'A', ms: 2000 }
+  );
+  assert.match(custom, /data-backdrop="color"/);
+  assert.match(custom, /--wt-backdrop: rgba\(255, 136, 0, 1\);/);
+  // The CSS that paints it ships inline with the card, so the bake renders it too.
+  assert.match(custom, /\.wt-cap\[data-backdrop='color'\] \.card \{[^}]*background: var\(--wt-backdrop\)/);
+  assert.match(role, /\.wt-ch\[data-backdrop='color'\] \.dim \{[^}]*background: var\(--wt-backdrop\)/);
+});
+
 test('renderLiveCardHtml: chapter and caption fill templates with data-edit', () => {
   const ch = renderLiveCardHtml(brand, 'chapter', { chapterNo: 2, title: 'Our services', body: 'What we offer', ms: 2400 });
   assert.match(ch, /wt-ch/);

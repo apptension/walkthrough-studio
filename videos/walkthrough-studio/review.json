@@ -74,11 +74,16 @@
         "action": "approved",
         "at": "2026-10-19T05:18:29.436Z",
         "version": "20261019-071829"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-21T19:54:40.546Z",
+        "version": "20261021-215439"
       }
     ],
     "note": "",
-    "version": "20261019-071829",
-    "approvedAt": "2026-10-19T05:18:29.436Z",
-    "scriptHash": "90df082b95d3"
+    "version": "20261021-215439",
+    "approvedAt": "2026-10-21T19:54:40.546Z",
+    "scriptHash": "0243cf05ed0d"
   }
 }

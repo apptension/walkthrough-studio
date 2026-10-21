@@ -26,6 +26,17 @@ test('project settings masks credentials and a story change does not rediscover 
   assert.equal(story.changed.some((item) => item.field === 'password'), false);
 });
 
+test('a language change replans the script and keeps the current take', () => {
+  const untouched = revisePlan(before, { ...before, app: { ...before.app, password: '' } });
+  assert.equal(untouched.changed.some((item) => item.field === 'language'), false);
+  const plan = revisePlan(before, { ...before, language: 'pl', app: { ...before.app, password: '' } });
+  assert.deepEqual(plan.stages, ['planner']);
+  assert.equal(plan.needsRecord, false);
+  assert.equal(plan.changed.some((item) => item.label === 'Language'), true);
+  assert.equal(nextBrief(before, { ...before, language: 'PL', story: before.story, app: before.app }).language, 'pl');
+  assert.throws(() => nextBrief(before, { ...before, language: 'xx', story: before.story }), /Eleven v4/);
+});
+
 test('access changes re-record and brand changes discover, without writing the password into the revision', () => {
   const access = revisePlan(before, { ...before, app: { ...before.app, startUrl: 'https://app.example/team', password: '' } });
   assert.ok(access.stages.includes('analyze'));
@@ -45,6 +56,8 @@ test('access changes re-record and brand changes discover, without writing the p
     secrets: ['s3cret-value'],
   });
   assert.equal(JSON.stringify(written).includes('s3cret-value'), false);
+  assert.equal(written.language, 'en');
+  assert.equal(JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8')).language, 'en');
   assert.equal(scrubSecrets('keep s3cret-value out', ['s3cret-value']).includes('s3cret-value'), false);
   rmSync(dir, { recursive: true, force: true });
 });

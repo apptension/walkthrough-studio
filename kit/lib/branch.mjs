@@ -9,6 +9,7 @@
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { promptLanguageLine } from './languages.mjs';
 import { PURPOSE_IDS, resolvePurpose } from './narrative.mjs';
 import { VIDEOS, listVideos, loadVideo, slugify } from './project.mjs';
 
@@ -472,6 +473,7 @@ export function branchDraftNote(brief, { sourceSlug } = {}) {
     `## Branch of ${sourceSlug || brief?.branch?.sourceSlug || 'source'}`,
     `This project is a COPY of a finished overview. Rewrite it into a FOCUSED feature video — do not keep the full tour.`,
     `Title: ${brief?.title}`,
+    promptLanguageLine(brief?.language),
     `Angle: ${brief?.branch?.angle || '—'}`,
     `Purpose: ${brief?.purpose || 'feature'} · target ~${brief?.lengthSec || 90}s`,
     `Audience: ${brief?.audience || '—'}`,

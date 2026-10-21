@@ -12,9 +12,12 @@
         height: 1080px;
         overflow: hidden;
         /* Transparent so Studio can composite captions over the recording.
-           color-scheme must match the Studio page or Chrome paints an opaque white canvas. */
+           Chrome paints an opaque canvas (white or #121212) whenever this root's color-scheme
+           differs from the embedding <iframe>'s. Studio keeps the iframe `light`, and Chrome also
+           assumes `light` for an iframe that was display:none when this document was created —
+           so `light` here is the only value that stays transparent in every case. */
         background: transparent;
-        color-scheme: dark;
+        color-scheme: light;
         font-family: '{{FONT}}', ui-sans-serif, system-ui, sans-serif;
       }
       .preview-stage {
