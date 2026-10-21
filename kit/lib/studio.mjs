@@ -23,6 +23,7 @@ import {
   cancelAllJobs,
   cancelJob,
   getJob,
+  answerJob,
   jobView as jobPayload,
   listJobs,
   setAgentPreference,
@@ -1309,6 +1310,14 @@ async function handleApi(req, res, url) {
     const job = cancelJob(jobCancel[1]);
     if (!job) return json(res, 404, { error: 'job not found' });
     return json(res, 200, { ok: true, job: jobPayload(job) });
+  }
+
+  const jobAnswer = path.match(/^\/api\/jobs\/([^/]+)\/answer$/);
+  if (jobAnswer && req.method === 'POST') {
+    const body = await readBody(req);
+    const result = answerJob(jobAnswer[1], { value: body.value, cancel: Boolean(body.cancel) });
+    if (!result) return json(res, 404, { error: 'job not found' });
+    return json(res, 200, { ok: true, continue: result.continue });
   }
 
   const jobMatch = path.match(/^\/api\/jobs\/([^/]+)$/);

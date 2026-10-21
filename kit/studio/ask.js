@@ -13,6 +13,16 @@ const ICON = {
 let dialog = null;
 let pending = null;
 
+/** A job question stays up. A toast or a later confirm must not dismiss it. */
+export function planAsk({ pending: current, incoming } = {}) {
+  if (current?.job && (incoming?.toast || !incoming?.job)) return { dismiss: false, show: false };
+  return { dismiss: Boolean(current), show: true };
+}
+
+export function noteToast() {
+  return planAsk({ pending, incoming: { toast: true } });
+}
+
 function mount() {
   if (dialog) return dialog;
   dialog = document.createElement('dialog');
@@ -64,9 +74,14 @@ export function ask({
   ok = 'Continue',
   cancel = 'Cancel',
   tone = 'accent',
+  secret = false,
+  job = false,
+  toast = false,
 } = {}) {
   const d = mount();
-  if (pending) {
+  const plan = planAsk({ pending, incoming: { job, toast } });
+  if (!plan.show) return Promise.resolve(kind === 'confirm' ? false : null);
+  if (plan.dismiss && pending) {
     dialog.returnValue = 'cancel';
     d.close();
   }
@@ -81,7 +96,7 @@ export function ask({
   sub.hidden = !sub.textContent;
   const body = d.querySelector('#askBody');
   if (kind === 'prompt') {
-    body.innerHTML = `<label class="field-label" for="askInput">${text(label || 'Title')}</label><input id="askInput" type="text" value="${text(value)}" placeholder="${text(placeholder)}" autocomplete="off" spellcheck="false" />`;
+    body.innerHTML = `<label class="field-label" for="askInput">${text(label || 'Title')}</label><input id="askInput" type="${secret ? 'password' : 'text'}" value="${text(value)}" placeholder="${text(placeholder)}" autocomplete="off" spellcheck="false" />`;
   } else if (kind === 'choice') {
     const list = (options || [])
       .map((o) => {
@@ -113,7 +128,7 @@ export function ask({
   d.querySelector('#askCancel').textContent = cancel;
   d.returnValue = 'cancel';
   return new Promise((resolve) => {
-    pending = { kind, resolve };
+    pending = { kind, resolve, job: Boolean(job) };
     d.showModal();
     const input = d.querySelector('#askInput');
     if (input) {

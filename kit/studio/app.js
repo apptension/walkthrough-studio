@@ -1,5 +1,5 @@
 import { paintAgentStream } from './agentStream.js';
-import { ask } from './ask.js';
+import { ask, noteToast } from './ask.js';
 import { getMarkMode, initFavicon, setFaviconMode } from './favicon.js';
 import { initHelp } from './help.js';
 import { initBranch } from './branch.js';
@@ -748,6 +748,7 @@ function iconBtn(act, verId, label) {
 }
 
 function toast(title, detail = '', kind = 'ok') {
+  noteToast();
   const el = document.createElement('div');
   el.className = `toast ${kind === 'err' ? 'err' : kind === 'warn' ? 'warn' : ''}`;
   el.innerHTML = `<i class="dot"></i><div><b>${escapeHtml(title)}</b>${detail ? `<span>${escapeHtml(detail)}</span>` : ''}</div>`;
@@ -1580,16 +1581,32 @@ function watchJob(jobId, opts = {}) {
         const job = await api(`/api/jobs/${jobId}`);
         state.job = job;
         state.jobId = jobId;
+        if (job.question && state.jobAsk !== job.question.id) {
+          state.jobAsk = job.question.id;
+          const answer = await ask({
+            kind: job.question.field === 'confirm' ? 'confirm' : 'prompt',
+            job: true,
+            secret: job.question.field === 'password',
+            title: job.question.prompt,
+            label: job.question.field === 'password' ? 'Password' : 'Email',
+            ok: 'Continue',
+          });
+          await api(`/api/jobs/${jobId}/answer`, {
+            method: 'POST',
+            body: { cancel: answer == null, value: answer },
+          }).catch(() => {});
+        }
         if (opts.onUpdate) opts.onUpdate(job);
         else showActivityDock(job, { surface });
         if (
           job.status === 'done' ||
           job.status === 'failed' ||
           job.status === 'needs-agent' ||
-          job.status === 'cancelled'
+          job.status === 'cancelled' ||
+          job.status === 'waiting'
         ) {
           if (job.status === 'done') finish(resolve, job);
-          else finish(reject, new Error(job.message || job.status));
+          else if (job.status !== 'waiting') finish(reject, new Error(job.message || job.status));
         }
       } catch (err) {
         finish(reject, err);
@@ -1614,7 +1631,7 @@ function stageList(stages) {
 /** Fill one activity surface (render bay or session rail) from a job. */
 function paintWork(prefix, job) {
   const view = describeJob(job);
-  const running = job.status === 'running' || job.status === 'queued' || job.status === 'cancelling';
+  const running = job.status === 'running' || job.status === 'queued' || job.status === 'cancelling' || job.status === 'waiting';
   if ($(`${prefix}Spinner`)) $(`${prefix}Spinner`).hidden = !running;
   if ($(`${prefix}Art`)) $(`${prefix}Art`).hidden = true;
   $('renderLiveCard')?.classList.toggle('is-idle', false);

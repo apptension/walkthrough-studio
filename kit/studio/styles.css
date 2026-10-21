@@ -4411,6 +4411,11 @@ select option { background-color: #1c1f1c; color: var(--ink); }
 }
 .sheet-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .sheet-actions .meta { margin-right: auto; }
+.sheet-dialog.ask #askCancel,
+.sheet-dialog.ask #askOk {
+  min-width: 44px;
+  min-height: 44px;
+}
 .sheet-dialog .sheet-foot .btn { min-height: 34px; padding: 8px 15px; font-size: 12.5px; border-radius: 9px; }
 .sheet-dialog .sheet-foot .btn.primary { min-width: 128px; }
 .btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }

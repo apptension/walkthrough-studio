@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
 import { usesStallRepair } from './selectorRetry.mjs';
+import { applyJobAnswer } from '../studio/jobQuestion.js';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
 import { describeJob } from '../studio/progress.js';
@@ -595,6 +596,43 @@ function markNeedsAgent(job, outDir, message) {
 
 export function getJob(id) {
   return JOBS.get(id) || null;
+}
+
+const jobAnswers = new Map();
+
+/** Pause a job until Studio submits or cancels the question. */
+export function raiseJobQuestion(job, { field = 'email', prompt } = {}) {
+  job.question = { id: `${job.id}:${field}`, field, prompt: prompt || 'What email should this video use?' };
+  job.status = 'waiting';
+  job.phase = 'waiting';
+  append(job, `? ${job.question.prompt}`, { activity: job.question.prompt, kind: 'system' });
+  return new Promise((resolve) => {
+    jobAnswers.set(job.id, { resolve, field });
+  });
+}
+
+export function answerJob(id, { value, cancel } = {}) {
+  const job = getJob(id);
+  const waiter = jobAnswers.get(id);
+  if (!job || !waiter) return null;
+  jobAnswers.delete(id);
+  const result = applyJobAnswer({
+    field: waiter.field,
+    value: cancel ? null : value,
+    store: (pairs) => upsertDotEnv(pairs),
+  });
+  job.question = null;
+  if (!result.continue) {
+    job.status = 'cancelled';
+    job.phase = 'cancelled';
+    append(job, result.log, { activity: 'Stopped', kind: 'system' });
+  } else {
+    job.status = 'running';
+    job.phase = 'running';
+    append(job, result.log, { activity: result.log, kind: 'system' });
+  }
+  waiter.resolve(result);
+  return { continue: result.continue };
 }
 
 export function listJobs() {
