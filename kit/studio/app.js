@@ -4264,6 +4264,20 @@ function renderTransitions(transitions) {
   $('transitionDurationOut').textContent = `${Number(transitions.duration).toFixed(1)}s`;
 }
 
+function fillOverlayAtmospheres(id, choices, value) {
+  const el = $(id);
+  if (!el || !choices?.length) return;
+  const cur = value || el.value;
+  el.innerHTML = choices
+    .map((choice) => {
+      const atm = typeof choice === 'string' ? choice : choice.id;
+      const label = typeof choice === 'string' ? choice : choice.label || choice.id;
+      return `<option value="${escapeHtml(atm)}">${escapeHtml(label)}</option>`;
+    })
+    .join('');
+  if ([...el.options].some((o) => o.value === cur)) el.value = cur;
+}
+
 function renderOverlays(overlays) {
   const look = overlays || state.video?.overlays;
   if (!look) return;
@@ -4271,9 +4285,10 @@ function renderOverlays(overlays) {
     const el = $(id);
     if (el && value != null && document.activeElement !== el) el.value = String(value);
   };
+  const atmospheres = look.catalog?.atmospheres;
+  fillOverlayAtmospheres('overlayChapterAtm', atmospheres, look.chapter?.atmosphere || 'waves');
+  fillOverlayAtmospheres('overlayCaptionAtm', atmospheres, look.caption?.atmosphere || 'waves');
   set('overlayPreset', look.preset || 'plateMatch');
-  set('overlayChapterAtm', look.chapter?.atmosphere || 'waves');
-  set('overlayCaptionAtm', look.caption?.atmosphere || 'waves');
   set('overlayCaptionSeat', look.caption?.seat || 'bottom-center');
   set('overlayCaptionAlign', look.caption?.align || 'left');
 }

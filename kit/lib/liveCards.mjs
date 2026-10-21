@@ -16,12 +16,20 @@ import {
   defaultCardHoldMs,
 } from '../studio/cardMotion.js';
 import { loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
-import { resolveMotion } from './plateMotion.mjs';
+import { atmosphereSnippet } from './atmosphere.mjs';
+import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, resolveMotion } from './plateMotion.mjs';
 import { TEMPLATES } from './project.mjs';
 import { parseFlowCalls } from './script.mjs';
 import { esc } from './text.mjs';
 
-export const OVERLAY_ATMOSPHERES = Object.freeze(['waves', 'mesh', 'blobs', 'none']);
+/** Plate WebGL fields, plus the CSS-only blob wash. `none` is a flat brand field. */
+export const OVERLAY_ATMOSPHERES = Object.freeze([...ATMOSPHERE_IDS, 'blobs']);
+export const OVERLAY_ATMOSPHERE_CHOICES = Object.freeze(
+  OVERLAY_ATMOSPHERES.map((id) => ({
+    id,
+    label: id === 'blobs' ? 'Blobs · soft wash' : ATMOSPHERE_LABELS[id] || id,
+  }))
+);
 export const OVERLAY_SEATS = Object.freeze(['bottom-center', 'bottom-left', 'bottom-right']);
 export const OVERLAY_ALIGNS = Object.freeze(['left', 'center']);
 export const OVERLAY_ENERGIES = Object.freeze(['calm', 'clear', 'punchy']);
@@ -137,6 +145,27 @@ function waveFieldMarkup(p, id, { rings = 9 } = {}) {
   </svg>`;
 }
 
+/** WebGL plate field for a card, or empty strings when the slot stays a CSS wash (`none`, `blobs`). */
+function cardField(brand, atmosphere, kind) {
+  if (!atmosphere || atmosphere === 'none' || atmosphere === 'blobs' || !ATMOSPHERE_IDS.includes(atmosphere)) {
+    return { FIELD: '', FIELD_SCRIPT: '' };
+  }
+  const motion = resolveMotion(brand);
+  const same = motion.atmosphere === atmosphere;
+  const tuned = same && Number.isFinite(motion.atmosphereOpacity) ? motion.atmosphereOpacity : 0;
+  const snippet = atmosphereSnippet(brand, {
+    id: atmosphere,
+    // A caption is a small panel, so the field needs more presence than a full-frame plate.
+    opacity: Math.max(kind === 'caption' ? 0.72 : 0, tuned) || undefined,
+    speed: same && Number.isFinite(motion.atmosphereSpeed) ? motion.atmosphereSpeed : undefined,
+    local: true,
+    hooks: false,
+    width: kind === 'caption' ? 1200 : 1920,
+    height: kind === 'caption' ? 420 : 1080,
+  });
+  return { FIELD: snippet.markup, FIELD_SCRIPT: snippet.script };
+}
+
 function brandTokens(p) {
   return {
     FONT: p.font,
@@ -205,7 +234,7 @@ export function resolveOverlays(brand, direction = {}) {
     caption,
     catalog: {
       presets: OVERLAY_PRESET_IDS.map((id) => ({ id, ...OVERLAY_PRESETS[id] })),
-      atmospheres: OVERLAY_ATMOSPHERES,
+      atmospheres: OVERLAY_ATMOSPHERE_CHOICES,
       seats: OVERLAY_SEATS,
       aligns: OVERLAY_ALIGNS,
       energies: OVERLAY_ENERGIES,
@@ -305,6 +334,8 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
 
   const common = {
     ...brandTokens(p),
+    ...cardField(brand, slot.atmosphere, kind),
+    DURATION: (ms / 1000).toFixed(2),
     ATMOSPHERE: slot.atmosphere,
     ENERGY: slot.energy,
     SHEEN: onOff(slot.sheen, true),

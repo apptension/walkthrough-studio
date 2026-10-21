@@ -22,7 +22,7 @@ import { spawn } from 'node:child_process';
 import { duration as mediaDuration } from './media.mjs';
 
 /** Bump when bake pixel format / capture path changes (invalidates prepareLive stamp). */
-const BAKE_PIPELINE = 5;
+const BAKE_PIPELINE = 6;
 
 /** Same rule Studio uses for the preview window — one definition, re-exported for callers. */
 export { cardMarkDuration };

@@ -51,6 +51,13 @@ function runtime() {
         el.style.setProperty('--el', `${(now - o.t0) / 1000}s`);
         el.innerHTML = o.html;
         sr.appendChild(el);
+        // innerHTML does not run scripts. The plate-field runtime has to start inside this
+        // shadow tree so the canvas it queries is the one on this card.
+        for (const old of el.querySelectorAll('script')) {
+          const next = document.createElement('script');
+          next.textContent = old.textContent;
+          old.replaceWith(next);
+        }
       }
       if (o.exitAt) el.style.setProperty('--x', `${(o.exitAt - o.t0) / 1000}s`);
       clearTimeout(timers.get(o.id));
