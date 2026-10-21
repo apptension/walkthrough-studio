@@ -10,8 +10,13 @@ export function pageNeedsPerson({ text = '', url = '', hasPassword = false } = {
 export function signInWaitCopy() {
   return {
     title: 'This page is waiting for you',
-    next: 'Finish sign-in or consent in the browser, then continue. The draft stays as it is.',
+    next: 'Finish sign-in or consent in the browser window. Capture continues on its own when this page moves on. You can also press Continue, or Enter in the terminal. The draft stays as it is.',
   };
+}
+
+/** A headless take cannot accept sign-in. Open a visible browser and pause there. */
+export function shouldRelaunchHeaded({ headed = false, needsPerson = false } = {}) {
+  return !headed && Boolean(needsPerson);
 }
 
 export function shouldKeepWaiting({ needed, resumeExists, elapsed, timeoutMs = 600000 } = {}) {

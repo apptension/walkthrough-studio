@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { planAsk } from './ask.js';
-import { applyJobAnswer } from './jobQuestion.js';
+import { applyJobAnswer, parseJobQuestion } from './jobQuestion.js';
 
 test('a job email prompt stays up across a later toast', () => {
   const pending = { job: true, kind: 'prompt' };
@@ -14,6 +14,17 @@ test('a job email prompt stays up across a later toast', () => {
   const first = planAsk({ pending: null, incoming: { job: true } });
   assert.equal(first.show, true);
   assert.equal(first.dismiss, false);
+});
+
+test('an agent question is detected and a password stays out of the parsed prompt log', () => {
+  const email = parseJobQuestion('ask email: Which address should receive the invite?');
+  assert.equal(email.field, 'email');
+  assert.match(email.prompt, /invite/);
+  const password = parseJobQuestion('What password should I enter?');
+  assert.equal(password.field, 'password');
+  assert.equal(password.secret, true);
+  assert.equal(parseJobQuestion('The dashboard is ready.'), null);
+  assert.equal(password.prompt.includes('s3cret'), false);
 });
 
 test('cancel stops the job and submit continues it', () => {

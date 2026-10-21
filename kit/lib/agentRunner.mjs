@@ -5,12 +5,13 @@
  * then Claude Code when Cursor is missing or not authenticated.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
 import { usesStallRepair } from './selectorRetry.mjs';
-import { applyJobAnswer } from '../studio/jobQuestion.js';
+import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
 import { describeJob } from '../studio/progress.js';
@@ -547,21 +548,82 @@ function ingestStreamLine(job, line) {
 
 function attachLineParser(job, stream, { jsonl = false } = {}) {
   let buf = '';
+  let chain = Promise.resolve();
+  const take = async (line) => {
+    if (jsonl) ingestStreamLine(job, line);
+    else append(job, line);
+    if (job.question || job.status === 'waiting') return;
+    const asked = parseJobQuestion(job.log.at(-1)?.line || line);
+    if (!asked) return;
+    const pending = raiseJobQuestion(job, asked);
+    if (process.stdin.isTTY && !process.env.WALKTHROUGH_STUDIO) {
+      const value = await readCliAnswer(asked);
+      answerJob(job.id, { value, cancel: value == null || value === '' });
+    }
+    await pending;
+  };
   stream.on('data', (chunk) => {
     buf += chunk.toString();
     const parts = buf.split(/\r?\n/);
     buf = parts.pop() || '';
-    for (const line of parts) {
-      if (jsonl) ingestStreamLine(job, line);
-      else append(job, line);
-    }
+    if (!parts.length) return;
+    stream.pause();
+    chain = chain
+      .then(async () => {
+        for (const line of parts) await take(line);
+      })
+      .finally(() => stream.resume());
   });
   stream.on('end', () => {
-    if (buf.trim()) {
-      if (jsonl) ingestStreamLine(job, buf);
-      else append(job, buf);
-      buf = '';
+    if (!buf.trim()) return;
+    const rest = buf;
+    buf = '';
+    stream.pause();
+    chain = chain
+      .then(() => take(rest))
+      .finally(() => stream.resume());
+  });
+}
+
+/** CLI answer. A password is not echoed and is never printed. */
+function readCliAnswer({ prompt, secret }) {
+  return new Promise((resolve) => {
+    if (secret) {
+      process.stdout.write(`${prompt}\n> `);
+      let buf = '';
+      const onData = (chunk) => {
+        const s = chunk.toString();
+        if (s === '\u0003') {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        if (s.includes('\r') || s.includes('\n')) {
+          cleanup();
+          process.stdout.write('\n');
+          resolve(buf);
+          return;
+        }
+        if (s === '\u007f' || s === '\b') {
+          buf = buf.slice(0, -1);
+          return;
+        }
+        buf += s;
+      };
+      const cleanup = () => {
+        process.stdin.off('data', onData);
+        if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      };
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on('data', onData);
+      return;
     }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${prompt}\n> `, (value) => {
+      rl.close();
+      resolve(value);
+    });
   });
 }
 

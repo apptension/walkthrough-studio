@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { draftFromDescription } from './shortBrief.js';
+import { draftFromDescription, applyDraftToConfig } from './shortBrief.js';
 
 test('one description and a start URL draft an editable video and do not record', () => {
   const draft = draftFromDescription({
@@ -16,7 +16,16 @@ test('one description and a start URL draft an editable video and do not record'
   assert.ok(draft.title.split(/\s+/).length <= 8);
   assert.ok(draft.chapters.length >= 2);
   assert.ok(draft.chapters.some((chapter) => /settings/i.test(chapter)));
+  assert.equal(draft.audience, 'new admin');
   assert.deepEqual(draft.proof, ['features']);
+  const config = applyDraftToConfig(
+    { title: 'Old', audience: 'Old audience', purpose: 'overview', record: { startUrl: 'http://localhost:3000' } },
+    draft
+  );
+  assert.equal(config.record.startUrl, 'https://app.example.com/team');
+  assert.equal(config.purpose, 'onboarding');
+  assert.equal(config.story.lengthSec, 60);
+  assert.equal(config.story.mustShow.length >= 2, true);
 });
 
 test('the short brief is the opening, and the five-step form stays available', () => {

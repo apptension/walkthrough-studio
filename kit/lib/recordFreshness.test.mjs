@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
+import { recordNeedsRerecord, recordRerecordReason, recordTakeNote } from './recordFreshness.mjs';
 
 test('changing only the start URL sets needsRecord when the flow is unchanged', () => {
   const needs = recordNeedsRerecord({
@@ -25,4 +25,6 @@ test('the same URL does not ask for a re-record', () => {
     }),
     false
   );
+  assert.equal(recordTakeNote({ hasLive: true, urlChanged: false }), '');
+  assert.match(recordTakeNote({ hasLive: true, urlChanged: true }), /replaces the old capture/);
 });

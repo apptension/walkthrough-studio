@@ -5,6 +5,8 @@
  *   node cli.mjs studio [slug] [--port 4747]
  */
 import { createServer } from 'node:http';
+
+process.env.WALKTHROUGH_STUDIO = '1';
 import {
   copyFileSync,
   createReadStream,

@@ -22,7 +22,9 @@ export function draftFromDescription({ description, startUrl } = {}) {
     .map((part) => part.replace(/[,\s]+$/g, '').trim())
     .filter(Boolean)
     .slice(0, 6);
-  const audience = /for ([^.]+)/i.exec(text)?.[1]?.trim() || '';
+  const forWhom = /(?:for|aimed at) ([^.]+)/i.exec(text);
+  const showWhom = /show (?:a |an |the )?(.+?) how to/i.exec(text);
+  const audience = (forWhom?.[1] || showWhom?.[1] || chapters[0].split(/\s+/).slice(0, 8).join(' ')).trim();
   let purpose = 'overview';
   if (/onboard|how to|admin/i.test(text)) purpose = 'onboarding';
   else if (/launch|release/i.test(text)) purpose = 'launch';
@@ -42,5 +44,22 @@ export function draftFromDescription({ description, startUrl } = {}) {
     proof,
     startUrl: httpUrl(startUrl),
     records: false,
+  };
+}
+
+/** Write a draft onto a scaffolded config. Does not record. */
+export function applyDraftToConfig(config, draft) {
+  return {
+    ...config,
+    title: draft.title,
+    audience: draft.audience || config.audience,
+    purpose: draft.purpose,
+    record: { ...(config.record || {}), startUrl: draft.startUrl },
+    story: {
+      ...(config.story || {}),
+      mustShow: draft.chapters,
+      lengthSec: draft.lengthSec,
+      proof: draft.proof,
+    },
   };
 }

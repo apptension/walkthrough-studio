@@ -15,6 +15,12 @@ export function recordNeedsRerecord({
   return false;
 }
 
+export function recordTakeNote({ hasLive = false, flowNewer = false, urlChanged = false, loginChanged = false } = {}) {
+  if (!hasLive) return '';
+  const reason = recordRerecordReason({ flowNewer, urlChanged, loginChanged });
+  return reason ? `${reason}. This take replaces the old capture.` : '';
+}
+
 export function recordRerecordReason({ flowNewer = false, urlChanged = false, loginChanged = false } = {}) {
   if (urlChanged) return 'Start URL changed — re-record before produce';
   if (loginChanged) return 'Sign-in changed — re-record before produce';

@@ -6,7 +6,9 @@
  *   node cli.mjs discover-brand --name X --url https://… [--app-url https://…] [--force]
  *                                          harvest official logo + draft brand pack + motion-brief.md
  *   node cli.mjs new <slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]
- *                                          scaffold videos/<slug>/
+ *                                          [--description "…"] [--url https://…]
+ *                                          scaffold videos/<slug>/. A description and URL draft
+ *                                          the brief only — nothing is recorded until you approve it.
  *   node cli.mjs branch <slug> [--discover] [--title "…"] [--angle "…"] [--slug kebab]
  *                                          suggest feature deep-dives from an overview, or copy one into a new project
  *   node cli.mjs plates <slug> [--force]   render brand open/close (+ review.html)
@@ -62,7 +64,7 @@
  *      no-credit plumbing check (macOS `say` + synthesized pad).
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { KIT, OUT_ROOT, TEMPLATES, VIDEOS, listVideos, loadVideo } from './lib/project.mjs';
 
@@ -130,16 +132,45 @@ async function main() {
       return;
     }
     case 'new': {
-      if (!slug || !/^[a-z0-9-]+$/.test(slug)) throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]');
+      if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
+        throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose …] [--description "…"] [--url https://…]');
+      }
       const { scaffoldVideo } = await import('./lib/project.mjs');
       const { PURPOSE_IDS } = await import('./lib/narrative.mjs');
+      const description = opt('--description');
+      const startUrl = opt('--url');
+      if (description && !startUrl) throw new Error('A description needs --url https://… — nothing was recorded.');
       const purpose = opt('--purpose');
       if (purpose && !PURPOSE_IDS.includes(purpose)) throw new Error(`--purpose must be one of ${PURPOSE_IDS.join(', ')}`);
-      const dir = scaffoldVideo(slug, { title: opt('--title') });
-      if (purpose) {
-        const cfgPath = join(dir, 'video.config.json');
-        const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-        cfg.purpose = purpose;
+      let drafted = null;
+      let title = opt('--title');
+      if (description) {
+        const { draftFromDescription } = await import('./studio/shortBrief.js');
+        drafted = draftFromDescription({ description, startUrl });
+        if (drafted.records) throw new Error('A description draft must not record.');
+        title = title || drafted.title;
+      }
+      const dir = scaffoldVideo(slug, { title });
+      const cfgPath = join(dir, 'video.config.json');
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+      if (drafted) {
+        const { applyDraftToConfig } = await import('./studio/shortBrief.js');
+        const next = applyDraftToConfig(cfg, drafted);
+        if (purpose) next.purpose = purpose;
+        writeFileSync(cfgPath, JSON.stringify(next, null, 2) + '\n');
+        console.log(`✓ ${dir}`);
+        console.log('  Drafted from your description. Nothing was recorded.');
+        console.log(`  Title: ${next.title}`);
+        console.log(`  Audience: ${next.audience}`);
+        console.log(`  Purpose: ${next.purpose} · ${drafted.lengthSec}s`);
+        console.log(`  Start: ${next.record.startUrl}`);
+        for (const chapter of drafted.chapters) console.log(`  · ${chapter}`);
+        console.log(`  Edit the brief, then approve it before: node cli.mjs record ${slug}`);
+        return;
+      }
+      if (purpose || startUrl) {
+        if (purpose) cfg.purpose = purpose;
+        if (startUrl) cfg.record = { ...(cfg.record || {}), startUrl };
         writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
       }
       console.log(`✓ ${dir}\n  1. edit video.config.json (copy, steps, env)\n  2. write flow.mjs\n  3. node cli.mjs plates ${slug} → review the brand plates\n  4. node cli.mjs all ${slug}`);
@@ -234,7 +265,36 @@ async function main() {
     case 'record': {
       preflight();
       const video = loadVideo(slug);
-      const recOpts = { headed: flag('--headed'), pace: opt('--pace') };
+      const loginRequired = Boolean(video.config?.record?.loginRequired);
+      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      if (headed && loginRequired && !flag('--headed')) {
+        console.log('» record · Sign-in is on, so the browser stays visible.');
+      }
+      const live = join(video.out, 'live.mp4');
+      const metaPath = join(video.out, 'live-meta.json');
+      let recordedUrl = '';
+      let recordedLogin = null;
+      if (existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+          recordedUrl = meta.startUrl || '';
+          if ('loginRequired' in meta) recordedLogin = meta.loginRequired;
+        } catch {
+          /* an unreadable meta file still allows the take */
+        }
+      }
+      const startUrl = video.config?.record?.startUrl || '';
+      const flowPath = join(video.dir, 'flow.mjs');
+      const hasLive = existsSync(live);
+      const { recordTakeNote } = await import('./lib/recordFreshness.mjs');
+      const note = recordTakeNote({
+        hasLive,
+        flowNewer: hasLive && existsSync(flowPath) && statSync(flowPath).mtimeMs > statSync(live).mtimeMs,
+        urlChanged: Boolean(recordedUrl && startUrl && recordedUrl !== startUrl),
+        loginChanged: recordedLogin != null && Boolean(recordedLogin) !== loginRequired,
+      });
+      if (note) console.log(`» ${note}`);
+      const recOpts = { headed, pace: opt('--pace') };
       const { recordLive } = await import('./lib/record.mjs');
       try {
         await recordLive(video, recOpts);
@@ -720,7 +780,9 @@ async function main() {
       const { recordLive } = await import('./lib/record.mjs');
       const { produce } = await import('./lib/produce.mjs');
       const { validate } = await import('./lib/validate.mjs');
-      await recordLive(video, { headed: flag('--headed'), pace: opt('--pace') });
+      const loginRequired = Boolean(video.config?.record?.loginRequired);
+      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      await recordLive(video, { headed, pace: opt('--pace') });
       await produce(video, { forcePlates: flag('--force') });
       if (existsSync(join(video.dir, 'narration.mjs'))) {
         const { audioMode } = await import('./lib/audio/elevenlabs.mjs');

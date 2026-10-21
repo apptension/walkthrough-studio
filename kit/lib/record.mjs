@@ -22,11 +22,13 @@ import {
 import { createMail } from './mail.mjs';
 import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
 import { installRecordedSelectorRetry } from './selectorRetry.mjs';
+import { describeRecordFailure } from '../studio/recordFailure.js';
 import {
   contextUsesSession,
   pageNeedsPerson,
   sessionFile,
   shouldKeepWaiting,
+  shouldRelaunchHeaded,
   signInWaitCopy,
   waitFiles,
 } from './signInPause.mjs';
@@ -466,25 +468,43 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     restoreKeys.push(() => (kb.press = origPress), () => (locatorProto.press = origLocatorPress));
   }
 
-  async function pauseIfPerson() {
+  async function pageState() {
     const text = await page.locator('body').innerText({ timeout: 1500 }).catch(() => '');
     const hasPassword = (await page.locator('input[type="password"]').count().catch(() => 0)) > 0;
-    if (!pageNeedsPerson({ text, url: page.url(), hasPassword })) return;
+    return pageNeedsPerson({ text, url: page.url(), hasPassword });
+  }
+
+  async function pauseIfPerson() {
+    if (!(await pageState())) return;
     const files = waitFiles(out);
     const copy = signInWaitCopy();
     writeFileSync(files.wait, JSON.stringify({ url: page.url(), ...copy, at: new Date().toISOString() }));
     rmSync(files.resume, { force: true });
     console.log(`» sign-in · ${copy.title}. ${copy.next}`);
+    let typed = false;
+    const onStdin = (chunk) => {
+      if (String(chunk).includes('\n') || String(chunk).includes('\r')) typed = true;
+    };
+    if (process.stdin.isTTY) {
+      console.log('» sign-in · Press Enter in this terminal when you are done.');
+      process.stdin.resume();
+      process.stdin.on('data', onStdin);
+    }
     const started = Date.now();
-    while (true) {
-      const gate = shouldKeepWaiting({
-        needed: true,
-        resumeExists: existsSync(files.resume),
-        elapsed: Date.now() - started,
-      });
-      if (gate === false) break;
-      if (gate === 'timeout') throw new Error('Sign-in wait timed out. Finish sign-in, then re-record.');
-      await wait(400);
+    try {
+      while (true) {
+        const still = await pageState();
+        const gate = shouldKeepWaiting({
+          needed: true,
+          resumeExists: existsSync(files.resume) || typed || !still,
+          elapsed: Date.now() - started,
+        });
+        if (gate === false) break;
+        if (gate === 'timeout') throw new Error('Sign-in wait timed out. Finish sign-in, then re-record.');
+        await wait(400);
+      }
+    } finally {
+      if (process.stdin.isTTY) process.stdin.off('data', onStdin);
     }
     rmSync(files.wait, { force: true });
     rmSync(files.resume, { force: true });
@@ -492,6 +512,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     console.log('» sign-in · continuing in this session');
   }
 
+  let handedOff = false;
   try {
     console.log('» open · Loading the start page');
     const candidates = startUrlCandidates(startUrl);
@@ -500,6 +521,18 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     await page.goto(opened.url, { waitUntil: config.record.waitUntil || 'networkidle', timeout: 15000 });
     await page.evaluate((family) => document.fonts.load(`600 20px "${family}"`), brand.font.family);
     await wait(500);
+
+    if (shouldRelaunchHeaded({ headed, needsPerson: await pageState() })) {
+      console.log('» sign-in · This page needs you. Opening a visible browser.');
+      recorder.kill();
+      stallWatchdog.stop();
+      focus.uninstall();
+      restoreKeys.forEach((fn) => fn());
+      await context.close().catch(() => {});
+      await browser.close().catch(() => {});
+      handedOff = true;
+      return recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg });
+    }
 
     // Optional pre-roll (cookie banners, login shells) — runs before capture so it never appears on camera.
     if (typeof beforeCapture === 'function') {
@@ -627,17 +660,13 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       ? `${stallReport.summary}\n\n${(stallReport.hints || []).map((h) => `• ${h}`).join('\n')}\n\n${err.stack || err}`
       : String(err?.stack || err);
     writeFileSync(join(out, 'error.txt'), text);
-    console.error(
-      stallReport
-        ? `✗ capture stalled — see ${join(out, 'capture-stall.json')}, error.png, error.txt`
-        : err?.attempts
-          ? `✗ ${err.message}`
-          : err?.selectorRetry
-            ? `✗ ${err.message}`
-            : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
-    );
+    const described = describeRecordFailure(`${err?.message || ''}\n${err?.stack || ''}`);
+    console.error(`✗ ${described.reason}`);
+    if (described.url) console.error(`  ${described.url}`);
+    console.error(`  Next: ${described.next}`);
     throw err;
   } finally {
+    if (handedOff) return;
     stallWatchdog.stop();
     focus.uninstall();
     restoreKeys.forEach((fn) => fn());

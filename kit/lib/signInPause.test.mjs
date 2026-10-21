@@ -9,6 +9,7 @@ import {
   pageNeedsPerson,
   sessionFile,
   shouldKeepWaiting,
+  shouldRelaunchHeaded,
   signInWaitCopy,
 } from './signInPause.mjs';
 
@@ -23,6 +24,11 @@ test('a login or consent page pauses and names what to do next', () => {
   const copy = signInWaitCopy();
   assert.match(copy.next, /continue/i);
   assert.match(copy.next, /draft/i);
+  assert.match(copy.next, /Enter/);
+  assert.equal(shouldRelaunchHeaded({ headed: false, needsPerson: true }), true);
+  assert.equal(shouldRelaunchHeaded({ headed: true, needsPerson: true }), false);
+  assert.equal(shouldRelaunchHeaded({ headed: false, needsPerson: false }), false);
+  assert.equal(shouldKeepWaiting({ needed: true, resumeExists: true, elapsed: 10 }), false);
 });
 
 test('pause, resume, and a second record already signed in', async () => {
