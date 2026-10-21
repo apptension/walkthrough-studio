@@ -11,6 +11,7 @@ import { initEditor } from './editor.js';
 import { mountZen, zen } from './zen.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
+import { criticFindingMarkup } from './criticFindings.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -3382,14 +3383,7 @@ function renderCriticFindings(critic) {
   const findings = [...critic.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   box.innerHTML = findings.length
     ? findings
-        .map(
-          (f, i) => `<div class="critic-item ${f.severity}">
-        <div class="critic-item-head"><span class="tag">${f.severity}</span><span class="critic-target">${escapeHtml(f.target)}</span><span class="critic-persona">${escapeHtml(f.persona)}</span></div>
-        <p class="critic-issue">${escapeHtml(f.issue)}</p>
-        <p class="critic-suggest">${escapeHtml(f.suggestion)}</p>
-        <button type="button" class="btn tiny critic-fix" data-critic-fix="${i}" title="Send this finding to the agent as a director note">Fix with AI</button>
-      </div>`
-        )
+        .map((f, i) => criticFindingMarkup(f, i))
         .join('')
     : `<p class="empty-inline">Clean — narration and plates follow the ${escapeHtml(critic.purpose || 'story')} spine.</p>`;
   box.__findings = findings;

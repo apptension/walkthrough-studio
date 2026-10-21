@@ -6253,6 +6253,14 @@ body.ss-is-dragging * {
 .critic-item { padding: 8px 0 9px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
 .critic-item:last-child { border-bottom: none; }
 .critic-item-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.critic-item-head .critic-fix {
+  margin-left: auto;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  color: #0a0a0a;
+  background-color: #42f272;
+}
 .critic-item .tag {
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 5px;
   border: 1px solid var(--line); border-radius: 4px; color: var(--muted); flex: none;
@@ -6260,7 +6268,7 @@ body.ss-is-dragging * {
 .critic-item.high .tag { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .critic-item.medium .tag { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .critic-target { font-family: var(--mono, ui-monospace, monospace); font-size: 10.5px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.critic-persona { margin-left: auto; color: var(--muted); font-size: 10px; flex: none; }
+.critic-persona { color: var(--muted); font-size: 10px; flex: none; }
 .critic-issue { margin: 0; color: var(--ink); }
 .critic-suggest { margin: 0; color: var(--muted); }
 .critic-suggest::before { content: '→ '; color: var(--accent); }
