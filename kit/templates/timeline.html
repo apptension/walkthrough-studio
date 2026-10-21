@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Timeline plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.75s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+        --pad: 150px;
+      }
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 24px; padding: 56px 80px 48px;
+        animation: fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+      .head { text-align: center; flex: none; z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 16px; font-size: 58px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      /* The rail: one SVG stroke drawing left → right; stops hang above and below it. */
+      .tl { position: relative; width: 100%; max-width: 1720px; height: 620px; flex: none; }
+      .tl-rail { position: absolute; left: var(--pad); right: var(--pad); top: 50%; height: 4px; margin-top: -2px; overflow: visible; }
+      .tl-rail svg { width: 100%; height: 100%; overflow: visible; }
+      .tl-rail .track { stroke: color-mix(in srgb, var(--muted) 22%, transparent); stroke-width: 4; stroke-linecap: round; }
+      .tl-rail .ink {
+        stroke: url(#tlGrad); stroke-width: 4; stroke-linecap: round;
+        stroke-dasharray: 1; stroke-dashoffset: 1;
+        animation: fxDraw 1.7s 0.85s var(--inout) both;
+        filter: drop-shadow(0 0 10px color-mix(in srgb, var(--gold) 50%, transparent));
+      }
+      .tl-head {
+        position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
+        left: calc(var(--pad) + (100% - 2 * var(--pad)) * var(--x));
+        background: var(--text); box-shadow: 0 0 22px color-mix(in srgb, var(--gold) 80%, transparent);
+        opacity: 0;
+        animation: headRun 1.7s 0.85s var(--inout) both;
+      }
+      @keyframes headRun {
+        from { left: var(--pad); opacity: 1; }
+        92% { opacity: 1; }
+        to { left: calc(100% - var(--pad)); opacity: 0; }
+      }
+      .tl-stop {
+        position: absolute; top: 50%; width: 300px;
+        left: calc(var(--pad) + (100% - 2 * var(--pad)) * var(--x));
+        transform: translateX(-50%);
+        display: flex; flex-direction: column; align-items: center;
+      }
+      /* Dot centre sits on the rail: up-stops hang from it (bottom edge at rail + 11px), down-stops stand on it. */
+      .tl-stop.up { flex-direction: column-reverse; margin-top: 11px; translate: 0 -100%; }
+      .tl-stop.down { margin-top: -11px; }
+      .tl-dot {
+        width: 22px; height: 22px; border-radius: 50%; flex: none;
+        display: grid; place-items: center;
+        background: color-mix(in srgb, var(--surface) 90%, var(--ink));
+        border: 2px solid var(--gold);
+        transform: scale(0);
+        animation: fxPop 0.6s var(--s) var(--pop) both;
+        position: relative; z-index: 2;
+      }
+      .tl-dot span { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+      .tl-stop.now .tl-dot { background: linear-gradient(140deg, var(--gold), var(--amber)); border-color: transparent; box-shadow: 0 0 0 8px color-mix(in srgb, var(--gold) 16%, transparent), 0 0 30px color-mix(in srgb, var(--gold) 55%, transparent); }
+      .tl-stop.now .tl-dot span { background: var(--on-accent, #041004); }
+      .tl-stop.now .tl-dot::after {
+        content: ''; position: absolute; inset: -2px; border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--gold) 70%, transparent);
+        animation: ringPulse 1.5s calc(var(--s) + 0.5s) ease-out both;
+      }
+      @keyframes ringPulse { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(2.8); } }
+      @keyframes stemGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+      .tl-card {
+        width: 100%; padding: 22px 22px 20px; border-radius: 22px; text-align: center;
+        background: color-mix(in srgb, var(--surface) 80%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        box-shadow: 0 18px 40px color-mix(in srgb, var(--shade, var(--ink)) 42%, transparent);
+        --land: 22px; opacity: 0; transform-origin: 50% 100%;
+        animation: fxLand var(--card-in) calc(var(--s) + 0.12s) var(--expo) both;
+        will-change: transform, opacity, filter;
+        position: relative;
+      }
+      .tl-stop.up .tl-card { transform-origin: 50% 100%; }
+      .tl-stop.down .tl-card { transform-origin: 50% 0%; }
+      .tl-stop.now .tl-card {
+        background:
+          linear-gradient(165deg, color-mix(in srgb, var(--gold) 14%, transparent), transparent 48%),
+          color-mix(in srgb, var(--surface) 88%, transparent);
+        border-color: color-mix(in srgb, var(--gold) 32%, transparent);
+      }
+      /* Stem sits between dot and card on both sides. */
+      .tl-stop .tl-card::before {
+        content: ''; position: absolute; left: 50%; width: 2px; height: 44px; margin-left: -1px;
+        background: color-mix(in srgb, var(--gold) 45%, transparent);
+        transform: scaleY(0);
+        animation: stemGrow 0.5s calc(var(--s) + 0.1s) var(--expo) both;
+      }
+      .tl-stop.up .tl-card::before { top: 100%; transform-origin: 50% 0%; }
+      .tl-stop.down .tl-card::before { bottom: 100%; transform-origin: 50% 100%; }
+      .tl-stop.up .tl-card { margin-bottom: 44px; }
+      .tl-stop.down .tl-card { margin-top: 44px; }
+      .tl-date {
+        display: inline-block; padding: 5px 12px; border-radius: 999px; margin-bottom: 12px;
+        font-size: 12px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+        color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+      }
+      .tl-stop.now .tl-date { background: linear-gradient(140deg, var(--gold), var(--amber)); color: var(--on-accent, #041004); border-color: transparent; }
+      .tl-label { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; text-wrap: balance; }
+      .tl-note { margin-top: 8px; font-size: 16px; line-height: 1.4; color: var(--muted); text-wrap: pretty; }
+      .tl[data-n="6"] .tl-stop { width: 270px; }
+      .tl[data-n="6"] .tl-label { font-size: 21px; }
+      .bloom {
+        position: absolute; left: 50%; top: 52%; width: 1500px; height: 640px; margin: -320px 0 0 -750px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 11%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="tl" data-n="{{ITEM_COUNT}}">
+          <div class="tl-rail" aria-hidden="true">
+            <svg viewBox="0 0 100 4" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="tlGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="var(--gold)" />
+                  <stop offset="1" stop-color="var(--amber)" />
+                </linearGradient>
+              </defs>
+              <line class="track" x1="0" y1="2" x2="100" y2="2" pathLength="1" vector-effect="non-scaling-stroke" />
+              <line class="ink" x1="0" y1="2" x2="100" y2="2" pathLength="1" vector-effect="non-scaling-stroke" />
+            </svg>
+          </div>
+          <div class="tl-head" aria-hidden="true"></div>
+          {{ITEMS}}
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { PURPOSES, PURPOSE_IDS, resolvePurpose } from './narrative.mjs';
 import { BRANDS, VIDEOS, brandReadiness, scaffoldVideo, slugify, upsertDotEnv } from './project.mjs';
 
-const PLATE_TYPES = ['features', 'journey', 'stats', 'testimonials', 'logos', 'callout', 'compare', 'quote', 'metric', 'orbit'];
+import { PLATE_TYPE_IDS as PLATE_TYPES } from './plateTypes.mjs';
+
 const LENGTHS = [60, 90, 120, 180];
 
 const lines = (v) =>

@@ -9,6 +9,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { shortHoldWarning } from '../studio/voiceHold.js';
+import { PLATE_CATALOG, PLATE_TYPE_SET } from './plateTypes.mjs';
 
 /** Matches narration.mjs guidance (~2.4 spoken words per second). */
 const WORDS_PER_SEC = 2.4;
@@ -242,7 +243,7 @@ function lintScene(scene) {
 }
 
 function plateOnScreen(it) {
-  const list = it.items || it.steps || it.stats || it.quotes || it.logos || [];
+  const list = it.items || it.steps || it.stats || it.quotes || it.logos || it.tiers || [];
   const bits = list
     .slice(0, 6)
     .map((x) => x.label || x.value || x.author || x.quote || '')
@@ -251,21 +252,8 @@ function plateOnScreen(it) {
   return [it.sub, it.body, bits.join(' · '), bullets].filter(Boolean).map(plain).join(' — ');
 }
 
-/** Catalog of interstitial plate types Studio can add and edit. */
-export const PLATE_CATALOG = Object.freeze([
-  { type: 'features', label: 'Features', hint: 'Capability grid with icons', list: 'items', fields: ['label', 'note', 'icon'] },
-  { type: 'journey', label: 'Journey', hint: 'Ordered path through the tour', list: 'steps', fields: ['label', 'note', 'icon'] },
-  { type: 'logos', label: 'Logos', hint: 'Integration or client wall', list: 'logos', fields: ['label', 'asset'] },
-  { type: 'testimonials', label: 'Testimonials', hint: 'Quote flood from the field', list: 'quotes', fields: ['quote', 'author', 'role'] },
-  { type: 'stats', label: 'Stats', hint: 'Three hard numbers', list: 'stats', fields: ['value', 'label', 'note'] },
-  { type: 'callout', label: 'Callout', hint: 'One thesis and bullets', list: 'bullets', fields: ['text'] },
-  { type: 'compare', label: 'Compare', hint: 'Before / after columns', list: null, fields: [] },
-  { type: 'quote', label: 'Quote', hint: 'Single hero quote', list: null, fields: [] },
-  { type: 'metric', label: 'Metric', hint: 'One headline number', list: null, fields: [] },
-  { type: 'orbit', label: 'Orbit', hint: 'Logos circling the product', list: 'logos', fields: ['label', 'asset'] },
-]);
-
-const PLATE_TYPE_SET = new Set(PLATE_CATALOG.map((p) => p.type));
+/** Catalog of interstitial plate types Studio can add and edit (single source: plateTypes.mjs). */
+export { PLATE_CATALOG };
 
 function slugId(s) {
   return String(s || 'plate')
@@ -389,9 +377,104 @@ export function scaffoldPlate(type, { before, title } = {}) {
         note: 'Use a real number from the brief.',
         progress: 0.76,
       };
+    case 'process':
+      return {
+        ...base,
+        eyebrow: 'How it works',
+        title: title || 'Three steps, one outcome',
+        sub: '',
+        steps: [
+          { label: 'Connect', note: 'Sign in and link the tools you already use' },
+          { label: 'Set up once', note: 'Name the rules; the product keeps them' },
+          { label: 'Run the week', note: 'Every change lands where the team looks' },
+        ],
+      };
+    case 'timeline':
+      return {
+        ...base,
+        eyebrow: 'The road so far',
+        title: title || 'Built in the open',
+        steps: [
+          { label: 'Launch', date: 'Q1', note: 'First teams on board' },
+          { label: 'Integrations', date: 'Q2', note: 'The stack connects' },
+          { label: 'Reporting', date: 'Q3', note: 'Numbers leaders ask for' },
+          { label: 'Now', date: 'Today', note: 'What you will see next' },
+        ],
+      };
+    case 'checklist':
+      return {
+        ...base,
+        eyebrow: 'By the end',
+        title: title || 'What is done when you are done',
+        items: [
+          { label: 'The team sees one plan', note: 'No side spreadsheets' },
+          { label: 'Changes land in minutes', note: 'Not next Monday' },
+          { label: 'Leaders get the number', note: 'Without asking twice' },
+        ],
+      };
+    case 'kpi':
+      return {
+        ...base,
+        eyebrow: 'This quarter',
+        title: title || 'The board leaders look at',
+        stats: [
+          { value: '—', label: 'Utilisation', delta: '+0%', note: 'from brief' },
+          { value: '—', label: 'On-time delivery', delta: '+0%', note: 'from brief' },
+          { value: '—', label: 'Hours saved', delta: '+0', note: 'from brief' },
+          { value: '—', label: 'Open requests', delta: '−0', note: 'from brief' },
+        ],
+      };
+    case 'statement':
+      return {
+        ...base,
+        eyebrow: 'The point',
+        title: title || ['One plan the whole team', '*actually* follows.'],
+        sub: 'Replace with the thesis in the brief — one line, one accent.',
+      };
+    case 'faq':
+      return {
+        ...base,
+        eyebrow: 'You might be wondering',
+        title: title || 'Before you ask',
+        items: [
+          { label: 'Does it replace our spreadsheet?', note: 'Yes — import it once; the plan lives here from then on.' },
+          { label: 'How long to set up?', note: 'An afternoon for most teams; integrations connect with one login.' },
+          { label: 'Who sees what?', note: 'Roles decide; leaders see totals, people see their own week.' },
+        ],
+      };
+    case 'pricing':
+      return {
+        ...base,
+        eyebrow: 'Plans',
+        title: title || 'Start small, grow in place',
+        tiers: [
+          { label: 'Starter', value: '$0', period: 'per user / month', note: 'For a first team', items: ['Core planning', 'Two integrations', 'Email support'] },
+          { label: 'Team', value: '$12', period: 'per user / month', note: 'Most teams land here', badge: 'Most popular', featured: true, items: ['Everything in Starter', 'Reports and exports', 'Unlimited integrations', 'Priority support'] },
+          { label: 'Business', value: '$29', period: 'per user / month', note: 'For the whole org', items: ['Everything in Team', 'SSO and audit log', 'Dedicated success manager'] },
+        ],
+      };
+    case 'team':
+      return {
+        ...base,
+        eyebrow: 'Who it is for',
+        title: title || 'Built for the people in the loop',
+        items: [
+          { label: 'Team lead', note: 'Plans the week, sees the gaps' },
+          { label: 'Operations', note: 'Keeps the rules, answers once' },
+          { label: 'Leadership', note: 'Reads the number, not the thread' },
+        ],
+      };
     default:
       return base;
   }
+}
+
+/** Split a Studio "lines" cell ("a · b · c" or newline-separated) into a string array. */
+function splitLines(value) {
+  return String(value ?? '')
+    .split(/\s*(?:\n|·|\|)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** Normalize list payloads from Studio into the config shape for a plate type. */
@@ -399,7 +482,7 @@ function applyPlateList(it, list) {
   const meta = PLATE_CATALOG.find((p) => p.type === it.type);
   if (!meta?.list || !Array.isArray(list)) return;
   const rows = list
-    .map((row) => {
+    .map((row, idx) => {
       if (meta.list === 'bullets') {
         const text = String(row?.text ?? row ?? '').trim();
         return text || null;
@@ -421,6 +504,7 @@ function applyPlateList(it, list) {
           value: value || '—',
           label: label || 'Metric',
           ...(row?.note != null && String(row.note).trim() ? { note: String(row.note).trim() } : {}),
+          ...(row?.delta != null && String(row.delta).trim() ? { delta: String(row.delta).trim() } : {}),
         };
       }
       if (meta.list === 'logos') {
@@ -431,12 +515,24 @@ function applyPlateList(it, list) {
           ...(row?.asset != null && String(row.asset).trim() ? { asset: String(row.asset).trim() } : { asset: '' }),
         };
       }
-      // items / steps
+      // items / steps / tiers: label is required; the other catalog columns copy when non-empty.
       const label = String(row?.label || '').trim();
       if (!label) return null;
       const out = { label };
-      if (row?.note != null && String(row.note).trim()) out.note = String(row.note).trim();
-      if (row?.icon != null && String(row.icon).trim()) out.icon = String(row.icon).trim();
+      for (const f of meta.fields) {
+        if (f === 'label') continue;
+        const v = row?.[f];
+        if (v == null || !String(v).trim()) continue;
+        if (f === 'lines') out.items = splitLines(v);
+        else out[f] = String(v).trim();
+      }
+      // Flags the row editor has no column for survive a Studio save (pricing featured/badge).
+      const prev = (it[meta.list] || [])[idx];
+      if (prev && typeof prev === 'object') {
+        for (const k of ['featured', 'badge', 'icon', 'asset', 'count']) {
+          if (prev[k] != null && out[k] == null && !meta.fields.includes(k)) out[k] = prev[k];
+        }
+      }
       return out;
     })
     .filter(Boolean);
@@ -448,6 +544,7 @@ function plateEditorState(it) {
   const listKey = meta.list;
   let rows = [];
   if (listKey === 'bullets') rows = (it.bullets || []).map((text) => ({ text }));
+  else if (listKey === 'tiers') rows = (it.tiers || []).map(({ items, ...row }) => ({ ...row, lines: (items || []).join(' · ') }));
   else if (listKey) rows = [...(it[listKey] || [])];
   return {
     type: it.type,

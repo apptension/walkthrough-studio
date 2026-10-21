@@ -117,21 +117,76 @@
   },
   "direction": {
     "focus": "guided",
-    "scale": "official",
+    "look": "studio",
+    "scale": "custom",
     "logo": "logo-source.svg",
+    "colors": {
+      "ink": "#070807",
+      "surface": "#151715",
+      "gold": "#42f272",
+      "amber": "#c6f24a",
+      "teal": "#7a9b6a"
+    },
     "camera": {
       "frame": "inset",
       "zoom": "subtle",
+      "background": "brand",
       "padding": "balanced",
       "corners": "soft",
       "shadow": "soft"
     },
     "cursor": {
       "style": "arrow",
+      "size": "m",
+      "glide": true,
+      "hideIdle": true,
       "loop": false
+    },
+    "keys": true,
+    "pace": "brisk",
+    "motion": {
+      "energy": "punchy",
+      "enterMs": 720,
+      "staggerMs": 90,
+      "pushScale": 1.05,
+      "openLogoWidth": 360,
+      "openLogoTop": 50,
+      "openLiftScale": 0.52,
+      "openLiftY": -88,
+      "atmosphere": "aurora",
+      "atmosphereOpacity": 0.42,
+      "atmosphereSpeed": 1.15,
+      "titleReveal": "cascade",
+      "depth": "deep",
+      "sheen": true
+    },
+    "overlays": {
+      "chapter": {
+        "ghost": false,
+        "atmosphere": "waves"
+      },
+      "caption": {}
     }
   },
   "transitions": {
     "style": "wipe"
+  },
+  "edit": {
+    "zooms": [
+      {
+        "id": "z556",
+        "t": 55.594,
+        "dur": 3.051,
+        "zoom": 1.47,
+        "x": 981,
+        "y": 407
+      }
+    ],
+    "zoomSkips": [
+      {
+        "from": 55.594,
+        "to": 58.645
+      }
+    ]
   }
 }

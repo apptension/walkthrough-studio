@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Statement plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 5.6s;
+        --black-out: 5.0s;
+        --title-size: {{TITLE_SIZE}}px;
+        --t-sub: {{T_SUB}}s;
+      }
+      /* Editorial, left-anchored: an accent bar, the eyebrow, 1–3 kinetic lines, a rule, one sub. */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; justify-content: center;
+        padding: 0 220px 0 300px;
+        animation: fadeOut 0.7s 4.6s var(--exit) forwards;
+      }
+      .bar {
+        position: absolute; left: 236px; top: 50%; width: 8px; height: 360px; margin-top: -180px; border-radius: 4px;
+        background: linear-gradient(180deg, var(--gold), var(--amber));
+        box-shadow: 0 0 32px color-mix(in srgb, var(--gold) 45%, transparent);
+        transform: scaleY(0); transform-origin: 50% 0%;
+        animation: barGrow 1.1s 0.2s var(--expo) both;
+      }
+      @keyframes barGrow { from { transform: scaleY(0); opacity: 0; } 30% { opacity: 1; } to { transform: scaleY(1); opacity: 1; } }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: eyebrowIn 0.9s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 22px; max-width: 1400px;
+        font-size: var(--title-size); font-weight: 600; letter-spacing: -0.05em; line-height: 1.02;
+        text-wrap: balance;
+      }
+      .s-line { display: block; }
+      .title .mask.word { padding-bottom: 0.14em; margin-bottom: -0.14em; margin-right: 0.26em; }
+      .rule {
+        margin-top: 34px; width: 220px; height: 2px;
+        background: linear-gradient(90deg, var(--gold), transparent);
+        transform-origin: left; transform: scaleX(0);
+        animation: ruleIn 0.9s calc(var(--t-sub) - 0.25s) var(--expo) both;
+      }
+      .sub {
+        margin-top: 24px; max-width: 980px;
+        font-size: 28px; font-weight: 500; line-height: 1.4; letter-spacing: -0.015em; color: var(--muted);
+        opacity: 0; animation: subWordIn 0.9s var(--t-sub) var(--expo) both;
+      }
+      .sub:empty, .sub:empty + * { display: none; }
+      .sub b { color: var(--text); font-weight: 600; }
+      .bloom {
+        position: absolute; left: 36%; top: 50%; width: 1500px; height: 760px; margin: -380px 0 0 -750px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.2s 0.1s ease-out both, fadeOut 0.7s 4.6s var(--exit) forwards;
+      }
+      .corner-logo {
+        position: absolute; right: 120px; bottom: 96px; width: 180px; opacity: 0;
+        animation: fadeUp 0.85s calc(var(--t-sub) + 0.35s) var(--expo) both;
+      }
+      .corner-logo .logo svg { max-height: 30px; }
+    </style>
+  </head>
+  <body data-duration="5.6">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="flare" style="--t-flare: 1.1s"></div>
+      <div class="compose">
+        <div class="bar" aria-hidden="true"></div>
+        <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+        <h1 class="title" data-fit="3" data-fit-min="52" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">
+          {{TITLE_LINES}}
+        </h1>
+        <div class="rule" aria-hidden="true"></div>
+        <p class="sub" data-edit="sub" data-edit-kind="text" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
+        <div class="corner-logo">{{LOGO}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

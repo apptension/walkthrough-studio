@@ -1,6 +1,7 @@
 /**
  * Brand plates: open, close, and interstitials.
- * Types: features | stats | callout | testimonials | logos | journey | compare | quote | metric | orbit
+ * Types (lib/plateTypes.mjs): features | journey | process | timeline | checklist | logos | orbit |
+ * testimonials | quote | stats | kpi | metric | callout | statement | compare | faq | pricing | team
  * Deterministic frame render — CSS animations paused and stepped;
  * JPEG @2x (q95) → Full HD x264 CRF 4. Plates are intermediates (the master re-encodes them),
  * so they stay near-lossless and the delivery encode is the one lossy generation; they stay
@@ -23,6 +24,7 @@ import { injectAtmosphere } from './atmosphere.mjs';
 import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } from './encode.mjs';
 import { brandCssVars, emphasize, esc } from './text.mjs';
 import { injectStyle, patchStyle } from './editDeck.mjs';
+import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
 
 /** Attribute-safe raw source for Studio inline edit (newlines → &#10;). */
 const escAttr = (s) => esc(s).replace(/\n/g, '&#10;');
@@ -122,19 +124,8 @@ function plateStyle(it, plateId) {
 
 const contentHash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 16);
 
-const PLATE_TYPES = new Set([
-  'features',
-  'stats',
-  'callout',
-  'testimonials',
-  'logos',
-  'journey',
-  'compare',
-  'quote',
-  'metric',
-  'orbit',
-]);
-export const INTERSTITIAL_TYPES = Object.freeze([...PLATE_TYPES]);
+const PLATE_TYPES = PLATE_TYPE_SET;
+export const INTERSTITIAL_TYPES = PLATE_TYPE_IDS;
 
 const MIME = {
   '.png': 'image/png',
@@ -753,6 +744,243 @@ function orbitItems(items, brand) {
   };
 }
 
+/* ——— Newer plate families: statement, process, timeline, checklist, kpi, pricing, faq, team ——— */
+
+/** Statement title lines: per-word masked rises (cascade → per character, wipe → per line). */
+function statementLines(list, { reveal = 'rise', start = 0.42, lineStep = 0.2, wordStep = 0.055 } = {}) {
+  let charIndex = 0;
+  let end = start;
+  const html = list
+    .map((line, i) => {
+      const t = start + i * lineStep;
+      let inner;
+      if (reveal === 'cascade') {
+        const chars = cascadeChars(line, { from: charIndex });
+        charIndex = chars.next;
+        inner = `<span class="title-cascade" style="--t: ${t.toFixed(2)}s">${chars.html}</span>`;
+        end = Math.max(end, t + charIndex * 0.026 + 0.72);
+      } else if (reveal === 'wipe') {
+        inner = `<span class="line-wipe" style="--t: ${t.toFixed(2)}s">${emphasize(line)}</span>`;
+        end = Math.max(end, t + 1.05);
+      } else {
+        const words = splitWordsPreservingEmphasis(line);
+        inner = words
+          .map(
+            (w, wi) =>
+              `<span class="mask word"><span class="rise" style="--t: ${(t + wi * wordStep).toFixed(2)}s">${emphasize(w)}</span></span>`
+          )
+          .join('');
+        end = Math.max(end, t + words.length * wordStep + 0.7);
+      }
+      return `<span class="s-line">${inner}</span>`;
+    })
+    .join('\n          ');
+  return { html, end };
+}
+
+/** Statement type scale: the longest line sets the size so one-liners earn the full stage. */
+function statementSize(list) {
+  const longest = Math.max(...list.map((l) => l.replace(/\*/g, '').length));
+  if (longest <= 16) return 118;
+  if (longest <= 24) return 100;
+  if (longest <= 32) return 86;
+  if (longest <= 42) return 72;
+  return 60;
+}
+
+/** Process steps: ghost numeral + rail that draws down to the next step. */
+function processItems(items) {
+  const n = items.length;
+  const step = n <= 3 ? 0.34 : 0.28;
+  return items
+    .map((it, i) => {
+      const s = 0.85 + i * step;
+      return `<div class="p-step" style="--s: ${s.toFixed(2)}s">
+          <div class="p-num">
+            <span class="p-ghost">${String(i + 1).padStart(2, '0')}</span>
+            <span class="p-dot"></span>
+            ${i < n - 1 ? '<span class="p-rail"></span>' : ''}
+          </div>
+          <div class="p-body">
+            <div class="p-label" data-edit="steps.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
+            ${it.note ? `<div class="p-note" data-edit="steps.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
+          </div>
+        </div>`;
+    })
+    .join('\n        ');
+}
+
+/**
+ * Timeline stops alternate above / below a rail that draws left → right; each stop lands as the
+ * line reaches it. The last stop is "now" (accent ring) unless a stop sets `featured`.
+ */
+function timelineItems(items) {
+  const n = items.length;
+  const span = n > 1 ? 1.45 / (n - 1) : 0;
+  const featured = items.findIndex((it) => it.featured === true);
+  const nowIdx = featured >= 0 ? featured : n - 1;
+  return items
+    .map((it, i) => {
+      const s = 0.9 + i * span;
+      const date = it.date || it.when || '';
+      const x = n > 1 ? i / (n - 1) : 0.5;
+      return `<div class="tl-stop ${i % 2 === 0 ? 'up' : 'down'}${i === nowIdx ? ' now' : ''}" style="--s: ${s.toFixed(2)}s; --x: ${x.toFixed(4)}">
+          <div class="tl-dot"><span></span></div>
+          <div class="tl-card">
+            ${date ? `<div class="tl-date" data-edit="steps.${i}.date" data-edit-raw="${escAttr(date)}">${emphasize(date)}</div>` : ''}
+            <div class="tl-label" data-edit="steps.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
+            ${it.note ? `<div class="tl-note" data-edit="steps.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
+          </div>
+        </div>`;
+    })
+    .join('\n        ');
+}
+
+/** Checklist rows + the timing the progress bar and counter follow. */
+function checklistItems(items) {
+  const n = items.length;
+  const step = n <= 4 ? 0.42 : 0.34;
+  const first = 0.95;
+  const html = items
+    .map((it, i) => {
+      const s = first + i * step;
+      return `<div class="ck-row" style="--s: ${s.toFixed(2)}s">
+          <div class="ck-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CHECK_PATH}" pathLength="1"/></svg></div>
+          <div class="ck-text">
+            <div class="ck-label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
+            ${it.note ? `<div class="ck-note" data-edit="items.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
+          </div>
+        </div>`;
+    })
+    .join('\n        ');
+  // Checks draw at --s + 0.3; the bar and counter run from the first to the last check.
+  const start = first + 0.3;
+  const span = Math.max(0.6, (n - 1) * step + 0.2);
+  return { html, start: start.toFixed(2), span: span.toFixed(2) };
+}
+
+/** Deterministic sparkline bars: trend follows the delta sign, jitter follows the tile index. */
+function kpiSpark(i, down, bars = 9) {
+  return Array.from({ length: bars }, (_, k) => {
+    const slope = down ? 1 - k / (bars - 1) : k / (bars - 1);
+    const jitter = (((i + 1) * 37 + k * 53) % 23) / 23;
+    const h = 0.22 + slope * 0.58 + (jitter - 0.5) * 0.2;
+    return `<i style="--h: ${Math.max(0.12, Math.min(1, h)).toFixed(3)}; --b: ${k}"></i>`;
+  }).join('');
+}
+
+function kpiItems(items) {
+  const n = items.length;
+  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  return items
+    .map((it, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const s = 0.7 + row * 0.26 + col * 0.1;
+      const value = String(it.value ?? '').trim();
+      const delta = String(it.delta ?? it.trend ?? '').trim();
+      const down = /^[-−▼↓]/.test(delta);
+      const count = it.count === false ? '' : ` data-count data-count-start="${(s + 0.3).toFixed(2)}" data-count-dur="1.1"`;
+      return `<div class="k-tile" style="--s: ${s.toFixed(2)}s">
+          <div class="k-top">
+            <div class="k-label" data-edit="stats.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
+            ${
+              delta
+                ? `<div class="k-delta ${down ? 'down' : 'up'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span data-edit="stats.${i}.delta" data-edit-raw="${escAttr(delta)}">${emphasize(delta)}</span></div>`
+                : ''
+            }
+          </div>
+          <div class="k-value" data-fit="1" data-fit-min="40" data-fit-group="kpi-value"${count} data-edit="stats.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</div>
+          ${it.note ? `<div class="k-note" data-edit="stats.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
+          <div class="k-spark" aria-hidden="true">${kpiSpark(i, down)}</div>
+        </div>`;
+    })
+    .join('\n        ');
+}
+
+/** Which pricing tier carries the brand: the one flagged `featured`, else the middle of three / last of two. */
+export function pricingFeatured(tiers) {
+  const flagged = tiers.findIndex((t) => t?.featured === true);
+  if (flagged >= 0) return flagged;
+  return tiers.length === 3 ? 1 : tiers.length - 1;
+}
+
+function pricingTiers(tiers) {
+  const n = tiers.length;
+  const fi = pricingFeatured(tiers);
+  let order = 0;
+  return tiers
+    .map((t, i) => {
+      const featured = i === fi;
+      // Quiet tiers land first, the featured one last — the eye ends on the plan that matters.
+      const s = featured ? 0.72 + (n - 1) * 0.14 + 0.18 : 0.72 + order++ * 0.14;
+      const value = String(t.value ?? t.price ?? '').trim();
+      const period = t.period || t.unit || '';
+      const lines = (t.items || t.lines || []).map((raw, k) => {
+        const text = typeof raw === 'string' ? raw : raw.label;
+        return `<div class="pr-line" style="--i: ${(s + 0.55 + k * 0.11).toFixed(2)}s">
+              <span class="pr-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CHECK_PATH}" pathLength="1"/></svg></span>
+              <span data-edit="tiers.${i}.items.${k}" data-edit-raw="${escAttr(text)}">${emphasize(text)}</span>
+            </div>`;
+      });
+      const badge = featured ? t.badge || 'Most popular' : '';
+      return `<div class="pr-card${featured ? ' featured' : ''}" style="--s: ${s.toFixed(2)}s">
+          ${badge ? `<div class="pr-badge" data-edit="tiers.${i}.badge" data-edit-raw="${escAttr(badge)}">${emphasize(badge)}</div>` : ''}
+          <div class="pr-name" data-edit="tiers.${i}.label" data-edit-raw="${escAttr(t.label || '')}">${emphasize(t.label || '')}</div>
+          <div class="pr-price">
+            <span class="pr-value" data-fit="1" data-fit-min="40" data-fit-group="price" data-count data-count-start="${(s + 0.3).toFixed(2)}" data-count-dur="1.0" data-edit="tiers.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</span>
+            ${period ? `<span class="pr-period" data-edit="tiers.${i}.period" data-edit-raw="${escAttr(period)}">${emphasize(period)}</span>` : ''}
+          </div>
+          ${t.note ? `<div class="pr-note" data-edit="tiers.${i}.note" data-edit-raw="${escAttr(t.note)}">${emphasize(t.note)}</div>` : ''}
+          ${lines.length ? `<div class="pr-lines">${lines.join('\n            ')}</div>` : ''}
+        </div>`;
+    })
+    .join('\n        ');
+}
+
+function faqItems(items) {
+  const n = items.length;
+  const step = n <= 2 ? 0.7 : n === 3 ? 0.56 : 0.46;
+  return items
+    .map((it, i) => {
+      const s = 0.8 + i * step;
+      const q = it.label || it.question || it.q || '';
+      const a = it.note || it.answer || it.a || '';
+      return `<div class="fq" style="--s: ${s.toFixed(2)}s">
+          <div class="fq-q">
+            <span class="fq-mark" aria-hidden="true">?</span>
+            <div class="fq-text" data-edit="items.${i}.label" data-edit-raw="${escAttr(q)}">${emphasize(q)}</div>
+          </div>
+          <div class="fq-a">
+            <span class="fq-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4v8a4 4 0 0 0 4 4h8M14 12l4 4-4 4" pathLength="1"/></svg></span>
+            <div class="fq-text" data-edit="items.${i}.note" data-edit-raw="${escAttr(a)}">${emphasize(a)}</div>
+          </div>
+        </div>`;
+    })
+    .join('\n        ');
+}
+
+function teamItems(items, brand) {
+  const n = items.length;
+  const span = n > 1 ? 0.5 / (n - 1) : 0;
+  return items
+    .map((it, i) => {
+      const s = 0.75 + i * span;
+      const asset = it.asset || it.photo || it.logo;
+      const photo = asset ? resolveLogoPresentation(brand, { ...it, asset }) : null;
+      const name = it.label || it.name || '';
+      const role = it.note || it.role || '';
+      return `<div class="tm-card" style="--s: ${s.toFixed(2)}s; --k: ${i % 3}">
+          <div class="tm-avatar${photo ? ' photo' : ''}" aria-hidden="true">${
+            photo ? `<img src="${photo.src}" alt="" />` : `<span>${esc(initials(name))}</span>`
+          }</div>
+          <div class="tm-name" data-edit="items.${i}.label" data-edit-raw="${escAttr(name)}">${emphasize(name)}</div>
+          ${role ? `<div class="tm-role" data-edit="items.${i}.note" data-edit-raw="${escAttr(role)}">${emphasize(role)}</div>` : ''}
+        </div>`;
+    })
+    .join('\n        ');
+}
+
 export function platePaths(video) {
   const dir = join(video.out, 'plates');
   const interstitial = {};
@@ -945,6 +1173,104 @@ function buildInterstitial(video, it, paths, common) {
       ITEMS: orbit.html,
       LEGEND: orbit.legend,
     });
+  } else if (it.type === 'statement') {
+    const lines = (Array.isArray(it.title) ? it.title : String(it.title ?? '').split('\n'))
+      .map((l) => String(l).trim())
+      .filter(Boolean);
+    const chars = lines.join(' ').replace(/\*/g, '').length;
+    if (!lines.length || lines.length > 3 || chars < 4 || chars > 140) {
+      throw new Error(`statement plate "${it.id}" needs 1–3 title lines, 4–140 characters in all (got ${lines.length} line(s), ${chars})`);
+    }
+    const st = statementLines(lines, { reveal: motion.titleReveal });
+    write({
+      ...eyebrow('The point'),
+      ...titleEditFields(lines, { asLines: true }),
+      TITLE_LINES: st.html,
+      TITLE_SIZE: statementSize(lines),
+      T_SUB: Math.min(2.6, st.end + 0.1).toFixed(2),
+      SUB: emphasize(it.sub || it.body || ''),
+      SUB_RAW: escAttr(it.sub || it.body || ''),
+    });
+  } else if (it.type === 'process') {
+    const items = it.steps || it.items || [];
+    if (items.length < 3 || items.length > 5) {
+      throw new Error(`process plate "${it.id}" needs 3–5 steps (got ${items.length})`);
+    }
+    write({
+      ...eyebrow('How it works'),
+      ...title(it.title),
+      SUB: emphasize(it.sub || ''),
+      SUB_RAW: escAttr(it.sub || ''),
+      ITEM_COUNT: items.length,
+      ITEMS: processItems(items),
+    });
+  } else if (it.type === 'timeline') {
+    const items = it.steps || it.items || it.milestones || [];
+    if (items.length < 3 || items.length > 6) {
+      throw new Error(`timeline plate "${it.id}" needs 3–6 stops (got ${items.length})`);
+    }
+    write({ ...eyebrow('The road so far'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: timelineItems(items) });
+  } else if (it.type === 'checklist') {
+    const items = (it.items || it.bullets || []).map((x) => (typeof x === 'string' ? { label: x } : x));
+    if (items.length < 3 || items.length > 6) {
+      throw new Error(`checklist plate "${it.id}" needs 3–6 items (got ${items.length})`);
+    }
+    const ck = checklistItems(items);
+    write({
+      ...eyebrow('By the end'),
+      ...title(it.title),
+      ITEM_COUNT: items.length,
+      ITEMS: ck.html,
+      CK_START: ck.start,
+      CK_SPAN: ck.span,
+    });
+  } else if (it.type === 'kpi') {
+    const items = it.stats || it.items || it.tiles || [];
+    if (items.length < 3 || items.length > 6) {
+      throw new Error(`kpi plate "${it.id}" needs 3–6 tiles (got ${items.length})`);
+    }
+    for (const t of items) {
+      if (!String(t.value ?? '').trim() || !String(t.label ?? '').trim()) {
+        throw new Error(`kpi plate "${it.id}": every tile needs a value and a label`);
+      }
+    }
+    write({ ...eyebrow('This quarter'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: kpiItems(items) });
+  } else if (it.type === 'pricing') {
+    const tiers = it.tiers || it.plans || [];
+    if (tiers.length < 2 || tiers.length > 3) {
+      throw new Error(`pricing plate "${it.id}" needs 2–3 tiers (got ${tiers.length})`);
+    }
+    for (const t of tiers) {
+      if (!String(t.label ?? t.name ?? '').trim() || !String(t.value ?? t.price ?? '').trim()) {
+        throw new Error(`pricing plate "${it.id}": every tier needs a label and a value`);
+      }
+      if ((t.items || t.lines || []).length > 5) {
+        throw new Error(`pricing plate "${it.id}": a tier takes at most 5 lines`);
+      }
+    }
+    write({
+      ...eyebrow('Plans'),
+      ...title(it.title),
+      ITEM_COUNT: tiers.length,
+      ITEMS: pricingTiers(tiers.map((t) => ({ ...t, label: t.label || t.name }))),
+    });
+  } else if (it.type === 'faq') {
+    const items = it.items || it.questions || [];
+    if (items.length < 2 || items.length > 4) {
+      throw new Error(`faq plate "${it.id}" needs 2–4 questions (got ${items.length})`);
+    }
+    for (const q of items) {
+      if (!String(q.label ?? q.question ?? q.q ?? '').trim() || !String(q.note ?? q.answer ?? q.a ?? '').trim()) {
+        throw new Error(`faq plate "${it.id}": every item needs a question (label) and an answer (note)`);
+      }
+    }
+    write({ ...eyebrow('You might be wondering'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: faqItems(items) });
+  } else if (it.type === 'team') {
+    const items = it.items || it.people || [];
+    if (items.length < 3 || items.length > 6) {
+      throw new Error(`team plate "${it.id}" needs 3–6 people (got ${items.length})`);
+    }
+    write({ ...eyebrow('Who it is for'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: teamItems(items, brand) });
   }
 }
 
