@@ -103,9 +103,13 @@ export function ask({
         const v = typeof o === 'string' ? o : o.value;
         const lab = typeof o === 'string' ? o : o.label || o.value;
         const hint = typeof o === 'string' ? '' : o.hint || '';
+        const still = typeof o === 'string' ? '' : o.still || '';
         const on = String(v) === String(value || options[0]?.value || options[0] || '');
-        return `<button type="button" class="ask-choice${on ? ' is-on' : ''}" data-value="${text(v)}" role="option" aria-selected="${on}">
-          <strong>${text(lab)}</strong>${hint ? `<span>${text(hint)}</span>` : ''}
+        const frame = still
+          ? `<span class="ask-still"><img alt="" src="${text(still)}" decoding="async" /></span><span class="ask-copy"><strong>${text(lab)}</strong>${hint ? `<span>${text(hint)}</span>` : ''}</span>`
+          : `<strong>${text(lab)}</strong>${hint ? `<span>${text(hint)}</span>` : ''}`;
+        return `<button type="button" class="ask-choice${still ? ' has-still' : ''}${on ? ' is-on' : ''}" data-value="${text(v)}" role="option" aria-selected="${on}">
+          ${frame}
         </button>`;
       })
       .join('');

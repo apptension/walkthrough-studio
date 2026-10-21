@@ -115,6 +115,7 @@ import {
   saveLiveCardCopy,
 } from './liveCards.mjs';
 import { buildPlates, platePaths, readPlateRenderMeta } from './plates.mjs';
+import { plateStill } from './plateStills.mjs';
 import { savePlateCopy } from './plateCopy.mjs';
 import {
   branchDraftNote,
@@ -1303,6 +1304,20 @@ async function handleApi(req, res, url) {
 
   if (path === '/api/brands' && req.method === 'GET') {
     return json(res, 200, { brands: listBrands() });
+  }
+
+  const plateStillMatch = path.match(/^\/api\/plate-stills\/([^/]+)\/([^/]+)\.jpg$/);
+  if (plateStillMatch && req.method === 'GET') {
+    const brandName = decodeURIComponent(plateStillMatch[1]);
+    const type = decodeURIComponent(plateStillMatch[2]).replace(/\.jpg$/, '');
+    try {
+      const file = await plateStill(brandName, type);
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache' });
+      createReadStream(file).pipe(res);
+    } catch (err) {
+      json(res, 404, { error: err.message || String(err) });
+    }
+    return;
   }
 
   if (path === '/api/projects' && req.method === 'POST') {

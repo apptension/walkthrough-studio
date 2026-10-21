@@ -1247,7 +1247,14 @@ export function initWorkflow(ctx) {
           kind: 'choice',
           title: 'Add interstitial plate',
           detail: 'Inserts a brand plate before a chapter. Edit copy and rows inline after it lands.',
-          options: types.map((t) => ({ value: t.type, label: t.label, hint: t.hint })),
+          options: types.map((t) => ({
+            value: t.type,
+            label: t.label,
+            hint: t.hint,
+            still: getState()?.video?.brand
+              ? `/api/plate-stills/${encodeURIComponent(getState().video.brand)}/${encodeURIComponent(t.type)}.jpg`
+              : '',
+          })),
           value: 'features',
           ok: 'Add plate',
         });
