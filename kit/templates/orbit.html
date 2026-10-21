@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Orbit plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.75s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+        --spin: 16deg;
+        /* Centre lockup draws right after the pill lands (plates.css defaults suit the open plate). */
+        --t-wipe-l: 0.9s;
+        --t-wipe-r: 1.02s;
+        --t-trace: 0.75s;
+        --t-travel: 0.5s;
+        --t-sweep: 2.1s;
+      }
+      .compose {
+        position: absolute; inset: 0;
+        display: grid; grid-template-columns: minmax(0, 620px) 1fr; align-items: center;
+        padding: 72px 100px 72px 130px; gap: 24px;
+        animation: fadeOut 0.75s 5.35s var(--exit) forwards;
+      }
+      .head { z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.2s var(--expo) both;
+      }
+      .title {
+        margin-top: 18px; font-size: 58px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.06; text-wrap: balance;
+        opacity: 0; animation: fadeUp 0.9s 0.34s var(--expo) both;
+      }
+      .sub {
+        margin-top: 22px; max-width: 30ch; font-size: 23px; color: var(--muted); line-height: 1.45; text-wrap: pretty;
+        opacity: 0; animation: fadeUp 0.8s 0.5s var(--expo) both;
+      }
+      .legend { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 10px 14px; max-width: 620px; }
+      .legend span {
+        font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
+        padding: 8px 14px; border-radius: 999px;
+        background: color-mix(in srgb, var(--surface) 80%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        opacity: 0; animation: fadeUp 0.6s calc(var(--s) + 0.25s) var(--expo) both;
+      }
+      /* The orbit: centre lockup, two rings, tiles seated on the rings. */
+      .orbit {
+        position: relative; width: 880px; height: 880px; margin: 0 auto; justify-self: center;
+        display: grid; place-items: center;
+      }
+      .o-center {
+        position: relative; z-index: 3;
+        width: 280px; min-height: 120px; padding: 28px 32px; border-radius: 28px;
+        display: grid; place-items: center;
+        background:
+          linear-gradient(165deg, color-mix(in srgb, var(--gold) 14%, transparent), transparent 48%),
+          color-mix(in srgb, var(--surface) 88%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+        box-shadow:
+          0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 48%, transparent),
+          inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
+        animation: fxPop 0.7s 0.42s var(--pop) both;
+      }
+      .o-center .logo svg { max-height: 56px; }
+      .o-center .logo-img { max-height: 56px; width: auto; }
+      .o-pulse {
+        position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px;
+        border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--gold) 55%, transparent);
+        opacity: 0; z-index: 1;
+        animation: oPulse 2.4s var(--p) ease-out both;
+      }
+      @keyframes oPulse { from { opacity: 0.75; transform: scale(0.6); } to { opacity: 0; transform: scale(3.1); } }
+      .o-ring {
+        position: absolute; left: 50%; top: 50%; border-radius: 50%;
+        border: 1.5px solid color-mix(in srgb, var(--gold) 28%, transparent);
+        opacity: 0;
+        animation: ringIn 1.2s var(--r-in) var(--expo) both, spin var(--dur) linear both;
+      }
+      .o-ring.inner { width: 520px; height: 520px; margin: -260px 0 0 -260px; --r-in: 0.5s; --dir: 1; }
+      .o-ring.outer { width: 800px; height: 800px; margin: -400px 0 0 -400px; --r-in: 0.62s; --dir: -1;
+        border-color: color-mix(in srgb, var(--gold) 16%, transparent); }
+      @keyframes ringIn { from { opacity: 0; scale: 0.9; } to { opacity: 1; scale: 1; } }
+      /* Slow orbital drift; tiles counter-rotate so marks stay upright. */
+      @keyframes spin { from { rotate: 0deg; } to { rotate: calc(var(--spin) * var(--dir)); } }
+      @keyframes counterSpin { from { rotate: 0deg; } to { rotate: calc(var(--spin) * var(--dir) * -1); } }
+      /* seat (static angle) → spin (animated drift) → arm (radius) → upright (static) → counter (animated) → tile */
+      .o-seat { position: absolute; left: 50%; top: 50%; width: 0; height: 0; rotate: var(--a); z-index: 2; }
+      .o-spin { position: absolute; left: 0; top: 0; width: 0; height: 0; animation: spin var(--dur) linear both; }
+      .o-arm {
+        position: absolute; left: 0; top: 0;
+        animation: fxTravel var(--card-in) var(--s) var(--expo) both;
+      }
+      .o-upright { rotate: calc(var(--a) * -1); }
+      .o-counter { animation: counterSpin var(--dur) linear both; }
+      .o-tile {
+        width: 168px; height: 104px; margin: -52px 0 0 -84px;
+        border-radius: 24px; padding: 16px 18px;
+        display: grid; place-items: center;
+        border: 1px solid transparent;
+        box-shadow: 0 14px 32px color-mix(in srgb, var(--shade, var(--ink)) 35%, transparent);
+        animation: fxPop 0.55s calc(var(--s) + 0.28s) var(--pop) both;
+      }
+      .o-seat.far .o-tile { width: 148px; height: 92px; margin: -46px 0 0 -74px; }
+      .o-tile[data-tone="light"] {
+        background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, #f4f7f2 70%, var(--gold) 8%) 100%);
+        border-color: color-mix(in srgb, #0a1f0a 10%, transparent);
+        box-shadow:
+          0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset,
+          0 16px 36px color-mix(in srgb, var(--shade, var(--ink)) 42%, transparent);
+      }
+      .o-tile[data-tone="dark"] {
+        background: color-mix(in srgb, var(--surface) 78%, #000 12%);
+        border-color: color-mix(in srgb, var(--muted) 28%, transparent);
+        box-shadow: 0 14px 32px color-mix(in srgb, var(--shade, var(--ink)) 45%, transparent);
+      }
+      .o-tile img { max-width: 100%; max-height: 54px; width: auto; height: auto; object-fit: contain; position: relative; z-index: 1; }
+      .o-link {
+        position: absolute; left: 0; top: 0; height: 1.5px; width: var(--r);
+        background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 55%, transparent), transparent 85%);
+        transform-origin: left center; transform: scaleX(0);
+        animation: grow var(--card-in) var(--s) var(--expo) both;
+      }
+      @keyframes grow { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+      .bloom {
+        position: absolute; left: 70%; top: 50%; width: 1100px; height: 900px; margin: -450px 0 0 -550px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 13%, transparent), transparent 66%);
+        opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="3" data-fit-min="44" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.34s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+          <p class="sub" data-edit="sub" data-edit-kind="text" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
+          <div class="legend">{{LEGEND}}</div>
+        </div>
+        <div class="orbit">
+          <div class="o-pulse" style="--p: 0.9s"></div>
+          <div class="o-pulse" style="--p: 2.1s"></div>
+          <div class="o-pulse" style="--p: 3.3s"></div>
+          <div class="o-ring inner"></div>
+          <div class="o-ring outer"></div>
+          {{ITEMS}}
+          <div class="o-center"><div class="logo">{{LOGO}}</div></div>
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { describe, test } from 'node:test';
+import { applyCardEdits, cardMarkKey } from './editDeck.mjs';
+import {
+  bakeClipName,
+  cardBakeOverlayGraph,
+  overlaysModeFromLiveMeta,
+  planCardBakes,
+} from './liveCardBake.mjs';
+
+describe('overlaysModeFromLiveMeta', () => {
+  test('defaults to burned for legacy takes', () => {
+    assert.equal(overlaysModeFromLiveMeta(null), 'burned');
+    assert.equal(overlaysModeFromLiveMeta({}), 'burned');
+  });
+  test('reads clean', () => {
+    assert.equal(overlaysModeFromLiveMeta({ overlays: { mode: 'clean' } }), 'clean');
+  });
+});
+
+describe('planCardBakes', () => {
+  test('pairs marks to cards by label then order', () => {
+    const cards = [
+      { id: 'overlay:chapter:1', kind: 'chapter', label: 'Open', htmlPath: '/a.html', flowIndex: 1 },
+      { id: 'overlay:caption:2', kind: 'caption', label: 'Scan', htmlPath: '/b.html', flowIndex: 2 },
+    ];
+    const plans = planCardBakes(
+      [
+        { kind: 'chapter', t: 5, dur: 2.5, label: 'Open' },
+        { kind: 'caption', t: 8, dur: 2, label: 'Scan' },
+        { kind: 'click', t: 9 },
+      ],
+      cards
+    );
+    assert.equal(plans.length, 2);
+    assert.equal(plans[0].cardId, 'overlay:chapter:1');
+    assert.equal(plans[0].dur, 2.5);
+    assert.equal(plans[1].cardId, 'overlay:caption:2');
+  });
+
+  test('honours edit.cards duration trims for produce bake', () => {
+    const mark = { kind: 'caption', t: 7.22, dur: 5.692, label: 'The promise' };
+    const key = cardMarkKey(mark);
+    const edited = applyCardEdits([{ ...mark, key }], [{ key, t: 8.0, dur: 1.6 }]);
+    const plans = planCardBakes(edited, [
+      { id: 'overlay:caption:1', kind: 'caption', label: 'The promise', htmlPath: '/c.html', flowIndex: 1 },
+    ]);
+    assert.equal(plans.length, 1);
+    assert.equal(plans[0].t, 8.0);
+    assert.equal(plans[0].dur, 1.6);
+    assert.equal(bakeClipName(plans[0], 0), '000-caption-t8.00-d1.60.mov');
+  });
+
+  test('keyed cards pair by markKey and ignore label collisions', () => {
+    const a = { kind: 'caption', t: 2, dur: 2, label: 'Scan the map' };
+    const b = { kind: 'caption', t: 9, dur: 3, label: 'Scan the map' };
+    const orphan = { kind: 'caption', t: 20, dur: 1, label: 'No card recorded' };
+    const timeline = [a, b, orphan].map((m) => ({ ...m, key: cardMarkKey(m) }));
+    const cards = [
+      // Deliberately reversed flow order and wrong-looking labels: the key must decide.
+      { id: 'overlay:caption:4', kind: 'caption', label: 'Caption · Scan the map', htmlPath: '/b.html', flowIndex: 4, markKey: cardMarkKey(b) },
+      { id: 'overlay:caption:1', kind: 'caption', label: 'Caption · Scan the map', htmlPath: '/a.html', flowIndex: 1, markKey: cardMarkKey(a) },
+    ];
+    const plans = planCardBakes(timeline, cards);
+    assert.deepEqual(
+      plans.map((p) => [p.cardId, p.dur]),
+      [
+        ['overlay:caption:1', 2],
+        ['overlay:caption:4', 3],
+      ]
+    );
+  });
+});
+
+describe('cardBakeOverlayGraph', () => {
+  test('builds alpha overlay chain for chapter + caption', () => {
+    const dir = join(tmpdir(), `wt-bake-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const a = join(dir, 'a.mov');
+    const b = join(dir, 'b.mov');
+    writeFileSync(a, 'x');
+    writeFileSync(b, 'x');
+    try {
+      const graph = cardBakeOverlayGraph(
+        [
+          { kind: 'chapter', t: 1, dur: 2 },
+          { kind: 'caption', t: 4, dur: 1.5 },
+        ],
+        [a, b],
+        { srcLabel: '[lraw]', outLabel: '[lbake]', startInputIndex: 1 }
+      );
+      assert.equal(graph.inputCount, 2);
+      assert.equal(graph.inputs.length, 4);
+      assert.ok(graph.filter.every((f) => !f.includes('colorkey')));
+      assert.ok(graph.filter.some((f) => f.includes('format=rgba,setpts=PTS+1.000/TB')));
+      assert.ok(graph.filter.some((f) => f.includes('format=rgba,setpts=PTS+4.000/TB')));
+      assert.ok(graph.filter.some((f) => f.includes("between(t\\,1.000\\,3.000)")));
+      assert.ok(graph.filter.some((f) => f.includes('eof_action=pass')));
+      assert.equal(graph.outLabel, '[lbake]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

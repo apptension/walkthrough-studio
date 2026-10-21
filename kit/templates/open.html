@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Opening plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.7s;
+        --t-wipe-l: 0.95s;
+        --t-wipe-r: 1.07s;
+        --t-draw: 1.2s;
+        --t-word: 1.5s;
+        --t-trace: 0.6s;
+        --t-travel: 1.05s;
+        --t-sweep: 2.6s;
+        --t-flare: 2.25s;
+        --t-lift: 3.05s;
+        --x-copy: 5.0s;
+        --x-logo: 5.15s;
+        --t-eyebrow: 3.22s;
+        --t-title: 3.42s;
+        --t-sub: 3.95s;
+        /* No mid-plate hold: lift/title/sub run until ~4.9s; exits start at 5.0s */
+        --hold-from: 0s;
+        --hold-until: 0s;
+      }
+
+      .bloom {
+        position: absolute; left: 50%; top: 54%; width: 1400px; height: 620px;
+        margin: -310px 0 0 -700px; border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), color-mix(in srgb, var(--amber) 4%, transparent) 42%, transparent 72%);
+        opacity: 0;
+        animation: bloomIn 2.4s 0.35s var(--quint) both, fadeOut 0.8s var(--x-logo) var(--exit) forwards;
+      }
+      @keyframes bloomIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+      .lockup-exit {
+        position: absolute; left: 50%;
+        top: var(--open-logo-top, 52%);
+        width: min(var(--open-logo-width, 820px), 46vw);
+        margin-left: calc(min(var(--open-logo-width, 820px), 46vw) / -2);
+        transform-origin: 50% 0;
+        animation: exitScale 0.75s var(--x-logo) var(--exit) forwards;
+      }
+      .lockup { transform: translateY(-50%); animation: lift 1.25s var(--t-lift) var(--inout) both; }
+      @keyframes lift {
+        from { transform: translateY(-50%) scale(1); }
+        to { transform: translateY(var(--open-lift-y, -210%)) scale(var(--open-lift-scale, 0.58)); }
+      }
+      .logo { filter: drop-shadow(0 18px 50px color-mix(in srgb, var(--amber) 25%, transparent)); }
+
+      /* Copy: layout only — each line owns enter (child) + exit (.line-exit). */
+      .copy-exit {
+        position: absolute; left: 0; right: 0; top: 42%;
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+      }
+      .eyebrow-exit { --xe: 0.3s; }
+      .eyebrow {
+        display: flex; align-items: center; gap: 14px;
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0;
+        animation: eyebrowIn 0.95s var(--t-eyebrow) var(--expo) both;
+      }
+      .eyebrow::before, .eyebrow::after {
+        content: ''; width: 40px; height: 1px; background: currentColor;
+        opacity: 0; transform: scaleX(0);
+        animation: ruleIn 0.75s var(--t-eyebrow) var(--expo) both;
+      }
+      .eyebrow::before { transform-origin: right center; }
+      .eyebrow::after { transform-origin: left center; }
+
+      .title {
+        margin-top: 28px;
+        font-size: {{TITLE_SIZE}}px;
+        font-weight: 600;
+        letter-spacing: -0.045em;
+        line-height: 1.06;
+      }
+      .title .accent {
+        background: linear-gradient(92deg, var(--gold) 0%, var(--amber) 72%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .sub-exit { --xe: 0s; margin-top: 32px; }
+      .sub {
+        font-size: 22px; font-weight: 500; color: var(--muted); letter-spacing: -0.005em;
+        display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.15em 0.35em;
+        max-width: 56ch;
+      }
+      .sub .word {
+        display: inline-block; text-wrap: balance;
+        opacity: 0;
+        will-change: transform, filter, opacity;
+        animation: subWordIn 0.9s var(--t) var(--expo) both;
+      }
+      .sub .sep {
+        display: inline-block;
+        opacity: 0;
+        color: color-mix(in srgb, var(--muted) 70%, var(--gold));
+        font-weight: 500;
+        animation: fadeIn 0.55s var(--t) ease-out both;
+      }
+      .sub b {
+        color: var(--text);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body data-duration="6.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="flare"></div>
+      <div class="lockup-exit">
+        <div class="lockup">
+          <div class="logo">{{LOGO}}</div>
+        </div>
+      </div>
+      <div class="copy-exit">
+        <div class="line-exit eyebrow-exit">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+        </div>
+        <h1 class="title" data-fit="{{TITLE_LINES}}" data-fit-min="56" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        <div class="line-exit sub-exit">
+          <p class="sub" data-edit="sub" data-edit-kind="source" data-edit-accent="b" data-edit-beats="1" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -1,0 +1,516 @@
+/**
+ * Live chapter cards + caption panels — kit templates filled like plates.
+ * Recording injects the fragment; Studio writes full HTML previews under out/overlays/.
+ *
+ * Config: video.config.json → direction.overlays
+ *   preset?: plateMatch | editorial | punchy | minimal | spotlight
+ *   chapter?: { atmosphere, energy, sheen, ghost, blobs, rail }
+ *   caption?: { atmosphere, energy, sheen, seat, maxWidth, bottom, inset, align }
+ */
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  captionMotionTiming,
+  chapterMotionTiming,
+  clampCardHoldMs,
+  defaultCardHoldMs,
+} from '../studio/cardMotion.js';
+import { loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
+import { resolveMotion } from './plateMotion.mjs';
+import { TEMPLATES } from './project.mjs';
+import { parseFlowCalls } from './script.mjs';
+import { esc } from './text.mjs';
+
+export const OVERLAY_ATMOSPHERES = Object.freeze(['waves', 'mesh', 'blobs', 'none']);
+export const OVERLAY_SEATS = Object.freeze(['bottom-center', 'bottom-left', 'bottom-right']);
+export const OVERLAY_ALIGNS = Object.freeze(['left', 'center']);
+export const OVERLAY_ENERGIES = Object.freeze(['calm', 'clear', 'punchy']);
+
+/** Named looks — expand into chapter + caption defaults (video may still override keys). */
+export const OVERLAY_PRESETS = Object.freeze({
+  plateMatch: {
+    label: 'Match plates',
+    hint: 'Inherit atmosphere, energy and sheen from direction.motion',
+    chapter: { inheritMotion: true, ghost: true, blobs: true, rail: true },
+    caption: { inheritMotion: true, seat: 'bottom-center', maxWidth: 560, bottom: 40, align: 'left' },
+  },
+  editorial: {
+    label: 'Editorial',
+    hint: 'Calm waves, centered captions, quiet chapter field',
+    chapter: { atmosphere: 'waves', energy: 'calm', sheen: true, ghost: true, blobs: false, rail: true },
+    caption: { atmosphere: 'waves', energy: 'calm', sheen: true, seat: 'bottom-center', maxWidth: 600, bottom: 48, align: 'left' },
+  },
+  punchy: {
+    label: 'Punchy',
+    hint: 'Snappy entrances, deep wave field, bright sheen',
+    chapter: { atmosphere: 'waves', energy: 'punchy', sheen: true, ghost: true, blobs: true, rail: true },
+    caption: { atmosphere: 'waves', energy: 'punchy', sheen: true, seat: 'bottom-center', maxWidth: 540, bottom: 36, align: 'left' },
+  },
+  minimal: {
+    label: 'Minimal',
+    hint: 'No atmosphere ornaments — solid brand field, classic lower-left caption',
+    chapter: { atmosphere: 'none', energy: 'calm', sheen: false, ghost: false, blobs: false, rail: false },
+    caption: { atmosphere: 'none', energy: 'calm', sheen: false, seat: 'bottom-left', maxWidth: 480, bottom: 40, align: 'left' },
+  },
+  spotlight: {
+    label: 'Spotlight',
+    hint: 'Mesh chapter wash, wide centered caption',
+    chapter: { atmosphere: 'mesh', energy: 'clear', sheen: true, ghost: true, blobs: true, rail: true },
+    caption: { atmosphere: 'waves', energy: 'clear', sheen: true, seat: 'bottom-center', maxWidth: 640, bottom: 44, align: 'center' },
+  },
+});
+
+export const OVERLAY_PRESET_IDS = Object.freeze(Object.keys(OVERLAY_PRESETS));
+
+const fill = (tpl, values) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => (values[k] != null ? String(values[k]) : ''));
+
+const escAttr = (s) => esc(s).replace(/\n/g, '&#10;');
+
+/** Eyebrow line and the big ghost number for chapter `chapterNo` (1-based), plus saved overrides. */
+export function chapterChrome(chapterNo, copy = {}) {
+  const fallback = String(Math.max(1, Number(chapterNo) || 1)).padStart(2, '0');
+  const num = String(copy?.num ?? '').trim().slice(0, 8) || fallback;
+  const kicker = String(copy?.kicker ?? '').trim().slice(0, 48) || `Chapter ${fallback}`;
+  return { num, kicker, fallback };
+}
+
+function cardCopyMap(video) {
+  const raw = video?.config?.liveCardCopy;
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+}
+
+/** Saved eyebrow / ghost number for one flow call, or null when the card still uses the defaults. */
+function cardCopyFor(video, flowIndex) {
+  const row = cardCopyMap(video)[String(flowIndex)];
+  return row && typeof row === 'object' ? row : null;
+}
+
+const onOff = (v, fallback = true) => {
+  if (v === undefined || v === null || v === '') return fallback ? '1' : '0';
+  if (typeof v === 'boolean') return v ? '1' : '0';
+  if (['on', 'true', '1', 'yes'].includes(String(v).toLowerCase())) return '1';
+  if (['off', 'false', '0', 'no'].includes(String(v).toLowerCase())) return '0';
+  return fallback ? '1' : '0';
+};
+
+const boolFrom = (v, fallback = true) => onOff(v, fallback) === '1';
+
+let cachedCss = null;
+function overlayCss() {
+  if (cachedCss == null) cachedCss = readFileSync(join(TEMPLATES, 'overlays.css'), 'utf8');
+  return cachedCss;
+}
+
+function palette(brand) {
+  const c = brand.colors || {};
+  return {
+    ink: c.ink,
+    surface: c.surface || c.ink,
+    gold: c.gold,
+    amber: c.amber,
+    text: c.text || '#f8fafc',
+    muted: c.muted || '#94a3b8',
+    onAccent: c.onAccent || '#111',
+    font: brand.font?.family || 'Inter',
+    fontCss: brand.font?.css || '',
+  };
+}
+
+function waveFieldMarkup(p, id, { rings = 9 } = {}) {
+  const ellipses = Array.from({ length: rings }, (_, i) => {
+    const t = i / Math.max(1, rings - 1);
+    const rx = (14 + i * 7.2).toFixed(1);
+    const ry = (8.5 + i * 4.4).toFixed(1);
+    const op = (0.78 - t * 0.55).toFixed(2);
+    const sw = (0.28 + (i % 4 === 0 ? 0.22 : 0)).toFixed(2);
+    return `<ellipse cx="50" cy="52" rx="${rx}" ry="${ry}" fill="none" stroke="url(#${id})" stroke-width="${sw}" opacity="${op}"/>`;
+  }).join('');
+  return `<svg class="wave-field" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="${id}" x1="8%" y1="12%" x2="92%" y2="88%">
+        <stop offset="0%" stop-color="${p.gold}"/>
+        <stop offset="55%" stop-color="${p.amber}"/>
+        <stop offset="100%" stop-color="${p.gold}"/>
+      </linearGradient>
+    </defs>
+    <g class="wave-rings">${ellipses}</g>
+  </svg>`;
+}
+
+function brandTokens(p) {
+  return {
+    FONT: p.font,
+    INK: p.ink,
+    SURFACE: p.surface,
+    GOLD: p.gold,
+    AMBER: p.amber,
+    TEXT: p.text,
+    MUTED: p.muted,
+    ON_ACCENT: p.onAccent,
+    OVERLAY_CSS: overlayCss(),
+  };
+}
+
+/**
+ * Resolve direction.overlays (+ optional preset) against plate motion inheritance.
+ * Returns { preset, chapter, caption, catalog } for Studio + fill.
+ */
+export function resolveOverlays(brand, direction = {}) {
+  const raw = direction.overlays && typeof direction.overlays === 'object' ? direction.overlays : {};
+  const presetId = OVERLAY_PRESET_IDS.includes(raw.preset) ? raw.preset : 'plateMatch';
+  const preset = OVERLAY_PRESETS[presetId];
+  const motion = resolveMotion(brand);
+
+  const inherit = (slot) => {
+    const base = { ...(preset[slot] || {}) };
+    const overlay = raw[slot] && typeof raw[slot] === 'object' ? raw[slot] : {};
+    const merged = { ...base, ...overlay };
+    if (merged.inheritMotion || (!merged.atmosphere && base.inheritMotion)) {
+      merged.atmosphere = OVERLAY_ATMOSPHERES.includes(overlay.atmosphere)
+        ? overlay.atmosphere
+        : OVERLAY_ATMOSPHERES.includes(motion.atmosphere)
+          ? motion.atmosphere
+          : 'waves';
+      merged.energy = OVERLAY_ENERGIES.includes(overlay.energy)
+        ? overlay.energy
+        : OVERLAY_ENERGIES.includes(motion.energy)
+          ? motion.energy
+          : 'clear';
+      if (overlay.sheen === undefined && base.sheen === undefined) merged.sheen = motion.sheen !== false;
+    }
+    if (!OVERLAY_ATMOSPHERES.includes(merged.atmosphere)) merged.atmosphere = 'waves';
+    if (!OVERLAY_ENERGIES.includes(merged.energy)) merged.energy = 'clear';
+    // Drop the inherit flag from the public look object.
+    delete merged.inheritMotion;
+    return merged;
+  };
+
+  const chapter = inherit('chapter');
+  chapter.ghost = boolFrom(chapter.ghost, true);
+  chapter.blobs = boolFrom(chapter.blobs, true);
+  chapter.rail = boolFrom(chapter.rail, true);
+  chapter.sheen = boolFrom(chapter.sheen, true);
+
+  const caption = inherit('caption');
+  caption.sheen = boolFrom(caption.sheen, true);
+  caption.seat = OVERLAY_SEATS.includes(caption.seat) ? caption.seat : 'bottom-center';
+  caption.align = OVERLAY_ALIGNS.includes(caption.align) ? caption.align : 'left';
+  caption.maxWidth = clampNum(caption.maxWidth, 560, 360, 800);
+  caption.bottom = clampNum(caption.bottom, 40, 16, 120);
+  caption.inset = clampNum(caption.inset, 40, 16, 120);
+
+  return {
+    preset: presetId,
+    chapter,
+    caption,
+    catalog: {
+      presets: OVERLAY_PRESET_IDS.map((id) => ({ id, ...OVERLAY_PRESETS[id] })),
+      atmospheres: OVERLAY_ATMOSPHERES,
+      seats: OVERLAY_SEATS,
+      aligns: OVERLAY_ALIGNS,
+      energies: OVERLAY_ENERGIES,
+    },
+  };
+}
+
+function clampNum(v, fallback, lo, hi) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, Math.round(n)));
+}
+
+/** Validate and merge a patch onto direction.overlays (Studio / CLI). */
+export function patchOverlays(current = {}, patch = {}) {
+  const next = {
+    ...(current && typeof current === 'object' ? current : {}),
+    chapter: { ...(current?.chapter || {}) },
+    caption: { ...(current?.caption || {}) },
+  };
+  if ('preset' in patch) {
+    if (patch.preset == null || patch.preset === '') delete next.preset;
+    else if (!OVERLAY_PRESET_IDS.includes(patch.preset)) throw new Error(`overlays.preset must be one of ${OVERLAY_PRESET_IDS.join(', ')}`);
+    else next.preset = patch.preset;
+  }
+  for (const slot of ['chapter', 'caption']) {
+    if (!(slot in patch) || patch[slot] == null) continue;
+    if (patch[slot] === null) {
+      next[slot] = {};
+      continue;
+    }
+    if (typeof patch[slot] !== 'object') throw new Error(`overlays.${slot} must be an object`);
+    const src = patch[slot];
+    const dest = { ...next[slot] };
+    if ('atmosphere' in src) {
+      if (src.atmosphere == null) delete dest.atmosphere;
+      else if (!OVERLAY_ATMOSPHERES.includes(src.atmosphere)) {
+        throw new Error(`overlays.${slot}.atmosphere must be one of ${OVERLAY_ATMOSPHERES.join(', ')}`);
+      } else dest.atmosphere = src.atmosphere;
+    }
+    if ('energy' in src) {
+      if (src.energy == null) delete dest.energy;
+      else if (!OVERLAY_ENERGIES.includes(src.energy)) {
+        throw new Error(`overlays.${slot}.energy must be one of ${OVERLAY_ENERGIES.join(', ')}`);
+      } else dest.energy = src.energy;
+    }
+    for (const key of ['sheen', 'ghost', 'blobs', 'rail']) {
+      if (!(key in src)) continue;
+      if (src[key] === null) delete dest[key];
+      else dest[key] = boolFrom(src[key], true);
+    }
+    if (slot === 'caption') {
+      if ('seat' in src) {
+        if (src.seat == null) delete dest.seat;
+        else if (!OVERLAY_SEATS.includes(src.seat)) throw new Error(`overlays.caption.seat must be one of ${OVERLAY_SEATS.join(', ')}`);
+        else dest.seat = src.seat;
+      }
+      if ('align' in src) {
+        if (src.align == null) delete dest.align;
+        else if (!OVERLAY_ALIGNS.includes(src.align)) throw new Error(`overlays.caption.align must be one of ${OVERLAY_ALIGNS.join(', ')}`);
+        else dest.align = src.align;
+      }
+      for (const [key, lo, hi] of [
+        ['maxWidth', 360, 800],
+        ['bottom', 16, 120],
+        ['inset', 16, 120],
+      ]) {
+        if (!(key in src)) continue;
+        if (src[key] === null) {
+          delete dest[key];
+          continue;
+        }
+        dest[key] = clampNum(src[key], dest[key] ?? (key === 'maxWidth' ? 560 : 40), lo, hi);
+      }
+    }
+    next[slot] = dest;
+  }
+  return next;
+}
+
+/**
+ * Fill a chapter or caption fragment for live capture (shadow-DOM injection).
+ * @param {'chapter'|'caption'} kind
+ */
+export function renderLiveCardHtml(brand, kind, props = {}) {
+  const direction = brand.direction || {};
+  const look = resolveOverlays(brand, direction);
+  const slot = kind === 'caption' ? look.caption : look.chapter;
+  const p = palette(brand);
+  const ms = clampCardHoldMs(props.ms, kind === 'chapter' ? 'chapter' : 'caption');
+  const chapterNo = Math.max(1, Number(props.chapterNo) || 1);
+  const chrome = chapterChrome(chapterNo, props);
+  const title = String(props.title || '');
+  const body = String(props.body || '');
+  const flowIndex = props.flowIndex != null ? String(props.flowIndex) : '';
+  const tpl = readFileSync(join(TEMPLATES, kind === 'caption' ? 'caption.html' : 'chapter.html'), 'utf8');
+
+  const common = {
+    ...brandTokens(p),
+    ATMOSPHERE: slot.atmosphere,
+    ENERGY: slot.energy,
+    SHEEN: onOff(slot.sheen, true),
+    NUM: chrome.num,
+    NUM_RAW: escAttr(chrome.num),
+    KICKER: esc(chrome.kicker),
+    KICKER_RAW: escAttr(chrome.kicker),
+    TITLE: esc(title),
+    TITLE_RAW: escAttr(title),
+    FLOW_INDEX: flowIndex,
+  };
+
+  if (kind === 'chapter') {
+    const bodyBlock = body
+      ? `<p class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${esc(body)}</p>`
+      : '';
+    return fill(tpl, {
+      ...common,
+      ...chapterMotionTiming(ms),
+      GHOST: onOff(slot.ghost, true),
+      BLOBS: onOff(slot.blobs, true),
+      RAIL: onOff(slot.rail, true),
+      WAVE_FIELD: waveFieldMarkup(p, `wtChWave${chapterNo}${flowIndex}`, { rings: 10 }),
+      BODY_BLOCK: bodyBlock,
+    });
+  }
+
+  const chapterTitle = String(props.chapterTitle || 'Getting started');
+  const bodyBlock = body
+    ? `<div class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${esc(body)}</div>`
+    : '';
+  return fill(tpl, {
+    ...common,
+    ...captionMotionTiming(ms),
+    SEAT: slot.seat,
+    CAP_ALIGN: slot.align,
+    CAP_MAX: slot.maxWidth,
+    CAP_BOTTOM: slot.bottom,
+    CAP_INSET: slot.inset,
+    EYEBROW: esc(chapterTitle),
+    EYEBROW_RAW: escAttr(chapterTitle),
+    WAVE_FIELD: waveFieldMarkup(p, `wtCapWave${chapterNo}${flowIndex}`, { rings: 7 }),
+    BODY_BLOCK: bodyBlock,
+  });
+}
+
+/**
+ * On-screen hold for a flow call: the recorded mark (with `edit.cards` applied) wins — that is
+ * what the timeline shows and what produce bakes; the authored holdMs only covers unrecorded takes.
+ */
+export function cardHoldMs(call, mark) {
+  const kind = call.kind === 'chapter' ? 'chapter' : 'caption';
+  const fromMark = mark && Number(mark.dur) > 0 ? Math.round(Number(mark.dur) * 1000) : null;
+  return clampCardHoldMs(fromMark || call.holdMs || defaultCardHoldMs(kind), kind);
+}
+
+export function liveCardPaths(video) {
+  const dir = join(video.out, 'overlays');
+  return { dir, css: join(dir, 'overlays.css') };
+}
+
+export function cardId(kind, flowIndex) {
+  return `overlay:${kind === 'step' ? 'caption' : kind}:${flowIndex}`;
+}
+
+export function parseCardId(id) {
+  const m = String(id || '').match(/^overlay:(chapter|caption):(\d+)$/);
+  if (!m) return null;
+  return { kind: m[1], flowIndex: Number(m[2]) };
+}
+
+/** Build Studio preview HTML for every chapter()/say() in flow.mjs. */
+export function buildLiveCards(video) {
+  const paths = liveCardPaths(video);
+  mkdirSync(paths.dir, { recursive: true });
+  copyFileSync(join(TEMPLATES, 'overlays.css'), paths.css);
+
+  const flowPath = join(video.dir, 'flow.mjs');
+  const calls = existsSync(flowPath) ? parseFlowCalls(readFileSync(flowPath, 'utf8')) : [];
+  // One pairing for every consumer: the card carries its mark's key so bake and Studio match by id.
+  const markByCall = pairCallsToMarks(calls, loadCardMarks(video));
+  const shell = readFileSync(join(TEMPLATES, 'overlay-preview.html'), 'utf8');
+  const p = palette(video.brand);
+  const look = resolveOverlays(video.brand, video.brand.direction || video.config?.direction || {});
+  const cards = [];
+  let chapterNo = 0;
+  let chapterTitle = '';
+
+  for (const call of calls) {
+    const isChapter = call.kind === 'chapter';
+    if (isChapter) {
+      chapterNo += 1;
+      chapterTitle = call.title;
+    }
+    const kind = isChapter ? 'chapter' : 'caption';
+    const id = cardId(kind, call.index);
+    const mark = markByCall.get(call.index) || null;
+    const ms = cardHoldMs(call, mark);
+    const fragment = renderLiveCardHtml(video.brand, kind, {
+      chapterNo: isChapter ? chapterNo : Math.max(1, chapterNo),
+      chapterTitle,
+      title: call.title,
+      body: call.body,
+      ms,
+      flowIndex: call.index,
+      ...(isChapter ? cardCopyFor(video, call.index) || {} : {}),
+    });
+    const html = fill(shell, {
+      LABEL: esc(call.title || id),
+      FONT_CSS: p.fontCss,
+      FONT: p.font,
+      INK: p.ink,
+      SURFACE: p.surface,
+      DURATION: (ms / 1000).toFixed(2),
+      KIND: kind,
+      CARD_ID: id,
+      OVERLAY: fragment,
+    });
+    const file = join(paths.dir, `${id.replace(/:/g, '-')}.html`);
+    if (!existsSync(file) || readFileSync(file, 'utf8') !== html) writeFileSync(file, html);
+    cards.push({
+      id,
+      kind,
+      flowIndex: call.index,
+      label: call.title,
+      body: call.body || '',
+      chapterNo: isChapter ? chapterNo : Math.max(1, chapterNo),
+      holdMs: ms,
+      markKey: mark?.key || null,
+      htmlPath: file,
+      htmlUrl: `/media/${video.slug}/overlays/${id.replace(/:/g, '-')}.html`,
+      type: kind,
+      look: kind === 'chapter' ? look.chapter : look.caption,
+    });
+  }
+
+  return { dir: paths.dir, cards, look };
+}
+
+/** List overlay previews for Program (rebuilds HTML only when content changed). */
+export function listLiveCards(video) {
+  const { cards } = buildLiveCards(video);
+  return cards.map((c) => ({
+    id: c.id,
+    label: c.kind === 'chapter' ? `Ch ${c.chapterNo} · ${c.label}` : `Caption · ${c.label}`,
+    type: c.kind,
+    kind: c.kind,
+    flowIndex: c.flowIndex,
+    markKey: c.markKey,
+    holdMs: c.holdMs,
+    htmlUrl: `${c.htmlUrl}?t=${Date.now()}`,
+    path: c.htmlPath,
+    mp4Url: null,
+    encode: null,
+    liveCard: true,
+  }));
+}
+
+/** Apply Studio inline edit onto flow.mjs (title/body) and video.config.json (chapter label, ghost number). */
+export async function saveLiveCardCopy(video, cardIdStr, fields = {}) {
+  const parsed = parseCardId(cardIdStr);
+  if (!parsed) throw new Error(`Not a live card id: ${cardIdStr}`);
+  const hasCopy = fields.title != null || fields.body != null;
+  const hasChrome = parsed.kind === 'chapter' && (fields.chapter != null || fields.number != null);
+  if (!hasCopy && !hasChrome) throw new Error('No text fields to save');
+  let result = { op: 'card-copy', index: parsed.flowIndex };
+  if (hasCopy) {
+    const { applyScriptStructure } = await import('./script.mjs');
+    const patch = { op: 'call-update', index: parsed.flowIndex };
+    if (fields.title != null) patch.title = fields.title;
+    if (fields.body != null) patch.body = fields.body;
+    result = await applyScriptStructure(video, patch);
+  }
+  if (hasChrome) writeCardChrome(video, parsed.flowIndex, fields);
+  return result;
+}
+
+function writeCardChrome(video, flowIndex, fields) {
+  const calls = existsSync(join(video.dir, 'flow.mjs'))
+    ? parseFlowCalls(readFileSync(join(video.dir, 'flow.mjs'), 'utf8'))
+    : [];
+  let chapterNo = 0;
+  for (const call of calls) {
+    if (call.kind !== 'chapter') continue;
+    chapterNo += 1;
+    if (call.index === flowIndex) break;
+  }
+  const { fallback } = chapterChrome(chapterNo || 1);
+  const raw = JSON.parse(readFileSync(video.configPath, 'utf8'));
+  const copy = { ...(raw.liveCardCopy || {}) };
+  const key = String(flowIndex);
+  const next = { ...(copy[key] || {}) };
+  if (fields.chapter != null) {
+    const v = String(fields.chapter).trim().slice(0, 48);
+    if (!v || v === `Chapter ${fallback}`) delete next.kicker;
+    else next.kicker = v;
+  }
+  if (fields.number != null) {
+    const v = String(fields.number).trim().slice(0, 8);
+    if (!v || v === fallback) delete next.num;
+    else next.num = v;
+  }
+  if (Object.keys(next).length) copy[key] = next;
+  else delete copy[key];
+  if (Object.keys(copy).length) raw.liveCardCopy = copy;
+  else delete raw.liveCardCopy;
+  writeFileSync(video.configPath, JSON.stringify(raw, null, 2) + '\n');
+  video.config.liveCardCopy = raw.liveCardCopy;
+}

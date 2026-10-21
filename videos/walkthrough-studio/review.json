@@ -1,0 +1,74 @@
+{
+  "script": {
+    "status": "approved",
+    "history": [
+      {
+        "action": "approved",
+        "at": "2026-10-18T21:21:27.128Z",
+        "hash": "bee85182a456"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-18T21:34:32.611Z",
+        "hash": "e7621bd865c5"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-18T21:45:54.516Z",
+        "hash": "90df082b95d3"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T04:44:56.591Z",
+        "hash": "691e91dc0799"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T04:50:39.280Z",
+        "hash": "dc6407ef753d"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T05:02:51.862Z",
+        "hash": "90df082b95d3"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T05:40:28.591Z",
+        "hash": "838db6b24876"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T06:44:58.953Z",
+        "hash": "bdb6e108e34c"
+      }
+    ],
+    "hash": "bdb6e108e34c",
+    "approvedAt": "2026-10-19T06:44:58.953Z",
+    "note": ""
+  },
+  "cut": {
+    "status": "approved",
+    "history": [
+      {
+        "action": "approved",
+        "at": "2026-10-18T21:30:53.177Z",
+        "version": "20261018-233052"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-18T21:53:31.483Z",
+        "version": "20261018-235331"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-19T05:18:29.436Z",
+        "version": "20261019-071829"
+      }
+    ],
+    "note": "",
+    "version": "20261019-071829",
+    "approvedAt": "2026-10-19T05:18:29.436Z",
+    "scriptHash": "90df082b95d3"
+  }
+}

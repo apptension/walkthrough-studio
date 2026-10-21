@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{LABEL}}</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        /* Transparent so Studio can composite captions over the recording.
+           color-scheme must match the Studio page or Chrome paints an opaque white canvas. */
+        background: transparent;
+        color-scheme: dark;
+        font-family: '{{FONT}}', ui-sans-serif, system-ui, sans-serif;
+      }
+      .preview-stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: transparent;
+      }
+      /* Program picker / still preview: give chapters a brand field behind the card. */
+      body[data-kind='chapter']:not([data-motion='1']):not(.studio-edit):not([data-composite='1']) .preview-stage {
+        background:
+          radial-gradient(ellipse 70% 55% at 50% 45%, {{SURFACE}} 0%, transparent 70%),
+          {{INK}};
+      }
+      /* Editor / bake composite over the recording — never matte the take. */
+      body[data-composite='1'] .preview-stage {
+        background: transparent !important;
+      }
+      /* Live cards are position:fixed; pin them inside the stage for the iframe. */
+      .preview-stage .wt-ch,
+      .preview-stage .wt-cap {
+        position: absolute;
+      }
+      body.studio-edit .wt {
+        pointer-events: auto;
+      }
+    </style>
+  </head>
+  <body data-duration="{{DURATION}}" data-kind="{{KIND}}" data-card-id="{{CARD_ID}}">
+    <div class="preview-stage">{{OVERLAY}}</div>
+  </body>
+</html>

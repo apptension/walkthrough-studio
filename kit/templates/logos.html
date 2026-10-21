@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Logos plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --cols: {{LOGO_COLS}};
+        --dur: 5.4s;
+        --black-out: 4.8s;
+        --n: {{ITEM_COUNT}};
+      }
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 44px; padding: 64px 100px;
+        animation: fadeOut 0.7s 4.35s var(--exit) forwards;
+      }
+      .head { text-align: center; max-width: 1100px; }
+      .eyebrow {
+        font-size: 14px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.8s 0.2s var(--expo) both;
+      }
+      .title {
+        margin-top: 14px; font-size: 52px; font-weight: 600; letter-spacing: -0.04em;
+        opacity: 0; animation: fadeUp 0.9s 0.35s var(--expo) both;
+      }
+      .sub {
+        margin: 14px auto 0; max-width: 46ch; font-size: 20px; color: var(--muted); line-height: 1.4;
+        opacity: 0; animation: fadeUp 0.8s 0.5s var(--expo) both;
+      }
+      /* 2×3 (or auto) grid fills the mid-frame — no empty lower third */
+      /* Balanced rows: the last row centres instead of leaving one tile alone on the left. */
+      .wall {
+        --gap-x: 32px;
+        width: 100%; max-width: 1480px;
+        display: flex; flex-wrap: wrap; justify-content: center;
+        gap: 28px var(--gap-x);
+      }
+      .wall > .logo-tile { width: calc((100% - (var(--cols) - 1) * var(--gap-x)) / var(--cols)); }
+      .logo-tile {
+        --land: 22px;
+        opacity: 0;
+        transform-origin: 50% 80%;
+        animation: fxLand var(--motion-enter, 0.9s) var(--s) var(--expo) both;
+      }
+      /* Tone is set by lib/logoTone.mjs from mark luminance (override with logos[].bg). */
+      .logo-frame {
+        height: 148px; border-radius: 24px; padding: 28px 32px;
+        display: grid; place-items: center;
+        border: 1px solid transparent;
+        box-shadow: 0 14px 32px color-mix(in srgb, var(--shade, var(--ink)) 35%, transparent);
+      }
+      .logo-frame[data-tone="light"] {
+        background:
+          linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, #f4f7f2 70%, var(--gold) 8%) 100%);
+        border-color: color-mix(in srgb, #0a1f0a 10%, transparent);
+        box-shadow:
+          0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset,
+          0 16px 36px color-mix(in srgb, var(--shade, var(--ink)) 42%, transparent);
+      }
+      .logo-frame[data-tone="dark"] {
+        background: color-mix(in srgb, var(--surface) 78%, #000 12%);
+        border-color: color-mix(in srgb, var(--muted) 28%, transparent);
+        box-shadow: 0 14px 32px color-mix(in srgb, var(--shade, var(--ink)) 45%, transparent);
+      }
+      .logo-frame img {
+        max-width: 100%; max-height: 88px; width: auto; height: auto;
+        object-fit: contain;
+      }
+      .logo-frame[data-tone="dark"] img {
+        filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--shade, var(--ink)) 35%, transparent));
+      }
+      .logo-label {
+        margin-top: 14px; text-align: center;
+        font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
+      }
+      .bloom {
+        position: absolute; left: 50%; top: 50%; width: 1200px; height: 560px; margin: -280px 0 0 -600px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 10%, transparent), transparent 70%);
+        opacity: 0; animation: fadeIn 1.1s 0.15s ease-out both, fadeOut 0.7s 4.35s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="5.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.35s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+          <p class="sub" data-edit="sub" data-edit-kind="text" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
+        </div>
+        <div class="wall">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

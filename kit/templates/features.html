@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Features plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.0s;
+        --black-out: 5.35s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+        --card-pop: var(--motion-pop, 0.94);
+      }
+      /* One vertical composition — title + capability grid fill the FHD frame */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 40px; padding: 56px 72px 52px;
+        animation: fadeOut 0.7s 4.95s var(--exit) forwards;
+      }
+      .head { text-align: center; flex: none; z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 16px; font-size: 64px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      /*
+        Count-aware grid on Full HD:
+        3 → single row of three wide cards
+        4 → 2×2
+        5 → 3 top + 2 centered below (primary five-card case)
+        6 → 3×2
+      */
+      .cards {
+        width: 100%; max-width: 1680px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 28px;
+        flex: none;
+      }
+      .card {
+        position: relative;
+        box-sizing: border-box;
+        min-height: 320px;
+        background:
+          linear-gradient(165deg, color-mix(in srgb, var(--gold) 14%, transparent), transparent 48%),
+          color-mix(in srgb, var(--surface) 88%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+        border-radius: 28px;
+        padding: 44px 28px 40px;
+        text-align: center;
+        box-shadow:
+          0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 48%, transparent),
+          inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
+        --land: 36px;
+        opacity: 0;
+        transform-origin: 50% 80%;
+        animation: fxLand var(--card-in) var(--s) var(--expo) both;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        will-change: transform, opacity, filter;
+      }
+      .cards[data-n="3"] .card { min-height: 360px; }
+      .cards[data-n="4"] {
+        max-width: 1280px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 32px;
+      }
+      .cards[data-n="4"] .card { min-height: 300px; }
+      /* 6-col spine: top trio spans 2 cols each; bottom pair sits in the center four */
+      .cards[data-n="5"] {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 28px 24px;
+      }
+      .cards[data-n="5"] .card:nth-child(1) { grid-column: 1 / 3; }
+      .cards[data-n="5"] .card:nth-child(2) { grid-column: 3 / 5; }
+      .cards[data-n="5"] .card:nth-child(3) { grid-column: 5 / 7; }
+      .cards[data-n="5"] .card:nth-child(4) { grid-column: 2 / 4; }
+      .cards[data-n="5"] .card:nth-child(5) { grid-column: 4 / 6; }
+      .cards[data-n="5"] .card { min-height: 300px; }
+      .cards[data-n="6"] {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .cards[data-n="6"] .card { min-height: 280px; }
+      .icon {
+        width: 76px; height: 76px; margin: 0 auto 22px; border-radius: 22px;
+        display: grid; place-items: center; color: var(--on-accent, #041004);
+        background: linear-gradient(145deg, var(--gold), var(--amber));
+        box-shadow:
+          0 0 0 7px color-mix(in srgb, var(--gold) 18%, transparent),
+          0 14px 32px color-mix(in srgb, var(--gold) 32%, transparent);
+        animation: fxPop 0.7s calc(var(--s) + 0.18s) var(--pop) both;
+      }
+      .icon svg { width: 34px; height: 34px; }
+      .num {
+        position: absolute; top: 18px; right: 22px;
+        font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted);
+        opacity: 0; animation: fadeIn 0.5s calc(var(--s) + 0.35s) ease-out both;
+      }
+      .label {
+        font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15;
+      }
+      .note {
+        margin-top: 14px; font-size: 18px; color: var(--muted); line-height: 1.42;
+        text-wrap: balance; max-width: 22ch;
+      }
+      .corner-logo {
+        flex: none; width: 200px; opacity: 0;
+        animation: fadeUp 0.85s 1.35s var(--expo) both;
+      }
+      .corner-logo .logo svg { max-height: 32px; }
+      .bloom {
+        position: absolute; left: 50%; top: 52%; width: 1500px; height: 720px; margin: -360px 0 0 -750px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 14%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.15s 0.15s ease-out both, fadeOut 0.7s 4.95s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.0">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="cards" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div>
+        <div class="corner-logo">{{LOGO}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -1,0 +1,275 @@
+/**
+ * Camera direction for the live reel, applied in the lossless clean pass:
+ *   - auto zoom: eased push-ins that follow the pointer from click to click (from `click`/`type`
+ *     marks the recorder writes), kept clear of chapter cards, captions and lenses;
+ *   - inset frame: the take as a rounded window with a soft shadow on a brand background.
+ * The product UI is only scaled, never graded.
+ */
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { BT709_PARAMS, BT709_SCALE_OPTS } from './encode.mjs';
+import { run } from './media.mjs';
+
+export const ZOOM_LEVELS = Object.freeze({ off: 0, subtle: 1.3, bold: 1.65 });
+export const FRAME_STYLES = Object.freeze(['full', 'inset']);
+export const BACKGROUNDS = Object.freeze(['brand', 'ink', 'accent']);
+export const FRAME_PADDING = Object.freeze({ tight: 0.95, balanced: 0.9, roomy: 0.82 });
+export const FRAME_CORNERS = Object.freeze({ square: 0, soft: 22, round: 42 });
+export const FRAME_SHADOWS = Object.freeze(['off', 'soft', 'deep']);
+
+const IN = 0.75;
+const OUT = 0.85;
+const PAN = 0.65;
+/** Ease lengths shared with the Studio's live preview so the on-screen push-in matches the render. */
+export const ZOOM_TIMING = Object.freeze({ in: IN, out: OUT, pan: PAN });
+const HOLD_AFTER = 1.6;
+const MERGE_GAP = 2.8;
+const MIN_HOLD = 0.5;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const even = (v) => Math.round(v / 2) * 2;
+const f3 = (v) => Number(v).toFixed(3);
+
+/** Windows where the frame must stay whole: cards and captions are part of the picture. */
+export function blockedWindows(timeline) {
+  const out = [];
+  for (const m of timeline) {
+    if (!Number.isFinite(m.t)) continue;
+    if (m.kind === 'chapter') out.push([m.t - 0.3, m.t + (m.dur || 2.8) + 0.4]);
+    else if (m.kind === 'caption') out.push([m.t - 0.3, m.t + (m.dur || 2.4) + 0.5]);
+    else if (m.kind === 'magnify' && m.dur) out.push([m.t - 0.3, m.t + m.dur + 0.3]);
+    else if (m.kind === 'zoom' && m.dur) out.push([m.t, m.t + m.dur]);
+    // Editor "keep whole" windows (edit.zoomSkips) — auto zoom stays out, manual zooms still apply.
+    else if (m.kind === 'nozoom' && m.dur) out.push([m.t, m.t + m.dur]);
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
+
+/**
+ * Group pointer targets into zoom shots. Returns [{ start, end, zoom, points: [{ t, cx, cy }] }]
+ * plus how many targets fell inside a blocked window.
+ */
+export function planZooms(timeline = [], { width, height, level = 'off', duration = Infinity } = {}) {
+  const zoom = ZOOM_LEVELS[level] || 0;
+  const targets = timeline
+    .filter((m) => (m.kind === 'click' || m.kind === 'type') && Number.isFinite(m.x) && Number.isFinite(m.y))
+    .sort((a, b) => a.t - b.t);
+  const manual = timeline
+    .filter((m) => m.kind === 'zoom' && Number.isFinite(m.t) && Number.isFinite(m.dur) && m.dur > 0)
+    .map((m) => {
+      const z = Number.isFinite(m.zoom) ? clamp(m.zoom, 1.1, 2.2) : ZOOM_LEVELS[m.level] || ZOOM_LEVELS.bold;
+      const x = Number.isFinite(m.x) ? m.x : m.rect ? m.rect.x + m.rect.w / 2 : width / 2;
+      const y = Number.isFinite(m.y) ? m.y : m.rect ? m.rect.y + m.rect.h / 2 : height / 2;
+      const halfW = width / (2 * z);
+      const halfH = height / (2 * z);
+      return {
+        start: Number(f3(Math.max(0, m.t))),
+        end: Number(f3(Math.min(duration, m.t + m.dur))),
+        zoom: z,
+        source: m.source === 'edit' ? 'edit' : 'manual',
+        ...(m.id ? { id: m.id } : {}),
+        points: [{ t: m.t + Math.min(IN, m.dur * 0.35), cx: Math.round(clamp(x, halfW, width - halfW)), cy: Math.round(clamp(y, halfH, height - halfH)) }],
+      };
+    })
+    .filter((shot) => shot.end - shot.start >= IN + OUT + 0.15);
+  if ((!zoom || !targets.length) && !manual.length) {
+    return { shots: [], skipped: 0, targets: targets.length, manual: 0 };
+  }
+  const blocked = blockedWindows(timeline);
+  const isBlocked = (t) => blocked.some(([a, b]) => t >= a && t <= b);
+  const usable = zoom ? targets.filter((m) => !isBlocked(m.t)) : [];
+
+  const groups = [];
+  for (const m of usable) {
+    const last = groups.at(-1);
+    const between = last && blocked.some(([a, b]) => a < m.t && b > last.at(-1).t);
+    if (last && m.t - last.at(-1).t < MERGE_GAP && !between) last.push(m);
+    else groups.push([m]);
+  }
+
+  const halfW = width / (2 * zoom);
+  const halfH = height / (2 * zoom);
+  const shots = [];
+  for (const group of groups) {
+    const first = group[0].t;
+    const lastT = group.at(-1).t;
+    let start = Math.max(0, first - IN - 0.15);
+    let end = Math.min(duration, lastT + HOLD_AFTER + OUT);
+    for (const [a, b] of blocked) {
+      if (b <= first && b > start) start = b;
+      if (a >= lastT && a < end) end = a;
+    }
+    if (end - start < IN + OUT + MIN_HOLD) continue;
+    const points = group.map((m) => ({
+      t: m.t,
+      cx: Math.round(clamp(m.x, halfW, width - halfW)),
+      cy: Math.round(clamp(m.y, halfH, height - halfH)),
+    }));
+    shots.push({ start: Number(f3(start)), end: Number(f3(end)), zoom, source: 'auto', points });
+  }
+  shots.push(...manual);
+  shots.sort((a, b) => a.start - b.start);
+  return { shots, skipped: zoom ? targets.length - usable.length : 0, targets: targets.length, manual: manual.length };
+}
+
+/** Smootherstep: zero velocity and acceleration at both ends. */
+const ease = (from, dur) => {
+  const u = `clip((t-${f3(from)})/${f3(Math.max(0.001, dur))},0,1)`;
+  return `(${u}*${u}*${u}*(${u}*(${u}*6-15)+10))`;
+};
+
+function zoomExpr(shots) {
+  const terms = shots.map((s) => {
+    const inE = ease(s.start, IN);
+    const outE = ease(s.end - OUT, OUT);
+    return `${(s.zoom - 1).toFixed(4)}*${inE}*(1-${outE})*between(t,${f3(s.start)},${f3(s.end)})`;
+  });
+  return `(1+${terms.join('+')})`;
+}
+
+function centerExpr(shots, key) {
+  const points = [];
+  for (const s of shots) {
+    const pts = s.points;
+    points.push({ t: s.start, v: pts[0][key] });
+    for (let i = 1; i < pts.length; i++) {
+      points.push({ t: Math.max(pts[i - 1].t, pts[i].t - PAN), v: pts[i - 1][key] });
+      points.push({ t: pts[i].t, v: pts[i][key] });
+    }
+    points.push({ t: s.end, v: pts.at(-1)[key] });
+  }
+  let out = String(points.at(-1).v);
+  for (let i = points.length - 2; i >= 0; i--) {
+    const a = points[i];
+    const b = points[i + 1];
+    const value = a.v === b.v ? String(a.v) : `${a.v}+(${b.v - a.v})*${ease(a.t, b.t - a.t)}`;
+    out = `if(lt(t,${f3(b.t)}),${value},${out})`;
+  }
+  return out;
+}
+
+/**
+ * Per-frame push-in. Scale first (lanczos, continuous zoom), then crop at output resolution, so a
+ * pan never steps by whole source pixels. No colour conversion happens here.
+ */
+export function zoomFilter(shots, { width, height }) {
+  if (!shots?.length) return null;
+  const Z = zoomExpr(shots);
+  const cx = centerExpr(shots, 'cx');
+  const cy = centerExpr(shots, 'cy');
+  const sw = `trunc(${width}*${Z}/2)*2`;
+  const sh = `trunc(${height}*${Z}/2)*2`;
+  const keep = 'in_color_matrix=bt709:out_color_matrix=bt709:in_range=tv:out_range=tv';
+  return (
+    `scale=w='${sw}':h='${sh}':eval=frame:flags=lanczos+accurate_rnd+full_chroma_int:${keep},` +
+    `crop=${width}:${height}:x='clip((${cx})*${Z}-${width / 2},0,${sw}-${width})':` +
+    `y='clip((${cy})*${Z}-${height / 2},0,${sh}-${height})':exact=1`
+  );
+}
+
+/** Window geometry for the inset frame. */
+export function insetGeometry({ width, height, padding = 'balanced', corners = 'soft' }) {
+  const inset = FRAME_PADDING[padding] || FRAME_PADDING.balanced;
+  const w = even(width * inset);
+  const h = even(height * inset);
+  return {
+    w,
+    h,
+    x: 2 * Math.floor((width - w) / 4),
+    y: 2 * Math.floor((height - h) / 4) - (padding === 'roomy' ? 8 : 4),
+    radius: FRAME_CORNERS[corners] ?? FRAME_CORNERS.soft,
+  };
+}
+
+const hex = (c, fallback) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c.slice(1) : fallback);
+
+/** Rounded-rect coverage (anti-aliased) as a geq expression over a w×h frame. */
+function roundedMask(w, h, r) {
+  const dx = `max(abs(X-${w / 2}+0.5)-${w / 2 - r},0)`;
+  const dy = `max(abs(Y-${h / 2}+0.5)-${h / 2 - r},0)`;
+  return `255*clip(${r}+0.5-hypot(${dx},${dy}),0,1)`;
+}
+
+/**
+ * Background (gradient + accent glow + window shadow) and the window alpha mask, rendered once
+ * per brand colours and frame size, then cached beside the take.
+ */
+export function frameAssets(
+  video,
+  { width, height, background = 'brand', padding = 'balanced', corners = 'soft', shadow = 'soft', geo = insetGeometry({ width, height, padding, corners }) }
+) {
+  const colors = video.brand.colors || {};
+  const ink = hex(colors.ink, '0b1020');
+  const surface = hex(colors.surface, ink);
+  const accent = hex(colors.gold, '7c5cff');
+  const secondary = hex(colors.amber, accent);
+  const key = createHash('sha1')
+    .update(JSON.stringify({ v: 3, width, height, background, shadow, ink, surface, accent, secondary, geo }))
+    .digest('hex')
+    .slice(0, 12);
+  const dir = join(video.out, 'camera');
+  mkdirSync(dir, { recursive: true });
+  const bg = join(dir, `frame-bg-${key}.png`);
+  const mask = join(dir, `frame-mask-${key}.png`);
+  if (existsSync(bg) && existsSync(mask)) return { bg, mask, geo };
+
+  const [c0, c1] =
+    background === 'accent' ? [accent, secondary] : background === 'ink' ? [ink, ink] : [surface, ink];
+  const glow = background === 'ink' ? '00' : background === 'accent' ? '40' : '55';
+  const shadowSpec =
+    shadow === 'off'
+      ? { offset: 0, sigma: 1, opacity: 0 }
+      : shadow === 'deep'
+        ? { offset: 24, sigma: 44, opacity: 0.8 }
+        : { offset: 18, sigma: 34, opacity: 0.62 };
+  const shadowMask = roundedMask(geo.w, geo.h, geo.radius);
+  run(
+    'ffmpeg',
+    [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', `gradients=s=${width}x${height}:c0=0x${c0}:c1=0x${c1}:x0=0:y0=0:x1=${width}:y1=${height}:speed=0:nb_colors=2:d=1`,
+      '-f', 'lavfi', '-i', `gradients=s=${width}x${height}:type=radial:c0=0x${accent}${glow}:c1=0x${accent}00:x0=${Math.round(width * 0.82)}:y0=${Math.round(height * 0.12)}:x1=${Math.round(width * 0.3)}:y1=${Math.round(height * 0.95)}:speed=0:nb_colors=2:d=1`,
+      '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:d=1`,
+      '-filter_complex',
+      [
+        `[0:v]format=rgba[base]`,
+        `[1:v]format=rgba[glow]`,
+        `[base][glow]overlay=format=auto[lit]`,
+        `color=c=black:s=${geo.w}x${geo.h}:d=1,format=gray,geq=lum='${shadowMask}'[win]`,
+        `color=c=black:s=${width}x${height}:d=1,format=gray[canvas]`,
+        `[canvas][win]overlay=x=${geo.x}:y=${geo.y + shadowSpec.offset}[sm]`,
+        `[sm]gblur=sigma=${shadowSpec.sigma},lutyuv=y='val*${shadowSpec.opacity}'[salpha]`,
+        `[2:v]format=gray[blk]`,
+        `[blk][salpha]alphamerge[shadow]`,
+        `[lit][shadow]overlay=format=auto,format=rgb24[out]`,
+      ].join(';'),
+      '-map', '[out]', '-frames:v', '1', '-update', '1', bg,
+    ],
+    'frame background'
+  );
+  run(
+    'ffmpeg',
+    [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', `color=c=black:s=${geo.w}x${geo.h}:d=1`,
+      '-vf', `format=gray,geq=lum='${roundedMask(geo.w, geo.h, geo.radius)}'`,
+      '-frames:v', '1', '-update', '1', mask,
+    ],
+    'frame mask'
+  );
+  return { bg, mask, geo };
+}
+
+/**
+ * Inputs + graph for the inset frame. `src` is the live label; returns the output label's graph.
+ * Background is converted once from RGB to tagged BT.709 like every other picture.
+ */
+export function frameGraph({ src, out, bgIdx, maskIdx, geo, width, height }) {
+  return [
+    `${src}scale=${geo.w}:${geo.h}:flags=lanczos+accurate_rnd+full_chroma_int:in_color_matrix=bt709:out_color_matrix=bt709:in_range=tv:out_range=tv,format=yuva420p[fwin]`,
+    `[${maskIdx}:v]format=gray[fmask]`,
+    `[fwin][fmask]alphamerge[fwa]`,
+    `[${bgIdx}:v]scale=${width}:${height}:${BT709_SCALE_OPTS},format=yuv420p,${BT709_PARAMS}[fbg]`,
+    `[fbg][fwa]overlay=x=${geo.x}:y=${geo.y}:format=auto:shortest=1,format=yuv420p,${BT709_PARAMS}${out}`,
+  ].join(';');
+}

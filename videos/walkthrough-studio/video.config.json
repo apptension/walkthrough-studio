@@ -1,0 +1,137 @@
+{
+  "title": "Walkthrough Studio",
+  "audience": "People who need a tool to build walkthroughs of their products based on Cursor / Claude Code agents",
+  "brand": "apptension-walkthrough-studio",
+  "open": {
+    "eyebrow": "The showcase cut",
+    "title": [
+      "This is",
+      "*Walkthrough Studio.*"
+    ],
+    "sub": "The desk we use to ship every walkthrough — *brief to master*"
+  },
+  "interstitials": [
+    {
+      "id": "capabilities",
+      "type": "features",
+      "before": "Meet Studio",
+      "title": "What Studio automates",
+      "eyebrow": "Best of the desk",
+      "items": [
+        {
+          "label": "Stage bar",
+          "note": "Brief through Deliver, gated",
+          "icon": "dashboard"
+        },
+        {
+          "label": "Agent draft",
+          "note": "Script from your product brief",
+          "icon": "spark"
+        },
+        {
+          "label": "Live capture",
+          "note": "Real Playwright tour of the app",
+          "icon": "calendar"
+        },
+        {
+          "label": "Brand plates",
+          "note": "Open, proof, and close frames",
+          "icon": "chart"
+        },
+        {
+          "label": "Handoff pack",
+          "note": "Master, captions, chapters, poster",
+          "icon": "export"
+        }
+      ]
+    },
+    {
+      "id": "path",
+      "type": "journey",
+      "before": "Start from a brief",
+      "title": "Your path in Studio",
+      "eyebrow": "The tour ahead",
+      "steps": [
+        {
+          "label": "Brief",
+          "note": "Audience, outcome, what to show",
+          "icon": "dashboard"
+        },
+        {
+          "label": "Script",
+          "note": "Approve copy before you record",
+          "icon": "check"
+        },
+        {
+          "label": "Record",
+          "note": "Live walkthrough of the real app",
+          "icon": "calendar"
+        },
+        {
+          "label": "Cut",
+          "note": "Watch, then pin the release",
+          "icon": "filter"
+        },
+        {
+          "label": "Deliver",
+          "note": "Export the client handoff pack",
+          "icon": "export"
+        }
+      ]
+    }
+  ],
+  "close": {
+    "title": [
+      "Every walkthrough.",
+      "One *studio.*"
+    ],
+    "steps": [
+      {
+        "label": "Brief and approve",
+        "note": "Pin the story before you record"
+      },
+      {
+        "label": "Record and render",
+        "note": "Live app, plates, and voice"
+      },
+      {
+        "label": "Export the pack",
+        "note": "Master, captions, chapters, poster"
+      }
+    ]
+  },
+  "chapterLabels": {
+    "start": "Meet Studio"
+  },
+  "record": {
+    "startUrl": "http://localhost:4747",
+    "waitUntil": "domcontentloaded",
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "slowMo": 22
+  },
+  "env": {
+    "appUrl": "http://localhost:4747"
+  },
+  "direction": {
+    "focus": "guided",
+    "scale": "official",
+    "logo": "logo-source.svg",
+    "camera": {
+      "frame": "inset",
+      "zoom": "subtle",
+      "padding": "balanced",
+      "corners": "soft",
+      "shadow": "soft"
+    },
+    "cursor": {
+      "style": "arrow",
+      "loop": false
+    }
+  },
+  "transitions": {
+    "style": "wipe"
+  }
+}

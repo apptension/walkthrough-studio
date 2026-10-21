@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Walkthrough Studio" fill="none">
+  <!-- Official mark — same as kit/studio/logo.svg (Rams isometric capture deck). -->
+  <defs>
+    <linearGradient id="wsFace" x1="8" y1="10" x2="56" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5a5f66"/>
+      <stop offset="55%" stop-color="#454a51"/>
+      <stop offset="100%" stop-color="#34383e"/>
+    </linearGradient>
+    <linearGradient id="wsSide" x1="40" y1="18" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2f3338"/>
+      <stop offset="100%" stop-color="#1e2226"/>
+    </linearGradient>
+    <linearGradient id="wsTop" x1="12" y1="8" x2="48" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6a7078"/>
+      <stop offset="100%" stop-color="#4a5058"/>
+    </linearGradient>
+    <linearGradient id="wsScreen" x1="16" y1="20" x2="44" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e8ebe4"/>
+      <stop offset="100%" stop-color="#c9cec4"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="32" cy="56.5" rx="18" ry="3.2" fill="#000" opacity="0.18"/>
+
+  <path d="M14 22 L32 12 L50 22 L32 32 Z" fill="url(#wsTop)"/>
+  <path d="M14 22 L32 32 L32 50 L14 40 Z" fill="url(#wsFace)"/>
+  <path d="M32 32 L50 22 L50 40 L32 50 Z" fill="url(#wsSide)"/>
+
+  <path d="M16.5 24.2 L32 33.2 L32 47.8 L16.5 38.8 Z" fill="#3d4249" opacity="0.55"/>
+
+  <path d="M19 26.5 L31.2 33.4 L31.2 43.2 L19 36.3 Z" fill="url(#wsScreen)"/>
+
+  <path d="M22.4 30.2 L22.4 35.8 L27.2 33 Z" fill="#2a2e33"/>
+  <path d="M27.6 30.4 L30.8 32.2 L30.5 32.9 L27.3 31.1 Z" fill="#2a2e33" opacity="0.85"/>
+  <path d="M27.6 32.6 L29.8 33.9 L29.5 34.5 L27.3 33.2 Z" fill="#2a2e33" opacity="0.5"/>
+
+  <path d="M14.15 28.2 L14.15 37.1 L15.4 37.8 L15.4 28.9 Z" fill="#7a9b6a"/>
+
+  <circle cx="40.2" cy="36.5" r="0.55" fill="#8a9098" opacity="0.55"/>
+  <circle cx="42.4" cy="35.3" r="0.55" fill="#8a9098" opacity="0.45"/>
+  <circle cx="44.6" cy="34.1" r="0.55" fill="#8a9098" opacity="0.35"/>
+  <circle cx="40.2" cy="39.2" r="0.55" fill="#8a9098" opacity="0.45"/>
+  <circle cx="42.4" cy="38" r="0.55" fill="#8a9098" opacity="0.35"/>
+  <circle cx="44.6" cy="36.8" r="0.55" fill="#8a9098" opacity="0.28"/>
+</svg>

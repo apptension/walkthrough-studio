@@ -1,0 +1,45 @@
+{
+  "name": "Apptension Walkthrough Studio",
+  "slug": "apptension-walkthrough-studio",
+  "url": "http://localhost:4747",
+  "appUrl": "http://localhost:4747",
+  "harvestedAt": "2026-10-18T21:17:51.877Z",
+  "pages": [
+    {
+      "url": "http://localhost:4747/?slug=walkthrough-studio",
+      "title": "Walkthrough Studio",
+      "h1": "This is Walkthrough Studio.",
+      "sub": "The desk we use to ship every walkthrough — brief to master",
+      "logos": [],
+      "colors": {
+        "ctaBg": "rgba(255, 255, 255, 0.02)",
+        "ctaColor": "rgb(196, 202, 214)",
+        "bodyBg": "rgb(9, 10, 12)",
+        "bodyColor": "rgb(242, 244, 248)",
+        "font": "\"Plus Jakarta Sans\", system-ui, sans-serif"
+      }
+    },
+    {
+      "url": "http://localhost:4747/?slug=walkthrough-studio",
+      "title": "Walkthrough Studio",
+      "h1": "This is Walkthrough Studio.",
+      "sub": "The desk we use to ship every walkthrough — brief to master",
+      "logos": [],
+      "colors": {
+        "ctaBg": "rgba(255, 255, 255, 0.02)",
+        "ctaColor": "rgb(196, 202, 214)",
+        "bodyBg": "rgb(9, 10, 12)",
+        "bodyColor": "rgb(242, 244, 248)",
+        "font": "\"Plus Jakarta Sans\", system-ui, sans-serif"
+      }
+    }
+  ],
+  "logos": [
+    {
+      "kind": "guess",
+      "href": "http://localhost:4747/logo.svg",
+      "score": 70
+    }
+  ],
+  "warning": "No logo asset downloaded — wordmark placeholder only. Grab the official SVG/PNG manually."
+}

@@ -1,0 +1,45 @@
+<style>{{OVERLAY_CSS}}
+  .wt-ch {
+    --wt-font: {{FONT}};
+    --wt-ink: {{INK}};
+    --wt-surface: {{SURFACE}};
+    --wt-gold: {{GOLD}};
+    --wt-amber: {{AMBER}};
+    --wt-text: {{TEXT}};
+    --wt-muted: {{MUTED}};
+    --wt-on-accent: {{ON_ACCENT}};
+    --x-body: {{X_BODY}}s;
+    --x-line: {{X_LINE}}s;
+    --x-title: {{X_TITLE}}s;
+    --x-eye: {{X_EYE}}s;
+    --x-ghost: {{X_GHOST}}s;
+    --x-atm: {{X_ATM}}s;
+  }
+</style>
+<div
+  class="wt wt-ch atm-{{ATMOSPHERE}} energy-{{ENERGY}}"
+  data-sheen="{{SHEEN}}"
+  data-ghost="{{GHOST}}"
+  data-blobs="{{BLOBS}}"
+  data-rail="{{RAIL}}"
+  data-kind="chapter"
+  data-flow-index="{{FLOW_INDEX}}"
+>
+  <div class="dim"></div>
+  <div class="lift"></div>
+  <div class="blob warm"></div>
+  <div class="blob cool"></div>
+  <div class="bloom"></div>
+  <div class="wave-haze"></div>
+  {{WAVE_FIELD}}
+  <div class="rail-top"></div>
+  <div class="ghost" data-edit="number" data-edit-kind="text" data-edit-raw="{{NUM_RAW}}">{{NUM}}</div>
+  <div class="content">
+    <div class="eyebrow" data-edit="chapter" data-edit-kind="text" data-edit-raw="{{KICKER_RAW}}">{{KICKER}}</div>
+    <h2 class="title" data-edit="title" data-edit-kind="text" data-edit-raw="{{TITLE_RAW}}">
+      <span class="mask"><span>{{TITLE}}</span></span>
+    </h2>
+    <div class="line"></div>
+    {{BODY_BLOCK}}
+  </div>
+</div>

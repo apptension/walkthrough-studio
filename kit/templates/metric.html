@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Metric plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 5.8s;
+        --black-out: 5.15s;
+        --progress: {{PROGRESS}};
+        --card-in: var(--motion-enter, 0.9s);
+      }
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        gap: 96px; padding: 72px 140px;
+        animation: fadeOut 0.7s 4.75s var(--exit) forwards;
+      }
+      /* Left: the ring + hero number. Right: what it means. */
+      .m-card {
+        --s: 0.3s;
+        flex: none; width: 520px; height: 520px; border-radius: 50%;
+        display: grid; place-items: center;
+        opacity: 0;
+        transform: translateY(calc(20px + var(--card-lift))) scale(0.92);
+        animation: ringIn var(--card-in) var(--s) var(--expo) both;
+      }
+      .m-card { overflow: visible; }
+      .m-card::after { display: none; }
+      @keyframes ringIn {
+        from { opacity: 0; transform: translateY(calc(20px + var(--card-lift))) scale(0.92); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .ring circle { fill: none; stroke-width: 14; }
+      .ring .ring-track { stroke-width: 14; }
+      .ring .ring-fill,
+      .ring .ring-glow {
+        --draw-to: calc(1 - var(--progress));
+        stroke-dasharray: 1; stroke-dashoffset: 1;
+        animation: fxDraw 1.7s 0.85s var(--inout) both;
+      }
+      .ring .ring-glow {
+        stroke: color-mix(in srgb, var(--gold) 35%, transparent); stroke-width: 34;
+        filter: blur(14px);
+        transform-origin: 50% 50%; transform: rotate(-90deg);
+      }
+      .ring .tick {
+        stroke: color-mix(in srgb, var(--muted) 35%, transparent); stroke-width: 2;
+        opacity: 0; animation: fadeIn 0.6s calc(0.6s + var(--i) * 0.03s) ease-out both;
+      }
+      .m-face {
+        position: relative; z-index: 1; display: grid; place-items: center; text-align: center;
+        width: 380px;
+      }
+      .value {
+        font-size: {{VALUE_SIZE}}px; font-weight: 700; letter-spacing: -0.055em; line-height: 1;
+        font-variant-numeric: tabular-nums; width: 100%; white-space: nowrap;
+        background: linear-gradient(120deg, var(--text), var(--gold));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        opacity: 0; animation: fadeUp 0.8s 0.75s var(--expo) both;
+      }
+      .unit {
+        margin-top: 10px; font-size: 16px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.7s 1.05s var(--expo) both;
+      }
+      .m-copy {
+        flex: 0 1 760px; display: flex; flex-direction: column; justify-content: center;
+      }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.5s var(--expo) both;
+      }
+      .title {
+        margin-top: 18px; font-size: 62px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.06;
+        opacity: 0; animation: fadeUp 0.9s 0.65s var(--expo) both;
+      }
+      .note {
+        margin-top: 22px; font-size: 24px; color: var(--muted); line-height: 1.45; max-width: 30ch; text-wrap: pretty;
+        opacity: 0; animation: fadeUp 0.8s 0.95s var(--expo) both;
+      }
+      .pills { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 12px; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 8px 14px; border-radius: 999px;
+        font-size: 15px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted);
+        background: color-mix(in srgb, var(--surface) 80%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        opacity: 0; transform: translateY(14px) scale(0.96);
+        animation: pillIn 0.7s var(--s) var(--expo) both;
+      }
+      .pill::before {
+        content: ''; width: 9px; height: 9px; border-radius: 50%;
+        background: linear-gradient(140deg, var(--gold), var(--amber));
+        box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 60%, transparent);
+      }
+      @keyframes pillIn { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      .bloom {
+        position: absolute; left: 34%; top: 50%; width: 1000px; height: 760px; margin: -380px 0 0 -500px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 15%, transparent), transparent 66%);
+        opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 4.75s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="5.8">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="m-card">
+          <svg class="ring" viewBox="0 0 520 520" aria-hidden="true">
+            <defs>
+              <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" style="stop-color: var(--gold)" />
+                <stop offset="1" style="stop-color: var(--amber)" />
+              </linearGradient>
+            </defs>
+            {{TICKS}}
+            <circle class="ring-track" cx="260" cy="260" r="222" />
+            <circle class="ring-glow" cx="260" cy="260" r="222" pathLength="1" />
+            <circle class="ring-fill" cx="260" cy="260" r="222" pathLength="1" />
+          </svg>
+          <div class="m-face">
+            <div class="value" data-fit="1" data-fit-min="44" data-count data-count-start="0.9" data-count-dur="1.6" data-edit="value" data-edit-raw="{{VALUE_RAW}}">{{VALUE}}</div>
+            <div class="unit" data-edit="unit" data-edit-raw="{{UNIT_RAW}}">{{UNIT}}</div>
+          </div>
+        </div>
+        <div class="m-copy">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="3" data-fit-min="38" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.65s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+          <p class="note" data-edit="note" data-edit-kind="text" data-edit-raw="{{NOTE_RAW}}">{{NOTE}}</p>
+          <div class="pills">{{PILLS}}</div>
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

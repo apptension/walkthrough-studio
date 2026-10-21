@@ -1,0 +1,5 @@
+node_modules/
+.env
+# Local plate/render scratch if someone runs the kit from the plugin tree
+tmp/
+*.mp4

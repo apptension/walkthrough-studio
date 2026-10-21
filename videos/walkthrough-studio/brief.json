@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-18T21:17:50.267Z",
+  "title": "Walkthrough Studio",
+  "product": "Walkthrough Studio",
+  "audience": "People who need a tool to build walkthroughs of their products based on Cursor / Claude Code agents",
+  "outcome": "Use the tool fully, have great understanding what it does and best things it offers",
+  "lengthSec": 120,
+  "tone": "confident, warm, plain-spoken",
+  "brand": {
+    "id": "apptension-walkthrough-studio",
+    "mode": "new",
+    "name": "Apptension Walkthrough Studio",
+    "url": "http://localhost:4747",
+    "appUrl": "http://localhost:4747"
+  },
+  "app": {
+    "startUrl": "http://localhost:4747",
+    "appUrl": "http://localhost:4747",
+    "marketingUrl": null,
+    "loginRequired": false,
+    "envVars": [],
+    "sourcePath": "/Users/zczarnecki/Documents/Projects/mip/repos/mip/.cursor/skills/product-walkthrough-video",
+    "notes": ""
+  },
+  "story": {
+    "mustShow": [
+      "Overview, what it can do (use best functions), what it does for users and what it automates"
+    ],
+    "keyMessages": [],
+    "mustSay": [],
+    "avoid": []
+  },
+  "proof": {
+    "plates": [
+      "features",
+      "journey"
+    ],
+    "stats": [],
+    "quotes": [],
+    "logos": []
+  }
+}

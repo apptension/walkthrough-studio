@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Testimonials plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        /* Timing filled from plates.mjs (carousel stretches for more waves) */
+        --dur: {{DUR}}s;
+        --black-out: {{BLACK_OUT}}s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.88s);
+        --card-pop: var(--motion-pop, 0.92);
+        --card-stagger: var(--motion-stagger, 0.13s);
+        --x-compose: {{X_COMPOSE}}s;
+        --x-card: {{X_CARD}}s;
+        /* Soft spring + cinematic dissolve curves */
+        --spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+        --dissolve: cubic-bezier(0.4, 0, 0.7, 0.2);
+      }
+
+      /* Centered FHD composition — head breathes, flood fills the mid-frame */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: stretch; justify-content: center;
+        gap: 28px; padding: 64px 56px 56px;
+        animation: fadeOut 0.78s var(--x-compose) var(--exit) forwards;
+      }
+      .head {
+        text-align: center; flex: none; z-index: 2;
+        padding: 0 24px;
+      }
+      .eyebrow {
+        font-size: 14px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase;
+        color: var(--gold);
+        opacity: 0; animation: fadeUp 0.7s 0.08s var(--expo) both;
+      }
+      .title {
+        margin-top: 12px; font-size: 44px; font-weight: 600; letter-spacing: -0.042em; line-height: 1.06;
+        opacity: 0; animation: fadeUp 0.8s 0.2s var(--expo) both;
+      }
+
+      /*
+        Flood fills remaining FHD height (slots stretch; cards fill slots).
+        3 → three tall columns
+        4 → 2×2
+        5 → two heroes + three below
+        6 → 3×2 dense masonry (cascade / dual-wave)
+        7–8 → 4×2
+      */
+      .flood {
+        flex: 1 1 auto; min-height: 0;
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: 1fr 1fr;
+        gap: 16px;
+        align-content: stretch;
+      }
+
+      /* Slot owns grid cell motion (float + dissolve); card owns enter */
+      .t-slot {
+        position: relative;
+        min-height: 0;
+        height: 100%;
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1) rotate(var(--rot, 0deg));
+        transform-origin: 50% 55%;
+        animation:
+          tFloat 3.6s calc(var(--s) + var(--card-in)) ease-in-out both,
+          tDissolve 0.95s calc(var(--x-card) + var(--xd, 0s)) var(--dissolve) forwards;
+        will-change: transform, opacity, filter;
+      }
+
+      .t-card {
+        position: relative;
+        isolation: isolate;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 26px 28px 22px;
+        border-radius: 24px;
+        background:
+          linear-gradient(155deg, color-mix(in srgb, var(--gold) 16%, transparent), transparent 44%),
+          linear-gradient(200deg, color-mix(in srgb, var(--surface) 94%, #000 6%), color-mix(in srgb, var(--ink) 35%, var(--surface)));
+        border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+        box-shadow:
+          0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 55%, transparent),
+          inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--gold) 8%, transparent);
+        display: flex; flex-direction: column; gap: 10px;
+        min-height: 0; overflow: hidden;
+        opacity: 0;
+        transform: translate3d(0, 52px, 0) scale(var(--card-pop)) rotate(calc(var(--rot, 0deg) * -0.4));
+        filter: blur(10px) saturate(0.85);
+        animation: tIn var(--card-in) var(--s) var(--spring) both;
+        will-change: transform, opacity, filter;
+      }
+      .t-card::before {
+        content: '';
+        position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+        background:
+          radial-gradient(ellipse 70% 55% at 12% 0%, color-mix(in srgb, var(--gold) 20%, transparent), transparent 58%),
+          radial-gradient(ellipse 50% 40% at 100% 100%, color-mix(in srgb, var(--amber) 12%, transparent), transparent 60%);
+        opacity: 0;
+        animation: fadeIn 0.85s calc(var(--s) + 0.22s) ease-out both;
+      }
+      .t-card::after {
+        content: '';
+        position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; z-index: 0;
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 0%, transparent);
+        opacity: 0;
+        animation: rimPulse 2.6s calc(var(--s) + var(--card-in)) ease-in-out both;
+      }
+      .t-card > * { position: relative; z-index: 1; }
+
+      /* Wave-2 cards (cascade): delayed enter, earlier dissolve */
+      .t-slot[data-wave="2"] {
+        animation:
+          tFloat 3.2s calc(var(--s) + var(--card-in)) ease-in-out both,
+          tDissolve 0.9s calc(var(--x-card) + 0.12s + var(--xd, 0s)) var(--dissolve) forwards;
+      }
+      .t-slot[data-wave="2"] .t-card {
+        background:
+          linear-gradient(155deg, color-mix(in srgb, var(--amber) 14%, transparent), transparent 46%),
+          linear-gradient(200deg, color-mix(in srgb, var(--surface) 90%, #000 10%), color-mix(in srgb, var(--ink) 40%, var(--surface)));
+      }
+
+      /* 3-up: own the full remaining height */
+      .flood[data-n="3"] {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: 1fr;
+        gap: 20px;
+      }
+      .flood[data-n="3"] .t-card {
+        padding: 34px 32px 28px;
+        border-radius: 28px;
+      }
+
+      /* 6 = 3×2 grid (unique quotes) or dual-wave cascade */
+      .flood[data-n="6"] {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: 1fr 1fr;
+        gap: 16px 18px;
+      }
+      .flood[data-n="6"] .t-card {
+        padding: 26px 24px 20px;
+        border-radius: 24px;
+      }
+      /* Cascade dual-wave: heroes taller, echoes denser */
+      .flood[data-n="6"][data-mode="cascade"] {
+        grid-template-rows: 1.12fr 0.88fr;
+        gap: 14px 18px;
+      }
+      .flood[data-n="6"][data-mode="cascade"] .t-slot[data-wave="1"] { z-index: 2; }
+      .flood[data-n="6"][data-mode="cascade"] .t-slot[data-wave="2"] { z-index: 1; }
+      .flood[data-n="6"][data-mode="cascade"] .t-slot[data-wave="1"] .t-card {
+        padding: 30px 28px 24px;
+        border-radius: 26px;
+      }
+      .flood[data-n="6"][data-mode="cascade"] .t-slot[data-wave="2"] .t-card {
+        padding: 22px 24px 18px;
+        border-radius: 22px;
+      }
+      /* Wave 1 dissolves mid-plate; wave 2 is already rising into the lower row */
+      .flood[data-n="6"][data-mode="cascade"] .t-slot[data-wave="1"] {
+        animation:
+          tFloat 2.8s calc(var(--s) + var(--card-in)) ease-in-out both,
+          tDissolve 1.05s calc(3.55s + var(--xd, 0s)) var(--dissolve) forwards;
+      }
+
+      .flood[data-n="4"] {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: 1fr 1fr;
+        gap: 18px;
+      }
+      .flood[data-n="4"] .t-card { padding: 28px 26px 22px; }
+
+      .flood[data-n="5"] .t-slot:nth-child(1) { grid-column: 1 / 3; grid-row: 1 / 2; }
+      .flood[data-n="5"] .t-slot:nth-child(2) { grid-column: 3 / 5; grid-row: 1 / 2; }
+      .flood[data-n="5"] .t-slot:nth-child(3) { grid-column: 1 / 2; grid-row: 2 / 3; }
+      .flood[data-n="5"] .t-slot:nth-child(4) { grid-column: 2 / 4; grid-row: 2 / 3; }
+      .flood[data-n="5"] .t-slot:nth-child(5) { grid-column: 4 / 5; grid-row: 2 / 3; }
+
+      .flood[data-n="7"],
+      .flood[data-n="8"] {
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .flood:not([data-mode="carousel"]) .t-slot:nth-child(n+9) { display: none; }
+
+      /*
+        Carousel: 3 content-sized cards per wave, stacked in the same columns.
+        Each wave rolls in (spring) → holds → dissolves; next wave overlaps slightly.
+      */
+      .flood[data-mode="carousel"] {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: 1fr;
+        gap: 22px;
+        align-items: center;
+        justify-items: stretch;
+        max-width: 1720px;
+        margin: 0 auto;
+        width: 100%;
+        padding: 8px 8px 12px;
+      }
+      .flood[data-mode="carousel"] .t-slot {
+        grid-row: 1;
+        grid-column: calc(var(--col, 0) + 1);
+        z-index: var(--z, 1);
+        width: 100%;
+        height: auto;
+        max-height: 100%;
+        align-self: center;
+        justify-self: stretch;
+        opacity: 0;
+        transform: translate3d(0, 36px, 0) scale(0.96) rotate(var(--rot, 0deg));
+        transform-origin: 50% 55%;
+        animation:
+          carIn 0.72s var(--s) var(--spring) both,
+          carFloat 2.2s calc(var(--s) + 0.72s) ease-in-out both,
+          carOut 0.7s calc(var(--s) + var(--hold, 2.55s)) var(--dissolve) forwards;
+        will-change: transform, opacity, filter;
+      }
+      .flood[data-mode="carousel"] .t-card {
+        height: auto;
+        min-height: 0;
+        max-height: min(620px, 100%);
+        padding: 28px 26px 22px;
+        border-radius: 26px;
+        overflow: visible;
+        opacity: 1;
+        transform: none;
+        filter: none;
+        animation: none;
+      }
+      .flood[data-mode="carousel"] .t-card::before,
+      .flood[data-mode="carousel"] .t-card::after {
+        animation: none;
+        opacity: 1;
+      }
+      .flood[data-mode="carousel"] .t-card::after {
+        opacity: 0.45;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent),
+          0 0 18px color-mix(in srgb, var(--gold) 12%, transparent);
+      }
+      .flood[data-mode="carousel"] .mark {
+        font-size: 72px;
+        opacity: 1;
+        transform: none;
+        animation: none;
+        margin-bottom: 2px;
+      }
+      .flood[data-mode="carousel"] .stars {
+        opacity: 1;
+      }
+      .flood[data-mode="carousel"] .star {
+        opacity: 1;
+        transform: none;
+        animation: none;
+      }
+      .flood[data-mode="carousel"] .quote {
+        flex: 0 1 auto;
+        overflow: visible;
+        opacity: 1;
+        transform: none;
+        animation: none;
+      }
+      .flood[data-mode="carousel"] .meta {
+        opacity: 1;
+        transform: none;
+        animation: none;
+        padding-top: 12px;
+      }
+      .flood[data-mode="carousel"] .meta-accent {
+        opacity: 1;
+        transform: none;
+        animation: none;
+      }
+      @keyframes carIn {
+        0% {
+          opacity: 0;
+          filter: blur(10px) saturate(0.75);
+          transform: translate3d(calc(var(--dx, 0px) * 0.4), 44px, 0) scale(calc(var(--card-pop) - 0.02)) rotate(calc(var(--rot, 0deg) * -0.6));
+        }
+        62% {
+          opacity: 1;
+          filter: blur(0) saturate(1);
+        }
+        82% {
+          transform: translate3d(0, -5px, 0) scale(1.02) rotate(var(--rot, 0deg));
+        }
+        100% {
+          opacity: 1;
+          filter: blur(0) saturate(1);
+          transform: translate3d(0, 0, 0) scale(1) rotate(var(--rot, 0deg));
+        }
+      }
+      @keyframes carFloat {
+        0%   { transform: translate3d(0, 0, 0) scale(1) rotate(var(--rot, 0deg)); }
+        50%  { transform: translate3d(var(--dx, 0px), var(--amp, -6px), 0) scale(1.01) rotate(var(--rot, 0deg)); }
+        100% { transform: translate3d(0, calc(var(--amp, -6px) * 0.2), 0) scale(1.005) rotate(var(--rot, 0deg)); }
+      }
+      @keyframes carOut {
+        0% {
+          opacity: 1;
+          filter: blur(0);
+          transform: translate3d(0, calc(var(--amp, -6px) * 0.2), 0) scale(1.005) rotate(var(--rot, 0deg));
+        }
+        100% {
+          opacity: 0;
+          filter: blur(12px);
+          transform: translate3d(0, -32px, 0) scale(0.94) rotate(calc(var(--rot, 0deg) * 1.3));
+        }
+      }
+
+      @keyframes tIn {
+        0% {
+          opacity: 0;
+          transform: translate3d(0, 56px, 0) scale(calc(var(--card-pop) - 0.04)) rotate(calc(var(--rot, 0deg) * -0.5));
+          filter: blur(12px) saturate(0.7);
+        }
+        55% {
+          opacity: 1;
+          filter: blur(0) saturate(1);
+        }
+        78% {
+          transform: translate3d(0, -6px, 0) scale(1.02) rotate(var(--rot, 0deg));
+        }
+        100% {
+          opacity: 1;
+          transform: translate3d(0, 0, 0) scale(1) rotate(var(--rot, 0deg));
+          filter: blur(0) saturate(1);
+        }
+      }
+      /* Continuous breath — amplitude via --amp (px), phase via animation-delay */
+      @keyframes tFloat {
+        0%   { transform: translate3d(0, 0, 0) scale(1) rotate(var(--rot, 0deg)); }
+        35%  { transform: translate3d(var(--dx, 0px), calc(var(--amp, -7px) * 1), 0) scale(1.012) rotate(var(--rot, 0deg)); }
+        70%  { transform: translate3d(calc(var(--dx, 0px) * -0.6), calc(var(--amp, -7px) * 0.35), 0) scale(1.006) rotate(var(--rot, 0deg)); }
+        100% { transform: translate3d(0, calc(var(--amp, -7px) * 0.15), 0) scale(1.004) rotate(var(--rot, 0deg)); }
+      }
+      @keyframes tDissolve {
+        0% {
+          opacity: 1;
+          filter: blur(0);
+          transform: translate3d(0, calc(var(--amp, -7px) * 0.15), 0) scale(1.004) rotate(var(--rot, 0deg));
+        }
+        100% {
+          opacity: 0;
+          filter: blur(14px);
+          transform: translate3d(0, -28px, 0) scale(0.94) rotate(calc(var(--rot, 0deg) * 1.4));
+        }
+      }
+
+      .mark {
+        flex: none;
+        font-size: 88px; font-weight: 700; line-height: 0.7; letter-spacing: -0.06em;
+        color: color-mix(in srgb, var(--gold) 78%, var(--text));
+        text-shadow: 0 0 40px color-mix(in srgb, var(--gold) 40%, transparent);
+        opacity: 0; transform: translateY(12px) scale(0.85);
+        animation: markIn 0.65s calc(var(--s) + 0.16s) var(--pop) both;
+        user-select: none; pointer-events: none;
+      }
+      .flood[data-n="3"] .mark { font-size: 108px; margin-bottom: 2px; }
+      .flood[data-n="6"] .t-slot[data-wave="1"] .mark { font-size: 96px; }
+      .flood[data-n="6"] .t-slot[data-wave="2"] .mark { font-size: 64px; }
+      @keyframes markIn {
+        from { opacity: 0; transform: translateY(18px) scale(0.68) rotate(-6deg); }
+        to { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+      }
+
+      .stars {
+        flex: none;
+        display: flex; gap: 5px;
+        font-size: 14px; letter-spacing: 0; color: var(--gold);
+        text-shadow: 0 0 20px color-mix(in srgb, var(--gold) 50%, transparent);
+        margin-top: -2px;
+      }
+      .flood[data-n="3"] .stars { font-size: 16px; gap: 6px; }
+      .star {
+        display: inline-block;
+        opacity: 0; transform: scale(0.35) translateY(8px);
+        animation: starPop 0.42s calc(var(--s) + 0.28s + var(--si, 0s)) var(--pop) both;
+      }
+      @keyframes starPop {
+        from { opacity: 0; transform: scale(0.3) translateY(10px) rotate(-12deg); }
+        70% { opacity: 1; transform: scale(1.12) translateY(-1px) rotate(2deg); }
+        to { opacity: 1; transform: scale(1) translateY(0) rotate(0deg); }
+      }
+
+      .quote {
+        font-size: var(--q, 22px); font-weight: 500; line-height: 1.28; letter-spacing: -0.018em;
+        text-wrap: pretty; flex: 1 1 auto; min-height: 0; overflow: hidden;
+        opacity: 0; transform: translateY(16px);
+        animation: quoteIn 0.78s calc(var(--s) + 0.34s) var(--expo) both;
+      }
+      @keyframes quoteIn {
+        from { opacity: 0; transform: translateY(18px); filter: blur(4px); }
+        to { opacity: 1; transform: translateY(0); filter: blur(0); }
+      }
+
+      .meta {
+        flex: none;
+        display: flex; flex-direction: column; gap: 4px;
+        margin-top: auto; padding-top: 14px;
+        border-top: 1px solid color-mix(in srgb, var(--gold) 22%, transparent);
+        opacity: 0; transform: translateY(10px);
+        animation: fadeUp 0.6s calc(var(--s) + 0.5s) var(--expo) both;
+      }
+      .author {
+        display: block;
+        font-size: 16px; font-weight: 600; letter-spacing: -0.015em;
+        color: var(--text);
+      }
+      .flood[data-n="3"] .author { font-size: 18px; }
+      .flood[data-n="6"] .t-slot[data-wave="2"] .author { font-size: 15px; }
+      .role {
+        display: block;
+        font-size: 13px; font-weight: 500; color: var(--muted);
+        letter-spacing: 0.02em;
+      }
+      .flood[data-n="3"] .role { font-size: 14px; }
+      .flood[data-n="6"] .author { font-size: 15px; }
+      .flood[data-n="6"] .role { font-size: 12px; }
+      .meta-accent {
+        width: 36px; height: 3px; border-radius: 2px; margin-bottom: 8px;
+        background: linear-gradient(90deg, var(--gold), var(--amber));
+        transform-origin: left center;
+        opacity: 0; transform: scaleX(0);
+        animation: ruleIn 0.5s calc(var(--s) + 0.46s) var(--expo) both;
+      }
+      @keyframes ruleIn {
+        from { opacity: 0; transform: scaleX(0); }
+        to { opacity: 1; transform: scaleX(1); }
+      }
+
+      .bloom {
+        position: absolute; left: 50%; top: 48%; width: 1680px; height: 860px;
+        margin: -430px 0 0 -840px; border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 14%, transparent), transparent 68%);
+        opacity: 0;
+        animation:
+          fadeIn 1.1s 0.06s ease-out both,
+          bloomPulse 4.5s 1.2s ease-in-out both,
+          fadeOut 0.78s var(--x-compose) var(--exit) forwards;
+      }
+      @keyframes bloomPulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.06); opacity: 0.85; }
+      }
+      @keyframes rimPulse {
+        0% {
+          opacity: 0;
+          box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 0%, transparent);
+        }
+        35% {
+          opacity: 1;
+          box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent),
+            0 0 28px color-mix(in srgb, var(--gold) 22%, transparent);
+        }
+        100% {
+          opacity: 0.55;
+          box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 18%, transparent),
+            0 0 12px color-mix(in srgb, var(--gold) 10%, transparent);
+        }
+      }
+    </style>
+  </head>
+  <body data-duration="{{DUR}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="32" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.2s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="flood" data-n="{{ITEM_COUNT}}" data-mode="{{FLOOD_MODE}}">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+    <script>
+      /**
+       * Binary-search the largest quote size that fills each card's remaining box.
+       * Tall columns / cascade heroes start higher so type owns the panel.
+       */
+      window.__fitPlate = async function fitQuotes() {
+        await document.fonts.ready;
+        const flood = document.querySelector('.flood');
+        const cards = [...document.querySelectorAll('.t-card')];
+        const n = Number(flood?.dataset.n || cards.length);
+        const mode = flood?.dataset.mode || 'grid';
+        for (const card of cards) {
+          const quote = card.querySelector('.quote');
+          if (!quote) continue;
+          const slot = card.closest('.t-slot');
+          const wave = slot?.dataset.wave || '1';
+          const wide = card.offsetWidth > 520;
+          const tall = card.offsetHeight > 480;
+          const chars = (quote.textContent || '').replace(/\s+/g, ' ').trim().length;
+          // Carousel cards size to content — pick a readable type size, no stretch-to-fill.
+          if (mode === 'carousel') {
+            let px = chars < 70 ? 26 : chars < 100 ? 22 : chars < 140 ? 19 : chars < 180 ? 17 : 15;
+            quote.style.setProperty('--q', px.toFixed(2) + 'px');
+            quote.dataset.fitPx = px.toFixed(1);
+            quote.dataset.mode = mode;
+            continue;
+          }
+          let max = n === 3 ? 34 : n === 6 && wave === '1' ? 28 : wide ? 26 : 20;
+          if (tall) max += n === 3 ? 6 : wave === '1' ? 3 : 1;
+          if (wave === '2') max = Math.min(max, 20);
+          if (chars < 70) max += 4;
+          else if (chars < 100) max += 2;
+          else if (chars > 160) max -= 4;
+          else if (chars > 130) max -= 2;
+          const min = n === 3 ? 18 : wave === '2' ? 12 : 13;
+          let lo = min;
+          let hi = max;
+          let best = min;
+          const fits = (px) => {
+            quote.style.setProperty('--q', px.toFixed(2) + 'px');
+            void quote.offsetHeight;
+            return (
+              quote.scrollHeight <= quote.clientHeight + 1 &&
+              quote.scrollWidth <= quote.clientWidth + 1 &&
+              card.scrollHeight <= card.clientHeight + 1
+            );
+          };
+          while (hi - lo > 0.2) {
+            const mid = (lo + hi) / 2;
+            if (fits(mid)) {
+              best = mid;
+              lo = mid;
+            } else {
+              hi = mid;
+            }
+          }
+          if (!fits(best)) {
+            best = min;
+            for (let px = max; px >= min; px -= 0.5) {
+              if (fits(px)) {
+                best = px;
+                break;
+              }
+            }
+          }
+          quote.style.setProperty('--q', best.toFixed(2) + 'px');
+          quote.dataset.fitPx = best.toFixed(1);
+          quote.dataset.mode = mode;
+        }
+        document.body.dataset.fit = '1';
+      };
+      window.__fitPlate();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,115 @@
+{
+  "name": "Walkthrough Studio",
+  "platform": "From brief to client-ready master",
+  "font": {
+    "family": "Plus Jakarta Sans",
+    "css": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=block"
+  },
+  "colors": {
+    "ink": "#0e0f12",
+    "surface": "#15171c",
+    "gold": "#4da3ff",
+    "amber": "#2b7de9",
+    "teal": "#3dd68c",
+    "text": "#f2f4f8",
+    "muted": "#7d8698",
+    "onAccent": "#0e0f12"
+  },
+  "logo": "logo.html",
+  "motionBrief": "motion-brief.md",
+  "motion": {
+    "energy": "punchy",
+    "enterMs": 780,
+    "staggerMs": 90,
+    "pushScale": 1.045,
+    "exitMs": 620,
+    "cardPop": 0.94,
+    "blobDrift": 1.15,
+    "openLogoWidth": 360,
+    "openLogoTop": 46,
+    "openLiftScale": 0.55,
+    "openLiftY": -195
+  },
+  "sources": {
+    "marketing": "http://localhost:4747",
+    "app": "http://localhost:4747",
+    "logoSvg": "logo-source.svg",
+    "logoNote": "Official mark from kit/studio/logo.svg (Rams isometric capture deck)."
+  },
+  "audio": {
+    "voice": {
+      "provider": "elevenlabs",
+      "name": "Brian",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_v4",
+      "outputFormat": "mp3_44100_128",
+      "direction": "[energetic, clear, confident product narration]",
+      "settings": {
+        "stability": 0.42,
+        "similarity_boost": 0.78,
+        "style": 0.48,
+        "use_speaker_boost": true,
+        "speed": 1.08
+      },
+      "maxFitSpeed": 1.15,
+      "pronunciations": {}
+    },
+    "music": {
+      "provider": "elevenlabs",
+      "model": "music_v2_5",
+      "styles": [
+        "polished techno underscore",
+        "clean electronic pulse",
+        "subtle four-on-the-floor kick",
+        "warm analog synth pads",
+        "crisp hi-hats",
+        "soft sidechain pump",
+        "118 BPM",
+        "club-lite instrumental",
+        "modern product trailer bed"
+      ],
+      "negativeStyles": [
+        "vocals",
+        "lyrics",
+        "harsh distortion",
+        "industrial noise",
+        "busy lead melody",
+        "hardstyle",
+        "aggressive drops",
+        "orchestral",
+        "acoustic piano"
+      ],
+      "intro": [
+        "bright synth open",
+        "tight kick enters",
+        "product reveal energy"
+      ],
+      "bed": [
+        "steady techno pulse",
+        "pads under narration",
+        "groove without crowding speech",
+        "background music under narration"
+      ],
+      "outro": [
+        "resolving synth hit",
+        "kick fades",
+        "clean final chord"
+      ]
+    },
+    "mix": {
+      "voiceLufs": -16,
+      "plateLufs": -20,
+      "bedLufs": -31,
+      "duck": {
+        "threshold": 0.02,
+        "ratio": 3,
+        "attackMs": 20,
+        "releaseMs": 350
+      },
+      "targetLufs": -14,
+      "truePeakDb": -1,
+      "sampleRate": 48000,
+      "bitrate": "192k"
+    }
+  }
+}
