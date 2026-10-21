@@ -5572,6 +5572,10 @@ body.ss-is-dragging * {
   gap: 6px;
   align-items: center;
 }
+/* Pricing tier lines ("a · b · c") take a full row under the short columns. */
+.ss-plate-row input[data-struct-field='plate.row.lines'] {
+  grid-column: 1 / -2;
+}
 .sheet-dialog .ss-plate-row input {
   width: 100%;
   min-width: 0;

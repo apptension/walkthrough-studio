@@ -36,9 +36,16 @@
         opacity: 0; animation: fadeUp 0.8s 0.6s var(--expo) both;
       }
       .score .n {
-        font-size: 72px; font-weight: 700; letter-spacing: -0.05em; line-height: 1;
+        display: inline-grid; font-size: 72px; font-weight: 700; letter-spacing: -0.05em; line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      /* Digits 0…n share one cell; each shows at its check (--in) and hides at the next (--out). */
+      .score .n i {
+        grid-area: 1 / 1; font-style: normal;
         background: linear-gradient(120deg, var(--text), var(--gold));
         -webkit-background-clip: text; background-clip: text; color: transparent;
+        opacity: 0;
+        animation: fadeIn 0.01s var(--in) both, fadeOut 0.01s var(--out) forwards;
       }
       .score .of { font-size: 24px; font-weight: 600; color: var(--muted); letter-spacing: -0.02em; }
       .panel {
@@ -124,7 +131,7 @@
         <div class="head">
           <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
           <h1 class="title" data-fit="3" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
-          <div class="score" aria-hidden="true"><span class="n" data-count data-count-start="{{CK_START}}" data-count-dur="{{CK_SPAN}}">{{ITEM_COUNT}}</span><span class="of">/ {{ITEM_COUNT}} done</span></div>
+          <div class="score" aria-hidden="true"><span class="n">{{COUNTER}}</span><span class="of">/ {{ITEM_COUNT}} done</span></div>
         </div>
         <div class="panel">
           <div class="bar" aria-hidden="true"><i></i></div>

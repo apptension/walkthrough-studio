@@ -64,6 +64,18 @@ testimonials, and a journey map — not only mid-title cards.
 | `quote` | One hero quote on the full stage (12–260 chars; size autoscales), avatar initials or a `logo` asset, optional stars | `{ type, id, before, quote, author, role?, company?, stars?:true\|1–5, logo?/asset? }` |
 | `metric` | One number worth remembering — counts up inside a progress ring with ticks; 0–4 pills | `{ type, id, before, title, value, unit?, note?, progress?:0–1, pills:[] }` — `progress` defaults from a `%` value, else 0.76 |
 | `orbit` | 3–8 logos circling the brand lockup (≤4 on the inner ring, the rest outside), legend chips | `{ type, id, before, title, sub?, logos:[{asset,label?,bg?}] }` |
+| `process` | “How it works” — 3–5 numbered steps stacked beside the thesis; ghost numerals, a rail that draws down | `{ type, id, before, title, sub?, steps:[{label,note?}] }` |
+| `timeline` | Milestones, release history or roadmap — 3–6 dated stops on a rail that draws left→right; the last stop (or `featured`) is “now” | `{ type, id, before, title, steps:[{label,date?,note?,featured?}] }` |
+| `checklist` | What “done” looks like — 3–6 outcomes that tick off in order with a progress bar and an n / n counter | `{ type, id, before, title, items:[{label,note?}] }` (strings allowed) |
+| `kpi` | A dashboard-style board — 3–6 tiles with count-up values, delta pills (`+12%` / `−3`) and sparkline bars; use when several numbers moved | `{ type, id, before, title, stats:[{value,label,delta?,note?}] }` |
+| `statement` | One kinetic line — 1–3 title lines rise word by word with one `*accent*`, optional sub; a breath between dense sections | `{ type, id, before, title: string \| [lines], sub? }` (4–140 chars) |
+| `faq` | Objections answered before they are asked — 2–4 question → answer pairs | `{ type, id, before, title, items:[{label: question, note: answer}] }` |
+| `pricing` | Plans side by side — 2–3 tiers, one featured (`featured`, else middle/last) with a badge; prices count up, ≤5 lines each | `{ type, id, before, title, tiers:[{label,value,period?,note?,items?:[],featured?,badge?}] }` |
+| `team` | Roles, personas or people — 3–6 cards with initials avatars or a photo `asset` | `{ type, id, before, title, items:[{label,note?,asset?}] }` |
+
+Pick the type that carries the fact: one number → `metric`; several that moved → `kpi`; a mechanism → `process`;
+a path through the UI → `journey`; a shift → `compare`; a promise → `statement`; a release → `timeline`.
+Vary the set across a video and never place two plates of the same type back to back.
 
 `before` is the **chapter title** the plate precedes (must match a `chapter()` in the take).
 Narration for plates goes in `narration.mjs → plates: { <id>: '…' }`.
@@ -183,7 +195,7 @@ press **Accent** on the stage bar (or ⌘B / Ctrl+B) to mark or unmark them, or 
 into the accent as you go. Save writes the `*…*` source back to the config, so the editor and the render agree.
 
 **Type scales with the copy.** The limits above are targets, not cliffs. Each plate title has a line
-budget (2, or 3 on `metric` / `orbit`, one per line on open/close) and steps down toward its floor rather
+budget (2, or 3 on `metric` / `orbit` / `process` / `checklist` / `faq` / `statement`, one per line on open/close) and steps down toward its floor rather
 than overflowing; a row of stats values or two compare column heads always share one size. Short copy
 earns size: a ≤24-character callout title grows to 80px, a short quote to 76px, two-line compares set
 items at 30px. Headings balance their lines and copy never ends on a single word. If a plate still

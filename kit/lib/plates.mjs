@@ -853,10 +853,17 @@ function checklistItems(items) {
         </div>`;
     })
     .join('\n        ');
-  // Checks draw at --s + 0.3; the bar and counter run from the first to the last check.
+  // Checks draw at --s + 0.3; the bar and counter step from the first to the last check.
   const start = first + 0.3;
   const span = Math.max(0.6, (n - 1) * step + 0.2);
-  return { html, start: start.toFixed(2), span: span.toFixed(2) };
+  // Counter digits 0…n stacked in one cell; digit k shows as check k fills and hides at check k+1.
+  const lag = 0.2;
+  const counter = Array.from({ length: n + 1 }, (_, k) => {
+    const tin = k === 0 ? 0 : start + (k - 1) * step + lag;
+    const tout = k === n ? 999 : start + k * step + lag;
+    return `<i style="--in: ${tin.toFixed(2)}s; --out: ${tout.toFixed(2)}s">${k}</i>`;
+  }).join('');
+  return { html, counter, start: start.toFixed(2), span: span.toFixed(2) };
 }
 
 /** Deterministic sparkline bars: trend follows the delta sign, jitter follows the tile index. */
@@ -1221,6 +1228,7 @@ function buildInterstitial(video, it, paths, common) {
       ...title(it.title),
       ITEM_COUNT: items.length,
       ITEMS: ck.html,
+      COUNTER: ck.counter,
       CK_START: ck.start,
       CK_SPAN: ck.span,
     });

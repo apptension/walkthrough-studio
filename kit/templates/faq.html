@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>FAQ plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.75s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+      }
+      /* Questions arrive quiet from the left; each answer lands a beat later in a brand panel. */
+      .compose {
+        position: absolute; inset: 0;
+        display: grid; grid-template-columns: 500px 1fr; gap: 90px; align-items: center;
+        padding: 72px 140px 72px 170px;
+        animation: fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+      .head { z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 18px; font-size: 62px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .list { display: flex; flex-direction: column; gap: 30px; }
+      .fq { display: flex; flex-direction: column; gap: 12px; }
+      .fq-q {
+        display: flex; align-items: center; gap: 16px;
+        opacity: 0; animation: fxSlideL 0.7s var(--s) var(--expo) both;
+      }
+      .fq-mark {
+        flex: none; width: 46px; height: 46px; border-radius: 50%;
+        display: grid; place-items: center;
+        font-size: 23px; font-weight: 700; color: var(--muted);
+        background: color-mix(in srgb, var(--muted) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+        animation: fxPop 0.5s calc(var(--s) + 0.05s) var(--pop) both;
+      }
+      .fq-q .fq-text { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.2; color: color-mix(in srgb, var(--text) 80%, var(--muted)); }
+      .fq-a {
+        margin-left: 62px; padding: 22px 30px 22px 24px; border-radius: 0 22px 22px 22px;
+        display: flex; align-items: flex-start; gap: 16px;
+        background:
+          linear-gradient(165deg, color-mix(in srgb, var(--gold) 12%, transparent), transparent 55%),
+          color-mix(in srgb, var(--surface) 86%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+        border-left: 3px solid var(--gold);
+        box-shadow: 0 16px 36px color-mix(in srgb, var(--shade, var(--ink)) 40%, transparent);
+        --land: 20px; opacity: 0; transform-origin: 0% 0%;
+        animation: fxLand var(--card-in) calc(var(--s) + 0.3s) var(--expo) both;
+        will-change: transform, opacity, filter;
+      }
+      .fq-arrow { flex: none; width: 24px; height: 24px; margin-top: 3px; color: var(--gold); }
+      .fq-arrow svg { width: 24px; height: 24px; }
+      .fq-arrow path {
+        stroke: currentColor; stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 1; stroke-dashoffset: 1;
+        animation: fxDraw 0.55s calc(var(--s) + 0.5s) var(--inout) both;
+      }
+      .fq-a .fq-text { font-size: 25px; font-weight: 500; line-height: 1.42; letter-spacing: -0.015em; text-wrap: pretty; }
+      .list[data-n="4"] .fq-q .fq-text { font-size: 28px; }
+      .list[data-n="4"] .fq-a .fq-text { font-size: 21px; }
+      .list[data-n="4"] .fq-a { padding: 16px 24px 16px 20px; }
+      .list[data-n="4"] { gap: 18px; }
+      .list[data-n="2"] .fq-q .fq-text { font-size: 38px; }
+      .list[data-n="2"] .fq-a .fq-text { font-size: 28px; }
+      .list[data-n="2"] { gap: 44px; }
+      .bloom {
+        position: absolute; left: 62%; top: 50%; width: 1300px; height: 720px; margin: -360px 0 0 -650px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="3" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="list" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

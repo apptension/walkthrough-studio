@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>KPI plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.2s;
+        --black-out: 5.55s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+      }
+      /* A product-style board: compact tiles, count-up values, delta pills and sparkline bars. */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 40px; padding: 56px 100px 52px;
+        animation: fadeOut 0.7s 5.15s var(--exit) forwards;
+      }
+      .head { text-align: center; flex: none; z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 16px; font-size: 58px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .board {
+        width: 100%; max-width: 1560px; flex: none;
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+      }
+      .board[data-n="4"] { max-width: 1160px; grid-template-columns: repeat(2, 1fr); }
+      .board[data-n="5"] { grid-template-columns: repeat(6, 1fr); }
+      .board[data-n="5"] .k-tile:nth-child(1) { grid-column: 1 / 3; }
+      .board[data-n="5"] .k-tile:nth-child(2) { grid-column: 3 / 5; }
+      .board[data-n="5"] .k-tile:nth-child(3) { grid-column: 5 / 7; }
+      .board[data-n="5"] .k-tile:nth-child(4) { grid-column: 2 / 4; }
+      .board[data-n="5"] .k-tile:nth-child(5) { grid-column: 4 / 6; }
+      .k-tile {
+        position: relative; overflow: hidden;
+        min-height: 250px; padding: 28px 30px 24px; border-radius: 24px;
+        display: flex; flex-direction: column;
+        background: color-mix(in srgb, var(--surface) 82%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        box-shadow: 0 20px 44px color-mix(in srgb, var(--shade, var(--ink)) 44%, transparent);
+        --land: 28px; opacity: 0; transform-origin: 50% 80%;
+        animation: fxLand var(--card-in) var(--s) var(--expo) both;
+        will-change: transform, opacity, filter;
+      }
+      .board[data-n="3"] .k-tile { min-height: 300px; }
+      .k-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .k-label { font-size: 15px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+      .k-delta {
+        display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px 5px 8px; border-radius: 999px;
+        font-size: 15px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap;
+        opacity: 0; animation: fxPop 0.5s calc(var(--s) + 0.55s) var(--pop) both;
+      }
+      .k-delta svg { width: 14px; height: 14px; }
+      .k-delta path { stroke: currentColor; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .k-delta.up { color: var(--on-accent, #041004); background: linear-gradient(140deg, var(--gold), var(--amber)); box-shadow: 0 6px 18px color-mix(in srgb, var(--gold) 35%, transparent); }
+      .k-delta.down { color: var(--text); background: color-mix(in srgb, var(--muted) 18%, transparent); border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent); }
+      .k-delta.down svg { transform: rotate(180deg); }
+      .k-value {
+        margin-top: 18px; font-size: 72px; font-weight: 700; letter-spacing: -0.05em; line-height: 1; white-space: nowrap;
+        background: linear-gradient(120deg, var(--text), var(--gold));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.2s) var(--expo) both;
+      }
+      .board[data-n="5"] .k-value, .board[data-n="6"] .k-value { font-size: 60px; }
+      .k-note { margin-top: 10px; font-size: 16px; color: var(--muted); line-height: 1.35; opacity: 0; animation: fadeIn 0.6s calc(var(--s) + 0.5s) ease-out both; }
+      .k-spark {
+        margin-top: auto; padding-top: 18px; height: 70px;
+        display: flex; align-items: flex-end; gap: 6px;
+      }
+      .k-spark i {
+        flex: 1; height: calc(var(--h) * 52px); border-radius: 4px 4px 2px 2px;
+        background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 70%, transparent), color-mix(in srgb, var(--gold) 18%, transparent));
+        transform: scaleY(0); transform-origin: 50% 100%;
+        animation: sparkUp 0.55s calc(var(--s) + 0.42s + var(--b) * 0.05s) var(--expo) both;
+      }
+      .k-spark i:last-child { background: linear-gradient(180deg, var(--gold), var(--amber)); box-shadow: 0 0 14px color-mix(in srgb, var(--gold) 55%, transparent); }
+      @keyframes sparkUp { from { transform: scaleY(0); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }
+      .bloom {
+        position: absolute; left: 50%; top: 54%; width: 1500px; height: 700px; margin: -350px 0 0 -750px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.15s 0.15s ease-out both, fadeOut 0.7s 5.15s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.2">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="board" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -36,11 +36,12 @@
       .sub:empty { display: none; }
       .steps {
         display: flex; flex-direction: column; gap: 0;
-        --row: calc(min(190px, 760px / var(--n)));
+        --row: calc(min(250px, 860px / var(--n)));
+        --ghost: 128px; --dot-y: 54px;
       }
       .p-step {
         position: relative;
-        display: grid; grid-template-columns: 150px 1fr; gap: 28px; align-items: start;
+        display: grid; grid-template-columns: 220px 1fr; gap: 36px; align-items: start;
         min-height: var(--row);
         --land: 26px;
         opacity: 0; transform-origin: 0% 50%;
@@ -49,34 +50,37 @@
       }
       .p-num { position: relative; height: 100%; }
       .p-ghost {
-        display: block; font-size: 88px; font-weight: 700; letter-spacing: -0.06em; line-height: 0.9;
+        display: block; font-size: var(--ghost); font-weight: 700; letter-spacing: -0.06em; line-height: 0.9;
         background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--amber) 55%, transparent));
         -webkit-background-clip: text; background-clip: text; color: transparent;
         opacity: 0.92;
         font-variant-numeric: tabular-nums;
       }
       .p-dot {
-        position: absolute; left: 124px; top: 36px; width: 14px; height: 14px; border-radius: 50%;
+        position: absolute; left: 180px; top: var(--dot-y); width: 16px; height: 16px; border-radius: 50%;
         background: linear-gradient(140deg, var(--gold), var(--amber));
-        box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 16%, transparent);
+        box-shadow: 0 0 0 7px color-mix(in srgb, var(--gold) 16%, transparent), 0 0 24px color-mix(in srgb, var(--gold) 50%, transparent);
         transform: scale(0);
         animation: fxPop 0.55s calc(var(--s) + 0.2s) var(--pop) both;
       }
       .p-rail {
-        position: absolute; left: 130px; top: 58px; bottom: -14px; width: 2px;
+        position: absolute; left: 187px; top: calc(var(--dot-y) + 26px); bottom: -16px; width: 2px;
         background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--gold) 18%, transparent));
         transform: scaleY(0); transform-origin: 50% 0%;
         animation: railGrow 0.7s calc(var(--s) + 0.32s) var(--inout) both;
       }
       @keyframes railGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-      .p-body { padding-top: 14px; padding-bottom: 18px; }
-      .p-label { font-size: 34px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.12; }
-      .p-note { margin-top: 10px; font-size: 20px; line-height: 1.42; color: var(--muted); max-width: 40ch; }
-      .steps[data-n="5"] .p-ghost { font-size: 72px; }
-      .steps[data-n="5"] .p-label { font-size: 30px; }
-      .steps[data-n="5"] .p-note { font-size: 18px; margin-top: 6px; }
-      .steps[data-n="5"] .p-dot { top: 30px; }
-      .steps[data-n="5"] .p-rail { top: 50px; }
+      .p-body { padding-top: 22px; padding-bottom: 20px; }
+      .p-label { font-size: 44px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.1; }
+      .p-note { margin-top: 12px; font-size: 24px; line-height: 1.4; color: var(--muted); max-width: 36ch; }
+      .steps[data-n="4"] { --ghost: 108px; --dot-y: 44px; }
+      .steps[data-n="4"] .p-label { font-size: 38px; }
+      .steps[data-n="4"] .p-note { font-size: 21px; }
+      .steps[data-n="4"] .p-body { padding-top: 16px; }
+      .steps[data-n="5"] { --ghost: 92px; --dot-y: 36px; }
+      .steps[data-n="5"] .p-label { font-size: 34px; }
+      .steps[data-n="5"] .p-note { font-size: 19px; margin-top: 6px; }
+      .steps[data-n="5"] .p-body { padding-top: 12px; padding-bottom: 12px; }
       .bloom {
         position: absolute; left: 62%; top: 50%; width: 1300px; height: 720px; margin: -360px 0 0 -650px;
         border-radius: 50%;

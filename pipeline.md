@@ -130,7 +130,11 @@ Types: `features` (3–6 icon cards), `stats` (2–4 figures, optional logo badg
 `callout`, `testimonials` (3–8 quote cards or a 6–16 carousel), `logos` (3–10 assets from
 `brands/<name>/assets/`), `journey` (3–6 first-user steps), `compare` (before/after columns, 2–5 lines
 each), `quote` (one hero quote), `metric` (one number in a progress ring), `orbit` (3–8 logos circling
-the lockup). Produce splits the live reel at those chapter timestamps and concatenates
+the lockup), `process` (3–5 numbered steps), `timeline` (3–6 dated stops on a drawn rail), `checklist`
+(3–6 outcomes ticking off), `kpi` (3–6 dashboard tiles with deltas and sparklines), `statement` (one
+kinetic line), `faq` (2–4 question → answer pairs), `pricing` (2–3 tiers, one featured), `team` (3–6
+people or roles). The catalog lives in `lib/plateTypes.mjs`; builder, Studio, wizard, branching and the
+agent prompts all read it. Produce splits the live reel at those chapter timestamps and concatenates
 `open → live… → plate → live… → close`. Narration: `narration.mjs → plates: { <id>: "…" }`.
 
 **Logo tile contrast:** `lib/logoTone.mjs` samples opaque (non-mat) pixels and sets
@@ -169,7 +173,12 @@ Entrances live once in `plates.css` and each plate type picks its own: `fxLand` 
 panels — blur clears, then the tilt settles), `fxHinge` (compare columns off the centre seam),
 `fxSlideL` / `fxSlideR` (compare lines), `fxDraw` (marks and the metric ring, `pathLength` 1),
 `fxTravel` (orbit seats ride out along their radius), `fxPop` (icons, close dots, avatars).
-Testimonials keep their own spring and float. Surfaces stay on the feature-card recipe: 28px radius,
+Testimonials keep their own spring and float. The newer families add one signature move each on top of
+those: `process` draws its rail down between ghost numerals, `timeline` draws the rail left→right with a
+running head and lands each stop as it passes, `checklist` fills boxes and draws the ticks while the bar
+and counter step in time, `kpi` raises sparkline bars behind count-up values, `pricing` lands the quiet
+tiers first and the featured one last, `faq` slides a question in and lands its answer a beat later,
+`team` pops avatars on a halo, `statement` rises word by word behind a growing accent bar and a flare. Surfaces stay on the feature-card recipe: 28px radius,
 gold wash plus `surface` at ~88% on the featured panel, muted border and `surface` at ~78% on the quiet one.
 
 **Atmosphere (`lib/atmosphere.mjs`):** one fragment shader per field over a full-screen quad, time from

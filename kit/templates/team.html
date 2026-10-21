@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>People plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 5.8s;
+        --black-out: 5.2s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+      }
+      /* A row of people: avatars pop in on a halo, names and roles follow. */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 56px; padding: 56px 100px 52px;
+        animation: fadeOut 0.7s 4.75s var(--exit) forwards;
+      }
+      .head { text-align: center; flex: none; z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 16px; font-size: 58px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .people {
+        width: 100%; max-width: 1640px; flex: none;
+        display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 28px;
+      }
+      .people[data-n="3"] { max-width: 1200px; }
+      .people[data-n="4"] { max-width: 1440px; }
+      .tm-card {
+        position: relative;
+        padding: 40px 24px 36px; border-radius: 28px; text-align: center;
+        display: flex; flex-direction: column; align-items: center;
+        background: color-mix(in srgb, var(--surface) 80%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        box-shadow: 0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 45%, transparent);
+        --land: 30px; opacity: 0; transform-origin: 50% 80%;
+        animation: fxLand var(--card-in) var(--s) var(--expo) both;
+        will-change: transform, opacity, filter;
+        overflow: hidden;
+      }
+      .tm-card::before {
+        content: ''; position: absolute; left: 50%; top: 86px; width: 260px; height: 260px; margin: -130px 0 0 -130px;
+        border-radius: 50%; pointer-events: none;
+        background: radial-gradient(circle, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%);
+        opacity: 0; animation: fadeIn 0.9s calc(var(--s) + 0.25s) ease-out both;
+      }
+      .tm-avatar {
+        position: relative; width: 132px; height: 132px; border-radius: 50%; flex: none;
+        display: grid; place-items: center; overflow: hidden;
+        font-size: 44px; font-weight: 700; letter-spacing: -0.04em; color: var(--on-accent, #041004);
+        background: linear-gradient(calc(120deg + var(--k) * 60deg), var(--gold), var(--amber));
+        box-shadow: 0 0 0 8px color-mix(in srgb, var(--gold) 16%, transparent), 0 18px 40px color-mix(in srgb, var(--gold) 32%, transparent);
+        transform: scale(0.6); opacity: 0;
+        animation: fxPop 0.7s calc(var(--s) + 0.18s) var(--pop) both;
+      }
+      .tm-avatar.photo { background: color-mix(in srgb, var(--surface) 70%, #000 18%); }
+      .tm-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .tm-avatar::after {
+        content: ''; position: absolute; inset: -8px; border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--gold) 60%, transparent);
+        opacity: 0; animation: haloPulse 1.4s calc(var(--s) + 0.55s) ease-out both;
+      }
+      @keyframes haloPulse { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.7); } }
+      .tm-name { margin-top: 26px; font-size: 27px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.4s) var(--expo) both; }
+      .tm-role { margin-top: 8px; font-size: 17px; line-height: 1.4; color: var(--muted); max-width: 22ch; text-wrap: balance; opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.5s) var(--expo) both; }
+      .people[data-n="5"] .tm-avatar, .people[data-n="6"] .tm-avatar { width: 108px; height: 108px; font-size: 36px; }
+      .people[data-n="5"] .tm-name, .people[data-n="6"] .tm-name { font-size: 23px; }
+      .people[data-n="6"] .tm-card { padding: 32px 16px 30px; }
+      .bloom {
+        position: absolute; left: 50%; top: 54%; width: 1500px; height: 680px; margin: -340px 0 0 -750px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 68%);
+        opacity: 0; animation: fadeIn 1.15s 0.15s ease-out both, fadeOut 0.7s 4.75s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="5.8">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="people" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pricing plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.75s;
+        --n: {{ITEM_COUNT}};
+        --card-in: var(--motion-enter, 0.9s);
+      }
+      /* Plans side by side; quiet tiers land first, the featured one last and a touch larger. */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 56px; padding: 52px 120px 48px;
+        animation: fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+      .head { text-align: center; flex: none; z-index: 2; }
+      .eyebrow {
+        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both;
+      }
+      .title {
+        margin-top: 16px; font-size: 56px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .plans {
+        width: 100%; max-width: 1480px; flex: none;
+        display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 28px; align-items: stretch;
+      }
+      .plans[data-n="2"] { max-width: 1080px; }
+      .pr-card {
+        position: relative; overflow: visible;
+        min-height: 420px; padding: 40px 40px 40px; border-radius: 28px;
+        display: flex; flex-direction: column;
+        background: color-mix(in srgb, var(--surface) 80%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+        box-shadow: 0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 45%, transparent);
+        --land: 34px; opacity: 0; transform-origin: 50% 85%;
+        animation: fxLand var(--card-in) var(--s) var(--expo) both;
+        will-change: transform, opacity, filter;
+      }
+      .pr-card.featured {
+        margin: -26px 0;
+        padding-top: 52px; padding-bottom: 52px;
+        background:
+          linear-gradient(165deg, color-mix(in srgb, var(--gold) 16%, transparent), transparent 48%),
+          color-mix(in srgb, var(--surface) 90%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 38%, transparent);
+        box-shadow:
+          0 30px 70px color-mix(in srgb, var(--shade, var(--ink)) 55%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent),
+          0 0 80px color-mix(in srgb, var(--gold) 16%, transparent),
+          inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent);
+      }
+      .pr-badge {
+        position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+        padding: 8px 18px; border-radius: 999px; white-space: nowrap;
+        font-size: 12px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;
+        color: var(--on-accent, #041004); background: linear-gradient(140deg, var(--gold), var(--amber));
+        box-shadow: 0 10px 26px color-mix(in srgb, var(--gold) 45%, transparent);
+        opacity: 0; animation: badgeIn 0.6s calc(var(--s) + 0.45s) var(--pop) both;
+      }
+      @keyframes badgeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.8); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+      .pr-name { font-size: 17px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+      .featured .pr-name { color: var(--gold); }
+      .pr-price { margin-top: 22px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+      .pr-value {
+        font-size: 84px; font-weight: 700; letter-spacing: -0.055em; line-height: 1; white-space: nowrap;
+        background: linear-gradient(120deg, var(--text), var(--gold));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.2s) var(--expo) both;
+      }
+      .pr-period { font-size: 17px; color: var(--muted); font-weight: 500; opacity: 0; animation: fadeIn 0.6s calc(var(--s) + 0.5s) ease-out both; }
+      .pr-note { margin-top: 14px; font-size: 18px; line-height: 1.4; color: var(--muted); opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.4s) var(--expo) both; }
+      .featured .pr-note { color: color-mix(in srgb, var(--text) 85%, var(--muted)); }
+      .pr-lines {
+        margin-top: 30px; padding-top: 26px; display: grid; gap: 16px;
+        border-top: 1px solid color-mix(in srgb, var(--muted) 16%, transparent);
+      }
+      .featured .pr-lines { border-top-color: color-mix(in srgb, var(--gold) 26%, transparent); }
+      .pr-line {
+        display: flex; gap: 14px; align-items: flex-start;
+        font-size: 20px; font-weight: 500; line-height: 1.35; letter-spacing: -0.015em;
+        opacity: 0; animation: fxSlideR 0.6s var(--i) var(--expo) both;
+      }
+      .pr-check {
+        flex: none; width: 28px; height: 28px; border-radius: 50%; margin-top: 0;
+        display: grid; place-items: center;
+        background: color-mix(in srgb, var(--muted) 16%, transparent);
+        border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+        color: var(--text);
+        animation: fxPop 0.5s calc(var(--i) + 0.08s) var(--pop) both;
+      }
+      .featured .pr-check {
+        background: linear-gradient(140deg, var(--gold), var(--amber)); border-color: transparent;
+        color: var(--on-accent, #041004);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 14%, transparent);
+      }
+      .pr-check svg { width: 13px; height: 13px; }
+      .pr-check path {
+        stroke: currentColor; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 1; stroke-dashoffset: 1;
+        animation: fxDraw 0.45s calc(var(--i) + 0.25s) var(--inout) both;
+      }
+      .bloom {
+        position: absolute; left: 50%; top: 56%; width: 1300px; height: 760px; margin: -380px 0 0 -650px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 13%, transparent), transparent 66%);
+        opacity: 0; animation: fadeIn 1.2s 1.0s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+    </style>
+  </head>
+  <body data-duration="6.4">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="plans" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

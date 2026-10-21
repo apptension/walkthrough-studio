@@ -16,6 +16,7 @@ import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.m
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
+import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
 import { describeJob } from '../studio/progress.js';
 
 const JOBS = new Map();
@@ -351,7 +352,9 @@ function buildPrompt(video, goal, extra = '', opts = {}) {
 
   const goals = {
     narration: `Improve narration.mjs for "${video.slug}" so VO narrates why (not clicks), ≤28 words/line, leads the pointer, and matches chapter/caption titles. Read ${critic} if present. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration.`,
-    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table. ${singlePlate}`,
+    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table. Plate types you can swap to or add (type — when: shape):
+${plateTypeGuide()}
+${singlePlate}`,
     scene: `You are editing ONE scene (brand plate) in the walkthrough "${video.slug}". ${singlePlate}
 Read ${config}, ${brief}, and ${critic} if present.
 
@@ -405,7 +408,7 @@ Write ONLY ${join(video.dir, 'branch-ideas.json')} as JSON with this shape:
     }
   ]
 }
-Rules: 5–8 ideas. Prefer real chapters / must-show beats / interstitial topics already in this project — not invented product areas. purpose is usually "feature" (sometimes "onboarding"). lengthSec 60|90|120. plates from features|journey|stats|testimonials|logos|callout|compare|quote|metric|orbit. Do not edit other files. Do not record or render.`,
+Rules: 5–8 ideas. Prefer real chapters / must-show beats / interstitial topics already in this project — not invented product areas. purpose is usually "feature" (sometimes "onboarding"). lengthSec 60|90|120. plates from ${PLATE_TYPE_LIST}. Do not edit other files. Do not record or render.`,
     branch: `Rewrite the BRANCHED walkthrough "${video.slug}" into a focused feature video. It was copied from an overview — the brief at ${join(video.dir, 'brief.json')} names the angle under branch.angle / story.mustShow.
 Read ${skillPath}/SKILL.md, ${skillPath}/authoring.md, ${join(video.dir, 'brief.json')}, ${config}, ${flow}, ${narration}, and ${flowAnalysis} if present.
 Keep brand, record.startUrl, env "$VAR" refs, and working Playwright patterns from the copied ${flow}. Drop off-angle chapters. Rewrite:
@@ -417,9 +420,11 @@ Do not re-introduce the full overview. Do not record or render.`,
 If ${flowAnalysis} exists, read it before writing flow.mjs — it is the live product map (DOM controls, form fields with validation + suggested fill values, and WebGL/canvas pointer recipes). Prefer its Playwright hints, fill recipes (unique emails per run, env refs for login, pattern-safe values) and canvas drag/wheel snippets over guesses. Fill fields with ctx.typeInto(locator, value) or ctx.fillField(patterns, value) — never getByPlaceholder→click→fill (placeholders often clear on focus and hang capture). Prefer name= selectors from the analysis. Fill every required field the analysis lists before clicking submit; never invent login secrets or place real orders. When it flags WebGL, set record.deviceScaleFactor: 1, use frame() not focus() on large canvases, and drive the model with page.mouse + actions.hide()/show() rather than getByRole on missing DOM children.
 The brand discovery gate has completed. Treat its official lockup, palette, font, product promise and motion language as required inputs for the opening, interstitials, close and narration. Do not substitute generic colors, another product's visual language, an invented logo, or a homemade wordmark.
 Write, in this order:
-1. ${config} — title, audience, open (eyebrow, 2-line title with one *accent*, sub), close (title, 3 steps), 2–4 interstitials[] (features/journey/stats/testimonials/logos/callout/compare/quote/metric/orbit — see authoring.md for each shape) placed with "before": <chapter title>, record.startUrl, env (credentials as "$ENV_VAR" references only — never literal secrets). Apply capture tips from the flow analysis (e.g. deviceScaleFactor: 1 for WebGL).
+1. ${config} — title, audience, open (eyebrow, 2-line title with one *accent*, sub), close (title, 3 steps), 2–4 interstitials[] (pick the type that carries the fact — ${PLATE_TYPE_LIST}; see authoring.md for each shape and the type guide below) placed with "before": <chapter title>, record.startUrl, env (credentials as "$ENV_VAR" references only — never literal secrets). Apply capture tips from the flow analysis (e.g. deviceScaleFactor: 1 for WebGL).
 2. ${flow} — the live journey: 4–7 chapter() cards and say() captions that follow the brief's "what to show" list. Author every wait()/hold at steady pace — the video's direction.pace scales them, so never pad waits to slow the tour or trim them to speed it; wrap one routine stretch in pace('brisk') … pace() if it needs to move faster than the rest. Use robust Playwright selectors from the flow analysis (getByRole/getByLabel/getByText). For pointer-reactive canvases, use the analysis recipes (mouse drag/wheel on the canvas box). If the app source is in this workspace, read it to confirm labels and routes; otherwise mark guessed selectors with // TODO(verify selector) and keep each step guarded (isVisible().catch(() => false)).
 3. ${narration} — intro, outro, one line per chapter/say title and per plate id; why-not-clicks, ≤28 words.
+Plate type guide (type — when: shape); vary the set, one proof plate at most per fact, never two of the same type back to back:
+${plateTypeGuide()}
 Build the script on the story spine below: every beat lands in the place it names, in order. Only use proof (stats, quotes, logos) that the brief provides. Keep the brief's tone and must-say/avoid lists. Do not record or render — the reviewer approves the script in Studio first.`,
     critic: `Read ${critic} (or run critic findings). Apply high-confidence narration and plate improvements to ${narration} and ${config} for "${video.slug}". Do not re-record. Follow the product-walkthrough-video skill hard rules.`,
     'capture-repair': `CAPTURE STALLED for "${video.slug}". The recorder aborted because the flow stopped making progress. Your job is a surgical fix so the next record can pass — then stop (Studio will re-record once).

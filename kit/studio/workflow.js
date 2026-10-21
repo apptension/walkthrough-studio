@@ -15,18 +15,51 @@ const ICON_X =
   '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 
 const KIND_LABEL = { open: 'Open', plate: 'Plate', chapter: 'Chapter', step: 'Caption', close: 'Close' };
+/** Mirrors kit/lib/plateTypes.mjs — used only until the script payload (which carries the catalog) loads. */
 const PLATE_TYPE_FALLBACK = [
   { type: 'features', label: 'Features', hint: 'Capability grid' },
   { type: 'journey', label: 'Journey', hint: 'Ordered tour path' },
+  { type: 'process', label: 'Process', hint: 'How it works' },
+  { type: 'timeline', label: 'Timeline', hint: 'Milestones on a rail' },
+  { type: 'checklist', label: 'Checklist', hint: 'Outcomes ticked off' },
   { type: 'logos', label: 'Logos', hint: 'Integration wall' },
-  { type: 'testimonials', label: 'Testimonials', hint: 'Quote flood' },
-  { type: 'stats', label: 'Stats', hint: 'Hard numbers' },
-  { type: 'callout', label: 'Callout', hint: 'Thesis + bullets' },
-  { type: 'compare', label: 'Compare', hint: 'Before / after' },
-  { type: 'quote', label: 'Quote', hint: 'Hero quote' },
-  { type: 'metric', label: 'Metric', hint: 'One number' },
   { type: 'orbit', label: 'Orbit', hint: 'Orbiting logos' },
+  { type: 'testimonials', label: 'Testimonials', hint: 'Quote flood' },
+  { type: 'quote', label: 'Quote', hint: 'Hero quote' },
+  { type: 'stats', label: 'Stats', hint: 'Hard numbers' },
+  { type: 'kpi', label: 'KPI board', hint: 'Dashboard tiles' },
+  { type: 'metric', label: 'Metric', hint: 'One number' },
+  { type: 'callout', label: 'Callout', hint: 'Thesis + bullets' },
+  { type: 'statement', label: 'Statement', hint: 'Kinetic type' },
+  { type: 'compare', label: 'Compare', hint: 'Before / after' },
+  { type: 'faq', label: 'FAQ', hint: 'Questions answered' },
+  { type: 'pricing', label: 'Pricing', hint: 'Plans side by side' },
+  { type: 'team', label: 'People', hint: 'Roles with avatars' },
 ];
+/** Row-editor placeholders by column; `<type>.<column>` wins over the plain column name. */
+const PLATE_ROW_PLACEHOLDER = {
+  label: 'Label',
+  note: 'Note',
+  icon: 'Icon',
+  asset: 'Asset file',
+  quote: 'Quote',
+  author: 'Author',
+  role: 'Role',
+  value: 'Value',
+  text: 'Bullet',
+  date: 'Date (Q2 · 2025 · Now)',
+  delta: 'Delta (+12% · −3)',
+  period: 'per user / month',
+  lines: 'Lines · separated · by dots',
+  'pricing.label': 'Plan name',
+  'pricing.value': 'Price ($12)',
+  'pricing.note': 'Who it is for',
+  'team.label': 'Name or role',
+  'team.note': 'What they get',
+  'team.asset': 'Photo file (optional)',
+  'kpi.label': 'Metric name',
+  'timeline.label': 'Milestone',
+};
 const STATUS_LABEL = {
   draft: 'Needs approval',
   approved: 'Approved',
@@ -185,28 +218,12 @@ export function initWorkflow(ctx) {
   function plateRowFields(s, row, ri) {
     const fields = s.plate?.fields || ['label', 'note'];
     const pid = escapeHtml(s.plateId || '');
+    const faq = s.plateType === 'faq';
     const cells = fields
       .map((f) => {
         const ph =
-          f === 'label'
-            ? 'Label'
-            : f === 'note'
-              ? 'Note'
-              : f === 'icon'
-                ? 'Icon'
-                : f === 'asset'
-                  ? 'Asset file'
-                  : f === 'quote'
-                    ? 'Quote'
-                    : f === 'author'
-                      ? 'Author'
-                      : f === 'role'
-                        ? 'Role'
-                        : f === 'value'
-                          ? 'Value'
-                          : f === 'text'
-                            ? 'Bullet'
-                            : f;
+          PLATE_ROW_PLACEHOLDER[`${s.plateType}.${f}`] ||
+          (faq && f === 'label' ? 'Question' : faq && f === 'note' ? 'Answer' : PLATE_ROW_PLACEHOLDER[f] || f);
         const val = escapeHtml(row?.[f] ?? '');
         return `<input type="text" data-struct-field="plate.row.${f}" data-plate-id="${pid}" data-row-index="${ri}" value="${val}" placeholder="${ph}" />`;
       })

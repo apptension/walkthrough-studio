@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { PLATE_CATALOG } from './plateTypes.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'walkthrough-plates-'));
 process.env.WALKTHROUGH_BRANDS = join(root, 'brands');
 process.env.WALKTHROUGH_VIDEOS = join(root, 'videos');
 process.env.WALKTHROUGH_OUT = join(root, 'out');
 
-const { loadVideo } = await import('./project.mjs');
-const { INTERSTITIAL_TYPES, buildPlates, compareType, logoColumns, platePaths } = await import('./plates.mjs');
+const { TEMPLATES, loadVideo } = await import('./project.mjs');
+const { INTERSTITIAL_TYPES, buildPlates, compareType, logoColumns, platePaths, pricingFeatured } = await import('./plates.mjs');
 
 // A ready brand pack: palette, font, lockup and three logo assets.
 const brandDir = join(root, 'brands', 'acme');
@@ -52,6 +53,14 @@ const config = {
     { id: 'number', type: 'metric', before: 'x', title: 'Saved', value: '$10,000', unit: 'per *month*', pills: ['One', '*Two*'] },
     { id: 'ring', type: 'orbit', before: 'x', title: 'Works with', logos: [{ asset: 'a.png', label: 'A' }, { asset: 'b.png' }, { asset: 'c.png', label: 'C' }] },
     { id: 'proof', type: 'stats', before: 'x', title: 'Proof', stats: [{ value: '4.7', label: 'G2' }, { value: '—', label: 'None', count: false }] },
+    { id: 'point', type: 'statement', before: 'x', title: ['One plan the team', '*actually* follows.'], sub: 'Supporting line' },
+    { id: 'how', type: 'process', before: 'x', title: 'How it works', sub: 'Three moves', steps: [{ label: 'Connect', note: 'Link tools' }, { label: 'Set up' }, { label: 'Run' }] },
+    { id: 'road', type: 'timeline', before: 'x', title: 'Built in the open', steps: [{ label: 'Launch', date: 'Q1' }, { label: 'Reports', date: 'Q2', note: 'n' }, { label: 'Now', date: 'Today' }] },
+    { id: 'done', type: 'checklist', before: 'x', title: 'Done', items: [{ label: 'One plan' }, 'Changes land', { label: 'Leaders get it', note: 'no asking' }] },
+    { id: 'board', type: 'kpi', before: 'x', title: 'Board', stats: [{ value: '94%', label: 'Util', delta: '+12%' }, { value: '3', label: 'Late', delta: '−2' }, { value: '120', label: 'Hours' }, { value: '8', label: 'Teams', count: false }] },
+    { id: 'plans', type: 'pricing', before: 'x', title: 'Plans', tiers: [{ label: 'Starter', value: '$0', items: ['Core'] }, { label: 'Team', value: '$12', period: 'per user', badge: 'Popular', items: ['A', '*B*'] }, { label: 'Business', value: 'Custom' }] },
+    { id: 'ask', type: 'faq', before: 'x', title: 'Before you ask', items: [{ label: 'Does it import?', note: 'Yes.' }, { label: 'How long?', note: 'An afternoon.' }] },
+    { id: 'people', type: 'team', before: 'x', title: 'Who it is for', items: [{ label: 'Ana Ruiz', note: 'Lead' }, { label: 'Ops', asset: 'a.png' }, { label: 'Leadership' }] },
   ],
 };
 writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(config));
@@ -63,12 +72,76 @@ const html = (id) => readFileSync(platePaths(loadVideo('probe')).interstitial[id
 test('all plate types build; new types fill every placeholder', () => {
   assert.deepEqual(
     [...INTERSTITIAL_TYPES],
-    ['features', 'stats', 'callout', 'testimonials', 'logos', 'journey', 'compare', 'quote', 'metric', 'orbit']
+    ['features', 'journey', 'process', 'timeline', 'checklist', 'logos', 'orbit', 'testimonials', 'quote', 'stats', 'kpi', 'metric', 'callout', 'statement', 'compare', 'faq', 'pricing', 'team']
   );
+  assert.deepEqual([...INTERSTITIAL_TYPES], PLATE_CATALOG.map((p) => p.type), 'builder and Studio catalog agree');
+  for (const type of INTERSTITIAL_TYPES) {
+    assert.ok(existsSync(join(TEMPLATES, `${type}.html`)), `template for ${type}`);
+  }
   buildPlates(loadVideo('probe'));
-  for (const id of ['shift', 'hero', 'number', 'ring', 'proof']) {
+  for (const id of ['shift', 'hero', 'number', 'ring', 'proof', 'point', 'how', 'road', 'done', 'board', 'plans', 'ask', 'people']) {
     assert.doesNotMatch(html(id), /\{\{[A-Z_]+\}\}/, `${id} has no unfilled placeholders`);
   }
+});
+
+test('statement, process, timeline and checklist builders shape their content', () => {
+  const point = html('point');
+  assert.equal((point.match(/class="s-line"/g) || []).length, 2, 'one shell per title line');
+  assert.match(point, /class="title-cascade"/, 'brand cascade reveal reaches the statement');
+  assert.match(point, /data-edit="title" data-edit-kind="lines" data-edit-raw="One plan the team&#10;\*actually\* follows\."/);
+  assert.match(point, /--title-size: 100px/, 'type scale follows the longest line');
+  assert.match(point, /data-edit="sub"[^>]*>Supporting line</);
+
+  const how = html('how');
+  assert.equal((how.match(/class="p-step"/g) || []).length, 3);
+  assert.equal((how.match(/class="p-rail"/g) || []).length, 2, 'rail between steps, none after the last');
+  assert.match(how, /<span class="p-ghost">03<\/span>/);
+  assert.match(how, /data-edit="steps\.0\.note"[^>]*>Link tools</);
+
+  const road = html('road');
+  assert.match(road, /class="tl-stop up"/);
+  assert.match(road, /class="tl-stop down"/);
+  assert.match(road, /class="tl-stop up now"[^>]*--x: 1\.0000/, 'last stop is "now" and sits at the end of the rail');
+  assert.match(road, /data-edit="steps\.1\.date"[^>]*>Q2</);
+  assert.match(road, /class="ink"[^>]*pathLength="1"/, 'the rail draws');
+
+  const done = html('done');
+  assert.equal((done.match(/class="ck-row"/g) || []).length, 3);
+  assert.match(done, /data-edit="items\.1\.label"[^>]*>Changes land</, 'string items become rows');
+  assert.match(done, /--ck-start: 1\.25s/);
+  assert.match(done, /<i style="--in: 0\.00s; --out: 1\.45s">0<\/i><i style="--in: 1\.45s; --out: 1\.87s">1<\/i>/, 'counter digits step with the checks');
+  assert.match(done, /<i style="--in: 2\.29s; --out: 999\.00s">3<\/i>/, 'the last digit stays');
+});
+
+test('kpi, pricing, faq and team builders shape their content', () => {
+  const board = html('board');
+  assert.equal((board.match(/class="k-tile"/g) || []).length, 4);
+  assert.match(board, /class="k-delta up"[^>]*>.*?data-edit="stats\.0\.delta"[^>]*>\+12%</s);
+  assert.match(board, /class="k-delta down"/);
+  assert.equal((board.match(/class="k-spark"/g) || []).length, 4);
+  assert.match(board, /class="k-value" data-fit="1"[^>]* data-count data-count-start="1\.00" data-count-dur="1\.1"/);
+  assert.match(board, /class="k-value" data-fit="1" data-fit-min="40" data-fit-group="kpi-value" data-edit="stats\.3\.value"/, 'count: false opts a tile out');
+
+  const plans = html('plans');
+  assert.equal((plans.match(/class="pr-card"/g) || []).length, 2);
+  assert.equal((plans.match(/class="pr-card featured"/g) || []).length, 1);
+  assert.match(plans, /class="pr-card featured" style="--s: 1\.18s"/, 'featured tier lands last');
+  assert.match(plans, /data-edit="tiers\.1\.badge"[^>]*>Popular</);
+  assert.match(plans, /data-edit="tiers\.1\.items\.1"[^>]*><span class="accent">B<\/span></);
+  assert.match(plans, /data-edit="tiers\.1\.period"[^>]*>per user</);
+  assert.equal(pricingFeatured([{}, {}]), 1);
+  assert.equal(pricingFeatured([{ featured: true }, {}, {}]), 0);
+
+  const ask = html('ask');
+  assert.equal((ask.match(/class="fq"/g) || []).length, 2);
+  assert.match(ask, /data-edit="items\.0\.label"[^>]*>Does it import\?</);
+  assert.match(ask, /data-edit="items\.0\.note"[^>]*>Yes\.</);
+
+  const people = html('people');
+  assert.equal((people.match(/class="tm-card"/g) || []).length, 3);
+  assert.match(people, /class="tm-avatar"[^>]*><span>AR<\/span>/, 'initials when no photo');
+  assert.match(people, /class="tm-avatar photo"[^>]*><img src="data:image\/png;base64,/, 'asset becomes the photo');
+  assert.match(people, /data-edit="items\.0\.note"[^>]*>Lead</);
 });
 
 test('per-plate motion overrides reach the atmosphere and title reveal', () => {
@@ -127,6 +200,16 @@ test('new builders validate their inputs', () => {
   assert.throws(bad({ id: 'm', type: 'metric', before: 'x', title: 'T' }), /needs a value/);
   assert.throws(bad({ id: 'o', type: 'orbit', before: 'x', logos: [{ asset: 'a.png' }] }), /3–8 logos/);
   assert.throws(bad({ id: 'z', type: 'hologram', before: 'x' }), /Unknown interstitial type "hologram" \(use features\|/);
+  assert.throws(bad({ id: 's', type: 'statement', before: 'x', title: 'Hi' }), /1–3 title lines, 4–140/);
+  assert.throws(bad({ id: 's', type: 'statement', before: 'x', title: ['a b c', 'd e f', 'g h i', 'j k l'] }), /1–3 title lines/);
+  assert.throws(bad({ id: 'p', type: 'process', before: 'x', steps: [{ label: 'A' }, { label: 'B' }] }), /3–5 steps/);
+  assert.throws(bad({ id: 't', type: 'timeline', before: 'x', steps: [{ label: 'A' }] }), /3–6 stops/);
+  assert.throws(bad({ id: 'c', type: 'checklist', before: 'x', items: ['A', 'B'] }), /3–6 items/);
+  assert.throws(bad({ id: 'k', type: 'kpi', before: 'x', stats: [{ value: '1', label: 'A' }, { value: '2' }, { value: '3', label: 'C' }] }), /value and a label/);
+  assert.throws(bad({ id: 'pr', type: 'pricing', before: 'x', tiers: [{ label: 'A', value: '$1' }] }), /2–3 tiers/);
+  assert.throws(bad({ id: 'pr', type: 'pricing', before: 'x', tiers: [{ label: 'A', value: '$1', items: ['1', '2', '3', '4', '5', '6'] }, { label: 'B', value: '$2' }] }), /at most 5 lines/);
+  assert.throws(bad({ id: 'f', type: 'faq', before: 'x', items: [{ label: 'Q?' }, { label: 'Q2?', note: 'A' }] }), /question \(label\) and an answer/);
+  assert.throws(bad({ id: 'tm', type: 'team', before: 'x', items: [{ label: 'A' }, { label: 'B' }] }), /3–6 people/);
   writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(config));
 });
 

@@ -43,9 +43,11 @@ music at plate level on every brand plate; bed level under live; ducks under spe
 ```
 
 Interstitial plates (`features`, `stats`, `callout`, `testimonials`, `logos`, `journey`, `compare`,
-`quote`, `metric`, `orbit`) carry facts the screencast alone cannot sell — capability grids, logo walls,
-quote floods, journey maps, ratings, before/after columns, one hero quote, one hero number, logos orbiting
-the product — inserted *before* a named chapter. Decide them from the motion brief; do not ship
+`quote`, `metric`, `orbit`, `process`, `timeline`, `checklist`, `kpi`, `statement`, `faq`, `pricing`,
+`team`) carry facts the screencast alone cannot sell — capability grids, logo walls, quote floods,
+journey maps, ratings, before/after columns, one hero quote, one hero number, logos orbiting the
+product, numbered how-it-works steps, dated milestones, outcomes ticking off, a KPI board, one kinetic
+line, objections answered, plans side by side, the people in the loop — inserted *before* a named chapter. Decide them from the motion brief; do not ship
 title-only open/close when the story needs belief, proof, or a first-user map.
 
 Every plate sits on a brand **atmosphere**: a WebGL field painted from the five-colour scale
@@ -232,7 +234,8 @@ guarantees a run spends nothing.
 13. **Motion brief is memory.** Every brand pack keeps `motion-brief.md` (audience, tone, visual system, motion language, audio, plate palette). Read it before every new video for that brand; update it when the product look or voice changes.
 14. **Plate variety.** A proper walkthrough is not only title cards. Prefer 2–5 visual interstitials
     (`features` / `stats` / `callout` / `testimonials` / `logos` / `journey` / `compare` / `quote` /
-    `metric` / `orbit`) — icons, assets, and real quotes — then prove them in the live app. Open + close
+    `metric` / `orbit` / `process` / `timeline` / `checklist` / `kpi` / `statement` / `faq` / `pricing` /
+    `team`) — icons, assets, and real quotes — then prove them in the live app. Open + close
     alone is the minimum, not the target. Use `suggest-plates` when the set is thin; motion tokens in
     `brand.json → motion` craft plate energy. Pick one atmosphere per video and keep it (a per-plate
     switch — Studio **Accent** or `motion --plate` — is a deliberate accent, not a default); effects

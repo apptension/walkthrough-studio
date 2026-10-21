@@ -314,7 +314,7 @@ describe('plate CRUD', () => {
     assert.equal(cfg.interstitials[0].items.length, 2);
 
     const script = await buildScript({ ...video, config: cfg });
-    assert.equal(script.plateTypes.length, 10);
+    assert.equal(script.plateTypes.length, 18);
     const plate = script.scenes.find((s) => s.kind === 'plate');
     assert.equal(plate.plate.rows.length, 2);
     assert.equal(plate.editable.remove, true);

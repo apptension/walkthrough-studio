@@ -429,8 +429,8 @@ body {
 /* ——— Typography ———
    Headings balance their lines; copy avoids one-word last lines. Sizes that must survive any
    copy length carry data-fit (lib/typeFit.mjs) and step down or up within their budget. */
-.title, .col-title, .step-label, .j-label, .label, .logo-label { text-wrap: balance; }
-.sub, .note, .body, .item, .bullet, .step-note, .j-note, .quote, .role, .meta { text-wrap: pretty; }
+.title, .col-title, .step-label, .j-label, .label, .logo-label, .p-label, .ck-label, .pr-name, .tm-name { text-wrap: balance; }
+.sub, .note, .body, .item, .bullet, .step-note, .j-note, .quote, .role, .meta, .p-note, .ck-note, .k-note, .pr-note, .pr-line, .tm-role { text-wrap: pretty; }
 [data-count] { font-variant-numeric: tabular-nums; }
 
 /* ——— Shared motion ——— */
@@ -695,7 +695,11 @@ body {
 .path,
 .cards,
 .row,
-.wall {
+.wall,
+.board,
+.plans,
+.people,
+.list {
   perspective: 1600px;
   perspective-origin: 50% 40%;
 }
@@ -709,7 +713,10 @@ body {
 .q-card,
 .m-card,
 .cmp-col,
-.o-tile {
+.o-tile,
+.k-tile,
+.tm-card,
+.fq-a {
   position: relative;
   overflow: hidden;
 }
@@ -721,7 +728,10 @@ body {
 .q-card::after,
 .m-card::after,
 .cmp-col::after,
-.o-tile::after {
+.o-tile::after,
+.k-tile::after,
+.tm-card::after,
+.fq-a::after {
   content: '';
   position: absolute;
   inset: -30% -70%;
