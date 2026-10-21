@@ -13,6 +13,7 @@ import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml,
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
+import { capturedTour, recordFailureAction, recordFailureNote } from './recordFailure.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -1035,6 +1036,20 @@ function decideAction(v) {
   const hasDelivery = Boolean(v.hasDelivery || f.deliveryAt);
   const plateBad = Boolean(f.plateHealth?.bad);
 
+  if (v.recordFailure) {
+    const retry = recordFailureAction();
+    return {
+      kind: 'warn',
+      status: 'Record failed',
+      title: v.recordFailure.reason,
+      reason: v.recordFailure.next,
+      detail: v.recordFailure.url,
+      primary: { label: retry.label, mode: retry.mode },
+      secondary: null,
+      makeLabel: retry.label,
+    };
+  }
+
   if (!hasLive && !hasDelivery) {
     return {
       kind: 'warn',
@@ -1173,9 +1188,10 @@ function renderActionCard(v) {
     const info = v?.recordFailure;
     failure.hidden = !info;
     const shot = $('recordFailureShot');
-    const text = $('recordFailureText');
     if (info && shot) shot.src = info.screenshot;
-    if (info && text) text.textContent = info.message;
+    if ($('recordFailureReason')) $('recordFailureReason').textContent = info?.reason || '';
+    if ($('recordFailureUrl')) $('recordFailureUrl').textContent = info?.url || '';
+    if ($('recordFailureNext')) $('recordFailureNext').textContent = info?.next || '';
   }
   const action = decideAction(v);
   state.action = action;
@@ -3837,7 +3853,7 @@ async function loadVideo(slug, { play = false } = {}) {
       state.previewingPlate = null;
       setMonitorLabel('Program');
     }
-    if (v.deliveryUrl) {
+    if (v.deliveryUrl && capturedTour({ hasLive: Boolean(v.freshness?.liveAt), recordFailed: Boolean(v.recordFailure) })) {
       if (state.monitorMode === 'program' || state.monitorMode === 'compare') {
         state.previewingPlate = null;
         player.src = v.deliveryUrl + `?t=${Date.now()}`;
@@ -5128,6 +5144,13 @@ function wire() {
     }
   });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);
+  $('recordFailureFix')?.addEventListener('click', () => {
+    const note = recordFailureNote(state.video?.recordFailure);
+    const noteEl = $('improveNote');
+    if (noteEl) noteEl.value = note;
+    document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
+    startImprove('full');
+  });
   $('btnExport').onclick = () => exportPack();
   $('btnSetPoster')?.addEventListener('click', () => setPosterFromCurrentFrame());
   $('btnExportMedia')?.addEventListener('click', () => exportPack());

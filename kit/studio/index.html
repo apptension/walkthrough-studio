@@ -276,7 +276,12 @@
           <div class="stage" id="stage">
             <figure id="recordFailure" class="record-failure" hidden>
               <img id="recordFailureShot" alt="Page when the recording failed" />
-              <figcaption id="recordFailureText"></figcaption>
+              <figcaption>
+                <strong id="recordFailureReason"></strong>
+                <span id="recordFailureUrl"></span>
+                <span id="recordFailureNext"></span>
+              </figcaption>
+              <button type="button" id="recordFailureFix" class="btn primary">Fix with AI</button>
             </figure>
             <div id="playerSingle" class="player-mode">
               <video id="player" playsinline preload="metadata"></video>

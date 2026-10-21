@@ -1856,7 +1856,13 @@ body.is-editor .monitor-head {
   height: auto;
   border-radius: 8px;
 }
+#recordFailureFix {
+  min-width: 44px;
+  min-height: 44px;
+}
 .record-failure figcaption {
+  display: grid;
+  gap: 4px;
   margin: 0;
   color: var(--warn);
   font-size: 13px;
