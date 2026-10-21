@@ -3,8 +3,11 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 export function pageNeedsPerson({ text = '', url = '', hasPassword = false } = {}) {
-  if (hasPassword) return true;
-  return /sign in|log in|login|consent|accept cookies/i.test(`${url} ${text}`);
+  const blob = `${url} ${text}`;
+  if (/consent|accept cookies/i.test(blob)) return true;
+  if (/sign[\s-]?in|log[\s-]?in|\blogin\b/i.test(blob)) return true;
+  if (/\b(settings|security|account|profile)\b/i.test(blob)) return false;
+  return Boolean(hasPassword);
 }
 
 export function signInWaitCopy() {

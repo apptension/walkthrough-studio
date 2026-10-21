@@ -17,6 +17,7 @@ test('a login or consent page pauses and names what to do next', () => {
   assert.equal(pageNeedsPerson({ text: 'Sign in to continue', url: 'https://app.test/login' }), true);
   assert.equal(pageNeedsPerson({ text: 'Accept cookies', url: 'https://app.test/' }), true);
   assert.equal(pageNeedsPerson({ hasPassword: true, text: 'Welcome' }), true);
+  assert.equal(pageNeedsPerson({ hasPassword: true, text: 'Change your password', url: 'https://app.test/settings/security' }), false);
   assert.equal(pageNeedsPerson({ text: 'Dashboard ready', url: 'https://app.test/home' }), false);
   assert.equal(shouldKeepWaiting({ needed: true, resumeExists: false, elapsed: 10 }), true);
   assert.equal(shouldKeepWaiting({ needed: true, resumeExists: true, elapsed: 10 }), false);
