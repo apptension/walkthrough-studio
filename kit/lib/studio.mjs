@@ -36,6 +36,7 @@ import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs
 import { lensGeometry } from './lens.mjs';
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { recordFailureView } from './recordFailure.mjs';
+import { waitFiles } from './signInPause.mjs';
 import { applyCleanup, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
@@ -382,6 +383,7 @@ function videoSummary(slug) {
     freshness,
     recordFailure,
     previewUrl: existsSync(join(video.out, 'live-preview.jpg')) ? `/media/${slug}/live-preview.jpg` : null,
+    signInWait: existsSync(waitFiles(video.out).wait) ? readJsonSafe(waitFiles(video.out).wait) : null,
     durationSec: meta?.durationSec || null,
     sizeMB: meta?.sizeMB || null,
     chapters: meta?.chapters || [],
@@ -1460,6 +1462,11 @@ async function handleApi(req, res, url) {
     const record = { ...(current.record || {}), startUrl, loginRequired };
     writeFileSync(pathCfg, JSON.stringify({ ...current, record }, null, 2) + '\n');
     return json(res, 200, { ok: true, freshness: freshnessInfo(loadVideo(video.slug)) });
+  }
+
+  if (rest === '/sign-in-continue' && req.method === 'POST') {
+    writeFileSync(waitFiles(video.out).resume, 'ok\n');
+    return json(res, 200, { ok: true });
   }
 
   if (rest === '/cleanup' && req.method === 'POST') {

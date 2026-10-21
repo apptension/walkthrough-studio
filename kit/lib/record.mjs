@@ -4,7 +4,7 @@
  * The flow only describes the product journey; this file owns quality.
  */
 import { chromium } from 'playwright';
-import { renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { renameSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { actionStyle, createStory, installBrandFonts, startFrameRecorder } from './motion.mjs';
@@ -22,6 +22,14 @@ import {
 import { createMail } from './mail.mjs';
 import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
 import { installRecordedSelectorRetry } from './selectorRetry.mjs';
+import {
+  contextUsesSession,
+  pageNeedsPerson,
+  sessionFile,
+  shouldKeepWaiting,
+  signInWaitCopy,
+  waitFiles,
+} from './signInPause.mjs';
 
 const PRESS_ACTIONS = new Set(['click', 'dblclick', 'check', 'uncheck', 'setChecked', 'tap', 'selectOption']);
 const TYPE_ACTIONS = new Set(['fill', 'pressSequentially']);
@@ -133,6 +141,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     deviceScaleFactor: dpr,
     ...(timezone && { timezoneId: timezone }),
     ...(locale && { locale }),
+    ...(contextUsesSession(video) ? { storageState: sessionFile(video) } : {}),
   });
   await installBrandFonts(context, brand);
   page = await context.newPage();
@@ -457,6 +466,32 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     restoreKeys.push(() => (kb.press = origPress), () => (locatorProto.press = origLocatorPress));
   }
 
+  async function pauseIfPerson() {
+    const text = await page.locator('body').innerText({ timeout: 1500 }).catch(() => '');
+    const hasPassword = (await page.locator('input[type="password"]').count().catch(() => 0)) > 0;
+    if (!pageNeedsPerson({ text, url: page.url(), hasPassword })) return;
+    const files = waitFiles(out);
+    const copy = signInWaitCopy();
+    writeFileSync(files.wait, JSON.stringify({ url: page.url(), ...copy, at: new Date().toISOString() }));
+    rmSync(files.resume, { force: true });
+    console.log(`» sign-in · ${copy.title}. ${copy.next}`);
+    const started = Date.now();
+    while (true) {
+      const gate = shouldKeepWaiting({
+        needed: true,
+        resumeExists: existsSync(files.resume),
+        elapsed: Date.now() - started,
+      });
+      if (gate === false) break;
+      if (gate === 'timeout') throw new Error('Sign-in wait timed out. Finish sign-in, then re-record.');
+      await wait(400);
+    }
+    rmSync(files.wait, { force: true });
+    rmSync(files.resume, { force: true });
+    await context.storageState({ path: sessionFile(video) }).catch(() => {});
+    console.log('» sign-in · continuing in this session');
+  }
+
   try {
     console.log('» open · Loading the start page');
     const candidates = startUrlCandidates(startUrl);
@@ -497,6 +532,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     mark('start', 'live start');
     stallWatchdog.start();
     await wait(900);
+    await pauseIfPerson();
 
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -534,6 +570,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     await page.screencast.stop();
     const capture = await recorder.finish(endedAt);
     renameSync(outPath, finalOut);
+    await context.storageState({ path: sessionFile(video) }).catch(() => {});
 
     if (writeMeta) {
       await Promise.all(frameJobs);

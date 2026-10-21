@@ -767,6 +767,15 @@ function paintLivePreview(v, { recording = false } = {}) {
   if (!recording && !view.show) img.hidden = true;
 }
 
+function paintSignInWait(wait) {
+  const box = $('signInWait');
+  if (!box) return;
+  box.hidden = !wait;
+  if (!wait) return;
+  if ($('signInWaitTitle')) $('signInWaitTitle').textContent = wait.title || 'This page is waiting for you';
+  if ($('signInWaitNext')) $('signInWaitNext').textContent = wait.next || '';
+}
+
 function toast(title, detail = '', kind = 'ok') {
   noteToast();
   const el = document.createElement('div');
@@ -1622,6 +1631,12 @@ function watchJob(jobId, opts = {}) {
         if (state.video?.slug) {
           state.video.previewUrl = state.video.previewUrl || `/media/${state.video.slug}/live-preview.jpg`;
           paintLivePreview(state.video, { recording });
+          if (recording) {
+            fetch(`/media/${state.video.slug}/sign-in-wait.json?t=${Date.now()}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((wait) => paintSignInWait(wait))
+              .catch(() => paintSignInWait(null));
+          } else paintSignInWait(null);
         }
         if (
           job.status === 'done' ||
@@ -5193,6 +5208,15 @@ function wire() {
     if (noteEl) noteEl.value = note;
     document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
     startImprove('full');
+  });
+  $('signInContinue')?.addEventListener('click', async () => {
+    if (!state.slug) return;
+    try {
+      await api(`/api/video/${state.slug}/sign-in-continue`, { method: 'POST', body: {} });
+      paintSignInWait(null);
+    } catch (err) {
+      toast('Could not continue', err.message, 'err');
+    }
   });
   $('btnExport').onclick = () => exportPack();
   $('btnSetPoster')?.addEventListener('click', () => setPosterFromCurrentFrame());
