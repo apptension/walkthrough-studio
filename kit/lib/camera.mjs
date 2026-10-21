@@ -10,6 +10,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BT709_PARAMS, BT709_SCALE_OPTS } from './encode.mjs';
 import { run } from './media.mjs';
+import { clampZoomCenter } from '../studio/zoomAim.js';
 
 export const ZOOM_LEVELS = Object.freeze({ off: 0, subtle: 1.3, bold: 1.65 });
 export const FRAME_STYLES = Object.freeze(['full', 'inset']);
@@ -60,15 +61,14 @@ export function planZooms(timeline = [], { width, height, level = 'off', duratio
       const z = Number.isFinite(m.zoom) ? clamp(m.zoom, 1.1, 2.2) : ZOOM_LEVELS[m.level] || ZOOM_LEVELS.bold;
       const x = Number.isFinite(m.x) ? m.x : m.rect ? m.rect.x + m.rect.w / 2 : width / 2;
       const y = Number.isFinite(m.y) ? m.y : m.rect ? m.rect.y + m.rect.h / 2 : height / 2;
-      const halfW = width / (2 * z);
-      const halfH = height / (2 * z);
+      const aim = clampZoomCenter(x, y, { zoom: z, width, height });
       return {
         start: Number(f3(Math.max(0, m.t))),
         end: Number(f3(Math.min(duration, m.t + m.dur))),
         zoom: z,
         source: m.source === 'edit' ? 'edit' : 'manual',
         ...(m.id ? { id: m.id } : {}),
-        points: [{ t: m.t + Math.min(IN, m.dur * 0.35), cx: Math.round(clamp(x, halfW, width - halfW)), cy: Math.round(clamp(y, halfH, height - halfH)) }],
+        points: [{ t: m.t + Math.min(IN, m.dur * 0.35), cx: aim.cx, cy: aim.cy }],
       };
     })
     .filter((shot) => shot.end - shot.start >= IN + OUT + 0.15);
@@ -87,8 +87,6 @@ export function planZooms(timeline = [], { width, height, level = 'off', duratio
     else groups.push([m]);
   }
 
-  const halfW = width / (2 * zoom);
-  const halfH = height / (2 * zoom);
   const shots = [];
   for (const group of groups) {
     const first = group[0].t;
@@ -100,11 +98,10 @@ export function planZooms(timeline = [], { width, height, level = 'off', duratio
       if (a >= lastT && a < end) end = a;
     }
     if (end - start < IN + OUT + MIN_HOLD) continue;
-    const points = group.map((m) => ({
-      t: m.t,
-      cx: Math.round(clamp(m.x, halfW, width - halfW)),
-      cy: Math.round(clamp(m.y, halfH, height - halfH)),
-    }));
+    const points = group.map((m) => {
+      const aim = clampZoomCenter(m.x, m.y, { zoom, width, height });
+      return { t: m.t, cx: aim.cx, cy: aim.cy };
+    });
     shots.push({ start: Number(f3(start)), end: Number(f3(end)), zoom, source: 'auto', points });
   }
   shots.push(...manual);

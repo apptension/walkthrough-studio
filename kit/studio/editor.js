@@ -26,7 +26,9 @@ import {
   soloJoinFocus,
   stagePointerOwner,
 } from './plateSync.js';
-import { lensLoupe, lensZoomCeiling, planAfterSeeked, planLensPaint, planLiveSeek } from './livePreview.js';
+import { FRAME_EDITOR_HIT, lensLoupe, lensZoomCeiling, planAfterSeeked, planFrameEditor, planLensPaint, planLiveSeek } from './livePreview.js';
+import { clampZoomCenter, zoomPreviewStyle } from './zoomAim.js';
+import { narratorKeyNote } from './narratorNote.js';
 import { applyCardMotionToDocument } from './cardMotion.js';
 import {
   cardEditLandingEd,
@@ -1307,8 +1309,9 @@ export function initEditor(ctx) {
     if (zs.zoom > 1.001) {
       const cx = zs.cx ?? W / 2;
       const cy = zs.cy ?? H / 2;
-      v.style.transformOrigin = `${(cx / W) * 100}% ${(cy / H) * 100}%`;
-      v.style.transform = `scale(${zs.zoom.toFixed(4)})`;
+      const style = zoomPreviewStyle(cx, cy, { zoom: zs.zoom, width: W, height: H });
+      v.style.transformOrigin = style.transformOrigin;
+      v.style.transform = style.transform;
     } else {
       v.style.transform = '';
       v.style.transformOrigin = '';
@@ -1372,6 +1375,14 @@ export function initEditor(ctx) {
     const v = video();
     if (!cv || !v) return null;
     const lens = lensAt(rec);
+    const selected = selectedLens();
+    const hold = planFrameEditor({
+      selected: Boolean(selected) && selected.source !== 'off',
+      blockStart: selected?.t ?? 0,
+      blockEnd: (selected?.t ?? 0) + (selected?.dur ?? 0),
+      playhead: rec,
+      playing: ed.playing,
+    }).visible;
     const vp = $('liveViewport');
     const cssW = vp?.clientWidth || 0;
     const cw = Math.round(cssW * (window.devicePixelRatio || 1));
@@ -1381,7 +1392,7 @@ export function initEditor(ctx) {
       cv.height = ch;
     }
     const g = cv.getContext('2d');
-    const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v.readyState });
+    const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v.readyState, hold });
     if (paint.action === 'clear') {
       g.clearRect(0, 0, cv.width, cv.height);
       return null;
@@ -1627,7 +1638,16 @@ export function initEditor(ctx) {
     if (!box) return;
     const shot = selectedShot();
     const c = curClip();
-    if (!shot || ed.playing || c?.kind !== 'live' || !ed.deck) {
+    const rec = c?.kind === 'live' ? edToRec(c, ed.t) : null;
+    const editor = planFrameEditor({
+      selected: Boolean(shot),
+      blockStart: shot?.start ?? 0,
+      blockEnd: shot?.end ?? 0,
+      playhead: rec,
+      playing: ed.playing,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    });
+    if (!editor.visible || !ed.deck) {
       box.hidden = true;
       return;
     }
@@ -1635,6 +1655,9 @@ export function initEditor(ctx) {
     // The stage already shows the push-in; the box is a full-frame drag surface (pan) with corner
     // handles for strength — not a crop preview on a 1× frame.
     box.hidden = false;
+    box.dataset.hit = String(FRAME_EDITOR_HIT);
+    const strength = box.querySelector('[data-frame-zoom]');
+    if (strength && document.activeElement !== strength) strength.value = String(Number(zoom.toFixed(2)));
     box.style.left = '0';
     box.style.top = '0';
     box.style.width = '100%';
@@ -1701,13 +1724,12 @@ export function initEditor(ctx) {
         ed.aim = { cx: drag.cx, cy: drag.cy };
       } else {
         const zoom = ed.aimZoom || drag.zoom;
-        // Pan in recording pixels; the stage is already scaled, so pointer travel maps through the crop.
-        const halfW = W / (2 * zoom);
-        const halfH = H / (2 * zoom);
-        ed.aim = {
-          cx: Math.round(clamp(drag.cx - ((e.clientX - drag.x) / rect.width) * (W / zoom), halfW, W - halfW)),
-          cy: Math.round(clamp(drag.cy - ((e.clientY - drag.y) / rect.height) * (H / zoom), halfH, H - halfH)),
-        };
+        const aim = clampZoomCenter(
+          drag.cx - ((e.clientX - drag.x) / rect.width) * (W / zoom),
+          drag.cy - ((e.clientY - drag.y) / rect.height) * (H / zoom),
+          { zoom, width: W, height: H }
+        );
+        ed.aim = { cx: aim.cx, cy: aim.cy };
       }
       paintZoomBox();
       renderFrame();
@@ -1730,6 +1752,25 @@ export function initEditor(ctx) {
     };
     box.addEventListener('pointerup', finish);
     box.addEventListener('pointercancel', finish);
+    box.querySelector('.frame-editor')?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    box.querySelector('[data-frame-zoom]')?.addEventListener('change', (e) => {
+      const current = selectedShot();
+      if (!current) return;
+      const nextZoom = Number(e.target.value);
+      ed.aimZoom = nextZoom;
+      const done = () => {
+        ed.aimZoom = null;
+      };
+      if (current.source === 'auto') {
+        adoptShot(current, { zoom: nextZoom })?.finally(done);
+        return;
+      }
+      const d = deckEdit();
+      postDeck({ zooms: d.zooms.map((z) => (z.id === current.id ? { ...z, zoom: nextZoom } : z)) }, { hint: 'Zoom strength saved' })?.finally(done);
+    });
+    box.querySelector('[data-frame-remove="zoom"]')?.addEventListener('click', () => {
+      document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
+    });
   }
 
   // ─── Magnifier aim box (selected lens, paused, playhead inside it) ───────────────────────
@@ -1742,7 +1783,15 @@ export function initEditor(ctx) {
     const lens = selectedLens();
     const c = curClip();
     const rec = c?.kind === 'live' ? edToRec(c, ed.t) : null;
-    if (!lens || lens.source === 'off' || ed.playing || rec == null || rec < lens.t - 0.05 || rec > lens.t + lens.dur + 0.05) {
+    const editor = planFrameEditor({
+      selected: Boolean(lens) && lens.source !== 'off',
+      blockStart: lens?.t ?? 0,
+      blockEnd: (lens?.t ?? 0) + (lens?.dur ?? 0),
+      playhead: rec,
+      playing: ed.playing,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    });
+    if (!editor.visible) {
       box.hidden = true;
       return;
     }
@@ -1754,6 +1803,14 @@ export function initEditor(ctx) {
     const ox = canvasX + LENS_PAD;
     const oy = canvasY + LENS_PAD;
     box.hidden = false;
+    box.dataset.hit = String(FRAME_EDITOR_HIT);
+    const own = lens.source === 'edit' ? deckLens(lens) : null;
+    const strength = box.querySelector('[data-frame-lens-zoom]');
+    const size = box.querySelector('[data-frame-lens-size]');
+    const zNow = ed.lensAim?.zoom ?? own?.zoom ?? lens.zoom;
+    const sizeNow = Math.max(ed.lensAim?.w ?? own?.w ?? lens.rect?.w ?? 80, ed.lensAim?.h ?? own?.h ?? lens.rect?.h ?? 80);
+    if (strength && document.activeElement !== strength) strength.value = String(Number(zNow).toFixed(2));
+    if (size && document.activeElement !== size) size.value = String(Math.round(sizeNow));
     box.style.left = `${(ox / W) * 100}%`;
     box.style.top = `${(oy / H) * 100}%`;
     box.style.width = `${(shape.diameter / W) * 100}%`;
@@ -1820,6 +1877,29 @@ export function initEditor(ctx) {
     };
     box.addEventListener('pointerup', finish);
     box.addEventListener('pointercancel', finish);
+    box.querySelector('.frame-editor')?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const saveLensPatch = (patch) => {
+      const current = selectedLens();
+      if (!current || current.source === 'off') return;
+      if (current.source === 'auto') return adoptLens(current, patch);
+      const d = deckEdit();
+      return postDeck({ lenses: d.lenses.map((l) => (l.id === current.id ? { ...l, ...patch } : l)) }, { hint: 'Magnifier saved' });
+    };
+    box.querySelector('[data-frame-lens-zoom]')?.addEventListener('change', (e) => {
+      saveLensPatch({ zoom: Number(e.target.value) });
+    });
+    box.querySelector('[data-frame-lens-size]')?.addEventListener('change', (e) => {
+      const size = Math.round(Number(e.target.value));
+      const current = selectedLens();
+      const own = current?.source === 'edit' ? deckLens(current) : null;
+      const w0 = own?.w ?? current?.rect?.w ?? size;
+      const h0 = own?.h ?? current?.rect?.h ?? size;
+      const max = Math.max(w0, h0, 1);
+      saveLensPatch({ w: Math.max(16, Math.round((w0 * size) / max)), h: Math.max(12, Math.round((h0 * size) / max)) });
+    });
+    box.querySelector('[data-frame-remove="lens"]')?.addEventListener('click', () => {
+      document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
+    });
   }
 
   // ─── Transport ───────────────────────────────────────────────────────────────────────────
@@ -3733,12 +3813,16 @@ export function initEditor(ctx) {
   }
 
   async function adoptShot(shot, over = {}) {
-    const p = shot.points?.[0] || { cx: (live().width || 1920) / 2, cy: (live().height || 1080) / 2 };
+    const W = live().width || 1920;
+    const H = live().height || 1080;
+    const p = shot.points?.[0] || { cx: W / 2, cy: H / 2 };
+    const zoom = over.zoom ?? shot.zoom;
+    const aim = clampZoomCenter(over.x ?? p.cx, over.y ?? p.cy, { zoom, width: W, height: H });
     const id = `z${Math.round((over.t ?? shot.start) * 10)}`;
     const d = deckEdit();
     const zooms = [
       ...d.zooms.filter((z) => z.id !== id),
-      { id, t: r3(over.t ?? shot.start), dur: r3(over.dur ?? shot.end - shot.start), zoom: over.zoom ?? shot.zoom, x: over.x ?? p.cx, y: over.y ?? p.cy },
+      { id, t: r3(over.t ?? shot.start), dur: r3(over.dur ?? shot.end - shot.start), zoom, x: aim.cx, y: aim.cy },
     ];
     const zoomSkips = [...d.zoomSkips, { from: shot.start, to: shot.end }];
     const r = await postDeck({ zooms, zoomSkips }, { hint: 'That zoom is yours now' });
@@ -4353,11 +4437,11 @@ export function initEditor(ctx) {
     const curSrc = sources[String(take)] || clip.source;
     const srcNote = curSrc === 'mic' ? 'This take is a mic recording.' : curSrc === 'upload' ? 'This take is an uploaded MP3.' : '';
     const voiceNote =
-      mode === 'live'
-        ? `Regenerate speaks a new take with ${escapeHtml(ed.deck?.audio?.narrator?.name || 'the narrator')}; Upload or Record attaches your own audio. Earlier takes stay a click away.`
+      mode === 'missing-key'
+        ? narratorKeyNote(mode)
         : mode === 'stub'
           ? 'Voice runs in stub mode: takes are silent placeholders of the right length. You can still upload or record a take.'
-          : 'Add ELEVENLABS_API_KEY in kit/.env to speak lines, or upload / record a take instead.';
+          : `Regenerate speaks a new take with ${escapeHtml(ed.deck?.audio?.narrator?.name || 'the narrator')}; Upload or Record attaches your own audio. Earlier takes stay a click away.`;
     const kindLabel = clip.kind === 'adlib' ? 'ad-lib' : clip.kind || 'line';
     return (
       head(ICONS.mic, 'voice', clip.key, `${escapeHtml(kindLabel)} · ${clip.dur.toFixed(1)}s${take > 1 ? ` · take ${take}` : ''}${clip.mute ? ' · muted' : ''}${curSrc === 'mic' || curSrc === 'upload' ? ` · ${curSrc}` : ''}`, `<button type="button" class="ins-icon danger" data-act="voice-mute" title="${clip.mute ? 'Unmute' : 'Mute'}">${clip.mute ? ICONS.mic : ICONS.trash}</button>`) +
@@ -4425,7 +4509,7 @@ export function initEditor(ctx) {
     const source = n.source === 'video' ? 'picked for this video' : 'from the brand';
     let picker;
     if (n.mode !== 'live') {
-      picker = `<p class="ins-note subtle">${n.mode === 'stub' ? 'Voice runs in stub mode, so the account list is not available.' : 'Add ELEVENLABS_API_KEY in kit/.env to pick a narrator from the account.'}</p>`;
+      picker = `<p class="ins-note subtle" data-narrator-key>${narratorKeyNote(n.mode)}</p>`;
     } else if (!list) {
       picker = `<p class="ins-note subtle">Loading the voices on the account…</p>`;
     } else if (list.error) {

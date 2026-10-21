@@ -5,10 +5,15 @@
  * then Claude Code when Cursor is missing or not authenticated.
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
+import { readOverlayReport } from './overlayRetry.mjs';
+import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
+import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
+import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
 import { describeJob } from '../studio/progress.js';
@@ -545,21 +550,82 @@ function ingestStreamLine(job, line) {
 
 function attachLineParser(job, stream, { jsonl = false } = {}) {
   let buf = '';
+  let chain = Promise.resolve();
+  const take = async (line) => {
+    if (jsonl) ingestStreamLine(job, line);
+    else append(job, line);
+    if (job.question || job.status === 'waiting') return;
+    const asked = parseJobQuestion(job.log.at(-1)?.line || line);
+    if (!asked) return;
+    const pending = raiseJobQuestion(job, asked);
+    if (process.stdin.isTTY && !process.env.WALKTHROUGH_STUDIO) {
+      const value = await readCliAnswer(asked);
+      answerJob(job.id, { value, cancel: value == null || value === '' });
+    }
+    await pending;
+  };
   stream.on('data', (chunk) => {
     buf += chunk.toString();
     const parts = buf.split(/\r?\n/);
     buf = parts.pop() || '';
-    for (const line of parts) {
-      if (jsonl) ingestStreamLine(job, line);
-      else append(job, line);
-    }
+    if (!parts.length) return;
+    stream.pause();
+    chain = chain
+      .then(async () => {
+        for (const line of parts) await take(line);
+      })
+      .finally(() => stream.resume());
   });
   stream.on('end', () => {
-    if (buf.trim()) {
-      if (jsonl) ingestStreamLine(job, buf);
-      else append(job, buf);
-      buf = '';
+    if (!buf.trim()) return;
+    const rest = buf;
+    buf = '';
+    stream.pause();
+    chain = chain
+      .then(() => take(rest))
+      .finally(() => stream.resume());
+  });
+}
+
+/** CLI answer. A password is not echoed and is never printed. */
+function readCliAnswer({ prompt, secret }) {
+  return new Promise((resolve) => {
+    if (secret) {
+      process.stdout.write(`${prompt}\n> `);
+      let buf = '';
+      const onData = (chunk) => {
+        const s = chunk.toString();
+        if (s === '\u0003') {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        if (s.includes('\r') || s.includes('\n')) {
+          cleanup();
+          process.stdout.write('\n');
+          resolve(buf);
+          return;
+        }
+        if (s === '\u007f' || s === '\b') {
+          buf = buf.slice(0, -1);
+          return;
+        }
+        buf += s;
+      };
+      const cleanup = () => {
+        process.stdin.off('data', onData);
+        if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      };
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on('data', onData);
+      return;
     }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${prompt}\n> `, (value) => {
+      rl.close();
+      resolve(value);
+    });
   });
 }
 
@@ -594,6 +660,43 @@ function markNeedsAgent(job, outDir, message) {
 
 export function getJob(id) {
   return JOBS.get(id) || null;
+}
+
+const jobAnswers = new Map();
+
+/** Pause a job until Studio submits or cancels the question. */
+export function raiseJobQuestion(job, { field = 'email', prompt } = {}) {
+  job.question = { id: `${job.id}:${field}`, field, prompt: prompt || 'What email should this video use?' };
+  job.status = 'waiting';
+  job.phase = 'waiting';
+  append(job, `? ${job.question.prompt}`, { activity: job.question.prompt, kind: 'system' });
+  return new Promise((resolve) => {
+    jobAnswers.set(job.id, { resolve, field });
+  });
+}
+
+export function answerJob(id, { value, cancel } = {}) {
+  const job = getJob(id);
+  const waiter = jobAnswers.get(id);
+  if (!job || !waiter) return null;
+  jobAnswers.delete(id);
+  const result = applyJobAnswer({
+    field: waiter.field,
+    value: cancel ? null : value,
+    store: (pairs) => upsertDotEnv(pairs),
+  });
+  job.question = null;
+  if (!result.continue) {
+    job.status = 'cancelled';
+    job.phase = 'cancelled';
+    append(job, result.log, { activity: 'Stopped', kind: 'system' });
+  } else {
+    job.status = 'running';
+    job.phase = 'running';
+    append(job, result.log, { activity: result.log, kind: 'system' });
+  }
+  waiter.resolve(result);
+  return { continue: result.continue };
 }
 
 export function listJobs() {
@@ -755,16 +858,14 @@ function runCliStep(job, step, slug, extraArgs = []) {
   });
 }
 
-/**
- * Record with automatic capture-repair once: on stall, run the capture-repair agent goal,
- * then re-record. Visible phases: recording → repairing → re-recording.
- */
+/** Record with a fresh bounded capture → repair loop for every recording job. */
 function startRecordWithRepair(video, extraArgs = []) {
+  const maxRepairs = captureRepairLimit();
   const job = newJob({
     kind: 'kit',
     step: 'record',
     slug: video.slug,
-    repair: { attempted: false, stalled: false },
+    repair: { attempts: 0, max: maxRepairs, stalled: false, history: [] },
   });
   job.status = 'running';
   job.startedAt = new Date().toISOString();
@@ -786,88 +887,106 @@ function startRecordWithRepair(video, extraArgs = []) {
       append(job, ok ? '✓ record done' : `✗ ${activity}`, { activity, kind: ok ? 'system' : 'error' });
     };
 
-    const first = await runCliStep(job, 'record', video.slug, extraArgs);
-    if (job.cancelRequested || first.signal === 'SIGTERM' || first.signal === 'SIGKILL') {
-      finalizeCancelled(job);
-      return;
-    }
-    if (first.code === 0) {
-      finish(true, 'Recording captured');
-      return;
-    }
-
-    const stall = readStallReport(video);
-    if (!stall) {
-      job.exitCode = first.code;
-      finish(false, `record failed (exit ${first.code})`);
-      return;
-    }
-
-    job.repair.stalled = true;
-    job.stall = stall;
-    append(job, `✗ stall · ${stall.summary}`, { activity: stall.summary, kind: 'error' });
-
-    if (!agentIsReady()) {
-      job.exitCode = first.code;
-      finish(
-        false,
-        'Capture stalled — run agent login, then Improve → capture-repair, or re-record after fixing flow.mjs'
-      );
-      return;
-    }
-
-    job.phase = 'repairing';
-    job.activity = 'Repairing flow after capture stall…';
-    append(job, '» repair · Asking the agent to fix flow.mjs from the stall report', {
-      activity: job.activity,
-      kind: 'system',
-    });
-
-    const note = formatStallNote(stall);
-    const improve = startImprove(video, 'capture-repair', { note, force: true });
-    job.repairJobId = improve.id;
-    // Mirror improve lines into this job so Studio’s single progress card stays useful.
-    const mirror = setInterval(() => {
-      if (improve.activity && improve.activity !== job.activity) {
-        job.activity = `Repair: ${improve.activity}`;
+    let captureAttempt = 1;
+    while (true) {
+      job.phase = captureAttempt === 1 ? 'recording' : 're-recording';
+      job.activity =
+        captureAttempt === 1
+          ? STEP_OPENING.record
+          : `Capturing again after repair ${captureAttempt - 1}/${maxRepairs}…`;
+      if (captureAttempt > 1) {
+        append(job, `» record · ${job.activity}`, { activity: job.activity, kind: 'system' });
       }
-    }, 400);
-    await waitForJob(improve);
-    clearInterval(mirror);
 
-    if (job.cancelRequested) {
-      cancelJob(improve.id);
-      finalizeCancelled(job);
-      return;
-    }
-    if (improve.status !== 'done') {
-      job.exitCode = first.code;
-      finish(false, improve.activity || 'Capture repair failed — fix flow.mjs from capture-stall.json');
-      return;
-    }
+      const result = await runCliStep(job, 'record', video.slug, extraArgs);
+      if (job.cancelRequested || result.signal === 'SIGTERM' || result.signal === 'SIGKILL') {
+        finalizeCancelled(job);
+        return;
+      }
+      job.exitCode = result.code;
+      if (result.code === 0) {
+        finish(
+          true,
+          captureAttempt === 1
+            ? 'Recording captured'
+            : `Recording captured after ${captureAttempt - 1} repair${captureAttempt === 2 ? '' : 's'}`
+        );
+        return;
+      }
 
-    job.repair.attempted = true;
-    job.phase = 're-recording';
-    job.activity = 'Re-recording after repair…';
-    append(job, '» record · Re-recording once after repair', { activity: job.activity, kind: 'system' });
+      const stall = readStallReport(video);
+      const overlay = readOverlayReport(video);
+      const selector = readSelectorReport(video);
+      if (overlay) {
+        append(job, `» revalidate · ${overlay.summary}`, { activity: overlay.summary, kind: 'system' });
+      }
+      if (selector) {
+        append(job, `» revalidate · ${selector.summary} Screenshot: error.png`, {
+          activity: selector.summary,
+          kind: 'system',
+        });
+      }
+      if (stall) {
+        append(job, `✗ stall · ${stall.summary}`, { activity: stall.summary, kind: 'error' });
+      }
 
-    const second = await runCliStep(job, 'record', video.slug, extraArgs);
-    if (job.cancelRequested || second.signal === 'SIGTERM' || second.signal === 'SIGKILL') {
-      finalizeCancelled(job);
-      return;
+      const repairable = usesStallRepair({
+        stall,
+        overlay: Boolean(overlay),
+        selector,
+        selectorRetry: false,
+      });
+      const decision = captureRepairDecision({ captureAttempt, maxRepairs, repairable });
+      if (decision.action === 'fail') {
+        finish(
+          false,
+          decision.reason === 'exhausted'
+            ? `Recording failed after ${maxRepairs} repair attempts. ${stall?.summary || selector?.summary || overlay?.summary || `Exit ${result.code}`}`
+            : `record failed (exit ${result.code})`
+        );
+        return;
+      }
+
+      job.repair.stalled ||= Boolean(stall);
+      job.stall = stall;
+      if (!agentIsReady()) {
+        finish(false, 'Capture needs repair, but the agent is not signed in. Sign in, then record again.');
+        return;
+      }
+
+      job.repair.attempts = decision.repairAttempt;
+      job.phase = 'repairing';
+      job.activity = `Repairing capture ${decision.repairAttempt}/${maxRepairs}…`;
+      append(job, `» repair ${decision.repairAttempt}/${maxRepairs} · Asking the agent to fix flow.mjs`, {
+        activity: job.activity,
+        kind: 'system',
+      });
+
+      const note = stall
+        ? formatStallNote(stall)
+        : selector?.detail || overlay?.detail || overlay?.summary || 'A dialog covered the click target.';
+      const improve = startImprove(video, 'capture-repair', { note, force: true });
+      job.repairJobId = improve.id;
+      const mirror = setInterval(() => {
+        if (improve.activity && improve.activity !== job.activity) {
+          job.activity = `Repair ${decision.repairAttempt}/${maxRepairs}: ${improve.activity}`;
+        }
+      }, 400);
+      await waitForJob(improve);
+      clearInterval(mirror);
+
+      if (job.cancelRequested) {
+        cancelJob(improve.id);
+        finalizeCancelled(job);
+        return;
+      }
+      if (improve.status !== 'done') {
+        finish(false, improve.activity || `Capture repair ${decision.repairAttempt}/${maxRepairs} failed`);
+        return;
+      }
+      job.repair.history.push({ attempt: decision.repairAttempt, jobId: improve.id, status: improve.status });
+      captureAttempt = decision.nextCaptureAttempt;
     }
-    job.exitCode = second.code;
-    if (second.code === 0) {
-      finish(true, 'Recording captured after repair');
-      return;
-    }
-    const stall2 = readStallReport(video);
-    finish(
-      false,
-      stall2
-        ? `Still stalled after repair — ${stall2.summary}. Fix flow.mjs manually, then re-record.`
-        : `Re-record failed (exit ${second.code}) after repair`
-    );
   })().catch((err) => {
     job.status = 'failed';
     job.phase = 'failed';

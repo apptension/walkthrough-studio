@@ -14,11 +14,13 @@
  * - Social proof before close; one clear CTA
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { suggestPlates } from './suggestPlates.mjs';
 import { PURPOSES, critiqueStory } from './narrative.mjs';
+import { beatsForCritic, critiqueSpokenFrames, formatSampleList } from '../studio/frameCheck.js';
 
 const PERSONAS = [
   {
@@ -266,7 +268,7 @@ function critiqueTimeline(video) {
   return findings;
 }
 
-function renderMarkdown(video, fingerprint, personas, findings, plateSuggest, purpose) {
+function renderMarkdown(video, fingerprint, personas, findings, plateSuggest, purpose, samples = []) {
   const spine = PURPOSES[purpose];
   const byPersona = Object.fromEntries(PERSONAS.map((p) => [p.id, []]));
   for (const f of findings) {
@@ -285,8 +287,11 @@ function renderMarkdown(video, fingerprint, personas, findings, plateSuggest, pu
     '## Personas',
     ...PERSONAS.map((p) => `- **${p.name}** — need: ${p.need} _(watches ${p.watches})_`),
     '',
-    '## Findings',
+    '## Sampled frames',
   ];
+  const sampleBlock = formatSampleList(samples);
+  lines.push(sampleBlock || '_No voiced frame was sampled._');
+  lines.push('', '## Findings');
   if (!findings.length) {
     lines.push('_No blocking findings — structure and narration look aligned with the spine._');
   } else {
@@ -295,6 +300,9 @@ function renderMarkdown(video, fingerprint, personas, findings, plateSuggest, pu
         `- **[${f.severity}] ${f.action.toUpperCase()}** (${f.persona}) \`${f.target}\` — ${f.issue}`,
         `  → ${f.suggestion}`
       );
+      if (f.frame?.path || f.frame?.at != null) {
+        lines.push(`  ${formatSampleList([{ key: f.target, at: f.frame.at, path: f.frame.path }]).replace(/^- /, 'sampled ')}`);
+      }
     }
   }
   lines.push('', '## Plate suggestions', plateSuggest.report, '', '## How to use', '1. Adjust narration / plates / flow from the findings.', '2. Re-record or re-produce only what changed.', '3. Critic stays frozen until `node cli.mjs critic <slug> --force`.', '4. Optional: `node cli.mjs critic <slug> --apply` to write high-confidence narration rewrites + missing plate scaffolds.');
@@ -327,6 +335,19 @@ async function applyFindings(video, findings, plateSuggest, { applyPlates }) {
   return { narrationApplied, platesAdded };
 }
 
+function writeFrameStill(video, at, relPath) {
+  const live = join(video.out, 'live.mp4');
+  if (!existsSync(live) || !(Number(at) >= 0)) return;
+  const dest = join(video.out, relPath);
+  mkdirSync(dirname(dest), { recursive: true });
+  const result = spawnSync(
+    'ffmpeg',
+    ['-hide_banner', '-loglevel', 'error', '-y', '-ss', Number(at).toFixed(3), '-i', live, '-frames:v', '1', dest],
+    { encoding: 'utf8' }
+  );
+  if (result.status !== 0) return;
+}
+
 /**
  * @param {object} video
  * @param {{ force?: boolean, apply?: boolean, applyPlates?: boolean }} opts
@@ -352,11 +373,28 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
   const briefPath = join(video.dir, 'brief.json');
   const brief = existsSync(briefPath) ? JSON.parse(readFileSync(briefPath, 'utf8')) : null;
   const story = critiqueStory(video.config, lines, { brief });
+  let scenes = [];
+  try {
+    const { buildScript } = await import('./script.mjs');
+    scenes = (await buildScript(video)).scenes || [];
+  } catch {
+    /* Frame check still runs on narration length when the script cannot be built. */
+  }
+  const frameTextPath = join(video.out, 'frame-text.json');
+  const frameText = existsSync(frameTextPath) ? JSON.parse(readFileSync(frameTextPath, 'utf8')) : [];
+  const beats = beatsForCritic(scenes, frameText);
+  for (const beat of beats) {
+    if (beat.frame?.path && beat.frame.at != null) writeFrameStill(video, beat.frame.at, beat.frame.path);
+  }
+  const samples = beats
+    .filter((beat) => beat.frame?.path || beat.frame?.at != null)
+    .map((beat) => ({ key: beat.key, at: beat.frame.at, path: beat.frame.path }));
   const findings = [
     ...critiqueNarration(lines),
     ...story.findings,
     ...critiqueStructure(video, plateSuggest),
     ...critiqueTimeline(video),
+    ...critiqueSpokenFrames(beats),
   ];
 
   const report = {
@@ -365,6 +403,7 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
     generatedAt: new Date().toISOString(),
     purpose: story.purpose,
     personas: PERSONAS,
+    samples,
     findings,
     plateProposals: plateSuggest.proposals.map(({ _reason, _beforeHint, ...p }) => ({
       ...p,
@@ -374,7 +413,7 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
   };
 
   writeFileSync(reportJson, JSON.stringify(report, null, 2));
-  writeFileSync(reportMd, renderMarkdown(video, fingerprint, PERSONAS, findings, plateSuggest, story.purpose));
+  writeFileSync(reportMd, renderMarkdown(video, fingerprint, PERSONAS, findings, plateSuggest, story.purpose, samples));
 
   console.log(`✓ critic → ${reportMd}`);
   console.log(`  ${findings.length} finding(s) · ${plateSuggest.proposals.length} plate proposal(s)`);

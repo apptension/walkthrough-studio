@@ -2,7 +2,10 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, wri
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyDirection } from './direction.mjs';
+import { loadDotEnv, refreshDotEnv } from './dotenv.mjs';
 import { DELIVERY } from './format.mjs';
+
+export { loadDotEnv, refreshDotEnv };
 
 export const KIT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SKILL = resolve(KIT, '..');
@@ -32,22 +35,6 @@ export function hostRoot() {
 
 export const OUT_ROOT = process.env.WALKTHROUGH_OUT || join(hostRoot(), 'tmp', 'videos');
 
-/** `kit/.env` (gitignored): KEY=VALUE lines for service keys such as ELEVENLABS_API_KEY. Shell env wins. */
-export function loadDotEnv(file = join(KIT, '.env')) {
-  if (!existsSync(file)) return {};
-  const loaded = {};
-  for (const raw of readFileSync(file, 'utf8').split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq < 0) continue;
-    const key = line.slice(0, eq).trim();
-    const value = line.slice(eq + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
-    if (process.env[key] === undefined) process.env[key] = value;
-    loaded[key] = value;
-  }
-  return loaded;
-}
 loadDotEnv();
 
 /**

@@ -5,8 +5,12 @@
  *   node cli.mjs list                      videos and their outputs
  *   node cli.mjs discover-brand --name X --url https://… [--app-url https://…] [--force]
  *                                          harvest official logo + draft brand pack + motion-brief.md
+ *   node cli.mjs brief <slug> [--audience "…"] [--outcome "…"] [--purpose …] [--url https://…]
+ *                                          show the brief, or save a revision and print what must rerun
  *   node cli.mjs new <slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]
- *                                          scaffold videos/<slug>/
+ *                                          [--description "…"] [--url https://…]
+ *                                          scaffold videos/<slug>/. A description and URL draft
+ *                                          the brief only — nothing is recorded until you approve it.
  *   node cli.mjs branch <slug> [--discover] [--title "…"] [--angle "…"] [--slug kebab]
  *                                          suggest feature deep-dives from an overview, or copy one into a new project
  *   node cli.mjs plates <slug> [--force]   render brand open/close (+ review.html)
@@ -62,7 +66,7 @@
  *      no-credit plumbing check (macOS `say` + synthesized pad).
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { KIT, OUT_ROOT, TEMPLATES, VIDEOS, listVideos, loadVideo } from './lib/project.mjs';
 
@@ -129,17 +133,78 @@ async function main() {
       if (res.report.warning) console.log(`  ⚠ ${res.report.warning}`);
       return;
     }
+    case 'brief': {
+      if (!slug) throw new Error('Usage: brief <slug> [--audience "…"] [--outcome "…"] [--purpose …] [--url https://…]');
+      const video = loadVideo(slug);
+      const { readFileSync: readText, existsSync: exists } = await import('node:fs');
+      const briefPath = join(video.dir, 'brief.json');
+      const current = exists(briefPath) ? JSON.parse(readText(briefPath, 'utf8')) : {};
+      const patch = {};
+      if (opt('--audience')) patch.audience = opt('--audience');
+      if (opt('--outcome')) patch.outcome = opt('--outcome');
+      if (opt('--purpose')) patch.purpose = opt('--purpose');
+      if (opt('--url')) patch.app = { ...(current.app || {}), startUrl: opt('--url') };
+      if (!Object.keys(patch).length) {
+        console.log(JSON.stringify({ title: current.title, audience: current.audience, purpose: current.purpose, startUrl: current.app?.startUrl }, null, 2));
+        return;
+      }
+      const { revisePlan, nextBrief } = await import('./studio/briefRevise.js');
+      const { applyBriefRevision, saveSourceRevision } = await import('./lib/briefRevise.mjs');
+      const plan = revisePlan(current, { ...current, ...patch, app: patch.app || current.app, story: current.story });
+      if (!plan.changed.length) {
+        console.log('No brief changes.');
+        return;
+      }
+      const revision = saveSourceRevision(video);
+      applyBriefRevision(video, nextBrief(current, { ...current, ...patch, app: patch.app || current.app, story: current.story, brand: current.brand, proof: current.proof }));
+      console.log(`✓ revision ${revision.id}`);
+      console.log(`  changed: ${plan.changed.map((item) => item.label).join(', ')}`);
+      console.log(`  rerun: ${plan.stages.join(', ') || 'none'}`);
+      if (plan.needsRecord) console.log('  footage: re-record before the next render');
+      if (plan.stages.includes('planner')) console.log(`  next: node cli.mjs studio ${slug}  (or re-draft from Project settings)`);
+      if (plan.stages.includes('analyze')) console.log(`  next: node cli.mjs analyze ${slug}`);
+      return;
+    }
     case 'new': {
-      if (!slug || !/^[a-z0-9-]+$/.test(slug)) throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]');
+      if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
+        throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose …] [--description "…"] [--url https://…]');
+      }
       const { scaffoldVideo } = await import('./lib/project.mjs');
       const { PURPOSE_IDS } = await import('./lib/narrative.mjs');
+      const description = opt('--description');
+      const startUrl = opt('--url');
+      if (description && !startUrl) throw new Error('A description needs --url https://… — nothing was recorded.');
       const purpose = opt('--purpose');
       if (purpose && !PURPOSE_IDS.includes(purpose)) throw new Error(`--purpose must be one of ${PURPOSE_IDS.join(', ')}`);
-      const dir = scaffoldVideo(slug, { title: opt('--title') });
-      if (purpose) {
-        const cfgPath = join(dir, 'video.config.json');
-        const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-        cfg.purpose = purpose;
+      let drafted = null;
+      let title = opt('--title');
+      if (description) {
+        const { draftFromDescription } = await import('./studio/shortBrief.js');
+        drafted = draftFromDescription({ description, startUrl });
+        if (drafted.records) throw new Error('A description draft must not record.');
+        title = title || drafted.title;
+      }
+      const dir = scaffoldVideo(slug, { title });
+      const cfgPath = join(dir, 'video.config.json');
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+      if (drafted) {
+        const { applyDraftToConfig } = await import('./studio/shortBrief.js');
+        const next = applyDraftToConfig(cfg, drafted);
+        if (purpose) next.purpose = purpose;
+        writeFileSync(cfgPath, JSON.stringify(next, null, 2) + '\n');
+        console.log(`✓ ${dir}`);
+        console.log('  Drafted from your description. Nothing was recorded.');
+        console.log(`  Title: ${next.title}`);
+        console.log(`  Audience: ${next.audience}`);
+        console.log(`  Purpose: ${next.purpose} · ${drafted.lengthSec}s`);
+        console.log(`  Start: ${next.record.startUrl}`);
+        for (const chapter of drafted.chapters) console.log(`  · ${chapter}`);
+        console.log(`  Edit the brief, then approve it before: node cli.mjs record ${slug}`);
+        return;
+      }
+      if (purpose || startUrl) {
+        if (purpose) cfg.purpose = purpose;
+        if (startUrl) cfg.record = { ...(cfg.record || {}), startUrl };
         writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
       }
       console.log(`✓ ${dir}\n  1. edit video.config.json (copy, steps, env)\n  2. write flow.mjs\n  3. node cli.mjs plates ${slug} → review the brand plates\n  4. node cli.mjs all ${slug}`);
@@ -234,24 +299,74 @@ async function main() {
     case 'record': {
       preflight();
       const video = loadVideo(slug);
-      const recOpts = { headed: flag('--headed'), pace: opt('--pace') };
-      const { recordLive } = await import('./lib/record.mjs');
-      try {
-        await recordLive(video, recOpts);
-      } catch (err) {
-        const { CaptureStallError, formatStallNote, readStallReport } = await import('./lib/captureStall.mjs');
-        if (!(err instanceof CaptureStallError) || !flag('--repair')) throw err;
-        console.log('» repair · Capture stalled — running capture-repair agent once');
-        const { startImprove, waitForJob } = await import('./lib/agentRunner.mjs');
-        const stall = readStallReport(video) || err.report;
-        const job = startImprove(video, 'capture-repair', { note: formatStallNote(stall), force: true });
-        await waitForJob(job);
-        if (job.status !== 'done') {
-          console.error(`✗ repair failed — ${job.activity || job.status}. See capture-stall.json and fix flow.mjs.`);
-          throw err;
+      const loginRequired = Boolean(video.config?.record?.loginRequired);
+      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      if (headed && loginRequired && !flag('--headed')) {
+        console.log('» record · Sign-in is on, so the browser stays visible.');
+      }
+      const live = join(video.out, 'live.mp4');
+      const metaPath = join(video.out, 'live-meta.json');
+      let recordedUrl = '';
+      let recordedLogin = null;
+      if (existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+          recordedUrl = meta.startUrl || '';
+          if ('loginRequired' in meta) recordedLogin = meta.loginRequired;
+        } catch {
+          /* an unreadable meta file still allows the take */
         }
-        console.log('» record · Re-recording once after repair');
-        await recordLive(video, recOpts);
+      }
+      const startUrl = video.config?.record?.startUrl || '';
+      const flowPath = join(video.dir, 'flow.mjs');
+      const hasLive = existsSync(live);
+      const { recordTakeNote } = await import('./lib/recordFreshness.mjs');
+      const note = recordTakeNote({
+        hasLive,
+        flowNewer: hasLive && existsSync(flowPath) && statSync(flowPath).mtimeMs > statSync(live).mtimeMs,
+        urlChanged: Boolean(recordedUrl && startUrl && recordedUrl !== startUrl),
+        loginChanged: recordedLogin != null && Boolean(recordedLogin) !== loginRequired,
+      });
+      if (note) console.log(`» ${note}`);
+      const recOpts = { headed, pace: opt('--pace') };
+      const { recordLive } = await import('./lib/record.mjs');
+      const { formatStallNote, readStallReport } = await import('./lib/captureStall.mjs');
+      const { readOverlayReport } = await import('./lib/overlayRetry.mjs');
+      const { readSelectorReport, usesStallRepair } = await import('./lib/selectorRetry.mjs');
+      const { captureRepairDecision, captureRepairLimit } = await import('./lib/captureRepairLoop.mjs');
+      const maxRepairs = captureRepairLimit();
+      let captureAttempt = 1;
+      while (true) {
+        try {
+          await recordLive(video, recOpts);
+          break;
+        } catch (err) {
+          const stall = readStallReport(video) || err?.report;
+          const overlay = readOverlayReport(video);
+          const selector = readSelectorReport(video);
+          const repairable = usesStallRepair({
+            stall,
+            overlay: Boolean(overlay),
+            selector,
+            selectorRetry: false,
+          });
+          const decision = captureRepairDecision({ captureAttempt, maxRepairs, repairable });
+          if (!flag('--repair') || decision.action === 'fail') throw err;
+
+          console.log(`» repair ${decision.repairAttempt}/${maxRepairs} · Running capture-repair agent`);
+          const { startImprove, waitForJob } = await import('./lib/agentRunner.mjs');
+          const repairNote = stall
+            ? formatStallNote(stall)
+            : selector?.detail || overlay?.detail || overlay?.summary || String(err?.message || err);
+          const job = startImprove(video, 'capture-repair', { note: repairNote, force: true });
+          await waitForJob(job);
+          if (job.status !== 'done') {
+            console.error(`✗ repair ${decision.repairAttempt}/${maxRepairs} failed — ${job.activity || job.status}`);
+            throw err;
+          }
+          captureAttempt = decision.nextCaptureAttempt;
+          console.log(`» record · Capturing again after repair ${decision.repairAttempt}/${maxRepairs}`);
+        }
       }
       return;
     }
@@ -720,7 +835,9 @@ async function main() {
       const { recordLive } = await import('./lib/record.mjs');
       const { produce } = await import('./lib/produce.mjs');
       const { validate } = await import('./lib/validate.mjs');
-      await recordLive(video, { headed: flag('--headed'), pace: opt('--pace') });
+      const loginRequired = Boolean(video.config?.record?.loginRequired);
+      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      await recordLive(video, { headed, pace: opt('--pace') });
       await produce(video, { forcePlates: flag('--force') });
       if (existsSync(join(video.dir, 'narration.mjs'))) {
         const { audioMode } = await import('./lib/audio/elevenlabs.mjs');

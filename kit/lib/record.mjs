@@ -4,7 +4,7 @@
  * The flow only describes the product journey; this file owns quality.
  */
 import { chromium } from 'playwright';
-import { renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { renameSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { actionStyle, createStory, installBrandFonts, startFrameRecorder } from './motion.mjs';
@@ -20,6 +20,19 @@ import {
   writeStallReport,
 } from './captureStall.mjs';
 import { createMail } from './mail.mjs';
+import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
+import { clearSelectorReport, installRecordedSelectorRetry, writeSelectorReport } from './selectorRetry.mjs';
+import { clearOverlayReport, installOverlayRetry, writeOverlayReport } from './overlayRetry.mjs';
+import { describeRecordFailure } from '../studio/recordFailure.js';
+import {
+  contextUsesSession,
+  pageNeedsPerson,
+  sessionFile,
+  shouldKeepWaiting,
+  shouldRelaunchHeaded,
+  signInWaitCopy,
+  waitFiles,
+} from './signInPause.mjs';
 
 const PRESS_ACTIONS = new Set(['click', 'dblclick', 'check', 'uncheck', 'setChecked', 'tap', 'selectOption']);
 const TYPE_ACTIONS = new Set(['fill', 'pressSequentially']);
@@ -34,6 +47,11 @@ export function livePath(video) {
 
 export async function recordLive(video, { headed = false, flow, outFile, writeMeta = true, pace: paceArg } = {}) {
   const { config, brand, out } = video;
+  // Every capture attempt owns fresh failure evidence. A later recording job must never
+  // repair from a stall, overlay, or selector report left by an earlier attempt.
+  clearStallReport(video);
+  clearOverlayReport(video);
+  clearSelectorReport(video);
   // Live pace: one tempo over every authored hold. `pace` (CLI --pace) overrides the stored direction
   // for this take only; flows may shift it mid-tour with ctx.pace().
   const basePace = paceArg !== undefined ? resolvePace(paceArg) : brand.direction?.pace || resolvePace();
@@ -55,6 +73,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   if (typeof flow !== 'function') throw new Error('flow.mjs must export a default async function');
 
   const timeline = [];
+  const frameSamples = [];
+  const frameJobs = [];
   let startedAt = 0;
   let stallReject = null;
   /** Set once the Playwright page exists — stall reports include the current URL. */
@@ -83,6 +103,20 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       stallWatchdog.touchMark(label);
     }
     if (kind === 'chapter' || kind === 'caption') console.log(`» capture · ${label}`);
+    if ((kind === 'chapter' || kind === 'caption') && page) {
+      const t = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+      const shot = page;
+      frameJobs.push(
+        Promise.race([
+          shot.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2500)),
+          new Promise((resolve) => setTimeout(() => resolve(''), 800)),
+        ])
+          .then((text) => {
+            if (text) frameSamples.push({ key: label, t: Number(t.toFixed(3)), text });
+          })
+          .catch(() => {})
+      );
+    }
     console.log(`  ${t.toFixed(1).padStart(6)}s  ${kind.padEnd(7)}  ${label}`);
   };
   // Framing: auto scroll by default (keeps screencast FPS). Opt into smooth via record.scroll.
@@ -115,10 +149,13 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     deviceScaleFactor: dpr,
     ...(timezone && { timezoneId: timezone }),
     ...(locale && { locale }),
+    ...(contextUsesSession(video) ? { storageState: sessionFile(video) } : {}),
   });
   await installBrandFonts(context, brand);
   page = await context.newPage();
   page.setDefaultTimeout(30000);
+  installOverlayRetry(page);
+  installRecordedSelectorRetry(page, video);
   const recorder = startFrameRecorder(outPath, viewport);
   const focusTreatment = brand.direction?.focus || 'guided';
   const cursor = await createCursor({ context, page, brand, wait, viewport, settings: brand.direction?.cursor, tempo: speed });
@@ -438,11 +475,71 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     restoreKeys.push(() => (kb.press = origPress), () => (locatorProto.press = origLocatorPress));
   }
 
+  async function pageState() {
+    const text = await page.locator('body').innerText({ timeout: 1500 }).catch(() => '');
+    const hasPassword = (await page.locator('input[type="password"]').count().catch(() => 0)) > 0;
+    return pageNeedsPerson({ text, url: page.url(), hasPassword });
+  }
+
+  async function pauseIfPerson() {
+    if (!(await pageState())) return;
+    const files = waitFiles(out);
+    const copy = signInWaitCopy();
+    writeFileSync(files.wait, JSON.stringify({ url: page.url(), ...copy, at: new Date().toISOString() }));
+    rmSync(files.resume, { force: true });
+    console.log(`» sign-in · ${copy.title}. ${copy.next}`);
+    let typed = false;
+    const onStdin = (chunk) => {
+      if (String(chunk).includes('\n') || String(chunk).includes('\r')) typed = true;
+    };
+    if (process.stdin.isTTY) {
+      console.log('» sign-in · Press Enter in this terminal when you are done.');
+      process.stdin.resume();
+      process.stdin.on('data', onStdin);
+    }
+    const started = Date.now();
+    try {
+      while (true) {
+        const still = await pageState();
+        const gate = shouldKeepWaiting({
+          needed: true,
+          resumeExists: existsSync(files.resume) || typed || !still,
+          elapsed: Date.now() - started,
+        });
+        if (gate === false) break;
+        if (gate === 'timeout') throw new Error('Sign-in wait timed out. Finish sign-in, then re-record.');
+        await wait(400);
+      }
+    } finally {
+      if (process.stdin.isTTY) process.stdin.off('data', onStdin);
+    }
+    rmSync(files.wait, { force: true });
+    rmSync(files.resume, { force: true });
+    await context.storageState({ path: sessionFile(video) }).catch(() => {});
+    console.log('» sign-in · continuing in this session');
+  }
+
+  let handedOff = false;
   try {
     console.log('» open · Loading the start page');
-    await page.goto(startUrl, { waitUntil: config.record.waitUntil || 'networkidle' });
+    const candidates = startUrlCandidates(startUrl);
+    const opened = candidates.length > 1 ? await openStartUrl(startUrl) : { url: startUrl, attempts: candidates };
+    if (opened.url !== startUrl) console.log(`» open · ${startUrl} → ${opened.url}`);
+    await page.goto(opened.url, { waitUntil: config.record.waitUntil || 'networkidle', timeout: 15000 });
     await page.evaluate((family) => document.fonts.load(`600 20px "${family}"`), brand.font.family);
     await wait(500);
+
+    if (shouldRelaunchHeaded({ headed, needsPerson: await pageState() })) {
+      console.log('» sign-in · This page needs you. Opening a visible browser.');
+      recorder.kill();
+      stallWatchdog.stop();
+      focus.uninstall();
+      restoreKeys.forEach((fn) => fn());
+      await context.close().catch(() => {});
+      await browser.close().catch(() => {});
+      handedOff = true;
+      return recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg });
+    }
 
     // Optional pre-roll (cookie banners, login shells) — runs before capture so it never appears on camera.
     if (typeof beforeCapture === 'function') {
@@ -450,14 +547,31 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     }
 
     console.log('» capture · Driving the walkthrough');
-    clearStallReport(video);
     startedAt = Date.now();
     recorder.begin(startedAt);
-    await page.screencast.start({ size: viewport, quality: 100, onFrame: (f) => recorder.onFrame(f) });
+    let lastPreviewAt = 0;
+    const previewPath = join(out, 'live-preview.jpg');
+    await page.screencast.start({
+      size: viewport,
+      quality: 100,
+      onFrame: (frame) => {
+        recorder.onFrame(frame);
+        const now = Date.now();
+        if (frame?.data && now - lastPreviewAt > 400) {
+          lastPreviewAt = now;
+          try {
+            writeFileSync(previewPath, frame.data);
+          } catch {
+            /* a preview miss must not stop the take */
+          }
+        }
+      },
+    });
     await page.screencast.showActions(actionLook());
     mark('start', 'live start');
     stallWatchdog.start();
     await wait(900);
+    await pauseIfPerson();
 
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -495,9 +609,12 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     await page.screencast.stop();
     const capture = await recorder.finish(endedAt);
     renameSync(outPath, finalOut);
+    await context.storageState({ path: sessionFile(video) }).catch(() => {});
 
     if (writeMeta) {
+      await Promise.all(frameJobs);
       writeFileSync(join(out, 'timeline.json'), JSON.stringify(timeline, null, 2));
+      if (frameSamples.length) writeFileSync(join(out, 'frame-text.json'), JSON.stringify(frameSamples, null, 2));
       const meta = {
         slug: video.slug,
         flow: result ?? null,
@@ -505,6 +622,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
         timeline,
         overlays: { mode: overlaysMode, pipeline: 1 },
         capture: { ...capture, method: 'screencast JPEG q100, timestamp-placed, lossless x264' },
+        startUrl,
+        loginRequired: Boolean(config.record?.loginRequired ?? config.env?.email),
         createdAt: new Date().toISOString(),
       };
       writeFileSync(join(out, 'live-meta.json'), JSON.stringify(meta, null, 2));
@@ -547,13 +666,15 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       ? `${stallReport.summary}\n\n${(stallReport.hints || []).map((h) => `• ${h}`).join('\n')}\n\n${err.stack || err}`
       : String(err?.stack || err);
     writeFileSync(join(out, 'error.txt'), text);
-    console.error(
-      stallReport
-        ? `✗ capture stalled — see ${join(out, 'capture-stall.json')}, error.png, error.txt`
-        : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
-    );
+    if (err?.overlayRetry) writeOverlayReport(video, err);
+    if (err?.selectorRetry) writeSelectorReport(video, err);
+    const described = describeRecordFailure(`${err?.message || ''}\n${err?.stack || ''}`);
+    console.error(`✗ ${described.reason}`);
+    if (described.url) console.error(`  ${described.url}`);
+    console.error(`  Next: ${described.next}`);
     throw err;
   } finally {
+    if (handedOff) return;
     stallWatchdog.stop();
     focus.uninstall();
     restoreKeys.forEach((fn) => fn());

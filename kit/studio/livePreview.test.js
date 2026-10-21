@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { lensLoupe, lensZoomCeiling, planAfterSeeked, planLensPaint, planLiveSeek } from './livePreview.js';
+import { FRAME_EDITOR_HIT, lensLoupe, lensZoomCeiling, planAfterSeeked, planFrameEditor, planLensPaint, planLiveSeek } from './livePreview.js';
 import { lensGeometry } from '../lib/lens.mjs';
 
 describe('planLiveSeek', () => {
@@ -64,6 +65,30 @@ describe('planLensPaint', () => {
 
   it('draws when a frame is available', () => {
     assert.deepEqual(planLensPaint({ hasLens: true, viewportCssPx: 640, readyState: 2 }), { action: 'draw' });
+  });
+
+  it('keeps the loupe across a seek while the editor is held', () => {
+    assert.deepEqual(planLensPaint({ hasLens: false, viewportCssPx: 640, readyState: 1, hold: true }), { action: 'keep' });
+  });
+});
+
+describe('planFrameEditor', () => {
+  const block = { selected: true, blockStart: 2, blockEnd: 5, playing: false };
+
+  it('keeps the editor across a seek inside the block', () => {
+    assert.equal(planFrameEditor({ ...block, playhead: 2.2 }).visible, true);
+    assert.equal(planFrameEditor({ ...block, playhead: 4.6 }).visible, true);
+  });
+
+  it('stays up under reduced motion', () => {
+    assert.equal(planFrameEditor({ ...block, playhead: 3, reducedMotion: true }).visible, true);
+  });
+
+  it('uses a 44px hit target', () => {
+    assert.ok(FRAME_EDITOR_HIT >= 44);
+    const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+    assert.match(css, /\.frame-editor-hit[\s\S]*min-width:\s*44px/);
+    assert.match(css, /\.frame-editor-hit[\s\S]*min-height:\s*44px/);
   });
 });
 

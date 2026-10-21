@@ -1,5 +1,5 @@
 import { paintAgentStream } from './agentStream.js';
-import { ask } from './ask.js';
+import { ask, noteToast } from './ask.js';
 import { getMarkMode, initFavicon, setFaviconMode } from './favicon.js';
 import { initHelp } from './help.js';
 import { initBranch } from './branch.js';
@@ -11,6 +11,12 @@ import { initEditor } from './editor.js';
 import { mountZen, zen } from './zen.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
+import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
+import { firstShortHold } from './voiceHold.js';
+import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
+import { programPreview } from './liveWatch.js';
+import { marksForProgram, pipelineOverlay, programSourceForStep } from './programBuild.js';
+import { captureSummary, shouldEnqueue } from './queueUx.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -48,6 +54,7 @@ const state = {
   plateReplayTimer: null,
   action: null,
   queue: [],
+  running: null,
   jobBusy: false, // exclusive: one kit/agent job at a time
   renderLogExpanded: false,
   pipelineStartedAt: null,
@@ -744,7 +751,125 @@ function iconBtn(act, verId, label) {
   return `<button type="button" class="btn icon-only" data-ver="${verId}" data-act="${act}" title="${label}" aria-label="${label}">${ICONS[act] || ''}</button>`;
 }
 
+function paintLivePreview(v, { recording = false, repairing = false } = {}) {
+  const img = $('livePreview');
+  if (!img) return;
+  const view = programPreview({
+    recording,
+    repairing,
+    previewUrl: v?.previewUrl || (recording ? img.dataset.url : null),
+    hasLive: Boolean(v?.freshness?.liveAt),
+    hasDelivery: Boolean(v?.hasDelivery || v?.deliveryUrl),
+  });
+  if (view.show && view.url) {
+    img.dataset.url = view.url;
+    const src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
+    img.src = src;
+    img.hidden = false;
+    $('noVideo')?.classList.remove('show');
+    const thumb = $('activityLive');
+    if (thumb) {
+      thumb.hidden = false;
+      thumb.src = src;
+    }
+  } else if (!recording && !view.show) {
+    img.hidden = true;
+    const thumb = $('activityLive');
+    if (thumb) thumb.hidden = true;
+  }
+  const badge = $('liveBadge');
+  if (badge) {
+    badge.hidden = !view.badge;
+    badge.classList.toggle('is-live', view.badge === 'Live');
+    if ($('liveBadgeText')) $('liveBadgeText').textContent = view.badge || '';
+  }
+  if (recording || repairing) {
+    const failure = $('recordFailure');
+    if (failure) failure.hidden = true;
+  }
+  if (view.badge) {
+    const hint =
+      view.badge === 'Live'
+        ? 'Recording the page now'
+        : view.badge === 'Repairing'
+          ? 'Repairing the flow, then capture starts again'
+          : 'Last frame from the recording';
+    setMonitorLabel('Program', hint);
+  }
+  if (!state.jobBusy && view.badge === 'Last frame') {
+    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Last frame is on Program';
+    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'The page the recorder stopped on.';
+    if ($('renderLiveArt')) $('renderLiveArt').hidden = true;
+  }
+}
+
+function paintSignInWait(wait) {
+  const box = $('signInWait');
+  if (!box) return;
+  box.hidden = !wait;
+  if (!wait) return;
+  if ($('signInWaitTitle')) $('signInWaitTitle').textContent = wait.title || 'This page is waiting for you';
+  if ($('signInWaitNext')) $('signInWaitNext').textContent = wait.next || '';
+}
+
+function paintProgramBuild(overlay) {
+  const box = $('programBuild');
+  if (!box) return;
+  box.hidden = !overlay?.show;
+  box.classList.toggle('is-fail', overlay?.tone === 'fail');
+  if (!overlay?.show) return;
+  if ($('programBuildTitle')) $('programBuildTitle').textContent = overlay.title || '';
+  if ($('programBuildDetail')) $('programBuildDetail').textContent = overlay.detail || '';
+  const shot = $('programBuildShot');
+  const log = $('programBuildLog');
+  if (shot) {
+    shot.hidden = !overlay.screenshot;
+    shot.onclick = () => overlay.screenshot && window.open(overlay.screenshot, '_blank');
+  }
+  if (log) {
+    log.hidden = !overlay.log;
+    log.onclick = () => {
+      if (overlay.log === 'activity') showLeftTab('render');
+      else if (overlay.log) window.open(overlay.log, '_blank');
+    };
+  }
+}
+
+async function publishProgramStep(step, slug) {
+  const v = await api(`/api/video/${encodeURIComponent(slug)}`);
+  if (state.slug && state.slug !== slug) return;
+  const player = $('player');
+  const time = Number(player?.currentTime) || 0;
+  state.video = { ...(state.video || {}), ...v };
+  state.scenes = v.scenes || [];
+  state.chapters = marksForProgram({ chapters: v.chapters, captureMarks: v.captureMarks });
+  renderScenes(state.scenes);
+  renderTimeline(state.chapters, v.durationSec || state.duration || player?.duration || 1);
+  const choice = programSourceForStep({
+    step,
+    hasLive: Boolean(v.liveUrl),
+    liveUrl: v.liveUrl,
+    hasDelivery: Boolean(v.deliveryUrl),
+    deliveryUrl: v.deliveryUrl,
+  });
+  if (!choice.src || !player) return;
+  player.classList.remove('hidden');
+  $('noVideo')?.classList.remove('show');
+  player.src = `${choice.src}${String(choice.src).includes('?') ? '&' : '?'}t=${Date.now()}`;
+  player.onloadedmetadata = () => {
+    if (choice.preserveTime && time > 0.05) {
+      try {
+        player.currentTime = Math.min(time, player.duration || time);
+      } catch {
+        /* the new file can be shorter than the previous playhead */
+      }
+    }
+    if (choice.play) player.play?.().catch(() => {});
+  };
+}
+
 function toast(title, detail = '', kind = 'ok') {
+  noteToast();
   const el = document.createElement('div');
   el.className = `toast ${kind === 'err' ? 'err' : kind === 'warn' ? 'warn' : ''}`;
   el.innerHTML = `<i class="dot"></i><div><b>${escapeHtml(title)}</b>${detail ? `<span>${escapeHtml(detail)}</span>` : ''}</div>`;
@@ -1033,6 +1158,24 @@ function decideAction(v) {
   const hasDelivery = Boolean(v.hasDelivery || f.deliveryAt);
   const plateBad = Boolean(f.plateHealth?.bad);
 
+  if (v.recordFailure) {
+    const retry = recordFailureAction();
+    const parsed = describeRecordFailure(v.recordFailure.reason);
+    const failure = v.recordFailure.technical
+      ? v.recordFailure
+      : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical };
+    return {
+      kind: 'warn',
+      status: 'Record failed',
+      title: failure.reason,
+      reason: failure.next || v.recordFailure.next,
+      detail: [failure.technical, failure.url].filter(Boolean).join(' · '),
+      primary: { label: retry.label, mode: retry.mode },
+      secondary: null,
+      makeLabel: retry.label,
+    };
+  }
+
   if (!hasLive && !hasDelivery) {
     return {
       kind: 'warn',
@@ -1160,6 +1303,30 @@ function setRenderMode(on, mode = 'render') {
 }
 
 function renderActionCard(v) {
+  const holdWarn = $('voiceHoldWarn');
+  if (holdWarn) {
+    const message = firstShortHold(v?.script?.scenes);
+    holdWarn.hidden = !message;
+    holdWarn.textContent = message;
+  }
+  const failure = $('recordFailure');
+  if (failure) {
+    const parsed = v?.recordFailure ? describeRecordFailure(v.recordFailure.reason) : null;
+    const info = v?.recordFailure
+      ? v.recordFailure.technical
+        ? v.recordFailure
+        : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical }
+      : null;
+    failure.hidden = !info;
+    const shot = $('recordFailureShot');
+    if (info && shot) shot.src = info.screenshot;
+    if ($('recordFailureReason')) {
+      $('recordFailureReason').textContent = info?.reason || '';
+      $('recordFailureReason').title = info?.technical || '';
+    }
+    if ($('recordFailureUrl')) $('recordFailureUrl').textContent = info?.url || '';
+    if ($('recordFailureNext')) $('recordFailureNext').textContent = info?.next || '';
+  }
   const action = decideAction(v);
   state.action = action;
   setStatus(action.kind, action.status);
@@ -1170,6 +1337,33 @@ function renderActionCard(v) {
   const headline = $('renderHeadline');
   const reason = $('renderReason');
   if (!pill || !headline || !reason) return;
+
+  const target = $('recordTarget');
+  if (target && v?.freshness) {
+    const startUrl = v.freshness.startUrl || '';
+    target.hidden = !v.freshness.liveAt && !startUrl;
+    const url = $('recordStartUrl');
+    const login = $('recordLoginRequired');
+    if (url && document.activeElement !== url) url.value = startUrl;
+    if (login && document.activeElement !== login) login.checked = Boolean(v.freshness.loginRequired);
+    const summary = $('recordTargetSummary');
+    if (summary && document.activeElement !== url) summary.textContent = captureSummary(startUrl, v.freshness.loginRequired);
+    const cleanup = $('cleanupDisclosure');
+    if (cleanup) cleanup.hidden = false;
+    const versions = $('cleanupVersions');
+    if (versions) {
+      const ids = (v.versions || []).map((ver) => ver.id).join(',');
+      if (versions.dataset.ids !== ids) {
+        versions.dataset.ids = ids;
+        versions.innerHTML = (v.versions || [])
+          .map(
+            (ver) =>
+              `<label class="tog"><input type="checkbox" value="${escapeHtml(ver.id)}" /><span>${escapeHtml(ver.displayName || ver.name || ver.id)}</span></label>`
+          )
+          .join('');
+      }
+    }
+  }
 
   if (state.renderBusy) {
     pill.className = 'render-pill run';
@@ -1266,22 +1460,63 @@ function renderQueue() {
   const list = $('jobQueue');
   const empty = $('queueEmpty');
   if (!list) return;
-  updateQueueBadge();
-  if (!state.queue.length) {
-    list.innerHTML = '';
-    if (empty) empty.hidden = false;
-    return;
-  }
-  if (empty) empty.hidden = true;
-  list.innerHTML = state.queue
-    .map(
-      (q, i) => `<li data-qid="${escapeHtml(q.qid)}">
+  const now = state.running
+    ? `<li class="is-now"><span class="q-num">Now</span><span class="q-label">${escapeHtml(state.running.label || 'Working')}</span></li>`
+    : '';
+  list.innerHTML =
+    now +
+    state.queue
+      .map(
+        (q, i) => `<li data-qid="${escapeHtml(q.qid)}">
       <span class="q-num">${i + 1}</span>
       <span class="q-label">${escapeHtml(q.label)}</span>
       <button type="button" class="queue-remove" data-remove-qid="${escapeHtml(q.qid)}" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </li>`
-    )
-    .join('');
+      )
+      .join('');
+  list.hidden = !state.running && !state.queue.length;
+  if (empty) empty.hidden = Boolean(state.running) || state.queue.length > 0;
+  const clear = $('btnClearQueue');
+  if (clear) clear.hidden = state.queue.length === 0;
+  updateQueueBadge();
+}
+
+async function saveRecordTarget() {
+  if (!state.slug) return;
+  const input = $('recordStartUrl');
+  const login = $('recordLoginRequired');
+  const status = $('recordTargetStatus');
+  const startUrl = input?.value.trim() || '';
+  const loginRequired = Boolean(login?.checked);
+  const currentUrl = state.video?.freshness?.startUrl || '';
+  const currentLogin = Boolean(state.video?.freshness?.loginRequired);
+  if (startUrl === currentUrl && loginRequired === currentLogin) {
+    if (status) status.hidden = true;
+    return;
+  }
+  if (!/^https?:\/\//i.test(startUrl)) {
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Use a full http(s) URL.';
+    }
+    return;
+  }
+  try {
+    await api(`/api/video/${state.slug}/record-target`, {
+      method: 'PUT',
+      body: { startUrl, loginRequired },
+    });
+    await loadVideo(state.slug);
+    if (status) {
+      status.hidden = false;
+      status.textContent = state.video?.freshness?.needsRecord ? 'Saved. The next render re-records.' : 'Saved.';
+    }
+  } catch (err) {
+    if (status) {
+      status.hidden = false;
+      status.textContent = err.message || 'Could not save.';
+    }
+  }
 }
 
 function enqueueJob(item, { silent = false } = {}) {
@@ -1302,6 +1537,10 @@ function enqueueJob(item, { silent = false } = {}) {
   };
   if (!entry.slug) {
     toast('No sequence open', 'Pick a project before queuing work', 'warn');
+    return null;
+  }
+  if (!shouldEnqueue(state.queue, entry)) {
+    toast('Already waiting', entry.label, 'warn');
     return null;
   }
   state.queue.push(entry);
@@ -1351,6 +1590,7 @@ function updateStopButtons() {
 async function stopAllWork({ reason = 'Stopped', silent = false } = {}) {
   state.stopRequested = true;
   state.queue = [];
+  state.running = null;
   renderQueue();
   try {
     state.workAbort?.abort();
@@ -1398,7 +1638,9 @@ async function drainQueue() {
     return;
   }
   state.jobBusy = true;
+  state.running = next;
   state.stopRequested = false;
+  renderQueue();
   updateStopButtons();
   const signal = beginWorkAbort();
   const isRender = next.kind === 'make' || next.kind === 'step';
@@ -1472,6 +1714,8 @@ async function drainQueue() {
     }
   } finally {
     state.jobBusy = false;
+    state.running = null;
+    renderQueue();
     state.activeSurface = null;
     buttonBusy($('btnExport'), false);
     buttonBusy($('btnMake'), false);
@@ -1525,16 +1769,45 @@ function watchJob(jobId, opts = {}) {
         const job = await api(`/api/jobs/${jobId}`);
         state.job = job;
         state.jobId = jobId;
+        if (job.question && state.jobAsk !== job.question.id) {
+          state.jobAsk = job.question.id;
+          const answer = await ask({
+            kind: job.question.field === 'confirm' ? 'confirm' : 'prompt',
+            job: true,
+            secret: job.question.field === 'password',
+            title: job.question.prompt,
+            label: job.question.field === 'password' ? 'Password' : 'Email',
+            ok: 'Continue',
+          });
+          await api(`/api/jobs/${jobId}/answer`, {
+            method: 'POST',
+            body: { cancel: answer == null, value: answer },
+          }).catch(() => {});
+        }
         if (opts.onUpdate) opts.onUpdate(job);
         else showActivityDock(job, { surface });
+        const recordJob = job.step === 'record' && (job.status === 'running' || job.status === 'waiting');
+        const repairing = recordJob && job.phase === 'repairing';
+        const recording = recordJob && !repairing;
+        if (state.video?.slug) {
+          state.video.previewUrl = state.video.previewUrl || `/media/${state.video.slug}/live-preview.jpg`;
+          paintLivePreview(state.video, { recording, repairing });
+          if (recording) {
+            fetch(`/media/${state.video.slug}/sign-in-wait.json?t=${Date.now()}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((wait) => paintSignInWait(wait))
+              .catch(() => paintSignInWait(null));
+          } else paintSignInWait(null);
+        }
         if (
           job.status === 'done' ||
           job.status === 'failed' ||
           job.status === 'needs-agent' ||
-          job.status === 'cancelled'
+          job.status === 'cancelled' ||
+          job.status === 'waiting'
         ) {
           if (job.status === 'done') finish(resolve, job);
-          else finish(reject, new Error(job.message || job.status));
+          else if (job.status !== 'waiting') finish(reject, new Error(job.message || job.status));
         }
       } catch (err) {
         finish(reject, err);
@@ -1559,7 +1832,7 @@ function stageList(stages) {
 /** Fill one activity surface (render bay or session rail) from a job. */
 function paintWork(prefix, job) {
   const view = describeJob(job);
-  const running = job.status === 'running' || job.status === 'queued' || job.status === 'cancelling';
+  const running = job.status === 'running' || job.status === 'queued' || job.status === 'cancelling' || job.status === 'waiting';
   if ($(`${prefix}Spinner`)) $(`${prefix}Spinner`).hidden = !running;
   if ($(`${prefix}Art`)) $(`${prefix}Art`).hidden = true;
   $('renderLiveCard')?.classList.toggle('is-idle', false);
@@ -3382,14 +3655,7 @@ function renderCriticFindings(critic) {
   const findings = [...critic.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   box.innerHTML = findings.length
     ? findings
-        .map(
-          (f, i) => `<div class="critic-item ${f.severity}">
-        <div class="critic-item-head"><span class="tag">${f.severity}</span><span class="critic-target">${escapeHtml(f.target)}</span><span class="critic-persona">${escapeHtml(f.persona)}</span></div>
-        <p class="critic-issue">${escapeHtml(f.issue)}</p>
-        <p class="critic-suggest">${escapeHtml(f.suggestion)}</p>
-        <button type="button" class="btn tiny critic-fix" data-critic-fix="${i}" title="Send this finding to the agent as a director note">Fix with AI</button>
-      </div>`
-        )
+        .map((f, i) => criticFindingMarkup(f, i))
         .join('')
     : `<p class="empty-inline">Clean — narration and plates follow the ${escapeHtml(critic.purpose || 'story')} spine.</p>`;
   box.__findings = findings;
@@ -3411,8 +3677,7 @@ async function runCriticFromStudio({ force = true } = {}) {
 }
 
 function fixFindingWithAi(f) {
-  const target = f.target.replace(/^narration:/, 'narration line "').replace(/^(narration line ".*)$/, '$1"');
-  const note = `${f.issue} (${target}, flagged by the ${f.persona}). ${f.suggestion}`;
+  const note = directorNoteForFinding(f);
   const plate = /^([a-z0-9-]+)\.(title|copy|items|steps)/.exec(f.target)?.[1] || (/^(open|close)\./.test(f.target) ? f.target.split('.')[0] : null);
   const noteEl = $('improveNote');
   if (noteEl) noteEl.value = note;
@@ -3760,6 +4025,7 @@ async function loadVideo(slug, { play = false } = {}) {
     state.lastChapter = null;
 
     $('title').textContent = v.title || v.slug;
+    if ($('btnProjectSettings')) $('btnProjectSettings').hidden = false;
     $('subtitle').textContent = v.audience ? String(v.audience).slice(0, 80) : 'Delivery preview';
     $('metaBits').innerHTML = [
       v.durationSec != null ? clockShort(v.durationSec) : null,
@@ -3806,7 +4072,8 @@ async function loadVideo(slug, { play = false } = {}) {
       state.previewingPlate = null;
       setMonitorLabel('Program');
     }
-    if (v.deliveryUrl) {
+    paintLivePreview(v, { recording: false });
+    if (v.deliveryUrl && capturedTour({ hasLive: Boolean(v.freshness?.liveAt), recordFailed: Boolean(v.recordFailure) })) {
       if (state.monitorMode === 'program' || state.monitorMode === 'compare') {
         state.previewingPlate = null;
         player.src = v.deliveryUrl + `?t=${Date.now()}`;
@@ -4464,10 +4731,13 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
       if (s.id === 'preview') continue;
       if (sig?.aborted || state.stopRequested) throw new Error('cancelled');
       setStep(s.id, 'run');
+      paintProgramBuild(pipelineOverlay({ running: true, label: s.label }));
       setFaviconMode(s.id === 'record' ? 'record' : s.id === 'deliver' ? 'export' : 'render');
       // Plates are content-hash cached; forcing here would redraw every plate twice per make.
       await runJobPromise(s.id, false, { signal: sig, slug: target });
       setStep(s.id, 'done');
+      await publishProgramStep(s.id, target).catch(() => {});
+      paintProgramBuild(pipelineOverlay({ running: false }));
     }
     setStep('preview', 'run');
     if (target === state.slug) await loadVideo(state.slug, { play: true });
@@ -4496,6 +4766,15 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
   } catch (err) {
     const running = state.pipeline?.find((s) => s.status === 'run');
     if (running) setStep(running.id, 'fail');
+    paintProgramBuild(
+      pipelineOverlay({
+        failed: true,
+        label: running?.label || 'Render',
+        error: err.message,
+        screenshot: state.video?.recordFailure ? `/media/${encodeURIComponent(target)}/error.png` : '',
+        log: 'activity',
+      })
+    );
     setStatus('warn', 'Render failed');
     setFaviconMode('err');
     toast('Render failed', err.message, 'err');
@@ -5059,7 +5338,48 @@ function wire() {
 
   $('btnMake').onclick = () => requestMake();
   $('btnActionPrimary').onclick = () => requestMake($('btnActionPrimary').dataset.mode);
+  $('recordStartUrl')?.addEventListener('change', () => saveRecordTarget());
+  $('recordLoginRequired')?.addEventListener('change', () => saveRecordTarget());
+  $('btnCleanup')?.addEventListener('click', async () => {
+    if (!state.slug) return;
+    try {
+      const selectedVersions = [...document.querySelectorAll('#cleanupVersions input:checked')].map((el) => el.value);
+      const plan = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: false, selectedVersions } });
+      if (!plan.files?.length) {
+        toast('Nothing to clean', 'The master and live recording stay');
+        return;
+      }
+      const lines = plan.files.map((file) => `${file.name} · ${file.bytes} bytes`).join('\n');
+      const ok = await ask({
+        title: 'Delete intermediate files',
+        detail: `${lines}\n\n${plan.totalBytes} bytes. The current master and live.mp4 stay.`,
+        ok: 'Delete',
+        tone: 'warn',
+      });
+      if (!ok) return;
+      const done = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: true, selectedVersions } });
+      toast('Intermediates deleted', `${done.files.length} file(s), ${done.totalBytes} bytes`);
+    } catch (err) {
+      toast('Cleanup failed', err.message, 'err');
+    }
+  });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);
+  $('recordFailureFix')?.addEventListener('click', () => {
+    const note = recordFailureNote(state.video?.recordFailure);
+    const noteEl = $('improveNote');
+    if (noteEl) noteEl.value = note;
+    document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
+    startImprove('full');
+  });
+  $('signInContinue')?.addEventListener('click', async () => {
+    if (!state.slug) return;
+    try {
+      await api(`/api/video/${state.slug}/sign-in-continue`, { method: 'POST', body: {} });
+      paintSignInWait(null);
+    } catch (err) {
+      toast('Could not continue', err.message, 'err');
+    }
+  });
   $('btnExport').onclick = () => exportPack();
   $('btnSetPoster')?.addEventListener('click', () => setPosterFromCurrentFrame());
   $('btnExportMedia')?.addEventListener('click', () => exportPack());
@@ -5077,8 +5397,29 @@ function wire() {
     }
   });
 
+  $('recordTargetForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveRecordTarget();
+  });
+  $('btnQueueAdd')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = $('queueMenu');
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    $('btnQueueAdd').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+  });
+  document.addEventListener('click', (e) => {
+    const menu = $('queueMenu');
+    if (!menu || menu.hidden) return;
+    if (e.target.closest('#queueMenu') || e.target.closest('#btnQueueAdd')) return;
+    menu.hidden = true;
+    $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
+  });
   document.querySelectorAll('[data-enqueue]').forEach((btn) => {
     btn.onclick = () => {
+      const menu = $('queueMenu');
+      if (menu) menu.hidden = true;
+      $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
       const kind = btn.dataset.enqueue;
       if (kind === 'make-quick') {
         enqueueJob({ kind: 'make', mode: 'quick', label: 'Render sequence' });
@@ -5759,7 +6100,7 @@ function initStages() {
       }
     },
   });
-  initProjects({
+  const projects = initProjects({
     api,
     toast,
     escapeHtml,
@@ -5768,6 +6109,7 @@ function initStages() {
     followAgentJob: workflow.followAgentJob,
     openScript: workflow.openScript,
   });
+  $('btnProjectSettings')?.addEventListener('click', () => projects.openSettings(state.video));
 }
 
 function agentTip(auth, id) {

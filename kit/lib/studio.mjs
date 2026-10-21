@@ -5,6 +5,8 @@
  *   node cli.mjs studio [slug] [--port 4747]
  */
 import { createServer } from 'node:http';
+
+process.env.WALKTHROUGH_STUDIO = '1';
 import {
   copyFileSync,
   createReadStream,
@@ -23,6 +25,7 @@ import {
   cancelAllJobs,
   cancelJob,
   getJob,
+  answerJob,
   jobView as jobPayload,
   listJobs,
   setAgentPreference,
@@ -33,6 +36,12 @@ import { loadNarrationLines, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
 import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs';
 import { lensGeometry } from './lens.mjs';
+import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
+import { recordFailureView } from './recordFailure.mjs';
+import { nextBrief, revisePlan } from '../studio/briefRevise.js';
+import { applyBriefRevision, saveSourceRevision, storeCredential } from './briefRevise.mjs';
+import { waitFiles } from './signInPause.mjs';
+import { applyCleanup, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
 import {
@@ -237,14 +246,29 @@ function freshnessInfo(video) {
   const newest = sources.slice().sort((a, b) => b.mtime - a.mtime)[0];
 
   const plateHealth = plateRenderHealth(video);
-  const needsRecord = Boolean(liveAt && flowAt && flowAt > liveAt + 1500);
+  const liveMeta = readJsonSafe(join(video.out, 'live-meta.json')) || {};
+  const startUrl = video.config.record?.startUrl || '';
+  const loginRequired = typeof video.config.record?.loginRequired === 'boolean' ? video.config.record.loginRequired : Boolean(video.config.env?.email);
+  const recordedUrl = liveMeta.startUrl || '';
+  const recordedLogin = liveMeta.loginRequired == null ? null : Boolean(liveMeta.loginRequired);
+  const flowNewer = Boolean(liveAt && flowAt && flowAt > liveAt + 1500);
+  const urlChanged = Boolean(recordedUrl && startUrl && recordedUrl !== startUrl);
+  const loginChanged = recordedLogin != null && recordedLogin !== loginRequired;
+  const needsRecord = recordNeedsRerecord({
+    hasLive: Boolean(liveAt),
+    flowNewer,
+    recordedUrl,
+    startUrl,
+    recordedLogin,
+    loginRequired,
+  });
   const staleSources = Boolean(deliveryAt && sourceAt && sourceAt > deliveryAt + 1500);
   const stale = staleSources || plateHealth.bad;
   const fresh = Boolean(deliveryAt) && !stale && !needsRecord;
 
   let reason = 'Delivery matches current sources';
   if (!deliveryAt) reason = 'No delivery master yet — run produce';
-  else if (needsRecord) reason = `flow.mjs is newer than live.mp4 — re-record before produce`;
+  else if (needsRecord) reason = recordRerecordReason({ flowNewer, urlChanged, loginChanged });
   else if (plateHealth.bad) {
     reason = `Plate render QC: ${plateHealth.issues.slice(0, 2).join('; ')} — re-render plates`;
   } else if (staleSources) reason = `${newest?.key || 'sources'} newer than delivery — rebuild to preview`;
@@ -253,6 +277,8 @@ function freshnessInfo(video) {
     fresh,
     stale,
     needsRecord,
+    startUrl,
+    loginRequired,
     plateHealth,
     reason,
     sourceAt: sourceAt || null,
@@ -266,6 +292,15 @@ function freshnessInfo(video) {
       newerThanLive: Boolean(liveAt && s.mtime > liveAt + 1500),
     })),
   };
+}
+
+function captureMarks(video) {
+  const file = join(video.out, 'timeline.json');
+  const marks = readJsonSafe(file);
+  if (!Array.isArray(marks)) return [];
+  return marks
+    .filter((mark) => mark.kind === 'chapter' || mark.kind === 'caption')
+    .map((mark) => ({ start: Number(mark.t) || 0, title: mark.label || '', kind: mark.kind }));
 }
 
 function videoSummary(slug) {
@@ -292,6 +327,15 @@ function videoSummary(slug) {
     : null;
   const handoffZip = join(video.out, `${slug}-handoff.zip`);
   const freshness = freshnessInfo(video);
+  const shotPath = join(video.out, 'error.png');
+  const liveFile = join(video.out, 'live.mp4');
+  const notePath = join(video.out, 'error.txt');
+  const recordFailure = recordFailureView({
+    shotMtime: existsSync(shotPath) ? statSync(shotPath).mtimeMs : null,
+    liveMtime: existsSync(liveFile) ? statSync(liveFile).mtimeMs : null,
+    note: existsSync(notePath) ? readFileSync(notePath, 'utf8') : '',
+    screenshot: `/media/${slug}/error.png`,
+  });
   return {
     slug,
     title: video.config.title,
@@ -350,6 +394,11 @@ function videoSummary(slug) {
     hasDelivery: existsSync(final),
     deliveryUrl: existsSync(final) ? `/media/${slug}/${slug}.mp4` : null,
     freshness,
+    recordFailure,
+    previewUrl: existsSync(join(video.out, 'live-preview.jpg')) ? `/media/${slug}/live-preview.jpg` : null,
+    liveUrl: existsSync(join(video.out, 'live.mp4')) ? `/media/${slug}/live.mp4` : null,
+    captureMarks: captureMarks(video),
+    signInWait: existsSync(waitFiles(video.out).wait) ? readJsonSafe(waitFiles(video.out).wait) : null,
     durationSec: meta?.durationSec || null,
     sizeMB: meta?.sizeMB || null,
     chapters: meta?.chapters || [],
@@ -1281,6 +1330,14 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, job: jobPayload(job) });
   }
 
+  const jobAnswer = path.match(/^\/api\/jobs\/([^/]+)\/answer$/);
+  if (jobAnswer && req.method === 'POST') {
+    const body = await readBody(req);
+    const result = answerJob(jobAnswer[1], { value: body.value, cancel: Boolean(body.cancel) });
+    if (!result) return json(res, 404, { error: 'job not found' });
+    return json(res, 200, { ok: true, continue: result.continue });
+  }
+
   const jobMatch = path.match(/^\/api\/jobs\/([^/]+)$/);
   if (jobMatch && req.method === 'GET') {
     const job = getJob(jobMatch[1]);
@@ -1367,6 +1424,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (rest === '/brief' && req.method === 'POST') {
+    const body = await readBody(req);
+    const current = readJsonSafe(join(video.dir, 'brief.json')) || {};
+    const plan = revisePlan(current, body);
+    if (!plan.changed.length) return json(res, 200, { ok: true, plan, revision: null });
+    const secrets = [body.app?.password].filter((value) => value && String(value).length >= 4);
+    const revision = saveSourceRevision(video, { secrets });
+    const written = applyBriefRevision(video, nextBrief(current, body), { secrets });
+    const stored = storeCredential(video, { email: body.app?.email, password: body.app?.password });
+    return json(res, 200, { ok: true, plan, revision: revision.id, brief: written, stored: stored.includes(`${video.slug.replace(/-/g, '_').toUpperCase()}_PASSWORD`) ? ['password'] : [] });
+  }
+
   if (rest === '/script/approve' && req.method === 'POST') {
     const body = await readBody(req).catch(() => ({}));
     const script = await buildScript(video);
@@ -1399,6 +1468,44 @@ async function handleApi(req, res, url) {
     }
     setCutReview(video, { status: body.status, version, note: body.note, by: body.by });
     return json(res, 200, { ok: true, review: reviewSummary(video), versions: listVersions(video) });
+  }
+
+  if (rest === '/record-target' && req.method === 'PUT') {
+    const body = await readBody(req);
+    const startUrl = String(body.startUrl || '').trim();
+    if (!/^https?:\/\//i.test(startUrl)) return json(res, 400, { error: 'Start URL must be a full http(s) URL.' });
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const previousUrl = current.record?.startUrl || '';
+    const previousLogin = typeof current.record?.loginRequired === 'boolean' ? current.record.loginRequired : Boolean(current.env?.email);
+    const loginRequired = Boolean(body.loginRequired);
+    const metaPath = join(video.out, 'live-meta.json');
+    const meta = readJsonSafe(metaPath) || {};
+    if (existsSync(join(video.out, 'live.mp4')) && !meta.startUrl && previousUrl) {
+      meta.startUrl = previousUrl;
+      meta.loginRequired = previousLogin;
+      writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+    }
+    const record = { ...(current.record || {}), startUrl, loginRequired };
+    writeFileSync(pathCfg, JSON.stringify({ ...current, record }, null, 2) + '\n');
+    return json(res, 200, { ok: true, freshness: freshnessInfo(loadVideo(video.slug)) });
+  }
+
+  if (rest === '/sign-in-continue' && req.method === 'POST') {
+    writeFileSync(waitFiles(video.out).resume, 'ok\n');
+    return json(res, 200, { ok: true });
+  }
+
+  if (rest === '/cleanup' && req.method === 'POST') {
+    const body = await readBody(req);
+    const plan = planCleanup(video.out, { slug: video.slug, selectedVersions: body.selectedVersions || [] });
+    if (body.confirm) applyCleanup(plan);
+    return json(res, 200, {
+      ok: true,
+      deleted: Boolean(body.confirm),
+      files: plan.files.map((file) => ({ name: file.name, bytes: file.bytes })),
+      totalBytes: plan.totalBytes,
+    });
   }
 
   if (rest === '/transitions' && req.method === 'GET') {

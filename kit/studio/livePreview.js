@@ -56,14 +56,37 @@ export function lensLoupe(size, zoom) {
   return { zoom: z, diameter, S: diameter + 2 * LOUPE.pad, capped: raw > LOUPE.max };
 }
 
+/** Hit target for on-frame magnify and zoom controls. */
+export const FRAME_EDITOR_HIT = 44;
+
+/**
+ * Whether the on-frame editor (strength, size, remove) stays up.
+ * A seek that remains inside the selected block must not hide it, including
+ * when the author prefers reduced motion.
+ */
+export function planFrameEditor({
+  selected = false,
+  blockStart = 0,
+  blockEnd = 0,
+  playhead = null,
+  playing = false,
+  reducedMotion = false,
+} = {}) {
+  if (!selected || playing || !Number.isFinite(playhead)) return { visible: false, reducedMotion: Boolean(reducedMotion) };
+  const visible = playhead >= blockStart - 0.05 && playhead <= blockEnd + 0.05;
+  return { visible, reducedMotion: Boolean(reducedMotion) };
+}
+
 /**
  * Whether drawLens should wipe the canvas and redraw, keep the last loupe,
  * or clear because no lens is active.
  *
  * Clearing while readyState < 2 (common mid-seek) is what makes the magnifier
- * vanish during timeline scrub.
+ * vanish during timeline scrub. `hold` keeps that loupe when the on-frame
+ * editor is still inside its block even if the lens lookup missed a frame.
  */
-export function planLensPaint({ hasLens = false, viewportCssPx = 0, readyState = 0 } = {}) {
+export function planLensPaint({ hasLens = false, viewportCssPx = 0, readyState = 0, hold = false } = {}) {
+  if (hold && readyState < 2) return { action: 'keep' };
   if (!hasLens || viewportCssPx <= 0) return { action: 'clear' };
   if (readyState < 2) return { action: 'keep' };
   return { action: 'draw' };

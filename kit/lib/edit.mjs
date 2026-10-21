@@ -17,6 +17,7 @@ import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { duration } from './media.mjs';
 import { FPS } from './motion.mjs';
 import { platePaths } from './plates.mjs';
+import { extendCloseForVoice, narrationSeconds, outroFromNarrationSource } from '../studio/voiceHold.js';
 import {
   applyCardEdits,
   applySegmentOmit,
@@ -396,7 +397,7 @@ export function buildEditPlan(video) {
     return null;
   };
 
-  return {
+  const plan = {
     segments,
     liveToDelivery,
     deliveryToLive,
@@ -423,4 +424,14 @@ export function buildEditPlan(video) {
     edit: deck,
     liveMap,
   };
+  try {
+    const narrationPath = video?.dir ? join(video.dir, 'narration.mjs') : '';
+    if (narrationPath && existsSync(narrationPath)) {
+      const spoken = narrationSeconds(outroFromNarrationSource(readFileSync(narrationPath, 'utf8')));
+      extendCloseForVoice(plan, spoken);
+    }
+  } catch {
+    /* A narration file that is not a single literal keeps the plate length. The editor still warns. */
+  }
+  return plan;
 }

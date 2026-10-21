@@ -5,6 +5,8 @@
  */
 import { paintAgentStream } from './agentStream.js';
 import { ask } from './ask.js';
+import { SCENARIO_EDITABLE_NOTE, defaultSectionCollapsed } from './scriptSections.js';
+import { finishScriptApproval, planScriptApproval, scriptApproveLabel } from './scriptApproval.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -453,8 +455,8 @@ export function initWorkflow(ctx) {
     </li>`;
   }
 
-  /** Session collapse state for Opening / Story / Closing. */
-  const sectionCollapsed = { opening: false, story: false, closing: false };
+  /** Session collapse state for Opening / Story / Closing. A new scenario starts folded. */
+  const sectionCollapsed = defaultSectionCollapsed();
 
   function sectionHeader(id, label, hint, count = 0) {
     const collapsed = Boolean(sectionCollapsed[id]);
@@ -773,6 +775,8 @@ export function initWorkflow(ctx) {
       : scaffold
         ? 'Starter template · waiting for a real draft'
         : `${t.chapters} chapters · ${t.plates} plates · ${t.words} words · ~${mm}:${ss}`;
+    const editable = $('scriptEditableNote');
+    if (editable) editable.textContent = drafting || scaffold ? '' : SCENARIO_EDITABLE_NOTE;
 
     $('scriptApprovedMeta').textContent =
       r.effective === 'approved'
@@ -784,7 +788,7 @@ export function initWorkflow(ctx) {
             : '';
     $('btnScriptApprove').disabled = drafting || r.effective === 'approved';
     $('btnScriptRequest').disabled = drafting;
-    $('btnScriptApprove').textContent = r.effective === 'changed' ? 'Re-approve script' : 'Approve script';
+    $('btnScriptApprove').textContent = scriptApproveLabel(r.effective);
 
     const guide = $('scriptGuide');
     const scaffoldEl = $('scriptScaffoldNote');
@@ -1386,19 +1390,35 @@ export function initWorkflow(ctx) {
   async function approveScript() {
     const slug = getState().slug;
     const note = $('scriptNote').value.trim();
+    let review;
     try {
-      await api(`/api/video/${slug}/script/approve`, { method: 'POST', body: { note } });
+      const saved = await api(`/api/video/${slug}/script/approve`, { method: 'POST', body: { note } });
+      review = saved.review;
     } catch (err) {
       if (!/blocking/i.test(err.message) || !(await ask({ title: 'Approve with blocking issues?', detail: err.message, ok: 'Approve anyway', tone: 'warn' }))) {
         toast('Not approved', err.message, 'warn');
         return;
       }
-      await api(`/api/video/${slug}/script/approve`, { method: 'POST', body: { note, force: true } });
+      try {
+        const saved = await api(`/api/video/${slug}/script/approve`, { method: 'POST', body: { note, force: true } });
+        review = saved.review;
+      } catch (err2) {
+        toast('Not approved', err2.message, 'warn');
+        return;
+      }
     }
     $('scriptNote').value = '';
-    toast('Script approved', 'Next: record the walkthrough', 'ok');
+    const totals = script?.totals || {};
+    const plan = planScriptApproval({
+      ok: true,
+      chapters: totals.chapters || 0,
+      plates: totals.plates || 0,
+      approvedAt: review?.script?.approvedAt,
+    });
+    if ($('scriptApprovedMeta')) $('scriptApprovedMeta').textContent = plan.proof;
+    toast('Script approved', plan.proof, 'ok');
+    finishScriptApproval($('scriptDialog'), plan);
     await reload({ quiet: true });
-    await loadScript();
   }
 
   /* ---------- cut sheet ---------- */

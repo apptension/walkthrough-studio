@@ -41,6 +41,7 @@
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         New video
       </button>
+      <button type="button" id="btnProjectSettings" class="btn compact" title="Edit the brief and replan" hidden>Project settings</button>
       <button type="button" id="btnBranch" class="btn compact icon-text" title="Branch focused feature videos from this overview">
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.5 10.5 15M15.8 7.5 13.5 15"/></svg>
         Branch
@@ -125,6 +126,7 @@
             </div>
             <h2 id="renderHeadline" class="render-headline">Select a sequence</h2>
             <p id="renderReason" class="render-reason">Choose a video, then render or queue jobs from here.</p>
+            <p id="voiceHoldWarn" class="voice-hold-warn" hidden></p>
             <div class="render-start-actions">
               <button type="button" id="btnActionPrimary" class="render-cta primary">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
@@ -134,6 +136,17 @@
                 <span class="cta-label">Other</span>
               </button>
             </div>
+            <details id="recordTarget" class="capture-line" hidden>
+              <summary>
+                <span class="capture-kicker">Opens</span>
+                <span id="recordTargetSummary">No start URL yet</span>
+              </summary>
+              <form id="recordTargetForm" class="record-target">
+                <label class="wf"><span class="field-label">Start URL</span><input id="recordStartUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></label>
+                <label class="tog"><input type="checkbox" id="recordLoginRequired" /><span>Sign-in required</span></label>
+                <p id="recordTargetStatus" class="capture-status" hidden></p>
+              </form>
+            </details>
             <div id="plateQcBanner" class="plate-qc-banner" hidden></div>
           </div>
 
@@ -161,6 +174,7 @@
                   <span id="renderLivePhase" class="badge" hidden>—</span>
                 </div>
                 <div id="renderLiveArt" class="zen-slot" data-art="tumbleweed" aria-hidden="true"></div>
+                <img id="activityLive" class="activity-live" alt="Live page" hidden />
                 <strong id="renderLiveTitle" class="work-title">All quiet on set 🌵</strong>
                 <p id="renderLiveMeta" class="work-summary">Render above, or queue a single step below.</p>
               </div>
@@ -172,37 +186,29 @@
             </div>
           </div>
 
-          <div class="render-section">
+          <div class="render-section" id="queueSection">
             <div class="render-section-label">
-              <span data-ico="queue" data-help="Run one step on its own instead of a full render. Plates re-renders brand scenes, Audio re-mixes voice and music, Export builds the handoff pack. Steps queued while something runs start in order.">Queue</span>
+              <span data-ico="queue" data-help="Steps waiting behind the current job. Add Plates, Audio, or Export. Render stays the button above so it is not listed twice.">Queue</span>
               <div class="render-section-actions">
-                <button type="button" id="btnStopWork" class="btn tiny danger" hidden title="Stop current job and clear queue">
-                  Stop all
-                </button>
-                <button type="button" id="btnClearQueue" class="btn tiny" title="Clear pending queue only">Clear</button>
+                <button type="button" id="btnQueueAdd" class="btn tiny" aria-expanded="false" aria-controls="queueMenu">Add step</button>
+                <button type="button" id="btnStopWork" class="btn tiny danger" hidden title="Stop running job and clear queue">Stop all</button>
+                <button type="button" id="btnClearQueue" class="btn tiny" hidden title="Clear waiting steps. The running job keeps going.">Clear</button>
               </div>
             </div>
-            <div class="queue-add">
-              <button type="button" class="queue-chip" data-enqueue="plates" title="Render brand plates">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
-                Plates
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="audio" title="Voice + music mix">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
-                Audio
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="deliver" title="Export handoff pack">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
-                Export
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="make-quick" title="Queue full produce (no re-record)">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-                Render
-              </button>
+            <div id="queueMenu" class="queue-menu" hidden>
+              <button type="button" data-enqueue="plates">Plates</button>
+              <button type="button" data-enqueue="audio">Audio</button>
+              <button type="button" data-enqueue="deliver">Export</button>
             </div>
-            <ul id="jobQueue" class="queue-list"></ul>
-            <div id="queueEmpty" class="queue-empty" data-zen="dashes" data-mini data-title="Nothing in line ✨" data-sub="Steps wait here and run in order."></div>
+            <ol id="jobQueue" class="queue-list"></ol>
+            <p id="queueEmpty" class="queue-empty">Nothing waiting. Render runs from the button above.</p>
           </div>
+          <details id="cleanupDisclosure" class="capture-line capture-quiet" hidden>
+            <summary>Clean up capture files</summary>
+            <p class="capture-status">Removes intermediate files. The live recording and the delivery master stay.</p>
+            <div id="cleanupVersions" class="cleanup-versions"></div>
+            <button type="button" id="btnCleanup" class="btn">Clean intermediates</button>
+          </details>
         </div>
 
         <div id="leftVersions" class="panel-body versions-bay" hidden>
@@ -266,6 +272,30 @@
 
         <div class="stage-wrap">
           <div class="stage" id="stage">
+              <img id="livePreview" class="live-preview" alt="Live recording" hidden />
+              <div id="liveBadge" class="live-badge" hidden><i></i><span id="liveBadgeText">Live</span></div>
+              <div id="signInWait" class="sign-in-wait" hidden>
+                <strong id="signInWaitTitle"></strong>
+                <p id="signInWaitNext"></p>
+                <button type="button" id="signInContinue" class="btn primary">Continue</button>
+              </div>
+            <figure id="recordFailure" class="record-failure" hidden>
+              <img id="recordFailureShot" alt="Page when the recording failed" />
+              <figcaption>
+                <strong id="recordFailureReason"></strong>
+                <span id="recordFailureUrl"></span>
+                <span id="recordFailureNext"></span>
+              </figcaption>
+              <button type="button" id="recordFailureFix" class="btn primary">Fix with AI</button>
+            </figure>
+            <div id="programBuild" class="program-build" hidden>
+              <strong id="programBuildTitle"></strong>
+              <p id="programBuildDetail"></p>
+              <div class="program-build-actions">
+                <button type="button" id="programBuildShot" class="btn" hidden>Open screenshot</button>
+                <button type="button" id="programBuildLog" class="btn" hidden>Open log</button>
+              </div>
+            </div>
             <div id="playerSingle" class="player-mode">
               <video id="player" playsinline preload="metadata"></video>
             </div>
@@ -300,6 +330,12 @@
                   <canvas id="liveLens" class="live-lens" aria-hidden="true"></canvas>
                   <div id="liveZoomBox" class="live-zoom-box" hidden>
                     <i class="zh nw"></i><i class="zh ne"></i><i class="zh sw"></i><i class="zh se"></i>
+                    <div class="frame-editor" data-frame-editor="zoom">
+                      <label class="frame-editor-hit">Strength
+                        <input type="range" data-frame-zoom min="1.2" max="2.2" step="0.05" aria-label="Zoom strength" />
+                      </label>
+                      <button type="button" class="frame-editor-hit" data-frame-remove="zoom">Remove</button>
+                    </div>
                     <div class="stage-aim-tip" data-tone="zoom" aria-live="polite">
                       <div class="stage-aim-tip__head">
                         <span class="stage-aim-tip__kind"></span>
@@ -309,6 +345,15 @@
                     </div>
                   </div>
                   <div id="liveLensBox" class="live-lens-box" hidden>
+                    <div class="frame-editor" data-frame-editor="lens">
+                      <label class="frame-editor-hit">Strength
+                        <input type="range" data-frame-lens-zoom min="1.2" max="2.4" step="0.05" aria-label="Magnifier strength" />
+                      </label>
+                      <label class="frame-editor-hit">Size
+                        <input type="range" data-frame-lens-size min="24" max="540" step="2" aria-label="Magnifier size" />
+                      </label>
+                      <button type="button" class="frame-editor-hit" data-frame-remove="lens">Remove</button>
+                    </div>
                     <div class="stage-aim-tip" data-tone="lens" aria-live="polite">
                       <div class="stage-aim-tip__head">
                         <span class="stage-aim-tip__kind"></span>
@@ -1110,6 +1155,7 @@
             <span id="scriptStatus" class="review-pill">Draft</span>
           </div>
           <p id="scriptTotals" class="sheet-sub">Walk the story top to bottom — what appears, how long it holds, what is said.</p>
+          <p id="scriptEditableNote" class="sheet-sub">This draft stays editable.</p>
         </div>
         <div class="sheet-tools">
           <label class="tog"><input type="checkbox" id="scriptOnlyIssues" /><span>Issues only</span></label>
@@ -1181,7 +1227,7 @@
         <div class="sheet-actions script-foot-actions">
           <span id="scriptApprovedMeta" class="meta"></span>
           <span class="kbd-hint"><kbd>⌘</kbd><kbd>↵</kbd> saves line</span>
-          <button type="button" id="btnScriptApprove" class="btn primary">Approve script</button>
+          <button type="button" id="btnScriptApprove" class="btn primary">Approve and close</button>
         </div>
       </footer>
     </dialog>
@@ -1242,6 +1288,13 @@
       </ol>
       <form id="projectForm" class="sheet-body wizard-body" novalidate>
         <p id="wizardError" class="wf-error" role="alert" hidden></p>
+
+        <fieldset data-step="short">
+          <div class="wz-head"><h3>Describe the video</h3><p>What to show, for whom, and about how long. The draft stays editable. Nothing records until you approve it.</p></div>
+          <label class="wf"><span class="field-label">Description <b>*</b></span><textarea name="description" rows="4" placeholder="Show a new admin how to invite a teammate in about a minute, then the settings that decide who can change it."></textarea></label>
+          <label class="wf"><span class="field-label">Start URL <b>*</b></span><input name="shortStartUrl" type="url" placeholder="https://app.example.com" spellcheck="false" /></label>
+          <button type="button" class="btn ghost" data-full-brief>Fill each field instead</button>
+        </fieldset>
 
         <fieldset data-step="0">
           <div class="wz-head"><h3>What is this video?</h3><p>Audience and outcome steer every line the agent writes.</p></div>

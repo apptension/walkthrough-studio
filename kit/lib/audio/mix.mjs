@@ -13,6 +13,7 @@ import { assertVideoCopied } from '../encode.mjs';
 import { duration, finalPath, run } from '../produce.mjs';
 import { snapshotVersion } from '../versions.mjs';
 import { compactAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice } from './desk.mjs';
+import { deliveryMuxFlags, mixEndSec } from '../../studio/voiceHold.js';
 
 const RAMP = 1.0; // seconds for the music to move between plate level and bed level
 const EDIT_XFADE = 2.0; // crossfade for a music edit that fits the track to a new take
@@ -138,7 +139,8 @@ export function mixAudio(video, { out } = {}) {
       filters.push(`[${inputs.length / 2 - 1}:a]${fmt},${cut}${fadeIn}${fadeOut}${trim}${vol}highpass=f=70,adelay=${ms}|${ms}[v${i}]`);
       return `[v${i}]`;
     });
-    filters.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:normalize=0,apad,atrim=0:${total.toFixed(3)}[vo]`);
+    const voiceEnd = mixEndSec(total, clips);
+    filters.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:normalize=0,apad,atrim=0:${voiceEnd.toFixed(3)}[vo]`);
     voiceLabel = '[vo]';
   }
 
@@ -226,8 +228,8 @@ export function mixAudio(video, { out } = {}) {
   const muxArgs = [
     '-hide_banner', '-loglevel', 'error', '-y', '-i', SILENT, '-i', master,
     '-map', '0:v', '-map', '1:a', '-map_metadata', '0', '-map_chapters', '0',
-    '-c:v', 'copy', '-c:a', 'aac', '-b:a', mix.bitrate || '192k', '-ar', String(sr),
-    '-shortest', '-movflags', '+faststart', tmp,
+    ...deliveryMuxFlags({ bitrate: mix.bitrate || '192k', sampleRate: sr }),
+    tmp,
   ];
   assertVideoCopied(muxArgs);
   run('ffmpeg', muxArgs, 'mux audio onto the delivery master (video copied)');
