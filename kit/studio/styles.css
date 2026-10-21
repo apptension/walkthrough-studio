@@ -498,6 +498,13 @@ body.is-rendering .project-panel {
   letter-spacing: -0.03em;
   line-height: 1.25;
 }
+.voice-hold-warn {
+  margin: 8px 0 0;
+  color: var(--warn);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.voice-hold-warn[hidden] { display: none; }
 .render-reason {
   margin: 6px 0 0;
   font-size: 11.5px;

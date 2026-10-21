@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { shortHoldWarning } from '../studio/voiceHold.js';
 
 /** Matches narration.mjs guidance (~2.4 spoken words per second). */
 const WORDS_PER_SEC = 2.4;
@@ -235,17 +236,8 @@ function lintScene(scene) {
   if (scene.narration && /\b(click|clicks|clicking|tap|press)\b/i.test(scene.narration)) {
     add('info', 'Narration describes clicks — say why it matters instead');
   }
-  if (
-    (scene.kind === 'chapter' || scene.kind === 'step') &&
-    scene.narrationSec > 0 &&
-    scene.holdSec > 0 &&
-    scene.narrationSec > scene.holdSec + 0.6
-  ) {
-    add(
-      'warn',
-      `Voice needs ~${scene.narrationSec.toFixed(1)}s but the card holds ${scene.holdSec.toFixed(1)}s — lengthen the hold or shorten the line`
-    );
-  }
+  const holdWarn = shortHoldWarning(scene.holdSec, scene.narrationSec);
+  if (holdWarn) add('warn', holdWarn);
   return issues;
 }
 

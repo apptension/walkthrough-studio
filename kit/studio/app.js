@@ -12,6 +12,7 @@ import { mountZen, zen } from './zen.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup } from './criticFindings.js';
+import { firstShortHold } from './voiceHold.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -1161,6 +1162,12 @@ function setRenderMode(on, mode = 'render') {
 }
 
 function renderActionCard(v) {
+  const holdWarn = $('voiceHoldWarn');
+  if (holdWarn) {
+    const message = firstShortHold(v?.script?.scenes);
+    holdWarn.hidden = !message;
+    holdWarn.textContent = message;
+  }
   const action = decideAction(v);
   state.action = action;
   setStatus(action.kind, action.status);
