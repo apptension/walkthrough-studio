@@ -62,3 +62,16 @@ venv/
 
 # Local agent design/plan scratch — never ship
 docs/superpowers/
+
+# Local productions. Only the Studio walkthrough ships with the product.
+# Any project you add under videos/ or kit/brands/ stays untracked.
+videos/*
+!videos/walkthrough-studio/
+!videos/walkthrough-studio/**
+kit/brands/*
+!kit/brands/acme/
+!kit/brands/acme/**
+!kit/brands/admiral/
+!kit/brands/admiral/**
+!kit/brands/apptension-walkthrough-studio/
+!kit/brands/apptension-walkthrough-studio/**
