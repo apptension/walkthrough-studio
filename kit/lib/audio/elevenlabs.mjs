@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { refreshDotEnv } from '../dotenv.mjs';
 
 const API = 'https://api.elevenlabs.io/v1';
 
@@ -17,6 +18,7 @@ export function apiKey() {
 }
 
 export function audioMode() {
+  refreshDotEnv();
   if (process.env.WALKTHROUGH_AUDIO_STUB === '1') return 'stub';
   return apiKey() ? 'live' : 'missing-key';
 }

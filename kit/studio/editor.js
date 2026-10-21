@@ -28,6 +28,7 @@ import {
 } from './plateSync.js';
 import { FRAME_EDITOR_HIT, lensLoupe, lensZoomCeiling, planAfterSeeked, planFrameEditor, planLensPaint, planLiveSeek } from './livePreview.js';
 import { clampZoomCenter, zoomPreviewStyle } from './zoomAim.js';
+import { narratorKeyNote } from './narratorNote.js';
 import { applyCardMotionToDocument } from './cardMotion.js';
 import {
   cardEditLandingEd,
@@ -4436,11 +4437,11 @@ export function initEditor(ctx) {
     const curSrc = sources[String(take)] || clip.source;
     const srcNote = curSrc === 'mic' ? 'This take is a mic recording.' : curSrc === 'upload' ? 'This take is an uploaded MP3.' : '';
     const voiceNote =
-      mode === 'live'
-        ? `Regenerate speaks a new take with ${escapeHtml(ed.deck?.audio?.narrator?.name || 'the narrator')}; Upload or Record attaches your own audio. Earlier takes stay a click away.`
+      mode === 'missing-key'
+        ? narratorKeyNote(mode)
         : mode === 'stub'
           ? 'Voice runs in stub mode: takes are silent placeholders of the right length. You can still upload or record a take.'
-          : 'Add ELEVENLABS_API_KEY in kit/.env to speak lines, or upload / record a take instead.';
+          : `Regenerate speaks a new take with ${escapeHtml(ed.deck?.audio?.narrator?.name || 'the narrator')}; Upload or Record attaches your own audio. Earlier takes stay a click away.`;
     const kindLabel = clip.kind === 'adlib' ? 'ad-lib' : clip.kind || 'line';
     return (
       head(ICONS.mic, 'voice', clip.key, `${escapeHtml(kindLabel)} · ${clip.dur.toFixed(1)}s${take > 1 ? ` · take ${take}` : ''}${clip.mute ? ' · muted' : ''}${curSrc === 'mic' || curSrc === 'upload' ? ` · ${curSrc}` : ''}`, `<button type="button" class="ins-icon danger" data-act="voice-mute" title="${clip.mute ? 'Unmute' : 'Mute'}">${clip.mute ? ICONS.mic : ICONS.trash}</button>`) +
@@ -4508,7 +4509,7 @@ export function initEditor(ctx) {
     const source = n.source === 'video' ? 'picked for this video' : 'from the brand';
     let picker;
     if (n.mode !== 'live') {
-      picker = `<p class="ins-note subtle">${n.mode === 'stub' ? 'Voice runs in stub mode, so the account list is not available.' : 'Add ELEVENLABS_API_KEY in kit/.env to pick a narrator from the account.'}</p>`;
+      picker = `<p class="ins-note subtle" data-narrator-key>${narratorKeyNote(n.mode)}</p>`;
     } else if (!list) {
       picker = `<p class="ins-note subtle">Loading the voices on the account…</p>`;
     } else if (list.error) {
