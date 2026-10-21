@@ -20,6 +20,7 @@ import {
   writeStallReport,
 } from './captureStall.mjs';
 import { createMail } from './mail.mjs';
+import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
 
 const PRESS_ACTIONS = new Set(['click', 'dblclick', 'check', 'uncheck', 'setChecked', 'tap', 'selectOption']);
 const TYPE_ACTIONS = new Set(['fill', 'pressSequentially']);
@@ -440,7 +441,10 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
 
   try {
     console.log('» open · Loading the start page');
-    await page.goto(startUrl, { waitUntil: config.record.waitUntil || 'networkidle' });
+    const candidates = startUrlCandidates(startUrl);
+    const opened = candidates.length > 1 ? await openStartUrl(startUrl) : { url: startUrl, attempts: candidates };
+    if (opened.url !== startUrl) console.log(`» open · ${startUrl} → ${opened.url}`);
+    await page.goto(opened.url, { waitUntil: config.record.waitUntil || 'networkidle', timeout: 15000 });
     await page.evaluate((family) => document.fonts.load(`600 20px "${family}"`), brand.font.family);
     await wait(500);
 
@@ -550,7 +554,9 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     console.error(
       stallReport
         ? `✗ capture stalled — see ${join(out, 'capture-stall.json')}, error.png, error.txt`
-        : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
+        : err?.attempts
+          ? `✗ ${err.message}`
+          : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
     );
     throw err;
   } finally {
