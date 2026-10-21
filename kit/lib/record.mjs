@@ -47,6 +47,11 @@ export function livePath(video) {
 
 export async function recordLive(video, { headed = false, flow, outFile, writeMeta = true, pace: paceArg } = {}) {
   const { config, brand, out } = video;
+  // Every capture attempt owns fresh failure evidence. A later recording job must never
+  // repair from a stall, overlay, or selector report left by an earlier attempt.
+  clearStallReport(video);
+  clearOverlayReport(video);
+  clearSelectorReport(video);
   // Live pace: one tempo over every authored hold. `pace` (CLI --pace) overrides the stored direction
   // for this take only; flows may shift it mid-tour with ctx.pace().
   const basePace = paceArg !== undefined ? resolvePace(paceArg) : brand.direction?.pace || resolvePace();
@@ -542,9 +547,6 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     }
 
     console.log('» capture · Driving the walkthrough');
-    clearStallReport(video);
-    clearOverlayReport(video);
-    clearSelectorReport(video);
     startedAt = Date.now();
     recorder.begin(startedAt);
     let lastPreviewAt = 0;

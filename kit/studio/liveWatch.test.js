@@ -11,6 +11,7 @@ test('during record, Program shows the page and not an empty stage', () => {
     hasDelivery: false,
   });
   assert.equal(view.show, true);
+  assert.equal(view.badge, 'Live');
   assert.equal(view.empty, false);
   assert.match(view.url, /live-preview\.jpg/);
 });
@@ -27,8 +28,19 @@ test('a record that stops on a login page keeps that frame', () => {
     hasLive: false,
   });
   assert.equal(after.show, true);
+  assert.equal(after.badge, 'Last frame');
   assert.equal(after.url, during.url);
   assert.equal(after.empty, false);
+});
+
+test('repair keeps the last frame visible and labels it as repairing', () => {
+  const view = programPreview({
+    repairing: true,
+    previewUrl: '/media/demo/live-preview.jpg',
+    hasLive: false,
+  });
+  assert.equal(view.show, true);
+  assert.equal(view.badge, 'Repairing');
 });
 
 test('the live frame element is on Program', () => {

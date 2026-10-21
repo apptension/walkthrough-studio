@@ -39,13 +39,13 @@ const STEPS = {
     title: 'Recording the walkthrough',
     done: 'Recording captured',
     failed: 'Recording did not finish',
-    summary: 'A real browser, driving the live app. Stalls auto-repair flow.mjs once, then re-record.',
+    summary: 'A real browser, driving the live app. A repairable stall cycles back through capture up to the retry limit.',
     stages: [
       ['open', 'Opening the app', 'Loading the start page', /open|navigat|start url|login/i],
       ['capture', 'Capturing', 'Chapter cards and captions play over the screen', /» capture|driving the walkthrough|chapter|caption/i],
       ['stall', 'Stall detected', 'No progress — writing the stall report', /✗ stall|capture stalled|stall ·/i],
       ['repair', 'Repairing the flow', 'Agent fixes selectors from the stall report', /» repair|repairing flow|capture-repair|Repair:/i],
-      ['rerecord', 'Re-recording', 'One automatic retry after repair', /» record · Re-recording|Re-recording after repair/i],
+      ['rerecord', 'Capturing again', 'Returns to capture after each repair', /» record · Capturing again|Capturing again after repair/i],
       ['save', 'Saving', 'Writing the take', /» save|finish|live\.mp4|wrote/i],
     ],
   },
@@ -292,6 +292,35 @@ export function describeJob(job) {
       now: '',
       progress: status === 'done' ? 1 : 0,
       stages: [],
+    };
+  }
+
+  if (
+    job?.step === 'record' &&
+    job?.status === 'running' &&
+    job?.repair?.attempts > 0 &&
+    (job.phase === 'repairing' || job.phase === 're-recording')
+  ) {
+    const attempts = Number(job.repair.attempts);
+    const maxRepairs = Number(job.repair.max) || 3;
+    const repairing = job.phase === 'repairing';
+    const stages = spec.stages.map(([id, label, detail]) => {
+      let state = 'todo';
+      if (['open', 'stall'].includes(id)) state = 'done';
+      if (id === 'repair') state = repairing ? 'run' : 'done';
+      if (id === 'capture') state = repairing ? 'done' : 'run';
+      return { id, label, detail, state };
+    });
+    return {
+      title: repairing
+        ? `Repairing capture ${attempts}/${maxRepairs}`
+        : `Capturing again ${attempts + 1}/${maxRepairs + 1}`,
+      summary: `Capture and repair can repeat ${maxRepairs} times before the job stops with an error.`,
+      statusLabel,
+      badge,
+      now: humanize(job.activity || ''),
+      progress: Math.min(0.9, attempts / (maxRepairs + 1)),
+      stages,
     };
   }
 

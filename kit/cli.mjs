@@ -330,22 +330,43 @@ async function main() {
       if (note) console.log(`» ${note}`);
       const recOpts = { headed, pace: opt('--pace') };
       const { recordLive } = await import('./lib/record.mjs');
-      try {
-        await recordLive(video, recOpts);
-      } catch (err) {
-        const { CaptureStallError, formatStallNote, readStallReport } = await import('./lib/captureStall.mjs');
-        if (!(err instanceof CaptureStallError) || !flag('--repair')) throw err;
-        console.log('» repair · Capture stalled — running capture-repair agent once');
-        const { startImprove, waitForJob } = await import('./lib/agentRunner.mjs');
-        const stall = readStallReport(video) || err.report;
-        const job = startImprove(video, 'capture-repair', { note: formatStallNote(stall), force: true });
-        await waitForJob(job);
-        if (job.status !== 'done') {
-          console.error(`✗ repair failed — ${job.activity || job.status}. See capture-stall.json and fix flow.mjs.`);
-          throw err;
+      const { formatStallNote, readStallReport } = await import('./lib/captureStall.mjs');
+      const { readOverlayReport } = await import('./lib/overlayRetry.mjs');
+      const { readSelectorReport, usesStallRepair } = await import('./lib/selectorRetry.mjs');
+      const { captureRepairDecision, captureRepairLimit } = await import('./lib/captureRepairLoop.mjs');
+      const maxRepairs = captureRepairLimit();
+      let captureAttempt = 1;
+      while (true) {
+        try {
+          await recordLive(video, recOpts);
+          break;
+        } catch (err) {
+          const stall = readStallReport(video) || err?.report;
+          const overlay = readOverlayReport(video);
+          const selector = readSelectorReport(video);
+          const repairable = usesStallRepair({
+            stall,
+            overlay: Boolean(overlay),
+            selector,
+            selectorRetry: false,
+          });
+          const decision = captureRepairDecision({ captureAttempt, maxRepairs, repairable });
+          if (!flag('--repair') || decision.action === 'fail') throw err;
+
+          console.log(`» repair ${decision.repairAttempt}/${maxRepairs} · Running capture-repair agent`);
+          const { startImprove, waitForJob } = await import('./lib/agentRunner.mjs');
+          const repairNote = stall
+            ? formatStallNote(stall)
+            : selector?.detail || overlay?.detail || overlay?.summary || String(err?.message || err);
+          const job = startImprove(video, 'capture-repair', { note: repairNote, force: true });
+          await waitForJob(job);
+          if (job.status !== 'done') {
+            console.error(`✗ repair ${decision.repairAttempt}/${maxRepairs} failed — ${job.activity || job.status}`);
+            throw err;
+          }
+          captureAttempt = decision.nextCaptureAttempt;
+          console.log(`» record · Capturing again after repair ${decision.repairAttempt}/${maxRepairs}`);
         }
-        console.log('» record · Re-recording once after repair');
-        await recordLive(video, recOpts);
       }
       return;
     }

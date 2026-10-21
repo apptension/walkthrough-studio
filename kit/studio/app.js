@@ -751,23 +751,56 @@ function iconBtn(act, verId, label) {
   return `<button type="button" class="btn icon-only" data-ver="${verId}" data-act="${act}" title="${label}" aria-label="${label}">${ICONS[act] || ''}</button>`;
 }
 
-function paintLivePreview(v, { recording = false } = {}) {
+function paintLivePreview(v, { recording = false, repairing = false } = {}) {
   const img = $('livePreview');
   if (!img) return;
   const view = programPreview({
     recording,
+    repairing,
     previewUrl: v?.previewUrl || (recording ? img.dataset.url : null),
     hasLive: Boolean(v?.freshness?.liveAt),
     hasDelivery: Boolean(v?.hasDelivery || v?.deliveryUrl),
   });
   if (view.show && view.url) {
     img.dataset.url = view.url;
-    img.src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
+    const src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
+    img.src = src;
     img.hidden = false;
     $('noVideo')?.classList.remove('show');
-    return;
+    const thumb = $('activityLive');
+    if (thumb) {
+      thumb.hidden = false;
+      thumb.src = src;
+    }
+  } else if (!recording && !view.show) {
+    img.hidden = true;
+    const thumb = $('activityLive');
+    if (thumb) thumb.hidden = true;
   }
-  if (!recording && !view.show) img.hidden = true;
+  const badge = $('liveBadge');
+  if (badge) {
+    badge.hidden = !view.badge;
+    badge.classList.toggle('is-live', view.badge === 'Live');
+    if ($('liveBadgeText')) $('liveBadgeText').textContent = view.badge || '';
+  }
+  if (recording || repairing) {
+    const failure = $('recordFailure');
+    if (failure) failure.hidden = true;
+  }
+  if (view.badge) {
+    const hint =
+      view.badge === 'Live'
+        ? 'Recording the page now'
+        : view.badge === 'Repairing'
+          ? 'Repairing the flow, then capture starts again'
+          : 'Last frame from the recording';
+    setMonitorLabel('Program', hint);
+  }
+  if (!state.jobBusy && view.badge === 'Last frame') {
+    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Last frame is on Program';
+    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'The page the recorder stopped on.';
+    if ($('renderLiveArt')) $('renderLiveArt').hidden = true;
+  }
 }
 
 function paintSignInWait(wait) {
@@ -1753,10 +1786,12 @@ function watchJob(jobId, opts = {}) {
         }
         if (opts.onUpdate) opts.onUpdate(job);
         else showActivityDock(job, { surface });
-        const recording = job.step === 'record' && (job.status === 'running' || job.status === 'waiting' || job.phase === 'recording' || job.phase === 'repairing');
+        const recordJob = job.step === 'record' && (job.status === 'running' || job.status === 'waiting');
+        const repairing = recordJob && job.phase === 'repairing';
+        const recording = recordJob && !repairing;
         if (state.video?.slug) {
           state.video.previewUrl = state.video.previewUrl || `/media/${state.video.slug}/live-preview.jpg`;
-          paintLivePreview(state.video, { recording });
+          paintLivePreview(state.video, { recording, repairing });
           if (recording) {
             fetch(`/media/${state.video.slug}/sign-in-wait.json?t=${Date.now()}`)
               .then((res) => (res.ok ? res.json() : null))
