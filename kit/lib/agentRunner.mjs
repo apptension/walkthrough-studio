@@ -9,6 +9,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
+import { usesStallRepair } from './selectorRetry.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { SKILL, upsertDotEnv } from './project.mjs';
 import { describeJob } from '../studio/progress.js';
@@ -797,7 +798,7 @@ function startRecordWithRepair(video, extraArgs = []) {
     }
 
     const stall = readStallReport(video);
-    if (!stall) {
+    if (!usesStallRepair({ stall, selectorRetry: false })) {
       job.exitCode = first.code;
       finish(false, `record failed (exit ${first.code})`);
       return;

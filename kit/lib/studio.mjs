@@ -34,6 +34,7 @@ import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLoc
 import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs';
 import { lensGeometry } from './lens.mjs';
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
+import { recordFailureView } from './recordFailure.mjs';
 import { applyCleanup, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
@@ -311,6 +312,15 @@ function videoSummary(slug) {
     : null;
   const handoffZip = join(video.out, `${slug}-handoff.zip`);
   const freshness = freshnessInfo(video);
+  const shotPath = join(video.out, 'error.png');
+  const liveFile = join(video.out, 'live.mp4');
+  const notePath = join(video.out, 'error.txt');
+  const recordFailure = recordFailureView({
+    shotMtime: existsSync(shotPath) ? statSync(shotPath).mtimeMs : null,
+    liveMtime: existsSync(liveFile) ? statSync(liveFile).mtimeMs : null,
+    note: existsSync(notePath) ? readFileSync(notePath, 'utf8') : '',
+    screenshot: `/media/${slug}/error.png`,
+  });
   return {
     slug,
     title: video.config.title,
@@ -369,6 +379,7 @@ function videoSummary(slug) {
     hasDelivery: existsSync(final),
     deliveryUrl: existsSync(final) ? `/media/${slug}/${slug}.mp4` : null,
     freshness,
+    recordFailure,
     durationSec: meta?.durationSec || null,
     sizeMB: meta?.sizeMB || null,
     chapters: meta?.chapters || [],

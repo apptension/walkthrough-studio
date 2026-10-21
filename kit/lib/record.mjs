@@ -21,6 +21,7 @@ import {
 } from './captureStall.mjs';
 import { createMail } from './mail.mjs';
 import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
+import { installRecordedSelectorRetry } from './selectorRetry.mjs';
 
 const PRESS_ACTIONS = new Set(['click', 'dblclick', 'check', 'uncheck', 'setChecked', 'tap', 'selectOption']);
 const TYPE_ACTIONS = new Set(['fill', 'pressSequentially']);
@@ -136,6 +137,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   await installBrandFonts(context, brand);
   page = await context.newPage();
   page.setDefaultTimeout(30000);
+  installRecordedSelectorRetry(page, video);
   const recorder = startFrameRecorder(outPath, viewport);
   const focusTreatment = brand.direction?.focus || 'guided';
   const cursor = await createCursor({ context, page, brand, wait, viewport, settings: brand.direction?.cursor, tempo: speed });
@@ -576,7 +578,9 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
         ? `✗ capture stalled — see ${join(out, 'capture-stall.json')}, error.png, error.txt`
         : err?.attempts
           ? `✗ ${err.message}`
-          : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
+          : err?.selectorRetry
+            ? `✗ ${err.message}`
+            : `✗ flow failed — see ${join(out, 'error.png')} and error.txt`
     );
     throw err;
   } finally {

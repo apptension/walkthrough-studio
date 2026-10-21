@@ -1168,6 +1168,15 @@ function renderActionCard(v) {
     holdWarn.hidden = !message;
     holdWarn.textContent = message;
   }
+  const failure = $('recordFailure');
+  if (failure) {
+    const info = v?.recordFailure;
+    failure.hidden = !info;
+    const shot = $('recordFailureShot');
+    const text = $('recordFailureText');
+    if (info && shot) shot.src = info.screenshot;
+    if (info && text) text.textContent = info.message;
+  }
   const action = decideAction(v);
   state.action = action;
   setStatus(action.kind, action.status);

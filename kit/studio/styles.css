@@ -1838,6 +1838,30 @@ body.is-editor .monitor-head {
     radial-gradient(ellipse at 50% 40%, #151915 0%, #080908 70%);
   container-type: size;
 }
+.record-failure {
+  position: absolute;
+  inset: 12px;
+  z-index: 4;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(10, 10, 10, 0.92);
+  overflow: auto;
+}
+.record-failure[hidden] { display: none; }
+.record-failure img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.record-failure figcaption {
+  margin: 0;
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.4;
+}
 .stage {
   position: relative;
   width: min(100cqw, calc(100cqh * 16 / 9));
