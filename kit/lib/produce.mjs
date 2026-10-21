@@ -48,12 +48,12 @@ const CLEAN_PIPELINE = 7;
  * Prepare the full live reel once (live-card bake + deflash + lenses). Cached against the take and the graph:
  * a plate or narration edit re-runs produce without touching the recording.
  */
-export async function prepareLive(video, LIVE, { width, height }) {
+export async function prepareLive(video, LIVE, { width, height, cardBake: givenBake } = {}) {
   const timelinePath = join(video.out, 'timeline.json');
   const timeline = existsSync(timelinePath) ? JSON.parse(readFileSync(timelinePath, 'utf8')) : [];
   const clean = join(video.out, 'live-clean.mp4');
   const stampPath = join(video.out, 'live-clean.json');
-  const cardBake = await prepareLiveCardBakes(video, LIVE);
+  const cardBake = givenBake || (await prepareLiveCardBakes(video, LIVE));
   const bakeGraph =
     cardBake.mode === 'clean' && cardBake.plans.length
       ? cardBakeOverlayGraph(cardBake.plans, cardBake.files, {
@@ -199,7 +199,6 @@ export async function prepareLive(video, LIVE, { width, height }) {
     '-r', String(FPS),
     ...losslessX264(QUALITY.clean.preset),
     '-pix_fmt', 'yuv420p', ...BT709_TAGS, '-an',
-    '-movflags', '+faststart',
     clean,
   ];
   assertX264Args('clean', cleanArgs);
@@ -249,9 +248,24 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   const FINAL = out || finalPath(video);
   assertPlayableLive(LIVE);
 
-  await renderPlates(video, { force: forcePlates });
+  const platesStarted = Date.now();
+  const cardsStarted = Date.now();
+  let platesSec = 0;
+  let cardsSec = 0;
+  const [, cardBake] = await Promise.all([
+    renderPlates(video, { force: forcePlates }).then((rows) => {
+      platesSec = (Date.now() - platesStarted) / 1000;
+      return rows;
+    }),
+    prepareLiveCardBakes(video, LIVE).then((bake) => {
+      cardsSec = (Date.now() - cardsStarted) / 1000;
+      return bake;
+    }),
+  ]);
   const { width, height } = config.record.viewport;
-  const { clean: cleanLive, camera, speed } = await prepareLive(video, LIVE, { width, height });
+  const cleanStarted = Date.now();
+  const { clean: cleanLive, camera, speed } = await prepareLive(video, LIVE, { width, height, cardBake });
+  const cleanSec = (Date.now() - cleanStarted) / 1000;
   const plan = buildEditPlan(video);
 
   // Live segments read straight from the cleaned reel (frame-accurate input seek): no slice
@@ -323,6 +337,7 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   );
 
   console.log(`» encode · Starting · ${mmss(plan.total)} master, ${n - 1} joins`);
+  const encodeStarted = Date.now();
   const deliveryArgs = [
     '-hide_banner', '-loglevel', 'error', '-y',
     ...inputs,
@@ -346,7 +361,11 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
       onProgress: (p) => console.log(`» encode · ${progressText(p)}`),
     }
   );
+  const encodeSec = (Date.now() - encodeStarted) / 1000;
   console.log(`» encode · Done · ${mmss(plan.total)} master`);
+  console.log(
+    `» timing · plates ${platesSec.toFixed(1)}s · cards ${cardsSec.toFixed(1)}s · clean ${cleanSec.toFixed(1)}s · encode ${encodeSec.toFixed(1)}s`
+  );
 
   const interstitialSec = plan.interstitials.reduce((s, i) => s + i.dur, 0);
   const editSegments = plan.segments.map((s) => ({
@@ -387,7 +406,28 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     quality: qualityMeta(),
     grade: 'none — true UI color',
     generatedAt: new Date().toISOString(),
+    timing: {
+      platesSec: Number(platesSec.toFixed(1)),
+      cardsSec: Number(cardsSec.toFixed(1)),
+      cleanSec: Number(cleanSec.toFixed(1)),
+      encodeSec: Number(encodeSec.toFixed(1)),
+    },
   };
+  if (!out) {
+    const priorPath = join(video.out, 'produce-meta.json');
+    if (existsSync(priorPath)) {
+      try {
+        const prior = JSON.parse(readFileSync(priorPath, 'utf8'));
+        if (prior.timing) {
+          const previous = { ...prior.timing };
+          delete previous.previous;
+          meta.timing.previous = previous;
+        }
+      } catch {
+        /* a broken sidecar must not block the new master */
+      }
+    }
+  }
   if (!out) {
     writeFileSync(join(video.out, 'produce-meta.json'), JSON.stringify(meta, null, 2));
     writeFileSync(

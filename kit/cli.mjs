@@ -21,6 +21,7 @@
  *                                          run flow.mjs → live.mp4 + timeline.json (--pace: this take only;
  *                                          --repair: on capture stall, agent-fix flow.mjs once and re-record)
  *   node cli.mjs produce <slug> [--force]  plates + live → <slug>.mp4 (single encode, chapters)
+ *   node cli.mjs bench <slug>              print produce-meta timing, plate ms/frame, bake seconds
  *   node cli.mjs voice <slug> [--force]    narration.mjs → ElevenLabs clips fitted to the take (voice/voice.json)
  *   node cli.mjs music <slug> [--force] [--prompt "warm piano, sparse"]
  *                                          music bed composed to the video's length (music/music.mp3)
@@ -374,6 +375,41 @@ async function main() {
       preflight();
       const { produce } = await import('./lib/produce.mjs');
       await produce(loadVideo(slug), { forcePlates: flag('--force') });
+      return;
+    }
+    case 'bench': {
+      if (!slug) throw new Error('Usage: bench <slug>');
+      const video = loadVideo(slug);
+      const { existsSync: has, readdirSync: list, readFileSync: read } = await import('node:fs');
+      const { join: pjoin } = await import('node:path');
+      const metaPath = pjoin(video.out, 'produce-meta.json');
+      if (!has(metaPath)) throw new Error(`Run: node cli.mjs produce ${slug}`);
+      const meta = JSON.parse(read(metaPath, 'utf8'));
+      const t = meta.timing || {};
+      const line = (label, sec) => console.log(`${label.padEnd(10)} ${sec == null ? '—' : `${Number(sec).toFixed(1)}s`}`);
+      console.log(`bench ${slug}`);
+      line('plates', t.platesSec);
+      line('cards', t.cardsSec);
+      line('clean', t.cleanSec);
+      line('encode', t.encodeSec);
+      if (t.previous) {
+        console.log('previous');
+        line('plates', t.previous.platesSec);
+        line('cards', t.previous.cardsSec);
+        line('clean', t.previous.cleanSec);
+        line('encode', t.previous.encodeSec);
+      }
+      for (const name of list(video.out).filter((f) => f.endsWith('.render.json'))) {
+        const row = JSON.parse(read(pjoin(video.out, name), 'utf8'));
+        console.log(`${name.replace('.render.json', '').padEnd(10)} ${row.msPerFrame ?? '—'} ms/frame · qc ${row.qc?.ok ? 'ok' : 'fail'}`);
+      }
+      const bakeMeta = pjoin(video.out, 'overlays', 'bake', 'bake-meta.json');
+      if (has(bakeMeta)) {
+        const bake = JSON.parse(read(bakeMeta, 'utf8'));
+        for (const plan of bake.plans || []) {
+          console.log(`bake ${String(plan.file || plan.label).padEnd(28)} ${plan.sec ?? '—'}s`);
+        }
+      }
       return;
     }
     case 'voice': {

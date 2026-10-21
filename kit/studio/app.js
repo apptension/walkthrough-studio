@@ -1767,6 +1767,17 @@ function watchJob(jobId, opts = {}) {
           return;
         }
         const job = await api(`/api/jobs/${jobId}`);
+        if (opts.quiet) {
+          if (job.status === 'done') finish(resolve, job);
+          else if (
+            job.status === 'failed' ||
+            job.status === 'needs-agent' ||
+            job.status === 'cancelled'
+          ) {
+            finish(reject, new Error(job.message || job.status));
+          }
+          return;
+        }
         state.job = job;
         state.jobId = jobId;
         if (job.question && state.jobAsk !== job.question.id) {
@@ -4696,13 +4707,13 @@ function showActivityDock(job, { surface } = {}) {
   }
 }
 
-async function runJobPromise(step, force = false, { signal, presets, slug } = {}) {
+async function runJobPromise(step, force = false, { signal, presets, slug, quiet } = {}) {
   state.activeSurface = 'render';
   if (signal?.aborted) throw new Error('cancelled');
   const target = slug || state.slug;
   if (!target) throw new Error('No sequence selected');
   const r = await api(`/api/video/${encodeURIComponent(target)}/run`, { method: 'POST', body: { step, force, presets } });
-  return watchJob(r.job.id, { surface: 'render', signal });
+  return watchJob(r.job.id, { surface: 'render', signal, quiet });
 }
 
 function requestMake(mode) {
@@ -4775,14 +4786,37 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
   updateStopButtons();
 
   try {
+    const produceFollows = steps.some((step) => step.id === 'produce');
+    const records = steps.some((step) => step.id === 'record');
     for (const s of steps) {
       if (s.id === 'preview') continue;
+      // Plates do not read the take. On a re-record they run beside capture; on a
+      // quick render, produce draws them beside the card bake.
+      if (s.id === 'plates' && (records || produceFollows)) continue;
       if (sig?.aborted || state.stopRequested) throw new Error('cancelled');
       setStep(s.id, 'run');
       paintProgramBuild(pipelineOverlay({ running: true, label: s.label }));
       setFaviconMode(s.id === 'record' ? 'record' : s.id === 'deliver' ? 'export' : 'render');
-      // Plates are content-hash cached; forcing here would redraw every plate twice per make.
-      await runJobPromise(s.id, false, { signal: sig, slug: target });
+      if (s.id === 'record') {
+        setStep('plates', 'run');
+        const platesJob = runJobPromise('plates', false, { signal: sig, slug: target, quiet: true });
+        const settled = await Promise.allSettled([
+          runJobPromise('record', false, { signal: sig, slug: target }),
+          platesJob,
+        ]);
+        const failed = settled.find((row) => row.status === 'rejected');
+        if (failed) throw failed.reason;
+        setStep('plates', 'done');
+        await publishProgramStep('plates', target).catch(() => {});
+      } else {
+        if (s.id === 'produce' && !records) setStep('plates', 'run');
+        // Plates are content-hash cached; forcing here would redraw every plate twice per make.
+        await runJobPromise(s.id, false, { signal: sig, slug: target });
+        if (s.id === 'produce' && !records) {
+          setStep('plates', 'done');
+          await publishProgramStep('plates', target).catch(() => {});
+        }
+      }
       setStep(s.id, 'done');
       await publishProgramStep(s.id, target).catch(() => {});
       paintProgramBuild(pipelineOverlay({ running: false }));

@@ -4,7 +4,7 @@
 
 | File                           | Role                                                                                                                                                                                |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kit/cli.mjs`                  | `list`, `new`, `plates`, `analyze`, `smoke`, `record`, `produce`, `voice`, `music`, `mix`, `audio`, `validate`, `captions`, `qc`, `deliver`, `critic`, `story`, `motion`, `edit`, `studio`, `all`, `manual`, `publish` |
+| `kit/cli.mjs`                  | `list`, `new`, `plates`, `analyze`, `smoke`, `record`, `produce`, `bench`, `voice`, `music`, `mix`, `audio`, `validate`, `captions`, `qc`, `deliver`, `critic`, `story`, `motion`, `edit`, `studio`, `all`, `manual`, `publish` |
 | `kit/lib/analyzeFlow.mjs`      | Product map before drafting flow.mjs: DOM controls, form fields with validation + fill recipes, WebGL/canvas pointer probes → `flow-analysis.md` |
 | `kit/lib/captions.mjs`         | Fitted `voice/voice.json` → SRT + WebVTT + transcript under `captions/`                                                                                                           |
 | `kit/lib/pacing.mjs`           | Soft tutorial QC (dead air, WPM, long live segments, missing captions) → `qc-report.json`                                                                                          |
@@ -197,9 +197,11 @@ as deterministic as CSS ones. `hook(fn)` registers per-frame callbacks — `coun
 prefix / suffix / grouping / decimals; the final frame writes the original string back. Studio's live
 preview runs the same runtime from `requestAnimationFrame` while animations are playing.
 
-**Plate render cache + motion QC (pipeline v6+):** HTML is written only when content changes. Each
-MP4 stores `<name>.render.json` with HTML content-hash, hold window, snap/reuse counts, and `qc`.
-Unchanged plates are skipped only when `pipeline` matches and `qc.ok` is true.
+**Plate render cache + motion QC (pipeline v16):** HTML is written only when content changes. Each
+MP4 stores `<name>.render.json` with the HTML hash, the `plates.css` hash, JPEG quality, raster
+backend, `msPerFrame`, hold window, snap/reuse counts, and `qc`. A plate is skipped when those match
+and `qc.ok` is true. `video.config.json` mtime is not a key, so an Editor save that only touches
+`edit.*` redraws no plates. A capture-path change bumps `RENDER_PIPELINE`.
 
 Settle-hold (`--hold-from` / `--hold-until`, or a short pre-blackout default) reuses one JPEG only
 after a **probe**: sample Web Animations progress across the window, shrink to the longest stable
@@ -367,13 +369,33 @@ the floor. Colour: every pass (take, plates, clean, master) converts to BT.709 l
 it with `BT709_TAGS`. Chromium JPEGs are BT.601 full range; a bare `format=yuv420p` keeps the 601 matrix, players decode
 HD as 709, and saturated UI colours drift green by up to 20 levels. The input matrix is read from each frame's tags, so
 older takes are corrected when produce runs. Stills (QC frames, poster) are full-range BT.601 4:4:4 JPEG q1. `live-clean.mp4` is rebuilt only
-when the take, its flash repairs or its lenses change. Both encodes report progress (`-progress pipe:1`), which
+when the take, its flash repairs, its lenses, or the card-bake stamp change. Both encodes report progress (`-progress pipe:1`), which
 Studio shows as `» live · 42% · …` and `» encode · 56% · 1:53 of 3:21 · about 0:17 left`.
 
-Plates are captured with Chromium on Metal with GPU rasterization (`RENDER_PIPELINE` 10): about 70 ms a frame
-against 340 ms on SwiftShader, with the same type and layout. Four plates run at a time from a pool. The schedule
-field's sine hash differs slightly between GPU and software, so the same plate lays out its background bars
-differently on each backend. Within one backend the render is deterministic.
+Plates are captured with Chromium on Metal with GPU rasterization (`RENDER_PIPELINE` 16): JPEG q95 via
+`Page.captureScreenshot` at 1920×1080, two plates at a time (`WALKTHROUGH_PLATE_JOBS` can raise that to 4).
+The capture forces a compositor frame, so the per-frame double `requestAnimationFrame` is gone; the one-shot
+type-fit wait stays. A live atmosphere (`.plate-field` with a field other than `none`) skips the hold probe,
+because that field never settles. `HeadlessExperimental.beginFrame` is a dead end on Playwright's Chromium
+156 headless shell: with `--enable-begin-frame-control` the page target closes before the first frame.
+The schedule field's sine hash differs slightly between GPU and software, so the same plate lays out its
+background bars differently on each backend. Within one backend the render is deterministic.
+
+**Card bake.** Clean-take cards are PNG-in-MOV with alpha. Captions are muxed with `-c:v copy`.
+Chapter cards are encoded with `-c:v png`: a stream-copied full frame deadlocks ffmpeg's scheduler
+on the second chapter.
+The bake browser uses the same Metal flags as plates, four pages at a time (`WALKTHROUGH_BAKE_JOBS`).
+Chapter cards stay full frame. Captions are cropped to the card's box plus a 64 px margin and overlaid at
+that origin. Each clip has a `<name>.json` content key (html, overlays.css, motion, time, duration,
+pipeline, raster). mtime does not invalidate a clip. `produce` draws plates and bakes together, then the
+clean pass. `live-clean.mp4` is lossless and has no `+faststart` (only ffmpeg reads it); the delivery
+master keeps faststart. `produce-meta.json → timing` records plates, cards, clean and encode seconds, plus
+the previous run. `node cli.mjs bench <slug>` prints that table, each plate's `msPerFrame`, and each bake
+clip's seconds. Studio starts the plate job beside a re-record, because plates do not read the take.
+
+**QC grabs.** `validate` seeks with `-ss` before `-i`. The frame matches an output-side seek and the grab
+finishes in a fraction of the time. Version snapshots copy with `COPYFILE_FICLONE`, so the three checkpoints
+per render stay and cost a clone instead of a full write.
 
 **Edit plan (`lib/edit.mjs`).** Every join is an overlapping `xfade`, never a cut through black. `buildEditPlan`
 gives each segment `at` (its start in the delivery), `dur`, `transitionIn { type, xfade, dur, card? }` and `padOut`;

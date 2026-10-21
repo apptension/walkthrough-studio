@@ -1,5 +1,5 @@
 /**
- * Frame-accurate QC (-ss after -i): plate holds, both joins, every chapter card
+ * Frame-accurate QC (`-ss` before `-i`): plate holds, both joins, every chapter card
  * and the clean frame after it, sampled captions; plus a contact sheet and a
  * review page. Read the JPEGs before calling a video done.
  */
@@ -13,6 +13,11 @@ import { STILL_JPEG_ARGS } from './media.mjs';
 import { finalPath } from './produce.mjs';
 import { platePaths } from './plates.mjs';
 import { esc } from './text.mjs';
+
+/** Frame-accurate grab. `-ss` before `-i` seeks by keyframe and lands on the same frame. */
+export function qcGrabArgs(file, t, out) {
+  return ['-hide_banner', '-loglevel', 'error', '-y', '-ss', Number(t).toFixed(3), '-i', file, ...STILL_JPEG_ARGS, out];
+}
 
 export function validate(video) {
   const FINAL = finalPath(video);
@@ -70,11 +75,7 @@ export function validate(video) {
 
   console.log(`» frames · Sampling ${shots.length} frames`);
   for (const [name, t] of shots) {
-    const r = spawnSync(
-      'ffmpeg',
-      ['-hide_banner', '-loglevel', 'error', '-y', '-i', FINAL, '-ss', t.toFixed(3), ...STILL_JPEG_ARGS, join(dir, `${name}.jpg`)],
-      { encoding: 'utf8' }
-    );
+    const r = spawnSync('ffmpeg', qcGrabArgs(FINAL, t, join(dir, `${name}.jpg`)), { encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`grab ${name}: ${r.stderr}`);
     console.log('·', name.padEnd(20), `${t.toFixed(2)}s`);
   }
