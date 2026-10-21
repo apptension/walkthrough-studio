@@ -27,6 +27,7 @@ import {
   stagePointerOwner,
 } from './plateSync.js';
 import { lensLoupe, lensZoomCeiling, planAfterSeeked, planLensPaint, planLiveSeek } from './livePreview.js';
+import { clampZoomCenter, zoomPreviewStyle } from './zoomAim.js';
 import { applyCardMotionToDocument } from './cardMotion.js';
 import {
   cardEditLandingEd,
@@ -1307,8 +1308,9 @@ export function initEditor(ctx) {
     if (zs.zoom > 1.001) {
       const cx = zs.cx ?? W / 2;
       const cy = zs.cy ?? H / 2;
-      v.style.transformOrigin = `${(cx / W) * 100}% ${(cy / H) * 100}%`;
-      v.style.transform = `scale(${zs.zoom.toFixed(4)})`;
+      const style = zoomPreviewStyle(cx, cy, { zoom: zs.zoom, width: W, height: H });
+      v.style.transformOrigin = style.transformOrigin;
+      v.style.transform = style.transform;
     } else {
       v.style.transform = '';
       v.style.transformOrigin = '';
@@ -1701,13 +1703,12 @@ export function initEditor(ctx) {
         ed.aim = { cx: drag.cx, cy: drag.cy };
       } else {
         const zoom = ed.aimZoom || drag.zoom;
-        // Pan in recording pixels; the stage is already scaled, so pointer travel maps through the crop.
-        const halfW = W / (2 * zoom);
-        const halfH = H / (2 * zoom);
-        ed.aim = {
-          cx: Math.round(clamp(drag.cx - ((e.clientX - drag.x) / rect.width) * (W / zoom), halfW, W - halfW)),
-          cy: Math.round(clamp(drag.cy - ((e.clientY - drag.y) / rect.height) * (H / zoom), halfH, H - halfH)),
-        };
+        const aim = clampZoomCenter(
+          drag.cx - ((e.clientX - drag.x) / rect.width) * (W / zoom),
+          drag.cy - ((e.clientY - drag.y) / rect.height) * (H / zoom),
+          { zoom, width: W, height: H }
+        );
+        ed.aim = { cx: aim.cx, cy: aim.cy };
       }
       paintZoomBox();
       renderFrame();
@@ -3733,12 +3734,16 @@ export function initEditor(ctx) {
   }
 
   async function adoptShot(shot, over = {}) {
-    const p = shot.points?.[0] || { cx: (live().width || 1920) / 2, cy: (live().height || 1080) / 2 };
+    const W = live().width || 1920;
+    const H = live().height || 1080;
+    const p = shot.points?.[0] || { cx: W / 2, cy: H / 2 };
+    const zoom = over.zoom ?? shot.zoom;
+    const aim = clampZoomCenter(over.x ?? p.cx, over.y ?? p.cy, { zoom, width: W, height: H });
     const id = `z${Math.round((over.t ?? shot.start) * 10)}`;
     const d = deckEdit();
     const zooms = [
       ...d.zooms.filter((z) => z.id !== id),
-      { id, t: r3(over.t ?? shot.start), dur: r3(over.dur ?? shot.end - shot.start), zoom: over.zoom ?? shot.zoom, x: over.x ?? p.cx, y: over.y ?? p.cy },
+      { id, t: r3(over.t ?? shot.start), dur: r3(over.dur ?? shot.end - shot.start), zoom, x: aim.cx, y: aim.cy },
     ];
     const zoomSkips = [...d.zoomSkips, { from: shot.start, to: shot.end }];
     const r = await postDeck({ zooms, zoomSkips }, { hint: 'That zoom is yours now' });

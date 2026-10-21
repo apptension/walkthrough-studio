@@ -1,0 +1,43 @@
+/**
+ * Zoom aim shared by the stage preview and the encode crop.
+ * The centre may move until the crop meets the frame edge, and no further —
+ * pixels outside the 1920×1080 frame stay hidden.
+ */
+
+export function clampZoomCenter(x, y, { zoom = 1, width = 1920, height = 1080 } = {}) {
+  const z = Math.max(1.001, Number(zoom) || 1);
+  const halfW = width / (2 * z);
+  const halfH = height / (2 * z);
+  const cx = Math.round(Math.min(width - halfW, Math.max(halfW, Number(x) || 0)));
+  const cy = Math.round(Math.min(height - halfH, Math.max(halfH, Number(y) || 0)));
+  const w = width / z;
+  const h = height / z;
+  return {
+    cx,
+    cy,
+    crop: {
+      x: Math.min(Math.max(0, cx - w / 2), Math.max(0, width - w)),
+      y: Math.min(Math.max(0, cy - h / 2), Math.max(0, height - h)),
+      w,
+      h,
+    },
+  };
+}
+
+/**
+ * CSS that shows the same window as the ffmpeg crop.
+ * `transform-origin` at the aim point scales around a layout point that is not
+ * the viewport centre, so an edge aim never reached the frame edge.
+ */
+export function zoomPreviewStyle(cx, cy, opts = {}) {
+  const aim = clampZoomCenter(cx, cy, opts);
+  const { width = 1920, height = 1080, zoom = 1 } = opts;
+  const z = Math.max(1.001, Number(zoom) || 1);
+  const tx = `${Number(((-aim.crop.x / width) * 100).toFixed(4))}%`;
+  const ty = `${Number(((-aim.crop.y / height) * 100).toFixed(4))}%`;
+  return {
+    transformOrigin: '0 0',
+    transform: `scale(${Number(z.toFixed(4))}) translate(${tx}, ${ty})`,
+    crop: aim.crop,
+  };
+}
