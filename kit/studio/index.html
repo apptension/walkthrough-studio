@@ -300,6 +300,12 @@
                   <canvas id="liveLens" class="live-lens" aria-hidden="true"></canvas>
                   <div id="liveZoomBox" class="live-zoom-box" hidden>
                     <i class="zh nw"></i><i class="zh ne"></i><i class="zh sw"></i><i class="zh se"></i>
+                    <div class="frame-editor" data-frame-editor="zoom">
+                      <label class="frame-editor-hit">Strength
+                        <input type="range" data-frame-zoom min="1.2" max="2.2" step="0.05" aria-label="Zoom strength" />
+                      </label>
+                      <button type="button" class="frame-editor-hit" data-frame-remove="zoom">Remove</button>
+                    </div>
                     <div class="stage-aim-tip" data-tone="zoom" aria-live="polite">
                       <div class="stage-aim-tip__head">
                         <span class="stage-aim-tip__kind"></span>
@@ -309,6 +315,15 @@
                     </div>
                   </div>
                   <div id="liveLensBox" class="live-lens-box" hidden>
+                    <div class="frame-editor" data-frame-editor="lens">
+                      <label class="frame-editor-hit">Strength
+                        <input type="range" data-frame-lens-zoom min="1.2" max="2.4" step="0.05" aria-label="Magnifier strength" />
+                      </label>
+                      <label class="frame-editor-hit">Size
+                        <input type="range" data-frame-lens-size min="24" max="540" step="2" aria-label="Magnifier size" />
+                      </label>
+                      <button type="button" class="frame-editor-hit" data-frame-remove="lens">Remove</button>
+                    </div>
                     <div class="stage-aim-tip" data-tone="lens" aria-live="polite">
                       <div class="stage-aim-tip__head">
                         <span class="stage-aim-tip__kind"></span>

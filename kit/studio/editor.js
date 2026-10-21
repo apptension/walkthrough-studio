@@ -26,7 +26,7 @@ import {
   soloJoinFocus,
   stagePointerOwner,
 } from './plateSync.js';
-import { lensLoupe, lensZoomCeiling, planAfterSeeked, planLensPaint, planLiveSeek } from './livePreview.js';
+import { FRAME_EDITOR_HIT, lensLoupe, lensZoomCeiling, planAfterSeeked, planFrameEditor, planLensPaint, planLiveSeek } from './livePreview.js';
 import { clampZoomCenter, zoomPreviewStyle } from './zoomAim.js';
 import { applyCardMotionToDocument } from './cardMotion.js';
 import {
@@ -1374,6 +1374,14 @@ export function initEditor(ctx) {
     const v = video();
     if (!cv || !v) return null;
     const lens = lensAt(rec);
+    const selected = selectedLens();
+    const hold = planFrameEditor({
+      selected: Boolean(selected) && selected.source !== 'off',
+      blockStart: selected?.t ?? 0,
+      blockEnd: (selected?.t ?? 0) + (selected?.dur ?? 0),
+      playhead: rec,
+      playing: ed.playing,
+    }).visible;
     const vp = $('liveViewport');
     const cssW = vp?.clientWidth || 0;
     const cw = Math.round(cssW * (window.devicePixelRatio || 1));
@@ -1383,7 +1391,7 @@ export function initEditor(ctx) {
       cv.height = ch;
     }
     const g = cv.getContext('2d');
-    const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v.readyState });
+    const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v.readyState, hold });
     if (paint.action === 'clear') {
       g.clearRect(0, 0, cv.width, cv.height);
       return null;
@@ -1629,7 +1637,16 @@ export function initEditor(ctx) {
     if (!box) return;
     const shot = selectedShot();
     const c = curClip();
-    if (!shot || ed.playing || c?.kind !== 'live' || !ed.deck) {
+    const rec = c?.kind === 'live' ? edToRec(c, ed.t) : null;
+    const editor = planFrameEditor({
+      selected: Boolean(shot),
+      blockStart: shot?.start ?? 0,
+      blockEnd: shot?.end ?? 0,
+      playhead: rec,
+      playing: ed.playing,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    });
+    if (!editor.visible || !ed.deck) {
       box.hidden = true;
       return;
     }
@@ -1637,6 +1654,9 @@ export function initEditor(ctx) {
     // The stage already shows the push-in; the box is a full-frame drag surface (pan) with corner
     // handles for strength — not a crop preview on a 1× frame.
     box.hidden = false;
+    box.dataset.hit = String(FRAME_EDITOR_HIT);
+    const strength = box.querySelector('[data-frame-zoom]');
+    if (strength && document.activeElement !== strength) strength.value = String(Number(zoom.toFixed(2)));
     box.style.left = '0';
     box.style.top = '0';
     box.style.width = '100%';
@@ -1731,6 +1751,25 @@ export function initEditor(ctx) {
     };
     box.addEventListener('pointerup', finish);
     box.addEventListener('pointercancel', finish);
+    box.querySelector('.frame-editor')?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    box.querySelector('[data-frame-zoom]')?.addEventListener('change', (e) => {
+      const current = selectedShot();
+      if (!current) return;
+      const nextZoom = Number(e.target.value);
+      ed.aimZoom = nextZoom;
+      const done = () => {
+        ed.aimZoom = null;
+      };
+      if (current.source === 'auto') {
+        adoptShot(current, { zoom: nextZoom })?.finally(done);
+        return;
+      }
+      const d = deckEdit();
+      postDeck({ zooms: d.zooms.map((z) => (z.id === current.id ? { ...z, zoom: nextZoom } : z)) }, { hint: 'Zoom strength saved' })?.finally(done);
+    });
+    box.querySelector('[data-frame-remove="zoom"]')?.addEventListener('click', () => {
+      document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
+    });
   }
 
   // ─── Magnifier aim box (selected lens, paused, playhead inside it) ───────────────────────
@@ -1743,7 +1782,15 @@ export function initEditor(ctx) {
     const lens = selectedLens();
     const c = curClip();
     const rec = c?.kind === 'live' ? edToRec(c, ed.t) : null;
-    if (!lens || lens.source === 'off' || ed.playing || rec == null || rec < lens.t - 0.05 || rec > lens.t + lens.dur + 0.05) {
+    const editor = planFrameEditor({
+      selected: Boolean(lens) && lens.source !== 'off',
+      blockStart: lens?.t ?? 0,
+      blockEnd: (lens?.t ?? 0) + (lens?.dur ?? 0),
+      playhead: rec,
+      playing: ed.playing,
+      reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    });
+    if (!editor.visible) {
       box.hidden = true;
       return;
     }
@@ -1755,6 +1802,14 @@ export function initEditor(ctx) {
     const ox = canvasX + LENS_PAD;
     const oy = canvasY + LENS_PAD;
     box.hidden = false;
+    box.dataset.hit = String(FRAME_EDITOR_HIT);
+    const own = lens.source === 'edit' ? deckLens(lens) : null;
+    const strength = box.querySelector('[data-frame-lens-zoom]');
+    const size = box.querySelector('[data-frame-lens-size]');
+    const zNow = ed.lensAim?.zoom ?? own?.zoom ?? lens.zoom;
+    const sizeNow = Math.max(ed.lensAim?.w ?? own?.w ?? lens.rect?.w ?? 80, ed.lensAim?.h ?? own?.h ?? lens.rect?.h ?? 80);
+    if (strength && document.activeElement !== strength) strength.value = String(Number(zNow).toFixed(2));
+    if (size && document.activeElement !== size) size.value = String(Math.round(sizeNow));
     box.style.left = `${(ox / W) * 100}%`;
     box.style.top = `${(oy / H) * 100}%`;
     box.style.width = `${(shape.diameter / W) * 100}%`;
@@ -1821,6 +1876,29 @@ export function initEditor(ctx) {
     };
     box.addEventListener('pointerup', finish);
     box.addEventListener('pointercancel', finish);
+    box.querySelector('.frame-editor')?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const saveLensPatch = (patch) => {
+      const current = selectedLens();
+      if (!current || current.source === 'off') return;
+      if (current.source === 'auto') return adoptLens(current, patch);
+      const d = deckEdit();
+      return postDeck({ lenses: d.lenses.map((l) => (l.id === current.id ? { ...l, ...patch } : l)) }, { hint: 'Magnifier saved' });
+    };
+    box.querySelector('[data-frame-lens-zoom]')?.addEventListener('change', (e) => {
+      saveLensPatch({ zoom: Number(e.target.value) });
+    });
+    box.querySelector('[data-frame-lens-size]')?.addEventListener('change', (e) => {
+      const size = Math.round(Number(e.target.value));
+      const current = selectedLens();
+      const own = current?.source === 'edit' ? deckLens(current) : null;
+      const w0 = own?.w ?? current?.rect?.w ?? size;
+      const h0 = own?.h ?? current?.rect?.h ?? size;
+      const max = Math.max(w0, h0, 1);
+      saveLensPatch({ w: Math.max(16, Math.round((w0 * size) / max)), h: Math.max(12, Math.round((h0 * size) / max)) });
+    });
+    box.querySelector('[data-frame-remove="lens"]')?.addEventListener('click', () => {
+      document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
+    });
   }
 
   // ─── Transport ───────────────────────────────────────────────────────────────────────────
