@@ -56,6 +56,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   if (typeof flow !== 'function') throw new Error('flow.mjs must export a default async function');
 
   const timeline = [];
+  const frameSamples = [];
+  const frameJobs = [];
   let startedAt = 0;
   let stallReject = null;
   /** Set once the Playwright page exists — stall reports include the current URL. */
@@ -84,6 +86,20 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       stallWatchdog.touchMark(label);
     }
     if (kind === 'chapter' || kind === 'caption') console.log(`» capture · ${label}`);
+    if ((kind === 'chapter' || kind === 'caption') && page) {
+      const t = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+      const shot = page;
+      frameJobs.push(
+        Promise.race([
+          shot.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2500)),
+          new Promise((resolve) => setTimeout(() => resolve(''), 800)),
+        ])
+          .then((text) => {
+            if (text) frameSamples.push({ key: label, t: Number(t.toFixed(3)), text });
+          })
+          .catch(() => {})
+      );
+    }
     console.log(`  ${t.toFixed(1).padStart(6)}s  ${kind.padEnd(7)}  ${label}`);
   };
   // Framing: auto scroll by default (keeps screencast FPS). Opt into smooth via record.scroll.
@@ -501,7 +517,9 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     renameSync(outPath, finalOut);
 
     if (writeMeta) {
+      await Promise.all(frameJobs);
       writeFileSync(join(out, 'timeline.json'), JSON.stringify(timeline, null, 2));
+      if (frameSamples.length) writeFileSync(join(out, 'frame-text.json'), JSON.stringify(frameSamples, null, 2));
       const meta = {
         slug: video.slug,
         flow: result ?? null,

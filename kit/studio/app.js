@@ -11,7 +11,7 @@ import { initEditor } from './editor.js';
 import { mountZen, zen } from './zen.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
-import { criticFindingMarkup } from './criticFindings.js';
+import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
 
 const $ = (id) => document.getElementById(id);
@@ -3434,8 +3434,7 @@ async function runCriticFromStudio({ force = true } = {}) {
 }
 
 function fixFindingWithAi(f) {
-  const target = f.target.replace(/^narration:/, 'narration line "').replace(/^(narration line ".*)$/, '$1"');
-  const note = `${f.issue} (${target}, flagged by the ${f.persona}). ${f.suggestion}`;
+  const note = directorNoteForFinding(f);
   const plate = /^([a-z0-9-]+)\.(title|copy|items|steps)/.exec(f.target)?.[1] || (/^(open|close)\./.test(f.target) ? f.target.split('.')[0] : null);
   const noteEl = $('improveNote');
   if (noteEl) noteEl.value = note;
