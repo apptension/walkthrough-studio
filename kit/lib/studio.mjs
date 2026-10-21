@@ -381,6 +381,7 @@ function videoSummary(slug) {
     deliveryUrl: existsSync(final) ? `/media/${slug}/${slug}.mp4` : null,
     freshness,
     recordFailure,
+    previewUrl: existsSync(join(video.out, 'live-preview.jpg')) ? `/media/${slug}/live-preview.jpg` : null,
     durationSec: meta?.durationSec || null,
     sizeMB: meta?.sizeMB || null,
     chapters: meta?.chapters || [],

@@ -14,6 +14,7 @@ import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, recordFailureAction, recordFailureNote } from './recordFailure.js';
+import { programPreview } from './liveWatch.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -745,6 +746,25 @@ const ICONS = {
 
 function iconBtn(act, verId, label) {
   return `<button type="button" class="btn icon-only" data-ver="${verId}" data-act="${act}" title="${label}" aria-label="${label}">${ICONS[act] || ''}</button>`;
+}
+
+function paintLivePreview(v, { recording = false } = {}) {
+  const img = $('livePreview');
+  if (!img) return;
+  const view = programPreview({
+    recording,
+    previewUrl: v?.previewUrl || (recording ? img.dataset.url : null),
+    hasLive: Boolean(v?.freshness?.liveAt),
+    hasDelivery: Boolean(v?.hasDelivery || v?.deliveryUrl),
+  });
+  if (view.show && view.url) {
+    img.dataset.url = view.url;
+    img.src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
+    img.hidden = false;
+    $('noVideo')?.classList.remove('show');
+    return;
+  }
+  if (!recording && !view.show) img.hidden = true;
 }
 
 function toast(title, detail = '', kind = 'ok') {
@@ -1598,6 +1618,11 @@ function watchJob(jobId, opts = {}) {
         }
         if (opts.onUpdate) opts.onUpdate(job);
         else showActivityDock(job, { surface });
+        const recording = job.step === 'record' && (job.status === 'running' || job.status === 'waiting' || job.phase === 'recording' || job.phase === 'repairing');
+        if (state.video?.slug) {
+          state.video.previewUrl = state.video.previewUrl || `/media/${state.video.slug}/live-preview.jpg`;
+          paintLivePreview(state.video, { recording });
+        }
         if (
           job.status === 'done' ||
           job.status === 'failed' ||
@@ -3870,6 +3895,7 @@ async function loadVideo(slug, { play = false } = {}) {
       state.previewingPlate = null;
       setMonitorLabel('Program');
     }
+    paintLivePreview(v, { recording: false });
     if (v.deliveryUrl && capturedTour({ hasLive: Boolean(v.freshness?.liveAt), recordFailed: Boolean(v.recordFailure) })) {
       if (state.monitorMode === 'program' || state.monitorMode === 'compare') {
         state.previewingPlate = null;

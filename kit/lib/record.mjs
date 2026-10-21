@@ -475,7 +475,24 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     clearStallReport(video);
     startedAt = Date.now();
     recorder.begin(startedAt);
-    await page.screencast.start({ size: viewport, quality: 100, onFrame: (f) => recorder.onFrame(f) });
+    let lastPreviewAt = 0;
+    const previewPath = join(out, 'live-preview.jpg');
+    await page.screencast.start({
+      size: viewport,
+      quality: 100,
+      onFrame: (frame) => {
+        recorder.onFrame(frame);
+        const now = Date.now();
+        if (frame?.data && now - lastPreviewAt > 400) {
+          lastPreviewAt = now;
+          try {
+            writeFileSync(previewPath, frame.data);
+          } catch {
+            /* a preview miss must not stop the take */
+          }
+        }
+      },
+    });
     await page.screencast.showActions(actionLook());
     mark('start', 'live start');
     stallWatchdog.start();
