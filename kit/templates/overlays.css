@@ -201,6 +201,57 @@
 }
 
 /* —— Atmosphere / feature switches —— */
+.wt .plate-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
+}
+.wt .plate-clock {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.wt-ch .plate-field {
+  opacity: 0;
+  animation: wtFadeIn calc(0.9s * var(--wt-enter-scale, 1)) calc(0.06s - var(--el, 0s)) cubic-bezier(0.16, 1, 0.3, 1) both,
+    wtFadeOut 0.48s calc(var(--x-atm) - var(--el, 0s)) cubic-bezier(0.55, 0, 0.75, 0.2) forwards;
+}
+.wt:has(.plate-field) .wave-field,
+.wt:has(.plate-field) .wave-haze,
+.wt:has(.plate-field) .blob,
+.wt:has(.plate-field) .bloom,
+.wt-ch:has(.plate-field) .dim {
+  display: none !important;
+}
+.wt-ch:has(.plate-field) .lift {
+  background: radial-gradient(
+    ellipse 46% 38% at 50% 48%,
+    color-mix(in srgb, var(--wt-ink) 62%, transparent) 0%,
+    transparent 74%
+  );
+}
+.wt-cap:has(.plate-field) .card {
+  background: color-mix(in srgb, var(--wt-ink) 38%, transparent);
+}
+.wt-cap:has(.plate-field) .card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.34));
+}
+.wt-cap .num,
+.wt-cap .rail,
+.wt-cap .timer {
+  z-index: 1;
+}
 .wt.atm-none .wave-field,
 .wt.atm-none .wave-haze,
 .wt.atm-blobs .wave-field,

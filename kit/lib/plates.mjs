@@ -1282,6 +1282,27 @@ function buildInterstitial(video, it, paths, common) {
   }
 }
 
+/**
+ * Write one interstitial's HTML (plus plates.css) into `dir/plates` for a still or a preview.
+ * `brand` is a loaded brand pack; `plate` is a config entry with `type`.
+ */
+export function writePreviewPlate(brand, plate, dir) {
+  const it = { ...plate, id: plate.id || plate.type };
+  const video = { brand, config: { interstitials: [it] }, out: dir };
+  const paths = platePaths(video);
+  mkdirSync(paths.dir, { recursive: true });
+  copyFileSync(join(TEMPLATES, 'plates.css'), join(paths.dir, 'plates.css'));
+  const brandMotion = resolveMotion(brand);
+  const common = {
+    FONT_CSS: brand.font?.css || '',
+    BRAND_VARS: `${brandCssVars(brand)}\n      ${motionCssVars(brand)}`,
+    LOGO: brand.logoHtml || '',
+    TITLE_REVEAL: brandMotion.titleReveal,
+  };
+  buildInterstitial(video, it, paths, common);
+  return paths.interstitial[it.id].html;
+}
+
 /** Writes plate HTML for open, close, and every interstitial. */
 export function buildPlates(video) {
   const { config, brand } = video;

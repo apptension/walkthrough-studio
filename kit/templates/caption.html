@@ -23,10 +23,13 @@
   data-align="{{CAP_ALIGN}}"
   data-sheen="{{SHEEN}}"
   data-kind="caption"
+  data-field-root
+  data-duration="{{DURATION}}"
   data-flow-index="{{FLOW_INDEX}}"
 >
   <div class="seat">
     <div class="card">
+      {{FIELD}}
       {{WAVE_FIELD}}
       <div class="glow"></div>
       <div class="sheen"></div>
@@ -42,4 +45,5 @@
       <div class="timer"></div>
     </div>
   </div>
+  {{FIELD_SCRIPT}}
 </div>

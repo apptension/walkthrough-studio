@@ -30,6 +30,29 @@ test('resolveOverlays: plateMatch inherits plate motion atmosphere/energy', () =
   assert.ok(OVERLAY_PRESET_IDS.includes('editorial'));
 });
 
+test('resolveOverlays: plateMatch keeps a promoted plate atmosphere', () => {
+  const look = resolveOverlays(
+    { ...brand, motion: { ...brand.motion, atmosphere: 'aurora' } },
+    { overlays: { preset: 'plateMatch' } }
+  );
+  assert.equal(look.chapter.atmosphere, 'aurora');
+  assert.equal(look.caption.atmosphere, 'aurora');
+  const ch = renderLiveCardHtml(
+    { ...brand, motion: { ...brand.motion, atmosphere: 'aurora' } },
+    'chapter',
+    { chapterNo: 1, title: 'Open', ms: 2400 }
+  );
+  assert.match(ch, /data-field="aurora"/);
+  assert.match(ch, /data-field-root/);
+  assert.match(ch, /__plateRuntime/);
+  const blobs = renderLiveCardHtml(
+    { ...brand, direction: { overlays: { chapter: { atmosphere: 'blobs' } } } },
+    'chapter',
+    { chapterNo: 1, title: 'Open', ms: 2400 }
+  );
+  assert.doesNotMatch(blobs, /<canvas class="plate-field"/);
+});
+
 test('resolveOverlays: caption seat and width clamps', () => {
   const look = resolveOverlays(brand, {
     overlays: { preset: 'minimal', caption: { seat: 'bottom-left', maxWidth: 9999, bottom: 2 } },
@@ -52,6 +75,10 @@ test('patchOverlays: validates enums and merges slots', () => {
   assert.equal(next.chapter.ghost, false);
   assert.throws(() => patchOverlays({}, { caption: { seat: 'top' } }), /seat must be/);
   assert.throws(() => patchOverlays({}, { preset: 'neon' }), /preset must be/);
+  const aurora = patchOverlays({}, { chapter: { atmosphere: 'aurora' }, caption: { atmosphere: 'aurora' } });
+  assert.equal(aurora.chapter.atmosphere, 'aurora');
+  assert.equal(aurora.caption.atmosphere, 'aurora');
+  assert.throws(() => patchOverlays({}, { chapter: { atmosphere: 'lava' } }), /atmosphere must be/);
 });
 
 test('renderLiveCardHtml: chapter and caption fill templates with data-edit', () => {

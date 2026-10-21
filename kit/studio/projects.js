@@ -66,6 +66,7 @@ export function initProjects(ctx) {
     $('wizardProgressBar').style.width = `${((step + 1) / STEPS) * 100}%`;
     clearError();
     form.scrollTop = 0;
+    if (step === 3) paintPlateStills();
     if (step === STEPS - 1) renderSummary();
     if (focus && step !== 3) {
       form
@@ -99,12 +100,33 @@ export function initProjects(ctx) {
     if (length) length.checked = true;
   }
 
+  /** Point each plate tile at a frozen still of that template in the chosen brand. */
+  function paintPlateStills() {
+    const brand = radio('brandMode') === 'existing' ? val('brandId') : '';
+    form.querySelectorAll('.plate-picks .pick').forEach((pick) => {
+      const type = pick.querySelector('input[name="plates"]')?.value;
+      const img = pick.querySelector('.pick-still img');
+      if (!img || !type) return;
+      const src = brand ? `/api/plate-stills/${encodeURIComponent(brand)}/${encodeURIComponent(type)}.jpg` : '';
+      if (img.getAttribute('src') === src) return;
+      img.classList.remove('is-in');
+      if (!src) {
+        img.removeAttribute('src');
+        return;
+      }
+      img.onload = () => img.classList.add('is-in');
+      img.onerror = () => img.classList.remove('is-in');
+      img.src = src;
+    });
+  }
+
   function syncConditional() {
     const isNew = radio('brandMode') === 'new';
     form.querySelector('[data-brand="existing"]').hidden = isNew;
     form.querySelector('[data-brand="new"]').hidden = !isNew;
     $('wizardDiscoverRow').hidden = !isNew;
     form.querySelectorAll('[data-login]').forEach((el) => (el.hidden = !checked('loginRequired')));
+    if (step === 3) paintPlateStills();
     if (step === STEPS - 1) showStep(step, { focus: false });
   }
 

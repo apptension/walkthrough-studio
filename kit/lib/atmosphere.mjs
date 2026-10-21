@@ -285,8 +285,20 @@ export function fieldShaderSource(id) {
  * The encoder calls `__plateRuntime.renderAt(ms)` after pausing CSS animations; Studio's live
  * preview follows the clock while animations run. `__plateField` is kept as an alias.
  */
-export function atmosphereSnippet(brand) {
-  const atmo = resolveAtmosphere(brand);
+export function atmosphereSnippet(brand, opts = {}) {
+  const tuned = resolveAtmosphere(brand);
+  const id = opts.id && ATMOSPHERES[opts.id] ? opts.id : tuned.id;
+  const base = ATMOSPHERES[id];
+  const atmo = {
+    id,
+    opacity: Number.isFinite(opts.opacity) ? opts.opacity : id === tuned.id ? tuned.opacity : base.opacity,
+    speed: Number.isFinite(opts.speed) ? opts.speed : id === tuned.id ? tuned.speed : 1,
+    drift: Number.isFinite(opts.drift) ? opts.drift : tuned.drift,
+  };
+  const local = opts.local === true;
+  const withHooks = opts.hooks !== false;
+  const width = opts.width || 1920;
+  const height = opts.height || 1080;
   const enabled = atmo.id !== 'none';
   const c = brand.colors || {};
   const gold = rgb01(c.gold, [0.96, 0.67, 0.12]);
@@ -296,7 +308,7 @@ export function atmosphereSnippet(brand) {
   const surface = rgb01(c.surface || c.ink, [0.07, 0.1, 0.17]);
 
   const markup = enabled
-    ? `<canvas class="plate-field" data-field="${atmo.id}" width="1920" height="1080" aria-hidden="true"></canvas>
+    ? `<canvas class="plate-field" data-field="${atmo.id}" width="${width}" height="${height}" aria-hidden="true"></canvas>
       <div class="plate-clock" aria-hidden="true"></div>`
     : `<div class="plate-clock" aria-hidden="true"></div>`;
 
@@ -304,7 +316,8 @@ export function atmosphereSnippet(brand) {
 
   const script = `<script>
 (function () {
-  const clock = document.querySelector('.plate-clock');
+  const root = ${local ? `(document.currentScript && document.currentScript.closest('[data-field-root]')) || document` : `document`};
+  const clock = root.querySelector('.plate-clock');
   if (!clock) return;
   const hooks = (window.__plateHooks = window.__plateHooks || []);
   const cssSec = (name, fallback) => {
@@ -312,7 +325,8 @@ export function atmosphereSnippet(brand) {
     return Number.isFinite(v) ? v : fallback;
   };
   function durMs() {
-    const d = parseFloat(document.body.dataset.duration || '6');
+    const own = root && root.dataset && root.dataset.duration ? parseFloat(root.dataset.duration) : NaN;
+    const d = Number.isFinite(own) ? own : parseFloat((document.body && document.body.dataset.duration) || '6');
     return (Number.isFinite(d) ? d : 6) * 1000;
   }
   function ensureClock() {
@@ -335,7 +349,7 @@ export function atmosphereSnippet(brand) {
     enabled
       ? `
   (function initField() {
-    const canvas = document.querySelector('.plate-field');
+    const canvas = root.querySelector('.plate-field');
     if (!canvas) return;
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, preserveDrawingBuffer: true });
     if (!gl) { canvas.style.display = 'none'; return; }
@@ -412,9 +426,13 @@ export function atmosphereSnippet(brand) {
 
   // Live Studio preview: follow the shared clock while CSS animations run.
   let raf = 0;
+  function playing() {
+    const lists = [document.getAnimations()];
+    if (root.getAnimations) lists.push(root.getAnimations({ subtree: true }));
+    return lists.some((list) => list.some((a) => a.playState === 'running'));
+  }
   function loop() {
-    const playing = document.getAnimations().some((a) => a.playState === 'running');
-    if (playing) render(clockMs());
+    if (playing()) render(clockMs());
     raf = requestAnimationFrame(loop);
   }
   ensureClock();
@@ -423,12 +441,16 @@ export function atmosphereSnippet(brand) {
   window.addEventListener('beforeunload', () => cancelAnimationFrame(raf));
 })();
 </script>
-<script>
+${
+    withHooks
+      ? `<script>
 ${countUpRuntimeSource()}
 </script>
 <script>
 ${typeFitRuntimeSource()}
-</script>`;
+</script>`
+      : ''
+  }`;
 
   return { markup, script, enabled, atmosphere: atmo };
 }
