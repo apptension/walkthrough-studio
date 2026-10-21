@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { lineTakeFiles } from '../lib/audio/voice.mjs';
 import { loadVideo, VIDEOS } from '../lib/project.mjs';
+import { ATMOSPHERE_IDS } from '../lib/plateMotion.mjs';
 
 const arg = (name, fallback) => process.argv.find((a, i, arr) => arr[i - 1] === name) || fallback;
 const port = Number(arg('--port', 4747));
@@ -156,7 +157,7 @@ try {
   check(await page.locator('#btnCriticRun').isVisible(), 'critic run button');
   if (summary.critic) check((await page.locator('#criticFindings .critic-item, #criticFindings .empty-inline').count()) >= 1, 'critic findings rendered');
   await page.screenshot({ path: join(shots, '03c-review-story.png') });
-  check(Array.isArray(summary.motionOptions?.atmospheres) && summary.motionOptions.atmospheres.length === 7, 'motion options for plate accents');
+  check(Array.isArray(summary.motionOptions?.atmospheres) && summary.motionOptions.atmospheres.length === ATMOSPHERE_IDS.length, 'motion options for plate accents');
 
   await page.click('.tools-panel .ptab[data-right="deliver"]');
   await page.check('#reelToggle');

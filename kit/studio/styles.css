@@ -3798,7 +3798,7 @@ body.tl-collapsed:not(.is-editor) .tl-toolbar { border-bottom-color: transparent
 .transition-duration output { text-align: right; font-variant-numeric: tabular-nums; color: var(--text, #e7ebe6); }
 
 /* Atmosphere + effects (Motion & transitions). */
-.atmosphere-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.atmosphere-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; max-height: 280px; overflow: auto; }
 .atmosphere-row .energy { padding: 8px 4px; }
 .atmosphere-row .energy strong { font-size: 10.5px; }
 .atmosphere-sliders { display: grid; gap: 6px; margin-top: 2px; }

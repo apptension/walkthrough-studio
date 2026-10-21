@@ -18,7 +18,7 @@
 | `kit/lib/audio/music.mjs`      | Composition plan from the segment lengths (intro / bed sections / outro) → `music/music.mp3` + `plan.json`                                                                          |
 | `kit/lib/audio/mix.mjs`        | Place clips, duck the bed, two-pass loudnorm, mux onto `<slug>.mp4` (video copied) → `audio-meta.json`                                                                              |
 | `kit/lib/plates.mjs`           | Fills `templates/*.html` (open, close, ten interstitial types) from config + brand → deterministic frame render                                                                      |
-| `kit/lib/atmosphere.mjs`       | WebGL brand atmosphere (schedule / aurora / mesh / particles / grid / waves) + the plate runtime (clock, `renderAt`, per-frame hooks) injected into every plate                       |
+| `kit/lib/atmosphere.mjs`       | WebGL brand atmosphere (the core fields plus every id promoted from `atmosphereLab.mjs`) + the plate runtime (clock, `renderAt`, per-frame hooks) injected into every plate                       |
 | `kit/lib/typeFit.mjs`          | Scalable plate typography — `data-fit` line budgets, floors/ceilings and groups, run before the first frame                                                                         |
 | `kit/lib/narrative.mjs`        | Purpose-based story spines (overview, feature, onboarding, launch, sales), messaging rules for the agents, story checks for the critic                                              |
 | `kit/lib/countUp.mjs`          | Count-up numbers for `stats` / `metric` values — parse + format shared by Node and the inlined plate runtime                                                                          |

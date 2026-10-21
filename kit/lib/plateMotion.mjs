@@ -4,6 +4,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PROMOTED_FIELDS } from './atmosphereLab.mjs';
 
 export const PROFILES = {
   calm: {
@@ -111,7 +112,45 @@ export function resolveMotion(brand) {
   };
 }
 
-export const ATMOSPHERE_IDS = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves'];
+const CORE_ATMOSPHERE_IDS = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves'];
+
+/** Short second line for Studio buttons and the CLI. Hints on the field stay the long form. */
+const PROMOTED_BLURBS = {
+  contour: 'simplex contours',
+  signal: 'warped isobars',
+  halftone: 'dotted isobars',
+  iridescent: 'spectral bands',
+  silk: 'flowing threads',
+  ridgelines: 'stacked ridges',
+  interference: 'crossing ripples',
+  warpstripes: 'bent stripes',
+  bend: 'bowed hairlines',
+  traces: 'phosphor traces',
+  isometric: 'iso lattice',
+  sonar: 'sweep rings',
+  constellation: 'linked points',
+  cells: 'cell walls',
+  dunes: 'lit crests',
+  caustics: 'water light',
+  smoke: 'cinematic haze',
+  marble: 'stone veins',
+  tide: 'rolling swells',
+  rain: 'falling strands',
+  embers: 'rising sparks',
+  orbit: 'tilted ellipses',
+  circuit: 'board traces',
+  horizon: 'low glow + stars',
+  shaft: 'light shaft',
+  eclipse: 'drifting corona',
+  tunnel: 'forward tunnel',
+  meters: 'level meters',
+  hex: 'hex lattice',
+  spiral: 'unwinding arm',
+  frost: 'crystal branches',
+  braid: 'woven ribbons',
+};
+
+export const ATMOSPHERE_IDS = [...CORE_ATMOSPHERE_IDS, ...PROMOTED_FIELDS.map((f) => f.id)];
 export const TITLE_REVEALS = ['rise', 'cascade', 'wipe'];
 export const DEPTHS = ['flat', 'soft', 'deep'];
 export const ENERGIES = Object.keys(PROFILES);
@@ -125,6 +164,7 @@ export const ATMOSPHERE_LABELS = {
   particles: 'Particles · bokeh dust',
   grid: 'Grid · perspective floor',
   waves: 'Waves · flow lines',
+  ...Object.fromEntries(PROMOTED_FIELDS.map((f) => [f.id, `${f.label} · ${PROMOTED_BLURBS[f.id] || f.hint}`])),
 };
 
 const MOTION_NUMBER_KEYS = ['enterMs', 'staggerMs', 'pushScale', 'exitMs', 'openLiftScale', 'openLiftY', 'openLogoTop', 'openLogoWidth'];

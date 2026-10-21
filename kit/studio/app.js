@@ -4128,6 +4128,23 @@ function setEnergy(energy) {
   });
 }
 
+function renderAtmosphereGrid(activeId) {
+  const grid = $('atmosphereGrid');
+  const ids = state.video?.motionOptions?.atmospheres;
+  if (!grid || !ids?.length) return;
+  const labels = state.video.motionOptions.atmosphereLabels || {};
+  grid.innerHTML = ids
+    .map((atm) => {
+      const full = labels[atm] || atm;
+      const dot = full.indexOf(' · ');
+      const name = dot === -1 ? full : full.slice(0, dot);
+      const em = dot === -1 ? '' : full.slice(dot + 3);
+      const on = atm === activeId;
+      return `<button type="button" class="energy${on ? ' active' : ''}" data-atmosphere="${atm}" role="radio" aria-checked="${on ? 'true' : 'false'}" title="${escapeHtml(full)}"><strong>${escapeHtml(name)}</strong><em>${escapeHtml(em)}</em></button>`;
+    })
+    .join('');
+}
+
 function setAtmosphere(id) {
   document.querySelectorAll('#atmosphereGrid [data-atmosphere]').forEach((btn) => {
     const on = btn.dataset.atmosphere === id;
@@ -4141,6 +4158,7 @@ function setAtmosphere(id) {
 /** Mirror the resolved effects layer (atmosphere, title reveal, depth, sheen) into the controls. */
 function renderEffects(motion) {
   if (!motion) return;
+  renderAtmosphereGrid(motion.atmosphere || 'none');
   setAtmosphere(motion.atmosphere || 'none');
   const op = $('atmosphereOpacity');
   if (op && document.activeElement !== op && motion.atmosphereOpacity != null) {
@@ -5612,12 +5630,12 @@ function wire() {
       saveTransitions({ style: btn.dataset.transition });
     };
   });
-  document.querySelectorAll('#atmosphereGrid [data-atmosphere]').forEach((btn) => {
-    btn.onclick = () => {
-      setAtmosphere(btn.dataset.atmosphere);
-      scheduleMotionLive();
-    };
-  });
+  $('atmosphereGrid').onclick = (e) => {
+    const btn = e.target.closest('[data-atmosphere]');
+    if (!btn || !$('atmosphereGrid').contains(btn)) return;
+    setAtmosphere(btn.dataset.atmosphere);
+    scheduleMotionLive();
+  };
   $('atmosphereOpacity')?.addEventListener('input', (e) => {
     $('atmosphereOpacityOut').textContent = Number(e.target.value).toFixed(2);
     scheduleMotionLive();

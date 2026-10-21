@@ -49,7 +49,7 @@ the product — inserted *before* a named chapter. Decide them from the motion b
 title-only open/close when the story needs belief, proof, or a first-user map.
 
 Every plate sits on a brand **atmosphere**: a WebGL field painted from the five-colour scale
-(`motion.atmosphere` — `none` / `schedule` / `aurora` / `mesh` / `particles` / `grid` / `waves`), plus an
+(`motion.atmosphere` — `none` or any id in `ATMOSPHERE_IDS`, including `schedule` / `aurora` / `mesh` / `particles` / `grid` / `waves` and the accepted lab fields), plus an
 effects layer (title reveal `rise` / `cascade` / `wipe`, 3D card depth `flat` / `soft` / `deep`, sheen
 sweep, count-up numbers, light flare on the open). Brand defaults live in `brand.json → motion`; a video
 overrides them in `video.config.json → direction.motion`; a single plate in `interstitials[].motion`.

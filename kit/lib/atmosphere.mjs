@@ -10,6 +10,7 @@
  *   particles  three parallax layers of bokeh dust with twinkle
  *   grid       perspective floor with a travelling light pulse
  *   waves      topographic contour lines flowing across the frame
+ *   …plus every field promoted out of the atmosphere lab (see PROMOTED_FIELDS)
  *
  * Every field reads the same uniforms (five-colour scale, time, drift, in/out envelope) so a
  * brand swap recolours it with no shader edits. Time comes from the plate clock, which the
@@ -20,8 +21,12 @@ import { parseCssHex } from './text.mjs';
 import { ATMOSPHERE_IDS, resolveMotion } from './plateMotion.mjs';
 import { countUpRuntimeSource } from './countUp.mjs';
 import { typeFitRuntimeSource } from './typeFit.mjs';
+import { GLSL_PREAMBLE } from './atmosphereGlsl.mjs';
+import { labShaderSource, PROMOTED_FIELDS } from './atmosphereLab.mjs';
 
-export const ATMOSPHERES = Object.freeze({
+export { GLSL_PREAMBLE };
+
+const CORE_ATMOSPHERES = {
   none: { label: 'None', hint: 'CSS atmosphere only', opacity: 0 },
   schedule: { label: 'Schedule', hint: 'Soft resource-calendar bars', opacity: 0.34 },
   aurora: { label: 'Aurora', hint: 'Slow ribbons of brand light', opacity: 0.42 },
@@ -29,6 +34,11 @@ export const ATMOSPHERES = Object.freeze({
   particles: { label: 'Particles', hint: 'Parallax bokeh dust', opacity: 0.5 },
   grid: { label: 'Grid', hint: 'Perspective floor with a light pulse', opacity: 0.4 },
   waves: { label: 'Waves', hint: 'Topographic contour lines', opacity: 0.36 },
+};
+
+export const ATMOSPHERES = Object.freeze({
+  ...CORE_ATMOSPHERES,
+  ...Object.fromEntries(PROMOTED_FIELDS.map((f) => [f.id, { label: f.label, hint: f.hint, opacity: f.opacity }])),
 });
 
 export { ATMOSPHERE_IDS };
@@ -56,42 +66,6 @@ export function resolveAtmosphere(brand) {
    GLSL: shared preamble + one body per field. Fields write straight-alpha gl_FragColor; the
    blend over the cleared buffer premultiplies it for the page compositor.
    ——————————————————————————————————————————————————————————————————————————————————————————— */
-
-const GLSL_PREAMBLE = `
-#ifdef GL_OES_standard_derivatives
-#extension GL_OES_standard_derivatives : enable
-#endif
-precision highp float;
-uniform vec2 uRes;
-uniform float uTime;
-uniform vec3 uGold;
-uniform vec3 uAmber;
-uniform vec3 uTeal;
-uniform vec3 uInk;
-uniform vec3 uSurface;
-uniform float uOpacity;
-uniform float uDrift;
-uniform float uEnv;
-
-float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p){
-  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-float fbm(vec2 p){
-  float v = 0.0; float a = 0.5; mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
-  for (int i = 0; i < 5; i++) { v += a * noise(p); p = m * p; a *= 0.5; }
-  return v;
-}
-/* Wide soft dim where the copy sits — the field never competes with the words. */
-float contentDim(vec2 uv){
-  vec2 band = (uv - vec2(0.5, 0.46)) * vec2(0.72, 1.05);
-  return mix(0.36, 1.0, smoothstep(0.08, 0.95, length(band)));
-}
-float vignette(vec2 p){ return smoothstep(1.35, 0.25, length(p * vec2(0.72, 1.0))); }
-float sdRoundBox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
-float easeInOut(float x){ return x * x * (3.0 - 2.0 * x); }
-`;
 
 const GLSL = {
   schedule: `
@@ -301,8 +275,9 @@ void main(){
 
 /** Fragment shader source for a field id (preamble + body). */
 export function fieldShaderSource(id) {
-  if (!GLSL[id]) throw new Error(`Unknown atmosphere "${id}"`);
-  return GLSL_PREAMBLE + GLSL[id];
+  if (GLSL[id]) return GLSL_PREAMBLE + GLSL[id];
+  if (PROMOTED_FIELDS.some((f) => f.id === id)) return labShaderSource(id);
+  throw new Error(`Unknown atmosphere "${id}"`);
 }
 
 /**

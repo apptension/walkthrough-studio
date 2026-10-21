@@ -528,14 +528,14 @@ async function main() {
       return;
     }
     case 'motion': {
+      const { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, motionOverrides, patchMotion, resolveMotion } = await import('./lib/plateMotion.mjs');
       if (!slug) {
         throw new Error(
-          'Usage: motion <slug> [--energy calm|clear|punchy] [--atmosphere none|schedule|aurora|mesh|particles|grid|waves]\n' +
+          `Usage: motion <slug> [--energy calm|clear|punchy] [--atmosphere ${ATMOSPHERE_IDS.join('|')}]\n` +
             '       [--presence 0–1] [--speed 0.3–3] [--reveal rise|cascade|wipe] [--depth flat|soft|deep] [--sheen on|off]\n' +
             '       [--plate <id|open|close>] [--reset]   (per-plate accent; --reset drops the override)'
         );
       }
-      const { ATMOSPHERE_LABELS, motionOverrides, patchMotion, resolveMotion } = await import('./lib/plateMotion.mjs');
       const video = loadVideo(slug);
       const patch = {
         ...(opt('--energy') && { energy: opt('--energy') }),
