@@ -5,6 +5,7 @@
  */
 import { paintAgentStream } from './agentStream.js';
 import { ask } from './ask.js';
+import { SCENARIO_EDITABLE_NOTE, defaultSectionCollapsed } from './scriptSections.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -453,8 +454,8 @@ export function initWorkflow(ctx) {
     </li>`;
   }
 
-  /** Session collapse state for Opening / Story / Closing. */
-  const sectionCollapsed = { opening: false, story: false, closing: false };
+  /** Session collapse state for Opening / Story / Closing. A new scenario starts folded. */
+  const sectionCollapsed = defaultSectionCollapsed();
 
   function sectionHeader(id, label, hint, count = 0) {
     const collapsed = Boolean(sectionCollapsed[id]);
@@ -773,6 +774,8 @@ export function initWorkflow(ctx) {
       : scaffold
         ? 'Starter template · waiting for a real draft'
         : `${t.chapters} chapters · ${t.plates} plates · ${t.words} words · ~${mm}:${ss}`;
+    const editable = $('scriptEditableNote');
+    if (editable) editable.textContent = drafting || scaffold ? '' : SCENARIO_EDITABLE_NOTE;
 
     $('scriptApprovedMeta').textContent =
       r.effective === 'approved'
