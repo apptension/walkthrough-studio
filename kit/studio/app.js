@@ -1185,6 +1185,19 @@ function renderActionCard(v) {
     const login = $('recordLoginRequired');
     if (url && document.activeElement !== url) url.value = v.freshness.startUrl || '';
     if (login && document.activeElement !== login) login.checked = Boolean(v.freshness.loginRequired);
+    const versions = $('cleanupVersions');
+    if (versions) {
+      const ids = (v.versions || []).map((ver) => ver.id).join(',');
+      if (versions.dataset.ids !== ids) {
+        versions.dataset.ids = ids;
+        versions.innerHTML = (v.versions || [])
+          .map(
+            (ver) =>
+              `<label class="tog"><input type="checkbox" value="${escapeHtml(ver.id)}" /><span>${escapeHtml(ver.displayName || ver.name || ver.id)}</span></label>`
+          )
+          .join('');
+      }
+    }
   }
 
   if (!action.title) {
@@ -5074,6 +5087,29 @@ function wire() {
       toast('Target saved', state.video?.freshness?.needsRecord ? 'Re-record & Render is ready' : 'Start URL saved');
     } catch (err) {
       toast('Could not save the start URL', err.message, 'err');
+    }
+  });
+  $('btnCleanup')?.addEventListener('click', async () => {
+    if (!state.slug) return;
+    try {
+      const selectedVersions = [...document.querySelectorAll('#cleanupVersions input:checked')].map((el) => el.value);
+      const plan = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: false, selectedVersions } });
+      if (!plan.files?.length) {
+        toast('Nothing to clean', 'The master and live recording stay');
+        return;
+      }
+      const lines = plan.files.map((file) => `${file.name} · ${file.bytes} bytes`).join('\n');
+      const ok = await ask({
+        title: 'Delete intermediate files',
+        detail: `${lines}\n\n${plan.totalBytes} bytes. The current master and live.mp4 stay.`,
+        ok: 'Delete',
+        tone: 'warn',
+      });
+      if (!ok) return;
+      const done = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: true, selectedVersions } });
+      toast('Intermediates deleted', `${done.files.length} file(s), ${done.totalBytes} bytes`);
+    } catch (err) {
+      toast('Cleanup failed', err.message, 'err');
     }
   });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);

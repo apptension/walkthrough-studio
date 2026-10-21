@@ -34,6 +34,7 @@ import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLoc
 import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs';
 import { lensGeometry } from './lens.mjs';
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
+import { applyCleanup, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
 import {
@@ -1438,6 +1439,18 @@ async function handleApi(req, res, url) {
     const record = { ...(current.record || {}), startUrl, loginRequired };
     writeFileSync(pathCfg, JSON.stringify({ ...current, record }, null, 2) + '\n');
     return json(res, 200, { ok: true, freshness: freshnessInfo(loadVideo(video.slug)) });
+  }
+
+  if (rest === '/cleanup' && req.method === 'POST') {
+    const body = await readBody(req);
+    const plan = planCleanup(video.out, { slug: video.slug, selectedVersions: body.selectedVersions || [] });
+    if (body.confirm) applyCleanup(plan);
+    return json(res, 200, {
+      ok: true,
+      deleted: Boolean(body.confirm),
+      files: plan.files.map((file) => ({ name: file.name, bytes: file.bytes })),
+      totalBytes: plan.totalBytes,
+    });
   }
 
   if (rest === '/transitions' && req.method === 'GET') {

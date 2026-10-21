@@ -520,6 +520,7 @@ body.is-rendering .project-panel {
   color: var(--ink);
   font: 12px/1.3 var(--mono);
 }
+.cleanup-versions { display: grid; gap: 4px; margin-top: 8px; }
 .render-start-actions {
   display: flex;
   flex-direction: column;
