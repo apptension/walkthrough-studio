@@ -30,8 +30,9 @@ export function describeRecordFailure(note) {
     next = 'Use Fix with AI to read the stall, or re-record when the page is ready.';
   }
   const line = firstLine(text).replace(/^✗\s*/, '');
-  if (line && line.length < 240 && !/^Error$/.test(line)) reason = line;
-  return { reason, url, next };
+  const noisy = /locator\.|Timeout|Error:|page\.|browser has been closed|waiting for|net::ERR/i.test(line);
+  if (line && line.length < 160 && !noisy && !/^Error$/.test(line)) reason = line;
+  return { reason, url, next, technical: noisy ? line : '' };
 }
 
 export function recordFailureView({ shotMtime = null, liveMtime = null, note = '', screenshot = 'error.png' } = {}) {

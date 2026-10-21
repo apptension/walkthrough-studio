@@ -5,6 +5,7 @@ import {
   installSelectorRetry,
   isSelectorTimeout,
   pickSelector,
+  selectorReport,
   usesStallRepair,
 } from './selectorRetry.mjs';
 
@@ -35,6 +36,15 @@ test('a stall that is not a selector miss still uses the repair path', () => {
   assert.equal(usesStallRepair({ stall: { kind: 'idle' }, selectorRetry: false }), true);
   assert.equal(usesStallRepair({ stall: null, selectorRetry: true }), false);
   assert.equal(usesStallRepair({ stall: null, selectorRetry: false }), false);
+  assert.equal(usesStallRepair({ selector: { stage: 'tab' } }), true);
+});
+
+test('a failed selector retry asks for one repair of that stage', () => {
+  const report = selectorReport(new Error('Selector retry failed for tab. Screenshot: error.png'));
+  assert.match(report.summary, /tab/);
+  assert.equal(report.stage, 'tab');
+  assert.match(report.next, /flow\.mjs/);
+  assert.equal(report.screenshot, 'error.png');
 });
 
 test('a test flow with a stale placeholder passes after the DOM retry', async () => {

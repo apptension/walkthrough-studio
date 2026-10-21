@@ -3,6 +3,8 @@
  * product map. A stall that is not a selector timeout stays on the existing repair path.
  */
 import { readFlowAnalysis } from './analyzeFlow.mjs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const ACTIONS = new Set([
   'click',
@@ -25,10 +27,10 @@ export function isSelectorTimeout(err) {
   return err.name === 'TimeoutError' || /Timeout \d+ms exceeded/.test(String(err.message || ''));
 }
 
-/** Repair runs only for a stall report. A selector retry is handled inside the take. */
-export function usesStallRepair({ stall, selectorRetry, overlay } = {}) {
-  if (selectorRetry) return false;
-  return Boolean(stall || overlay);
+/** Repair runs for a stall, a covering dialog, or a selector the live page could not replace. */
+export function usesStallRepair({ stall, selectorRetry, overlay, selector } = {}) {
+  if (selectorRetry && !selector) return false;
+  return Boolean(stall || overlay || selector);
 }
 
 function words(value) {
@@ -204,4 +206,33 @@ export function installSelectorRetry(page, { productMap = [] } = {}) {
 
 export function installRecordedSelectorRetry(page, video) {
   return installSelectorRetry(page, { productMap: productMapFromAnalysis(readFlowAnalysis(video)) });
+}
+
+export function selectorReport(err) {
+  const target = String(err?.message || '').match(/Selector retry failed for ([^.]+)/)?.[1] || 'the control';
+  return {
+    summary: `The page has no match for ${target}.`,
+    detail: String(err?.message || err || ''),
+    next: 'The capture-repair pass will rewrite that selector in flow.mjs, then this job records the take again.',
+    screenshot: 'error.png',
+    stage: target.trim(),
+  };
+}
+
+export function writeSelectorReport(video, err) {
+  writeFileSync(join(video.out, 'selector-miss.json'), JSON.stringify(selectorReport(err), null, 2) + '\n');
+}
+
+export function readSelectorReport(video) {
+  const file = join(video.out, 'selector-miss.json');
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+export function clearSelectorReport(video) {
+  rmSync(join(video.out, 'selector-miss.json'), { force: true });
 }

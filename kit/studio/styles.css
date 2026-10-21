@@ -522,13 +522,69 @@ body.is-rendering .project-panel {
 .record-target {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 8px;
 }
+.capture-line {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.capture-line summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.capture-line summary::-webkit-details-marker { display: none; }
+.capture-kicker {
+  flex: none;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+#recordTargetSummary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px/1.3 var(--mono);
+  color: var(--ink);
+}
+.capture-line summary::after {
+  content: 'Change';
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-dim);
+}
+.capture-line[open] summary::after { content: 'Close'; }
+.capture-quiet summary::after,
+.capture-quiet[open] summary::after { content: ''; }
+.capture-line .record-target,
+.capture-line > .capture-status,
+.capture-line > .cleanup-versions,
+.capture-line > .btn {
+  margin: 0 12px 12px;
+}
+.capture-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+.capture-status[hidden] { display: none; }
 .record-target .wf { display: grid; gap: 4px; }
 .record-target input[type="url"] {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 8px;
+  min-height: 44px;
+  padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--line-2);
   background: var(--well);
@@ -805,10 +861,37 @@ body.is-rendering .render-live-card {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
 
-.queue-add {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+.queue-menu {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.queue-menu[hidden] { display: none; }
+.queue-menu button {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  font: 600 13px/1 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.queue-menu button:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+}
+.queue-list li {
+  min-height: 44px;
+}
+.queue-list li.is-now {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.queue-list li.is-now .q-num { color: var(--accent); }
+.queue-remove {
+  flex: none;
 }
 .queue-chip {
   display: inline-flex;
@@ -849,15 +932,16 @@ body.is-rendering .render-live-card {
 .queue-list li .q-num {
   font: 600 10px var(--mono);
   color: var(--accent);
-  width: 16px;
+  min-width: 16px;
 }
 .queue-list li .q-label { flex: 1; min-width: 0; }
 .queue-list li button,
 .queue-list li .queue-remove {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
+  margin: -10px -8px -10px 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -870,7 +954,19 @@ body.is-rendering .render-live-card {
 .queue-list li .queue-remove svg { display: block; width: 13px; height: 13px; }
 .queue-list li button:hover,
 .queue-list li .queue-remove:hover { color: var(--danger); background: rgba(255,107,122,0.12); }
-.queue-empty { margin: 0; }
+.queue-empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+#btnQueueAdd,
+#btnClearQueue,
+#btnStopWork {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
+}
 .queue-badge {
   display: inline-grid;
   place-items: center;
@@ -6278,6 +6374,23 @@ body.ss-is-dragging * {
   color: var(--ink);
 }
 .as-text strong { font-weight: 650; color: #fff; }
+.as-shot {
+  min-height: 44px;
+  margin: 4px 0;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font: 600 12px/1 var(--font);
+  cursor: pointer;
+}
+.as-shot-img {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 8px;
+}
 .as-glyph { display: inline-grid; place-items: center; width: 12px; height: 12px; font: 700 9px/1 var(--mono); border-radius: 50%; }
 .as-glyph.dot { width: 6px; height: 6px; margin-top: 3px; background: var(--muted); }
 .as-glyph.ok { color: var(--good); }

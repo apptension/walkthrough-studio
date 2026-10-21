@@ -10,7 +10,9 @@ test('a failed record shows the reason, the URL, and the screenshot', () => {
     note: 'page.goto: Timeout 30000ms exceeded.\nnavigating to "http://localhost:3000/app", waiting until "domcontentloaded"',
     screenshot: '/media/demo/error.png',
   });
-  assert.match(view.reason, /did not load|Timeout 30000ms/);
+  assert.match(view.reason, /did not load/);
+  assert.doesNotMatch(view.reason, /Timeout/);
+  assert.match(view.technical, /Timeout 30000ms/);
   assert.match(view.url, /http:\/\/localhost:3000\/app/);
   assert.match(view.next, /re-record/i);
   assert.equal(view.screenshot, '/media/demo/error.png');
@@ -25,8 +27,18 @@ test('a refused connection names what failed and what to try next', () => {
     note: 'net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/',
     screenshot: '/media/demo/error.png',
   });
-  assert.match(view.reason, /could not open|ERR_CONNECTION_REFUSED/);
+  assert.match(view.reason, /could not open/);
+  assert.doesNotMatch(view.reason, /ERR_CONNECTION_REFUSED/);
   assert.match(view.next, /Start the app/);
+});
+
+test('a playwright line stays off the headline', () => {
+  const view = recordFailureView({
+    shotMtime: 9,
+    note: 'locator.waitFor: Target page, context or browser has been closed',
+  });
+  assert.match(view.reason, /stopped before the walkthrough finished/);
+  assert.match(view.technical, /browser has been closed/);
 });
 
 test('a newer take hides the failure, and plates alone are not a captured tour', () => {
@@ -43,4 +55,7 @@ test('the failure panel sits on Program with Fix with AI', () => {
   const shot = html.indexOf('id="recordFailureShot"');
   const fix = html.indexOf('id="recordFailureFix"');
   assert.ok(stage > 0 && panel > stage && shot > panel && fix > panel);
+  const stream = readFileSync(new URL('./agentStream.js', import.meta.url), 'utf8');
+  assert.match(stream, /class="as-shot"/);
+  assert.match(stream, /error\.png/);
 });

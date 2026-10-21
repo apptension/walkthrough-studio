@@ -21,7 +21,7 @@ import {
 } from './captureStall.mjs';
 import { createMail } from './mail.mjs';
 import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
-import { installRecordedSelectorRetry } from './selectorRetry.mjs';
+import { clearSelectorReport, installRecordedSelectorRetry, writeSelectorReport } from './selectorRetry.mjs';
 import { clearOverlayReport, installOverlayRetry, writeOverlayReport } from './overlayRetry.mjs';
 import { describeRecordFailure } from '../studio/recordFailure.js';
 import {
@@ -544,6 +544,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     console.log('» capture · Driving the walkthrough');
     clearStallReport(video);
     clearOverlayReport(video);
+    clearSelectorReport(video);
     startedAt = Date.now();
     recorder.begin(startedAt);
     let lastPreviewAt = 0;
@@ -664,6 +665,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       : String(err?.stack || err);
     writeFileSync(join(out, 'error.txt'), text);
     if (err?.overlayRetry) writeOverlayReport(video, err);
+    if (err?.selectorRetry) writeSelectorReport(video, err);
     const described = describeRecordFailure(`${err?.message || ''}\n${err?.stack || ''}`);
     console.error(`✗ ${described.reason}`);
     if (described.url) console.error(`  ${described.url}`);

@@ -136,13 +136,17 @@
                 <span class="cta-label">Other</span>
               </button>
             </div>
-            <form id="recordTargetForm" class="record-target" hidden>
-              <label class="wf"><span class="field-label">Start URL</span><input id="recordStartUrl" type="url" spellcheck="false" /></label>
-              <label class="tog"><input type="checkbox" id="recordLoginRequired" /><span>Sign-in required</span></label>
-              <button type="submit" class="btn">Save target</button>
-            </form>
-            <button type="button" id="btnCleanup" class="btn">Clean intermediates</button>
-            <div id="cleanupVersions" class="cleanup-versions"></div>
+            <details id="recordTarget" class="capture-line" hidden>
+              <summary>
+                <span class="capture-kicker">Opens</span>
+                <span id="recordTargetSummary">No start URL yet</span>
+              </summary>
+              <form id="recordTargetForm" class="record-target">
+                <label class="wf"><span class="field-label">Start URL</span><input id="recordStartUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></label>
+                <label class="tog"><input type="checkbox" id="recordLoginRequired" /><span>Sign-in required</span></label>
+                <p id="recordTargetStatus" class="capture-status" hidden></p>
+              </form>
+            </details>
             <div id="plateQcBanner" class="plate-qc-banner" hidden></div>
           </div>
 
@@ -181,37 +185,29 @@
             </div>
           </div>
 
-          <div class="render-section">
+          <div class="render-section" id="queueSection">
             <div class="render-section-label">
-              <span data-ico="queue" data-help="Run one step on its own instead of a full render. Plates re-renders brand scenes, Audio re-mixes voice and music, Export builds the handoff pack. Steps queued while something runs start in order.">Queue</span>
+              <span data-ico="queue" data-help="Steps waiting behind the current job. Add Plates, Audio, or Export. Render stays the button above so it is not listed twice.">Queue</span>
               <div class="render-section-actions">
-                <button type="button" id="btnStopWork" class="btn tiny danger" hidden title="Stop current job and clear queue">
-                  Stop all
-                </button>
-                <button type="button" id="btnClearQueue" class="btn tiny" title="Clear pending queue only">Clear</button>
+                <button type="button" id="btnQueueAdd" class="btn tiny" aria-expanded="false" aria-controls="queueMenu">Add step</button>
+                <button type="button" id="btnStopWork" class="btn tiny danger" hidden title="Stop running job and clear queue">Stop all</button>
+                <button type="button" id="btnClearQueue" class="btn tiny" hidden title="Clear waiting steps. The running job keeps going.">Clear</button>
               </div>
             </div>
-            <div class="queue-add">
-              <button type="button" class="queue-chip" data-enqueue="plates" title="Render brand plates">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
-                Plates
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="audio" title="Voice + music mix">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
-                Audio
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="deliver" title="Export handoff pack">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
-                Export
-              </button>
-              <button type="button" class="queue-chip" data-enqueue="make-quick" title="Queue full produce (no re-record)">
-                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-                Render
-              </button>
+            <div id="queueMenu" class="queue-menu" hidden>
+              <button type="button" data-enqueue="plates">Plates</button>
+              <button type="button" data-enqueue="audio">Audio</button>
+              <button type="button" data-enqueue="deliver">Export</button>
             </div>
-            <ul id="jobQueue" class="queue-list"></ul>
-            <div id="queueEmpty" class="queue-empty" data-zen="dashes" data-mini data-title="Nothing in line ✨" data-sub="Steps wait here and run in order."></div>
+            <ol id="jobQueue" class="queue-list"></ol>
+            <p id="queueEmpty" class="queue-empty">Nothing waiting. Render runs from the button above.</p>
           </div>
+          <details id="cleanupDisclosure" class="capture-line capture-quiet" hidden>
+            <summary>Clean up capture files</summary>
+            <p class="capture-status">Removes intermediate files. The live recording and the delivery master stay.</p>
+            <div id="cleanupVersions" class="cleanup-versions"></div>
+            <button type="button" id="btnCleanup" class="btn">Clean intermediates</button>
+          </details>
         </div>
 
         <div id="leftVersions" class="panel-body versions-bay" hidden>

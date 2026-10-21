@@ -20,7 +20,8 @@ function escapeHtml(s) {
 function format(text) {
   return escapeHtml(text)
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/error\.png/g, '<button type="button" class="as-shot" data-shot="error.png">Open screenshot</button>');
 }
 
 function tick() {
@@ -106,6 +107,22 @@ function createController(host, opts) {
     ctl.pinned = true;
     ctl.follow();
   });
+  host.addEventListener('click', (event) => {
+    const button = event.target.closest?.('.as-shot');
+    if (!button) return;
+    const slug = host.dataset.slug;
+    if (!slug) return;
+    const existing = button.parentElement.querySelector('.as-shot-img');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const img = document.createElement('img');
+    img.className = 'as-shot-img';
+    img.alt = 'Page when this step failed';
+    img.src = `/media/${encodeURIComponent(slug)}/error.png`;
+    button.after(img);
+  });
   return ctl;
 }
 
@@ -157,6 +174,7 @@ export function paintAgentStream(host, job, opts = {}) {
     ctl.jobId = job.id;
   }
   ctl.live = job.status === 'running' || job.status === 'queued' || job.status === 'cancelling';
+  if (job.slug) host.dataset.slug = job.slug;
   host.classList.toggle('is-live', ctl.live);
   const stream = job.stream || { rev: 0, entries: [] };
   let entries = stream.entries || [];

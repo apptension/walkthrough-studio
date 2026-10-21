@@ -13,9 +13,10 @@ import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml,
 import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
-import { capturedTour, recordFailureAction, recordFailureNote } from './recordFailure.js';
+import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
 import { programPreview } from './liveWatch.js';
 import { marksForProgram, pipelineOverlay, programSourceForStep } from './programBuild.js';
+import { captureSummary, shouldEnqueue } from './queueUx.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -53,6 +54,7 @@ const state = {
   plateReplayTimer: null,
   action: null,
   queue: [],
+  running: null,
   jobBusy: false, // exclusive: one kit/agent job at a time
   renderLogExpanded: false,
   pipelineStartedAt: null,
@@ -1125,12 +1127,16 @@ function decideAction(v) {
 
   if (v.recordFailure) {
     const retry = recordFailureAction();
+    const parsed = describeRecordFailure(v.recordFailure.reason);
+    const failure = v.recordFailure.technical
+      ? v.recordFailure
+      : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical };
     return {
       kind: 'warn',
       status: 'Record failed',
-      title: v.recordFailure.reason,
-      reason: v.recordFailure.next,
-      detail: v.recordFailure.url,
+      title: failure.reason,
+      reason: failure.next || v.recordFailure.next,
+      detail: [failure.technical, failure.url].filter(Boolean).join(' · '),
       primary: { label: retry.label, mode: retry.mode },
       secondary: null,
       makeLabel: retry.label,
@@ -1272,11 +1278,19 @@ function renderActionCard(v) {
   }
   const failure = $('recordFailure');
   if (failure) {
-    const info = v?.recordFailure;
+    const parsed = v?.recordFailure ? describeRecordFailure(v.recordFailure.reason) : null;
+    const info = v?.recordFailure
+      ? v.recordFailure.technical
+        ? v.recordFailure
+        : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical }
+      : null;
     failure.hidden = !info;
     const shot = $('recordFailureShot');
     if (info && shot) shot.src = info.screenshot;
-    if ($('recordFailureReason')) $('recordFailureReason').textContent = info?.reason || '';
+    if ($('recordFailureReason')) {
+      $('recordFailureReason').textContent = info?.reason || '';
+      $('recordFailureReason').title = info?.technical || '';
+    }
     if ($('recordFailureUrl')) $('recordFailureUrl').textContent = info?.url || '';
     if ($('recordFailureNext')) $('recordFailureNext').textContent = info?.next || '';
   }
@@ -1291,19 +1305,18 @@ function renderActionCard(v) {
   const reason = $('renderReason');
   if (!pill || !headline || !reason) return;
 
-  if (state.renderBusy) {
-    pill.className = 'render-pill run';
-    pill.textContent = 'Rendering';
-    return;
-  }
-
-  const target = $('recordTargetForm');
+  const target = $('recordTarget');
   if (target && v?.freshness) {
-    target.hidden = !v.freshness.liveAt && !v.freshness.startUrl;
+    const startUrl = v.freshness.startUrl || '';
+    target.hidden = !v.freshness.liveAt && !startUrl;
     const url = $('recordStartUrl');
     const login = $('recordLoginRequired');
-    if (url && document.activeElement !== url) url.value = v.freshness.startUrl || '';
+    if (url && document.activeElement !== url) url.value = startUrl;
     if (login && document.activeElement !== login) login.checked = Boolean(v.freshness.loginRequired);
+    const summary = $('recordTargetSummary');
+    if (summary && document.activeElement !== url) summary.textContent = captureSummary(startUrl, v.freshness.loginRequired);
+    const cleanup = $('cleanupDisclosure');
+    if (cleanup) cleanup.hidden = false;
     const versions = $('cleanupVersions');
     if (versions) {
       const ids = (v.versions || []).map((ver) => ver.id).join(',');
@@ -1317,6 +1330,12 @@ function renderActionCard(v) {
           .join('');
       }
     }
+  }
+
+  if (state.renderBusy) {
+    pill.className = 'render-pill run';
+    pill.textContent = 'Rendering';
+    return;
   }
 
   if (!action.title) {
@@ -1408,22 +1427,63 @@ function renderQueue() {
   const list = $('jobQueue');
   const empty = $('queueEmpty');
   if (!list) return;
-  updateQueueBadge();
-  if (!state.queue.length) {
-    list.innerHTML = '';
-    if (empty) empty.hidden = false;
-    return;
-  }
-  if (empty) empty.hidden = true;
-  list.innerHTML = state.queue
-    .map(
-      (q, i) => `<li data-qid="${escapeHtml(q.qid)}">
+  const now = state.running
+    ? `<li class="is-now"><span class="q-num">Now</span><span class="q-label">${escapeHtml(state.running.label || 'Working')}</span></li>`
+    : '';
+  list.innerHTML =
+    now +
+    state.queue
+      .map(
+        (q, i) => `<li data-qid="${escapeHtml(q.qid)}">
       <span class="q-num">${i + 1}</span>
       <span class="q-label">${escapeHtml(q.label)}</span>
       <button type="button" class="queue-remove" data-remove-qid="${escapeHtml(q.qid)}" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </li>`
-    )
-    .join('');
+      )
+      .join('');
+  list.hidden = !state.running && !state.queue.length;
+  if (empty) empty.hidden = Boolean(state.running) || state.queue.length > 0;
+  const clear = $('btnClearQueue');
+  if (clear) clear.hidden = state.queue.length === 0;
+  updateQueueBadge();
+}
+
+async function saveRecordTarget() {
+  if (!state.slug) return;
+  const input = $('recordStartUrl');
+  const login = $('recordLoginRequired');
+  const status = $('recordTargetStatus');
+  const startUrl = input?.value.trim() || '';
+  const loginRequired = Boolean(login?.checked);
+  const currentUrl = state.video?.freshness?.startUrl || '';
+  const currentLogin = Boolean(state.video?.freshness?.loginRequired);
+  if (startUrl === currentUrl && loginRequired === currentLogin) {
+    if (status) status.hidden = true;
+    return;
+  }
+  if (!/^https?:\/\//i.test(startUrl)) {
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Use a full http(s) URL.';
+    }
+    return;
+  }
+  try {
+    await api(`/api/video/${state.slug}/record-target`, {
+      method: 'PUT',
+      body: { startUrl, loginRequired },
+    });
+    await loadVideo(state.slug);
+    if (status) {
+      status.hidden = false;
+      status.textContent = state.video?.freshness?.needsRecord ? 'Saved. The next render re-records.' : 'Saved.';
+    }
+  } catch (err) {
+    if (status) {
+      status.hidden = false;
+      status.textContent = err.message || 'Could not save.';
+    }
+  }
 }
 
 function enqueueJob(item, { silent = false } = {}) {
@@ -1444,6 +1504,10 @@ function enqueueJob(item, { silent = false } = {}) {
   };
   if (!entry.slug) {
     toast('No sequence open', 'Pick a project before queuing work', 'warn');
+    return null;
+  }
+  if (!shouldEnqueue(state.queue, entry)) {
+    toast('Already waiting', entry.label, 'warn');
     return null;
   }
   state.queue.push(entry);
@@ -1493,6 +1557,7 @@ function updateStopButtons() {
 async function stopAllWork({ reason = 'Stopped', silent = false } = {}) {
   state.stopRequested = true;
   state.queue = [];
+  state.running = null;
   renderQueue();
   try {
     state.workAbort?.abort();
@@ -1540,7 +1605,9 @@ async function drainQueue() {
     return;
   }
   state.jobBusy = true;
+  state.running = next;
   state.stopRequested = false;
+  renderQueue();
   updateStopButtons();
   const signal = beginWorkAbort();
   const isRender = next.kind === 'make' || next.kind === 'step';
@@ -1614,6 +1681,8 @@ async function drainQueue() {
     }
   } finally {
     state.jobBusy = false;
+    state.running = null;
+    renderQueue();
     state.activeSurface = null;
     buttonBusy($('btnExport'), false);
     buttonBusy($('btnMake'), false);
@@ -5234,20 +5303,8 @@ function wire() {
 
   $('btnMake').onclick = () => requestMake();
   $('btnActionPrimary').onclick = () => requestMake($('btnActionPrimary').dataset.mode);
-  $('recordTargetForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!state.slug) return;
-    try {
-      await api(`/api/video/${state.slug}/record-target`, {
-        method: 'PUT',
-        body: { startUrl: $('recordStartUrl').value, loginRequired: $('recordLoginRequired').checked },
-      });
-      await loadVideo(state.slug);
-      toast('Target saved', state.video?.freshness?.needsRecord ? 'Re-record & Render is ready' : 'Start URL saved');
-    } catch (err) {
-      toast('Could not save the start URL', err.message, 'err');
-    }
-  });
+  $('recordStartUrl')?.addEventListener('change', () => saveRecordTarget());
+  $('recordLoginRequired')?.addEventListener('change', () => saveRecordTarget());
   $('btnCleanup')?.addEventListener('click', async () => {
     if (!state.slug) return;
     try {
@@ -5305,8 +5362,29 @@ function wire() {
     }
   });
 
+  $('recordTargetForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveRecordTarget();
+  });
+  $('btnQueueAdd')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = $('queueMenu');
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    $('btnQueueAdd').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+  });
+  document.addEventListener('click', (e) => {
+    const menu = $('queueMenu');
+    if (!menu || menu.hidden) return;
+    if (e.target.closest('#queueMenu') || e.target.closest('#btnQueueAdd')) return;
+    menu.hidden = true;
+    $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
+  });
   document.querySelectorAll('[data-enqueue]').forEach((btn) => {
     btn.onclick = () => {
+      const menu = $('queueMenu');
+      if (menu) menu.hidden = true;
+      $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
       const kind = btn.dataset.enqueue;
       if (kind === 'make-quick') {
         enqueueJob({ kind: 'make', mode: 'quick', label: 'Render sequence' });
