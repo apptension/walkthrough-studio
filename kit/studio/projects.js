@@ -4,6 +4,7 @@
  */
 import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
+import { draftFromDescription } from './shortBrief.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = 5;
@@ -41,6 +42,9 @@ export function initProjects(ctx) {
   }
 
   function showStep(n, { focus = true } = {}) {
+    form.dataset.mode = 'steps';
+    const stepsNav = $('wizardSteps');
+    if (stepsNav) stepsNav.hidden = false;
     step = Math.max(0, Math.min(STEPS - 1, n));
     form.querySelectorAll('fieldset[data-step]').forEach((fs) => (fs.hidden = Number(fs.dataset.step) !== step));
     document.querySelectorAll('#wizardSteps li').forEach((li) => {
@@ -64,6 +68,31 @@ export function initProjects(ctx) {
         .querySelector(`fieldset[data-step="${step}"] input:not([type=radio]):not([type=checkbox]), fieldset[data-step="${step}"] textarea`)
         ?.focus({ preventScroll: true });
     }
+  }
+
+  function showShort() {
+    form.dataset.mode = 'short';
+    form.querySelectorAll('fieldset[data-step]').forEach((fs) => {
+      fs.hidden = fs.dataset.step !== 'short';
+    });
+    const stepsNav = $('wizardSteps');
+    if (stepsNav) stepsNav.hidden = true;
+    $('btnWizardBack').disabled = true;
+    $('btnWizardNext').textContent = 'Draft the video';
+    $('wizardStepMeta').textContent = 'One description';
+    $('wizardProgressBar').style.width = '8%';
+    clearError();
+  }
+
+  function applyDraft(draft) {
+    form.elements.title.value = draft.title;
+    if (draft.audience) form.elements.audience.value = draft.audience;
+    form.elements.startUrl.value = draft.startUrl;
+    form.elements.mustShow.value = draft.chapters.join('\n');
+    const purpose = form.querySelector(`input[name="purpose"][value="${draft.purpose}"]`);
+    if (purpose) purpose.checked = true;
+    const length = form.querySelector(`input[name="lengthSec"][value="${draft.lengthSec}"]`);
+    if (length) length.checked = true;
   }
 
   function syncConditional() {
@@ -360,7 +389,7 @@ export function initProjects(ctx) {
     } catch {
       $('wizardBrand').innerHTML = '<option value="" disabled selected>Could not load brand packs</option>';
     }
-    showStep(0);
+    showShort();
     syncConditional();
     created = null;
     creationStage = null;
@@ -383,6 +412,17 @@ export function initProjects(ctx) {
   }
 
   function next() {
+    if (form.dataset.mode === 'short') {
+      try {
+        const draft = draftFromDescription({ description: val('description'), startUrl: val('shortStartUrl') });
+        if (draft.records) throw new Error('A draft must not record');
+        applyDraft(draft);
+        showStep(0);
+      } catch (err) {
+        showError(err.message, err.field);
+      }
+      return;
+    }
     const err = validate(step);
     if (err) return showError(...err);
     if (step === STEPS - 1) {
@@ -408,6 +448,7 @@ export function initProjects(ctx) {
   form.addEventListener('click', (e) => {
     const go = e.target.closest('[data-goto]');
     if (go) showStep(Number(go.dataset.goto));
+    if (e.target.closest('[data-full-brief]')) showStep(0);
   });
   $('btnWizardBack').onclick = () => {
     if (dialog.classList.contains('is-creating')) {

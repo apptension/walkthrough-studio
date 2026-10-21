@@ -1282,6 +1282,13 @@
       <form id="projectForm" class="sheet-body wizard-body" novalidate>
         <p id="wizardError" class="wf-error" role="alert" hidden></p>
 
+        <fieldset data-step="short">
+          <div class="wz-head"><h3>Describe the video</h3><p>What to show, for whom, and about how long. The draft stays editable. Nothing records until you approve it.</p></div>
+          <label class="wf"><span class="field-label">Description <b>*</b></span><textarea name="description" rows="4" placeholder="Show a new admin how to invite a teammate in about a minute, then the settings that decide who can change it."></textarea></label>
+          <label class="wf"><span class="field-label">Start URL <b>*</b></span><input name="shortStartUrl" type="url" placeholder="https://app.example.com" spellcheck="false" /></label>
+          <button type="button" class="btn ghost" data-full-brief>Fill each field instead</button>
+        </fieldset>
+
         <fieldset data-step="0">
           <div class="wz-head"><h3>What is this video?</h3><p>Audience and outcome steer every line the agent writes.</p></div>
           <label class="wf"><span class="field-label">Video title <b>*</b></span><input name="title" required placeholder="Invite a teammate" autocomplete="off" /></label>
