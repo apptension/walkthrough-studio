@@ -15,6 +15,7 @@ import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, recordFailureAction, recordFailureNote } from './recordFailure.js';
 import { programPreview } from './liveWatch.js';
+import { marksForProgram, pipelineOverlay, programSourceForStep } from './programBuild.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
@@ -774,6 +775,62 @@ function paintSignInWait(wait) {
   if (!wait) return;
   if ($('signInWaitTitle')) $('signInWaitTitle').textContent = wait.title || 'This page is waiting for you';
   if ($('signInWaitNext')) $('signInWaitNext').textContent = wait.next || '';
+}
+
+function paintProgramBuild(overlay) {
+  const box = $('programBuild');
+  if (!box) return;
+  box.hidden = !overlay?.show;
+  box.classList.toggle('is-fail', overlay?.tone === 'fail');
+  if (!overlay?.show) return;
+  if ($('programBuildTitle')) $('programBuildTitle').textContent = overlay.title || '';
+  if ($('programBuildDetail')) $('programBuildDetail').textContent = overlay.detail || '';
+  const shot = $('programBuildShot');
+  const log = $('programBuildLog');
+  if (shot) {
+    shot.hidden = !overlay.screenshot;
+    shot.onclick = () => overlay.screenshot && window.open(overlay.screenshot, '_blank');
+  }
+  if (log) {
+    log.hidden = !overlay.log;
+    log.onclick = () => {
+      if (overlay.log === 'activity') showLeftTab('render');
+      else if (overlay.log) window.open(overlay.log, '_blank');
+    };
+  }
+}
+
+async function publishProgramStep(step, slug) {
+  const v = await api(`/api/video/${encodeURIComponent(slug)}`);
+  if (state.slug && state.slug !== slug) return;
+  const player = $('player');
+  const time = Number(player?.currentTime) || 0;
+  state.video = { ...(state.video || {}), ...v };
+  state.scenes = v.scenes || [];
+  state.chapters = marksForProgram({ chapters: v.chapters, captureMarks: v.captureMarks });
+  renderScenes(state.scenes);
+  renderTimeline(state.chapters, v.durationSec || state.duration || player?.duration || 1);
+  const choice = programSourceForStep({
+    step,
+    hasLive: Boolean(v.liveUrl),
+    liveUrl: v.liveUrl,
+    hasDelivery: Boolean(v.deliveryUrl),
+    deliveryUrl: v.deliveryUrl,
+  });
+  if (!choice.src || !player) return;
+  player.classList.remove('hidden');
+  $('noVideo')?.classList.remove('show');
+  player.src = `${choice.src}${String(choice.src).includes('?') ? '&' : '?'}t=${Date.now()}`;
+  player.onloadedmetadata = () => {
+    if (choice.preserveTime && time > 0.05) {
+      try {
+        player.currentTime = Math.min(time, player.duration || time);
+      } catch {
+        /* the new file can be shorter than the previous playhead */
+      }
+    }
+    if (choice.play) player.play?.().catch(() => {});
+  };
 }
 
 function toast(title, detail = '', kind = 'ok') {
@@ -3864,6 +3921,7 @@ async function loadVideo(slug, { play = false } = {}) {
     state.lastChapter = null;
 
     $('title').textContent = v.title || v.slug;
+    if ($('btnProjectSettings')) $('btnProjectSettings').hidden = false;
     $('subtitle').textContent = v.audience ? String(v.audience).slice(0, 80) : 'Delivery preview';
     $('metaBits').innerHTML = [
       v.durationSec != null ? clockShort(v.durationSec) : null,
@@ -4569,10 +4627,13 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
       if (s.id === 'preview') continue;
       if (sig?.aborted || state.stopRequested) throw new Error('cancelled');
       setStep(s.id, 'run');
+      paintProgramBuild(pipelineOverlay({ running: true, label: s.label }));
       setFaviconMode(s.id === 'record' ? 'record' : s.id === 'deliver' ? 'export' : 'render');
       // Plates are content-hash cached; forcing here would redraw every plate twice per make.
       await runJobPromise(s.id, false, { signal: sig, slug: target });
       setStep(s.id, 'done');
+      await publishProgramStep(s.id, target).catch(() => {});
+      paintProgramBuild(pipelineOverlay({ running: false }));
     }
     setStep('preview', 'run');
     if (target === state.slug) await loadVideo(state.slug, { play: true });
@@ -4601,6 +4662,15 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
   } catch (err) {
     const running = state.pipeline?.find((s) => s.status === 'run');
     if (running) setStep(running.id, 'fail');
+    paintProgramBuild(
+      pipelineOverlay({
+        failed: true,
+        label: running?.label || 'Render',
+        error: err.message,
+        screenshot: state.video?.recordFailure ? `/media/${encodeURIComponent(target)}/error.png` : '',
+        log: 'activity',
+      })
+    );
     setStatus('warn', 'Render failed');
     setFaviconMode('err');
     toast('Render failed', err.message, 'err');
@@ -5917,7 +5987,7 @@ function initStages() {
       }
     },
   });
-  initProjects({
+  const projects = initProjects({
     api,
     toast,
     escapeHtml,
@@ -5926,6 +5996,7 @@ function initStages() {
     followAgentJob: workflow.followAgentJob,
     openScript: workflow.openScript,
   });
+  $('btnProjectSettings')?.addEventListener('click', () => projects.openSettings(state.video));
 }
 
 function agentTip(auth, id) {

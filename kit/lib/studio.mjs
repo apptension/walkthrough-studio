@@ -38,6 +38,8 @@ import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs
 import { lensGeometry } from './lens.mjs';
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { recordFailureView } from './recordFailure.mjs';
+import { nextBrief, revisePlan } from '../studio/briefRevise.js';
+import { applyBriefRevision, saveSourceRevision, storeCredential } from './briefRevise.mjs';
 import { waitFiles } from './signInPause.mjs';
 import { applyCleanup, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
@@ -292,6 +294,15 @@ function freshnessInfo(video) {
   };
 }
 
+function captureMarks(video) {
+  const file = join(video.out, 'timeline.json');
+  const marks = readJsonSafe(file);
+  if (!Array.isArray(marks)) return [];
+  return marks
+    .filter((mark) => mark.kind === 'chapter' || mark.kind === 'caption')
+    .map((mark) => ({ start: Number(mark.t) || 0, title: mark.label || '', kind: mark.kind }));
+}
+
 function videoSummary(slug) {
   const video = loadVideo(slug);
   const brandState = brandReadiness(video.config.brand);
@@ -385,6 +396,8 @@ function videoSummary(slug) {
     freshness,
     recordFailure,
     previewUrl: existsSync(join(video.out, 'live-preview.jpg')) ? `/media/${slug}/live-preview.jpg` : null,
+    liveUrl: existsSync(join(video.out, 'live.mp4')) ? `/media/${slug}/live.mp4` : null,
+    captureMarks: captureMarks(video),
     signInWait: existsSync(waitFiles(video.out).wait) ? readJsonSafe(waitFiles(video.out).wait) : null,
     durationSec: meta?.durationSec || null,
     sizeMB: meta?.sizeMB || null,
@@ -1409,6 +1422,18 @@ async function handleApi(req, res, url) {
     } catch (err) {
       return json(res, 400, { error: err.message || String(err) });
     }
+  }
+
+  if (rest === '/brief' && req.method === 'POST') {
+    const body = await readBody(req);
+    const current = readJsonSafe(join(video.dir, 'brief.json')) || {};
+    const plan = revisePlan(current, body);
+    if (!plan.changed.length) return json(res, 200, { ok: true, plan, revision: null });
+    const secrets = [body.app?.password].filter((value) => value && String(value).length >= 4);
+    const revision = saveSourceRevision(video, { secrets });
+    const written = applyBriefRevision(video, nextBrief(current, body), { secrets });
+    const stored = storeCredential(video, { email: body.app?.email, password: body.app?.password });
+    return json(res, 200, { ok: true, plan, revision: revision.id, brief: written, stored: stored.includes(`${video.slug.replace(/-/g, '_').toUpperCase()}_PASSWORD`) ? ['password'] : [] });
   }
 
   if (rest === '/script/approve' && req.method === 'POST') {

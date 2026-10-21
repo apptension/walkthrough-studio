@@ -5,6 +5,8 @@
  *   node cli.mjs list                      videos and their outputs
  *   node cli.mjs discover-brand --name X --url https://… [--app-url https://…] [--force]
  *                                          harvest official logo + draft brand pack + motion-brief.md
+ *   node cli.mjs brief <slug> [--audience "…"] [--outcome "…"] [--purpose …] [--url https://…]
+ *                                          show the brief, or save a revision and print what must rerun
  *   node cli.mjs new <slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]
  *                                          [--description "…"] [--url https://…]
  *                                          scaffold videos/<slug>/. A description and URL draft
@@ -129,6 +131,38 @@ async function main() {
       console.log(`  logo candidates: ${res.report.logos.length} · saved ${res.saved.length} asset(s)`);
       console.log(`  review logo.html + motion-brief.md before plates`);
       if (res.report.warning) console.log(`  ⚠ ${res.report.warning}`);
+      return;
+    }
+    case 'brief': {
+      if (!slug) throw new Error('Usage: brief <slug> [--audience "…"] [--outcome "…"] [--purpose …] [--url https://…]');
+      const video = loadVideo(slug);
+      const { readFileSync: readText, existsSync: exists } = await import('node:fs');
+      const briefPath = join(video.dir, 'brief.json');
+      const current = exists(briefPath) ? JSON.parse(readText(briefPath, 'utf8')) : {};
+      const patch = {};
+      if (opt('--audience')) patch.audience = opt('--audience');
+      if (opt('--outcome')) patch.outcome = opt('--outcome');
+      if (opt('--purpose')) patch.purpose = opt('--purpose');
+      if (opt('--url')) patch.app = { ...(current.app || {}), startUrl: opt('--url') };
+      if (!Object.keys(patch).length) {
+        console.log(JSON.stringify({ title: current.title, audience: current.audience, purpose: current.purpose, startUrl: current.app?.startUrl }, null, 2));
+        return;
+      }
+      const { revisePlan, nextBrief } = await import('./studio/briefRevise.js');
+      const { applyBriefRevision, saveSourceRevision } = await import('./lib/briefRevise.mjs');
+      const plan = revisePlan(current, { ...current, ...patch, app: patch.app || current.app, story: current.story });
+      if (!plan.changed.length) {
+        console.log('No brief changes.');
+        return;
+      }
+      const revision = saveSourceRevision(video);
+      applyBriefRevision(video, nextBrief(current, { ...current, ...patch, app: patch.app || current.app, story: current.story, brand: current.brand, proof: current.proof }));
+      console.log(`✓ revision ${revision.id}`);
+      console.log(`  changed: ${plan.changed.map((item) => item.label).join(', ')}`);
+      console.log(`  rerun: ${plan.stages.join(', ') || 'none'}`);
+      if (plan.needsRecord) console.log('  footage: re-record before the next render');
+      if (plan.stages.includes('planner')) console.log(`  next: node cli.mjs studio ${slug}  (or re-draft from Project settings)`);
+      if (plan.stages.includes('analyze')) console.log(`  next: node cli.mjs analyze ${slug}`);
       return;
     }
     case 'new': {

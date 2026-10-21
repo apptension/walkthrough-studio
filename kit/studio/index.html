@@ -41,6 +41,7 @@
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         New video
       </button>
+      <button type="button" id="btnProjectSettings" class="btn compact" title="Edit the brief and replan" hidden>Project settings</button>
       <button type="button" id="btnBranch" class="btn compact icon-text" title="Branch focused feature videos from this overview">
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.5 10.5 15M15.8 7.5 13.5 15"/></svg>
         Branch
@@ -289,6 +290,14 @@
               </figcaption>
               <button type="button" id="recordFailureFix" class="btn primary">Fix with AI</button>
             </figure>
+            <div id="programBuild" class="program-build" hidden>
+              <strong id="programBuildTitle"></strong>
+              <p id="programBuildDetail"></p>
+              <div class="program-build-actions">
+                <button type="button" id="programBuildShot" class="btn" hidden>Open screenshot</button>
+                <button type="button" id="programBuildLog" class="btn" hidden>Open log</button>
+              </div>
+            </div>
             <div id="playerSingle" class="player-mode">
               <video id="player" playsinline preload="metadata"></video>
             </div>
@@ -1220,7 +1229,7 @@
         <div class="sheet-actions script-foot-actions">
           <span id="scriptApprovedMeta" class="meta"></span>
           <span class="kbd-hint"><kbd>⌘</kbd><kbd>↵</kbd> saves line</span>
-          <button type="button" id="btnScriptApprove" class="btn primary">Approve script</button>
+          <button type="button" id="btnScriptApprove" class="btn primary">Approve and close</button>
         </div>
       </footer>
     </dialog>

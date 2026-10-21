@@ -26,9 +26,9 @@ export function isSelectorTimeout(err) {
 }
 
 /** Repair runs only for a stall report. A selector retry is handled inside the take. */
-export function usesStallRepair({ stall, selectorRetry } = {}) {
+export function usesStallRepair({ stall, selectorRetry, overlay } = {}) {
   if (selectorRetry) return false;
-  return Boolean(stall);
+  return Boolean(stall || overlay);
 }
 
 function words(value) {

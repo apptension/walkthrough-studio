@@ -10,6 +10,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
+import { readOverlayReport } from './overlayRetry.mjs';
 import { usesStallRepair } from './selectorRetry.mjs';
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
@@ -898,15 +899,19 @@ function startRecordWithRepair(video, extraArgs = []) {
     }
 
     const stall = readStallReport(video);
-    if (!usesStallRepair({ stall, selectorRetry: false })) {
+    const overlay = readOverlayReport(video);
+    if (overlay) {
+      append(job, `» revalidate · ${overlay.summary}`, { activity: overlay.summary, kind: 'system' });
+    }
+    if (!usesStallRepair({ stall, overlay: Boolean(overlay), selectorRetry: false })) {
       job.exitCode = first.code;
       finish(false, `record failed (exit ${first.code})`);
       return;
     }
 
-    job.repair.stalled = true;
+    job.repair.stalled = Boolean(stall);
     job.stall = stall;
-    append(job, `✗ stall · ${stall.summary}`, { activity: stall.summary, kind: 'error' });
+    if (stall) append(job, `✗ stall · ${stall.summary}`, { activity: stall.summary, kind: 'error' });
 
     if (!agentIsReady()) {
       job.exitCode = first.code;
@@ -924,7 +929,7 @@ function startRecordWithRepair(video, extraArgs = []) {
       kind: 'system',
     });
 
-    const note = formatStallNote(stall);
+    const note = stall ? formatStallNote(stall) : overlay?.detail || overlay?.summary || 'A dialog covered the click target.';
     const improve = startImprove(video, 'capture-repair', { note, force: true });
     job.repairJobId = improve.id;
     // Mirror improve lines into this job so Studio’s single progress card stays useful.

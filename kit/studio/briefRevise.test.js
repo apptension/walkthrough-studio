@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { maskCredentials, nextBrief, revisePlan, scrubSecrets } from './briefRevise.js';
+import { applyBriefRevision, saveSourceRevision } from '../lib/briefRevise.mjs';
+
+const before = {
+  title: 'Invite',
+  audience: 'Admins',
+  purpose: 'overview',
+  lengthSec: 120,
+  brand: { id: 'admiral', mode: 'existing' },
+  app: { startUrl: 'https://app.example/home', loginRequired: false, password: 'old-secret' },
+  story: { mustShow: ['Home'], keyMessages: [], mustSay: [], avoid: [] },
+  proof: { plates: ['features'], stats: [], quotes: [], logos: [] },
+};
+
+test('project settings masks credentials and a story change does not rediscover the brand', () => {
+  const masked = maskCredentials(before);
+  assert.equal(masked.app.password, '');
+  const story = revisePlan(before, { ...before, audience: 'New admins', app: { ...before.app, password: '' } });
+  assert.deepEqual(story.stages, ['planner']);
+  assert.equal(story.needsRecord, false);
+  assert.equal(story.changed.some((item) => item.field === 'password'), false);
+});
+
+test('access changes re-record and brand changes discover, without writing the password into the revision', () => {
+  const access = revisePlan(before, { ...before, app: { ...before.app, startUrl: 'https://app.example/team', password: '' } });
+  assert.ok(access.stages.includes('analyze'));
+  assert.equal(access.stages.includes('discover'), false);
+  assert.equal(access.needsRecord, true);
+  const brand = revisePlan(before, { ...before, brand: { id: 'acme' }, app: { ...before.app, password: '' } });
+  assert.deepEqual(brand.stages, ['discover']);
+
+  const dir = mkdtempSync(join(tmpdir(), 'ws-brief-'));
+  const video = { dir, slug: 'invite-admin', out: dir };
+  writeFileSync(join(dir, 'brief.json'), JSON.stringify({ ...before, app: { ...before.app, password: 's3cret-value' } }));
+  writeFileSync(join(dir, 'video.config.json'), JSON.stringify({ title: 'Invite', record: { startUrl: before.app.startUrl } }));
+  const revision = saveSourceRevision(video, { secrets: ['s3cret-value'] });
+  const copied = readFileSync(join(revision.dir, 'brief.json'), 'utf8');
+  assert.equal(copied.includes('s3cret-value'), false);
+  const written = applyBriefRevision(video, nextBrief(before, { ...before, audience: 'New admins', app: { ...before.app, password: 's3cret-value' } }), {
+    secrets: ['s3cret-value'],
+  });
+  assert.equal(JSON.stringify(written).includes('s3cret-value'), false);
+  assert.equal(scrubSecrets('keep s3cret-value out', ['s3cret-value']).includes('s3cret-value'), false);
+  rmSync(dir, { recursive: true, force: true });
+});

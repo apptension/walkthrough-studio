@@ -418,6 +418,14 @@ body {
   border-top-color: #fff;
   animation: spin .65s linear infinite;
 }
+.btn.primary.busy::after,
+.btn.primary.busy:hover::after,
+.render-cta.primary.busy::after,
+.render-cta.primary.busy:hover::after {
+  border-color: color-mix(in srgb, var(--on-accent) 28%, transparent);
+  border-top-color: var(--on-accent);
+}
+.render-cta.primary.busy { opacity: 1; }
 select:focus-visible,
 textarea:focus-visible,
 .btn:focus-visible,
@@ -1886,6 +1894,25 @@ body.is-editor .monitor-head {
   min-width: 44px;
   min-height: 44px;
 }
+.program-build {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(10, 10, 10, 0.88);
+  color: #fff;
+}
+.program-build[hidden] { display: none; }
+.program-build.is-fail { outline: 1px solid var(--warn); }
+.program-build strong { font-size: 14px; }
+.program-build p { margin: 0; color: rgba(255,255,255,0.78); font-size: 13px; }
+.program-build-actions { display: flex; gap: 8px; }
+.program-build-actions .btn { min-width: 44px; min-height: 44px; }
 .record-failure figcaption {
   display: grid;
   gap: 4px;

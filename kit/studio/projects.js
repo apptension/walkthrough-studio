@@ -5,6 +5,7 @@
 import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
 import { draftFromDescription } from './shortBrief.js';
+import { maskCredentials, revisePlan } from './briefRevise.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = 5;
@@ -15,6 +16,7 @@ export function initProjects(ctx) {
   const dialog = $('projectDialog');
   const creation = createCreationView({ dialog, escapeHtml });
   let step = 0;
+  let settingsBrief = null;
   let created = null;
   let creationStage = null;
   let creating = false;
@@ -42,7 +44,7 @@ export function initProjects(ctx) {
   }
 
   function showStep(n, { focus = true } = {}) {
-    form.dataset.mode = 'steps';
+    if (form.dataset.mode !== 'settings') form.dataset.mode = 'steps';
     const stepsNav = $('wizardSteps');
     if (stepsNav) stepsNav.hidden = false;
     step = Math.max(0, Math.min(STEPS - 1, n));
@@ -57,7 +59,9 @@ export function initProjects(ctx) {
     });
     $('btnWizardBack').disabled = step === 0;
     $('btnWizardBack').lastChild.textContent = 'Back';
-    $('btnWizardNext').textContent = step === STEPS - 1 ? (checked('runDraft') ? 'Create & draft' : 'Create project') : 'Continue';
+    const settings = form.dataset.mode === 'settings';
+    $('btnWizardNext').textContent =
+      step === STEPS - 1 ? (settings ? 'Save and replan' : checked('runDraft') ? 'Create & draft' : 'Create project') : 'Continue';
     $('wizardStepMeta').textContent = `Step ${step + 1} of ${STEPS}`;
     $('wizardProgressBar').style.width = `${((step + 1) / STEPS) * 100}%`;
     clearError();
@@ -218,6 +222,18 @@ export function initProjects(ctx) {
         rows: [['Plates', p.proof.plates.map((x) => x[0].toUpperCase() + x.slice(1)).join(', ') || 'None — open and close only']],
       },
     ];
+    if (form.dataset.mode === 'settings' && settingsBrief) {
+      const plan = revisePlan(settingsBrief, p);
+      groups.push({
+        title: 'This save',
+        step: 4,
+        rows: [
+          ['Changed', plan.changed.map((item) => item.label).join(', ') || 'Nothing'],
+          ['Rerun', plan.stages.join(', ') || 'None'],
+          ['Footage', plan.needsRecord ? 'Re-record before the next render' : 'Keep the current take'],
+        ],
+      });
+    }
     $('wizardSummary').innerHTML = groups
       .map(
         (g) => `<section class="ws-group">
@@ -374,11 +390,111 @@ export function initProjects(ctx) {
     }
   };
 
+  function fillFromBrief(brief, slug) {
+    const masked = maskCredentials(brief || {});
+    const set = (name, value) => {
+      const el = form.elements[name];
+      if (el && value != null) el.value = value;
+    };
+    set('title', masked.title || '');
+    set('product', masked.product || '');
+    set('audience', masked.audience || '');
+    set('outcome', masked.outcome || '');
+    set('tone', masked.tone || '');
+    set('slug', slug);
+    if (form.elements.slug) form.elements.slug.disabled = true;
+    const purpose = form.querySelector(`input[name="purpose"][value="${masked.purpose || 'overview'}"]`);
+    if (purpose) purpose.checked = true;
+    const length = form.querySelector(`input[name="lengthSec"][value="${masked.lengthSec || 120}"]`);
+    if (length) length.checked = true;
+    set('startUrl', masked.app?.startUrl || '');
+    set('appUrl', masked.app?.appUrl || '');
+    set('marketingUrl', masked.app?.marketingUrl || '');
+    set('sourcePath', masked.app?.sourcePath || '');
+    set('notes', masked.app?.notes || '');
+    set('email', masked.app?.email || '');
+    if (form.elements.password) form.elements.password.value = '';
+    const login = form.querySelector('input[name="loginRequired"]');
+    if (login) login.checked = Boolean(masked.app?.loginRequired);
+    set('mustShow', (masked.story?.mustShow || []).join('\n'));
+    set('keyMessages', (masked.story?.keyMessages || []).join('\n'));
+    set('mustSay', (masked.story?.mustSay || []).join('\n'));
+    set('avoid', (masked.story?.avoid || []).join('\n'));
+    set('stats', (masked.proof?.stats || []).join('\n'));
+    set('quotes', (masked.proof?.quotes || []).join('\n'));
+    set('logos', (masked.proof?.logos || []).join('\n'));
+    form.querySelectorAll('input[name="plates"]').forEach((input) => {
+      input.checked = (masked.proof?.plates || []).includes(input.value);
+    });
+    if (masked.brand?.id && form.elements.brandId) form.elements.brandId.value = masked.brand.id;
+    const existing = form.querySelector('input[name="brandMode"][value="existing"]');
+    if (existing) existing.checked = true;
+    syncConditional();
+  }
+
+  async function saveSettings() {
+    const btn = $('btnWizardNext');
+    try {
+      const plan = revisePlan(settingsBrief, payload());
+      if (!plan.changed.length) {
+        toast('No brief changes', 'Nothing to replan');
+        return;
+      }
+      const slug = form.elements.slug.value;
+      const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: payload() });
+      const stages = saved.plan?.stages || [];
+      toast('Brief saved', `${plan.changed.map((item) => item.label).join(', ')}. ${stages.join(', ') || 'No preparation to rerun.'}`, 'ok');
+      if (stages.includes('discover')) {
+        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: { step: 'discover' } });
+        if (job.job?.id) await follow(job.job.id);
+      }
+      if (stages.includes('analyze')) {
+        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
+        if (job.job?.id) await follow(job.job.id);
+      }
+      if (stages.includes('planner')) {
+        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: {} });
+        if (job.job?.id && job.job.status !== 'needs-agent') await follow(job.job.id);
+      }
+      if (dialog.open) dialog.close();
+      if (form.elements.slug) form.elements.slug.disabled = false;
+      $('projectDialogTitle').textContent = 'New video';
+      await openVideo(slug);
+      openScript();
+    } catch (err) {
+      toast('Could not save the brief', err.message, 'err');
+    } finally {
+      btn.classList.remove('busy');
+      btn.disabled = false;
+    }
+  }
+
+  async function openSettings(video) {
+    if (!video?.slug) return;
+    try {
+      const { brands } = await api('/api/brands');
+      $('wizardBrand').innerHTML = brands.length
+        ? brands.map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.name)}</option>`).join('')
+        : '<option value="" disabled>No brand packs yet</option>';
+    } catch {
+      /* keep the current options */
+    }
+    settingsBrief = maskCredentials(video.brief || { title: video.title, audience: video.audience, app: { startUrl: video.freshness?.startUrl || '' } });
+    form.dataset.mode = 'settings';
+    fillFromBrief(settingsBrief, video.slug);
+    $('projectDialogTitle').textContent = 'Project settings';
+    showStep(0);
+    dialog.showModal();
+  }
+
   async function open() {
     if (creating || dialog.classList.contains('is-creating')) {
       dialog.showModal();
       return;
     }
+    if (form.elements.slug) form.elements.slug.disabled = false;
+    $('projectDialogTitle').textContent = 'New video';
+    settingsBrief = null;
     try {
       const { brands } = await api('/api/brands');
       $('wizardBrand').innerHTML = brands.length
@@ -427,7 +543,8 @@ export function initProjects(ctx) {
     if (err) return showError(...err);
     if (step === STEPS - 1) {
       $('btnWizardNext').classList.add('busy');
-      create();
+      if (form.dataset.mode === 'settings') saveSettings();
+      else create();
     } else showStep(step + 1);
   }
 
@@ -464,5 +581,5 @@ export function initProjects(ctx) {
   });
   $('btnNewVideo').onclick = open;
 
-  return { open };
+  return { open, openSettings };
 }

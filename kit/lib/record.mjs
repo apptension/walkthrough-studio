@@ -22,6 +22,7 @@ import {
 import { createMail } from './mail.mjs';
 import { openStartUrl, startUrlCandidates } from './startUrl.mjs';
 import { installRecordedSelectorRetry } from './selectorRetry.mjs';
+import { clearOverlayReport, installOverlayRetry, writeOverlayReport } from './overlayRetry.mjs';
 import { describeRecordFailure } from '../studio/recordFailure.js';
 import {
   contextUsesSession,
@@ -148,6 +149,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   await installBrandFonts(context, brand);
   page = await context.newPage();
   page.setDefaultTimeout(30000);
+  installOverlayRetry(page);
   installRecordedSelectorRetry(page, video);
   const recorder = startFrameRecorder(outPath, viewport);
   const focusTreatment = brand.direction?.focus || 'guided';
@@ -541,6 +543,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
 
     console.log('» capture · Driving the walkthrough');
     clearStallReport(video);
+    clearOverlayReport(video);
     startedAt = Date.now();
     recorder.begin(startedAt);
     let lastPreviewAt = 0;
@@ -660,6 +663,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
       ? `${stallReport.summary}\n\n${(stallReport.hints || []).map((h) => `• ${h}`).join('\n')}\n\n${err.stack || err}`
       : String(err?.stack || err);
     writeFileSync(join(out, 'error.txt'), text);
+    if (err?.overlayRetry) writeOverlayReport(video, err);
     const described = describeRecordFailure(`${err?.message || ''}\n${err?.stack || ''}`);
     console.error(`✗ ${described.reason}`);
     if (described.url) console.error(`  ${described.url}`);
