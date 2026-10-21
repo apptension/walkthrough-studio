@@ -509,6 +509,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
         timeline,
         overlays: { mode: overlaysMode, pipeline: 1 },
         capture: { ...capture, method: 'screencast JPEG q100, timestamp-placed, lossless x264' },
+        startUrl,
+        loginRequired: Boolean(config.record?.loginRequired ?? config.env?.email),
         createdAt: new Date().toISOString(),
       };
       writeFileSync(join(out, 'live-meta.json'), JSON.stringify(meta, null, 2));

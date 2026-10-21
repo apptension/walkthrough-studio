@@ -1178,6 +1178,15 @@ function renderActionCard(v) {
     return;
   }
 
+  const target = $('recordTargetForm');
+  if (target && v?.freshness) {
+    target.hidden = !v.freshness.liveAt && !v.freshness.startUrl;
+    const url = $('recordStartUrl');
+    const login = $('recordLoginRequired');
+    if (url && document.activeElement !== url) url.value = v.freshness.startUrl || '';
+    if (login && document.activeElement !== login) login.checked = Boolean(v.freshness.loginRequired);
+  }
+
   if (!action.title) {
     pill.className = 'render-pill ok';
     pill.textContent = 'Up to date';
@@ -5053,6 +5062,20 @@ function wire() {
 
   $('btnMake').onclick = () => requestMake();
   $('btnActionPrimary').onclick = () => requestMake($('btnActionPrimary').dataset.mode);
+  $('recordTargetForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.slug) return;
+    try {
+      await api(`/api/video/${state.slug}/record-target`, {
+        method: 'PUT',
+        body: { startUrl: $('recordStartUrl').value, loginRequired: $('recordLoginRequired').checked },
+      });
+      await loadVideo(state.slug);
+      toast('Target saved', state.video?.freshness?.needsRecord ? 'Re-record & Render is ready' : 'Start URL saved');
+    } catch (err) {
+      toast('Could not save the start URL', err.message, 'err');
+    }
+  });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);
   $('btnExport').onclick = () => exportPack();
   $('btnSetPoster')?.addEventListener('click', () => setPosterFromCurrentFrame());

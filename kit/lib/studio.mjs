@@ -33,6 +33,7 @@ import { loadNarrationLines, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
 import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs';
 import { lensGeometry } from './lens.mjs';
+import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
 import {
@@ -237,14 +238,29 @@ function freshnessInfo(video) {
   const newest = sources.slice().sort((a, b) => b.mtime - a.mtime)[0];
 
   const plateHealth = plateRenderHealth(video);
-  const needsRecord = Boolean(liveAt && flowAt && flowAt > liveAt + 1500);
+  const liveMeta = readJsonSafe(join(video.out, 'live-meta.json')) || {};
+  const startUrl = video.config.record?.startUrl || '';
+  const loginRequired = typeof video.config.record?.loginRequired === 'boolean' ? video.config.record.loginRequired : Boolean(video.config.env?.email);
+  const recordedUrl = liveMeta.startUrl || '';
+  const recordedLogin = liveMeta.loginRequired == null ? null : Boolean(liveMeta.loginRequired);
+  const flowNewer = Boolean(liveAt && flowAt && flowAt > liveAt + 1500);
+  const urlChanged = Boolean(recordedUrl && startUrl && recordedUrl !== startUrl);
+  const loginChanged = recordedLogin != null && recordedLogin !== loginRequired;
+  const needsRecord = recordNeedsRerecord({
+    hasLive: Boolean(liveAt),
+    flowNewer,
+    recordedUrl,
+    startUrl,
+    recordedLogin,
+    loginRequired,
+  });
   const staleSources = Boolean(deliveryAt && sourceAt && sourceAt > deliveryAt + 1500);
   const stale = staleSources || plateHealth.bad;
   const fresh = Boolean(deliveryAt) && !stale && !needsRecord;
 
   let reason = 'Delivery matches current sources';
   if (!deliveryAt) reason = 'No delivery master yet — run produce';
-  else if (needsRecord) reason = `flow.mjs is newer than live.mp4 — re-record before produce`;
+  else if (needsRecord) reason = recordRerecordReason({ flowNewer, urlChanged, loginChanged });
   else if (plateHealth.bad) {
     reason = `Plate render QC: ${plateHealth.issues.slice(0, 2).join('; ')} — re-render plates`;
   } else if (staleSources) reason = `${newest?.key || 'sources'} newer than delivery — rebuild to preview`;
@@ -253,6 +269,8 @@ function freshnessInfo(video) {
     fresh,
     stale,
     needsRecord,
+    startUrl,
+    loginRequired,
     plateHealth,
     reason,
     sourceAt: sourceAt || null,
@@ -1399,6 +1417,27 @@ async function handleApi(req, res, url) {
     }
     setCutReview(video, { status: body.status, version, note: body.note, by: body.by });
     return json(res, 200, { ok: true, review: reviewSummary(video), versions: listVersions(video) });
+  }
+
+  if (rest === '/record-target' && req.method === 'PUT') {
+    const body = await readBody(req);
+    const startUrl = String(body.startUrl || '').trim();
+    if (!/^https?:\/\//i.test(startUrl)) return json(res, 400, { error: 'Start URL must be a full http(s) URL.' });
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const previousUrl = current.record?.startUrl || '';
+    const previousLogin = typeof current.record?.loginRequired === 'boolean' ? current.record.loginRequired : Boolean(current.env?.email);
+    const loginRequired = Boolean(body.loginRequired);
+    const metaPath = join(video.out, 'live-meta.json');
+    const meta = readJsonSafe(metaPath) || {};
+    if (existsSync(join(video.out, 'live.mp4')) && !meta.startUrl && previousUrl) {
+      meta.startUrl = previousUrl;
+      meta.loginRequired = previousLogin;
+      writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+    }
+    const record = { ...(current.record || {}), startUrl, loginRequired };
+    writeFileSync(pathCfg, JSON.stringify({ ...current, record }, null, 2) + '\n');
+    return json(res, 200, { ok: true, freshness: freshnessInfo(loadVideo(video.slug)) });
   }
 
   if (rest === '/transitions' && req.method === 'GET') {
