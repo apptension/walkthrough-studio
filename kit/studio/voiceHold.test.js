@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import {
   deliveryMuxFlags,
@@ -76,4 +79,51 @@ test('outro copy is read from a narration module', () => {
   const source = "export default { intro: 'Hello', outro: 'See you next week team' };";
   assert.equal(outroFromNarrationSource(source), 'See you next week team');
   assert.equal(narrationSeconds('one two three'), 3 / 2.4);
+});
+
+test('a long close line produces a master at least as long as that line', () => {
+  const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  const ffprobe = spawnSync('ffprobe', ['-version'], { encoding: 'utf8' });
+  if (ffmpeg.status !== 0 || ffprobe.status !== 0) return;
+
+  const dir = mkdtempSync(join(tmpdir(), 'voice-hold-'));
+  const picture = join(dir, 'picture.mp4');
+  const voice = join(dir, 'voice.m4a');
+  const master = join(dir, 'master.mp4');
+  const lineSec = 3;
+  try {
+    const madePicture = spawnSync(
+      'ffmpeg',
+      ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=320x180:d=1', '-c:v', 'libx264', picture],
+      { encoding: 'utf8' }
+    );
+    const madeVoice = spawnSync(
+      'ffmpeg',
+      ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `sine=f=440:d=${lineSec}`, '-c:a', 'aac', voice],
+      { encoding: 'utf8' }
+    );
+    assert.equal(madePicture.status, 0, madePicture.stderr);
+    assert.equal(madeVoice.status, 0, madeVoice.stderr);
+    const muxed = spawnSync(
+      'ffmpeg',
+      [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-i', picture, '-i', voice,
+        '-map', '0:v', '-map', '1:a',
+        ...deliveryMuxFlags(),
+        master,
+      ],
+      { encoding: 'utf8' }
+    );
+    assert.equal(muxed.status, 0, muxed.stderr);
+    const probed = spawnSync(
+      'ffprobe',
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', master],
+      { encoding: 'utf8' }
+    );
+    assert.equal(probed.status, 0, probed.stderr);
+    assert.ok(Number(probed.stdout) >= lineSec - 0.05, `master ${probed.stdout.trim()}s is shorter than the ${lineSec}s line`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
