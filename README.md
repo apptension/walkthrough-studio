@@ -176,7 +176,7 @@ One recording, every channel. The handoff pack includes the master, poster, capt
 Everything Studio does is a CLI command. Run from `kit/`:
 
 ```bash
-node cli.mjs discover-brand --name Acme --url https://acme.com   # brand pack from the live site
+node cli.mjs discover-brand --name Acme --url https://acme.com   # harvest site → agent authors brand pack
 node cli.mjs new billing --title "Billing" --purpose launch      # scaffold videos/billing/
 node cli.mjs all billing                                         # record → produce → audio → validate
 node cli.mjs deliver billing                                     # poster, SRT/VTT, chapters, QC, handoff pack

@@ -16,10 +16,11 @@ import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.m
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { promptLanguageLine } from './languages.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
-import { OUT_ROOT, SKILL, listBrands, upsertDotEnv } from './project.mjs';
+import { OUT_ROOT, SKILL, brandReadiness, listBrands, upsertDotEnv } from './project.mjs';
 import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
 import { describeJob } from '../studio/progress.js';
+import { DEFAULT_BRAND_AUDIO, harvestBrandFromUrls, slugifyBrand } from './discoverBrand.mjs';
 
 const JOBS = new Map();
 
@@ -83,7 +84,7 @@ const RUNNERS = {
       '--permission-mode',
       opts.force ? 'bypassPermissions' : 'acceptEdits',
       '--allowedTools',
-      'Read Edit Write Glob Grep Bash(node:*) Bash(ffprobe:*)',
+      'Read Edit Write Glob Grep Bash(node:*) Bash(ffprobe:*) Bash(curl:*) Bash(mkdir:*)',
     ],
   }),
 };
@@ -838,6 +839,170 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
 
 /** How long the one-description brief may take before Studio gives up and falls back. */
 const BRIEF_DRAFT_TIMEOUT_MS = Number(process.env.WALKTHROUGH_BRIEF_TIMEOUT_MS) || 4 * 60 * 1000;
+/** Brand authorship after harvest — enough time to read candidates and write the pack. */
+const DISCOVER_BRAND_TIMEOUT_MS = Number(process.env.WALKTHROUGH_DISCOVER_TIMEOUT_MS) || 6 * 60 * 1000;
+
+/**
+ * Prompt for the agent that authors a brand pack from a harvest report + candidate files.
+ * Code only collected evidence; the agent chooses the official lockup, palette, and type.
+ */
+export function discoverBrandPrompt({ brandDir, name, audience = '', reportPath, workspace }) {
+  const rel = (p) => p.replace(workspace + '/', '').replace(workspace, '.');
+  const brandJson = join(brandDir, 'brand.json');
+  const logoHtml = join(brandDir, 'logo.html');
+  const logoSource = join(brandDir, 'logo-source.svg');
+  const motionBrief = join(brandDir, 'motion-brief.md');
+  const candidates = join(brandDir, 'candidates');
+  const exampleAudio = JSON.stringify(DEFAULT_BRAND_AUDIO, null, 2);
+  return `You are authoring the official brand pack for "${name}" in Walkthrough Studio.
+
+A headless harvest already ran. It did NOT choose the logo or palette — that is your job.
+
+Read first:
+1. ${rel(reportPath)} — pages (title, h1, sub), color samples, font hints, and every media candidate
+2. Files under ${rel(candidates)}/ — downloaded SVGs/PNGs/ICOs (and inline SVGs) from the live site/app
+
+Write ONLY into ${rel(brandDir)}/:
+1. ${rel(logoSource)} — the official lockup bytes (prefer SVG). Copy from the best candidate file, or curl the official URL from the report if a better mark is linked but was not saved.
+2. ${rel(logoHtml)} — plate-ready markup:
+   - Prefer inline SVG with class="logo-svg" role="img" (add the class on the root <svg>) when the lockup is vector
+   - Or <img class="logo-img" alt="${name}" src="data:…;base64,…"> for raster
+   - First line comment: <!-- Sourced: <url or candidate path> -->
+   - NEVER invent a homemade wordmark when a real mark exists in candidates/ or on the site
+   - NEVER use partner/integration logos (Slack, Zapier, Podio, Sage, client walls, etc.) as the brand lockup
+   - Prefer header/nav lockups and brand-named SVGs over favicons / apple-touch icons
+   - For dark plates, a white/light lockup is ideal when the brand ships one
+3. ${rel(brandJson)} — complete pack. Required shape:
+{
+  "name": "${name}",
+  "platform": "<short product promise from h1 or site>",
+  "font": { "family": "<primary UI/marketing face>", "css": "<google/bunny fonts URL or data:text/css,>" },
+  "colors": {
+    "ink": "#………", "surface": "#………", "gold": "#………", "amber": "#………", "teal": "#………",
+    "text": "#f8fafc", "muted": "#………", "onAccent": "#………"
+  },
+  "logo": "logo.html",
+  "motionBrief": "motion-brief.md",
+  "placeholder": false,
+  "discovery": {
+    "status": "ready",
+    "harvestedAt": "<from report>",
+    "logoSource": "<https URL or candidates/… path you used>",
+    "paletteSource": "<marketing URL>",
+    "fontSource": "<css URL or note>"
+  },
+  "sources": { "marketing": "<url>", "app": "<url or null>", "logoSvg": "logo-source.svg", "logoNote": "<one line>" },
+  "audio": <copy the default audio object from the harvest stub brand.json unless the brand clearly needs a different voice>,
+  "motion": { "energy": "clear", "atmosphere": "<none|schedule|aurora|mesh|particles|grid|waves matching the product>" }
+}
+Default audio template (use unless you have a better brand-fit voice):
+${exampleAudio}
+
+Rules for colors: plates are dark. Pick ink/surface as dark neutrals tinted by the brand; gold = primary accent from CTAs/brand samples (not washed-out grey); amber = a related gradient end; teal may stay a cool support if the brand has no better third. onAccent = readable text on gold.
+4. ${rel(motionBrief)} — living motion brief: audience${audience ? ` (hint: ${audience})` : ''}, product promise from the harvest, voice/tone, visual system table with the tokens you chose, plate palette guidance, motion language, audio bed, sources. Facts only — never invent metrics or client logos.
+
+When you are done, brandReadiness must pass: placeholder false, logo.html present, all of ink/surface/gold/amber/teal as #RRGGBB, font.family + font.css set, discovery.status "ready", and motion-brief.md must exist.
+
+Do not edit videos/, kit/templates, or other brand packs. Do not record or render.`;
+}
+
+/**
+ * Harvest the live site/app, then run the agent to author the brand pack.
+ * Returns a Studio job (kind discover-brand). Used by Studio draft-project and the CLI.
+ */
+export function startDiscoverBrand(video, opts = {}) {
+  const name = String(opts.name || video?.config?.brand || '').trim();
+  const url = String(opts.url || '').trim();
+  const appUrl = opts.appUrl ? String(opts.appUrl).trim() : '';
+  const audience = opts.audience ? String(opts.audience).trim() : '';
+  const force = Boolean(opts.force);
+  if (!name || !url) throw new Error('discover-brand requires name and url');
+
+  const slug = video?.slug || slugifyBrand(name);
+  const job = newJob({
+    kind: 'discover-brand',
+    goal: 'discover-brand',
+    step: 'discover-brand',
+    slug,
+    brandSlug: slugifyBrand(name),
+  });
+  const outDir = video?.out ? join(video.out, 'studio-jobs') : join(OUT_ROOT, 'discover-brand', job.id);
+  mkdirSync(outDir, { recursive: true });
+
+  job.status = 'running';
+  job.startedAt = new Date().toISOString();
+  job.phase = 'harvest';
+  job.activity = 'Harvesting brand signals from the live site…';
+  append(job, job.activity, { activity: job.activity, kind: 'system' });
+
+  void (async () => {
+    try {
+      const harvest = await harvestBrandFromUrls({
+        name,
+        url,
+        appUrl: appUrl || undefined,
+        audience,
+        force,
+        onProgress: (msg) => {
+          if (job.cancelRequested) return;
+          append(job, `› ${msg}`, { activity: msg, kind: 'line' });
+        },
+      });
+      if (job.cancelRequested) {
+        finalizeCancelled(job, outDir);
+        return;
+      }
+
+      const workspace = workspaceRoot();
+      const prompt = discoverBrandPrompt({
+        brandDir: harvest.dir,
+        name,
+        audience,
+        reportPath: join(harvest.dir, 'discover-report.json'),
+        workspace,
+      });
+      job.prompt = prompt;
+      job.phase = 'author';
+      append(job, 'Handing off to agent to author the brand pack…', {
+        activity: 'Agent authoring logo, palette and motion brief…',
+        kind: 'system',
+      });
+
+      launchAgent(job, {
+        prompt,
+        outDir,
+        force: true,
+        retryLabel: 'Discover brand',
+        timeoutMs: DISCOVER_BRAND_TIMEOUT_MS,
+        onDone: () => {
+          const ready = brandReadiness(harvest.slug);
+          if (!ready.ready) {
+            return `Brand pack incomplete: ${ready.issues.join('; ')}. Fix logo.html / brand.json / motion-brief.md in ${harvest.dir}`;
+          }
+          if (!existsSync(join(harvest.dir, 'motion-brief.md'))) {
+            return `motion-brief.md is missing in ${harvest.dir}`;
+          }
+          append(job, `✓ brand pack ready · ${ready.name}`, { activity: `Brand pack ready · ${ready.name}`, kind: 'system' });
+          return '';
+        },
+      });
+    } catch (err) {
+      job.status = 'failed';
+      job.phase = 'failed';
+      job.finishedAt = new Date().toISOString();
+      job.activity = err.message || String(err);
+      job.message = job.activity;
+      append(job, `✗ ${job.activity}`, { activity: job.activity, kind: 'error' });
+      try {
+        writeFileSync(join(outDir, `${job.id}.json`), JSON.stringify(jobView({ ...job, log: job.log.slice(-80) }), null, 2));
+      } catch {
+        /* ignore */
+      }
+    }
+  })();
+
+  return job;
+}
 
 /**
  * Deconstruct one free-form description into a complete wizard brief. The agent may read the

@@ -114,6 +114,10 @@ const IMPROVE = {
   full: ['Applying your feedback', 'Reading the note, then editing the sources.'],
   narration: ['Rewriting narration', 'Shortening and refitting the spoken lines.'],
   plates: ['Reworking the plates', 'Updating plate copy from your note.'],
+  'discover-brand': [
+    'Capturing the brand',
+    'Harvesting the live site, then the agent authors the lockup, palette and motion brief.',
+  ],
 };
 
 const STATUS = {
@@ -277,7 +281,7 @@ export function describeJob(job) {
   const lines = logLines(job);
   const spec = STEPS[job?.step];
 
-  if (job?.kind === 'improve' || (!spec && job?.goal)) {
+  if (job?.kind === 'improve' || job?.kind === 'discover-brand' || (!spec && job?.goal)) {
     const [title, summary] = IMPROVE[job.goal] || IMPROVE.full;
     const now = humanize(job.activity || job.message || lines.at(-1) || '');
     return { title, summary, statusLabel, badge, now, progress: status === 'done' ? 1 : 0, stages: [] };

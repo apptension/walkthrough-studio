@@ -4,7 +4,7 @@
  *
  *   node cli.mjs list                      videos and their outputs
  *   node cli.mjs discover-brand --name X --url https://… [--app-url https://…] [--force]
- *                                          harvest official logo + draft brand pack + motion-brief.md
+ *                                          harvest site/app → agent authors logo + brand pack + motion-brief.md
  *   node cli.mjs brief <slug> [--audience "…"] [--outcome "…"] [--purpose …] [--url https://…]
  *                                          show the brief, or save a revision and print what must rerun
  *   node cli.mjs new <slug> [--title "…"] [--purpose overview|feature|onboarding|launch|sales]
@@ -121,19 +121,39 @@ async function main() {
       const url = opt('--url');
       const appUrl = opt('--app-url');
       if (!name || !url) throw new Error('Usage: discover-brand --name <Brand> --url https://… [--app-url https://…] [--force]');
-      const { discoverBrandFromUrls } = await import('./lib/discoverBrand.mjs');
-      const res = await discoverBrandFromUrls({
+      const { startDiscoverBrand, waitForJob } = await import('./lib/agentRunner.mjs');
+      const { brandReadiness } = await import('./lib/project.mjs');
+      const job = startDiscoverBrand(null, {
         name,
         url,
         appUrl,
         audience: opt('--audience') || '',
         force: flag('--force'),
-        onProgress: (msg) => console.log(`› ${msg}`),
       });
-      console.log(`✓ brand pack → ${res.dir}`);
-      console.log(`  logo candidates: ${res.report.logos.length} · saved ${res.saved.length} asset(s)`);
+      let seen = 0;
+      const pump = setInterval(() => {
+        const log = job.log || [];
+        while (seen < log.length) {
+          console.log(log[seen].line);
+          seen += 1;
+        }
+      }, 200);
+      await waitForJob(job);
+      clearInterval(pump);
+      for (; seen < (job.log || []).length; seen++) console.log(job.log[seen].line);
+      if (job.status === 'needs-agent') {
+        console.error(`✗ ${job.message || 'Agent sign-in required'}`);
+        process.exitCode = 2;
+        return;
+      }
+      if (job.status !== 'done') {
+        console.error(`✗ ${job.message || job.activity || `discover-brand ${job.status}`}`);
+        process.exitCode = 1;
+        return;
+      }
+      const ready = brandReadiness(job.brandSlug || name);
+      console.log(`✓ brand pack → ${ready.dir}`);
       console.log(`  review logo.html + motion-brief.md before plates`);
-      if (res.report.warning) console.log(`  ⚠ ${res.report.warning}`);
       return;
     }
     case 'brief': {
