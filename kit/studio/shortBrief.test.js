@@ -33,6 +33,9 @@ test('the short brief is the opening, and the five-step form stays available', (
   assert.match(html, /data-step="short"/);
   assert.match(html, /name="description"/);
   assert.match(html, /data-full-brief/);
+  // The agent's progress and live feed sit under the description while it drafts the brief.
+  assert.match(html, /id="shortDraft"/);
+  assert.match(html, /id="shortDraftStream"/);
   for (const step of ['0', '1', '2', '3', '4']) {
     assert.match(html, new RegExp(`data-step="${step}"`));
   }

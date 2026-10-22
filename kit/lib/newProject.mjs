@@ -92,8 +92,9 @@ export function createProject(input = {}) {
     const name = String(b.name || '').trim();
     if (!name) throw new Error('Name the new brand');
     brandId = slugify(name);
-    const site = httpUrl(b.url || marketingUrl, 'Brand website', { required: true });
-    if (!existsSync(join(BRANDS, brandId, 'brand.json'))) placeholderBrand(brandId, { name, url: site, appUrl });
+    // Discovery reads the marketing site when there is one, otherwise the live app itself.
+    const site = httpUrl(b.url || marketingUrl || appUrl || startUrl, 'Brand website', { required: true });
+    if (!existsSync(join(BRANDS, brandId, 'brand.json'))) placeholderBrand(brandId, { name, url: site, appUrl: appUrl || startUrl });
     needsDiscovery = true;
     b.url = site;
   } else {
@@ -135,7 +136,7 @@ export function createProject(input = {}) {
     purpose: PURPOSE_IDS.includes(input.purpose) ? input.purpose : resolvePurpose({ audience: input.audience }),
     lengthSec: LENGTHS.includes(Number(story.lengthSec)) ? Number(story.lengthSec) : 120,
     tone: String(story.tone || 'confident, warm, plain-spoken').trim(),
-    brand: { id: brandId, mode: b.mode === 'new' ? 'new' : 'existing', name: b.name || null, url: b.url || null, appUrl: appUrl || null },
+    brand: { id: brandId, mode: b.mode === 'new' ? 'new' : 'existing', name: b.name || null, url: b.url || null, appUrl: appUrl || startUrl || null },
     app: {
       startUrl,
       appUrl: appUrl || null,

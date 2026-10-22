@@ -106,6 +106,10 @@ export function createCreationView({ dialog, escapeHtml }) {
         view.querySelectorAll('[data-stage-time]').forEach((t) => (t.textContent = ''));
       }
       dialog.classList.add('is-creating');
+      dialog.classList.remove('is-ready');
+      view.classList.remove('is-ready');
+      const script = $('wizardScript');
+      if (script) script.hidden = true;
       view.hidden = false;
       clearInterval(timer);
       timer = setInterval(tick, 500);
@@ -196,6 +200,51 @@ export function createCreationView({ dialog, escapeHtml }) {
       }
     },
 
+    /** The finished first script, summarised in place of the progress grid. */
+    script(script, { brandName = '' } = {}) {
+      const host = $('wizardScript');
+      if (!host) return;
+      const scenes = script?.scenes || [];
+      const totals = script?.totals || {};
+      const minutes = totals.estSec ? `${Math.max(1, Math.round(totals.estSec / 60 * 10) / 10)} min` : '';
+      $('wizardScriptMeta').textContent = [
+        brandName,
+        `${totals.chapters || 0} chapters`,
+        `${totals.plates || 0} plates`,
+        totals.words ? `${totals.words} words of narration` : '',
+        minutes ? `~${minutes}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      let n = 0;
+      $('wizardScriptScenes').innerHTML = scenes
+        .filter((s) => ['open', 'chapter', 'plate', 'close'].includes(s.kind))
+        .map((s) => {
+          const mark = s.kind === 'open' ? 'Open' : s.kind === 'close' ? 'Close' : s.kind === 'plate' ? 'Plate' : String(++n);
+          const line = (s.narration || s.onScreen || '').toString().trim();
+          return `<li class="is-${escapeHtml(s.kind)}"><b>${escapeHtml(mark)}</b><div><strong>${escapeHtml(s.title || s.plateId || '')}</strong>${
+            line ? `<em>${escapeHtml(line)}</em>` : ''
+          }</div></li>`;
+        })
+        .join('');
+      const lint = $('wizardScriptLint');
+      const errors = totals.errors || 0;
+      const warnings = totals.warnings || 0;
+      lint.hidden = !errors && !warnings;
+      lint.classList.toggle('is-error', errors > 0);
+      lint.textContent = errors
+        ? `${errors} blocking issue${errors === 1 ? '' : 's'} — Review script first to see and fix ${errors === 1 ? 'it' : 'them'}.`
+        : `${warnings} note${warnings === 1 ? '' : 's'} from the script check — safe to render; review when you like.`;
+      host.hidden = false;
+      $('wizardCreationTitle').textContent = 'Your first script is ready';
+      $('wizardCreationEta').textContent = 'done';
+      dialog.classList.add('is-ready');
+      view.classList.add('is-ready');
+      clearInterval(timer);
+      timer = 0;
+      tick();
+    },
+
     fail(message) {
       failed = true;
       $('wizardCreationTitle').textContent = 'Preparation needs attention';
@@ -214,7 +263,7 @@ export function createCreationView({ dialog, escapeHtml }) {
     exit() {
       clearInterval(timer);
       timer = 0;
-      dialog.classList.remove('is-creating');
+      dialog.classList.remove('is-creating', 'is-ready');
       view.hidden = true;
     },
 
@@ -223,6 +272,8 @@ export function createCreationView({ dialog, escapeHtml }) {
       stage = null;
       startedAt = 0;
       view.classList.remove('is-ready');
+      const script = $('wizardScript');
+      if (script) script.hidden = true;
     },
   };
 }

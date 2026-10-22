@@ -16,7 +16,8 @@ import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.m
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { promptLanguageLine } from './languages.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
-import { SKILL, upsertDotEnv } from './project.mjs';
+import { OUT_ROOT, SKILL, listBrands, upsertDotEnv } from './project.mjs';
+import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
 import { describeJob } from '../studio/progress.js';
 
@@ -726,6 +727,15 @@ export function startImprove(video, goal, opts = {}) {
     prompt,
   });
   const outDir = join(video.out, 'studio-jobs');
+  return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve' });
+}
+
+/**
+ * Spawn the preferred agent CLI on `prompt`, stream its output into `job`, and settle the job on
+ * exit. `onDone(job, { code })` runs after a clean exit and may flip the job to failed by
+ * returning a message. Shared by improve/draft jobs and the brief draft.
+ */
+function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null } = {}) {
   mkdirSync(outDir, { recursive: true });
   const workspace = workspaceRoot();
   writePromptArtifacts(job, outDir, workspace);
@@ -750,7 +760,7 @@ export function startImprove(video, goal, opts = {}) {
       outDir,
       runner.provider === 'claude'
         ? `Claude Code is not signed in. Run \`claude\` then /login (or set ANTHROPIC_API_KEY in kit/.env), then retry — or paste ${job.promptFile} into a chat.`
-        : `Authentication required. Run \`agent login\` in a terminal (or set CURSOR_API_KEY in kit/.env), then retry Improve — or open ${job.promptFile} in Cursor chat / run ${job.runScript}.`
+        : `Authentication required. Run \`agent login\` in a terminal (or set CURSOR_API_KEY in kit/.env), then retry ${retryLabel} — or open ${job.promptFile} in Cursor chat / run ${job.runScript}.`
     );
     return job;
   }
@@ -762,7 +772,7 @@ export function startImprove(video, goal, opts = {}) {
   job.phase = 'starting';
   append(job, `Launching ${runner.label}…`, { activity: `Launching ${runner.label}…`, kind: 'system' });
 
-  const args = runner.args(prompt, workspace, opts);
+  const args = runner.args(prompt, workspace, { force });
   const child = spawn(runner.bin, args, {
     cwd: workspace,
     env: { ...process.env },
@@ -772,11 +782,27 @@ export function startImprove(video, goal, opts = {}) {
   job.pid = child.pid;
   attachLineParser(job, child.stdout, { jsonl: true });
   attachLineParser(job, child.stderr, { jsonl: false });
+  let timer = null;
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      if (job.status !== 'running') return;
+      job.timedOut = true;
+      append(job, `Taking too long — stopping after ${Math.round(timeoutMs / 1000)} s`, { kind: 'error' });
+      cancelJob(job.id);
+    }, timeoutMs);
+  }
   child.on('close', (code, signal) => {
+    if (timer) clearTimeout(timer);
     job.exitCode = code;
     job.finishedAt = new Date().toISOString();
     if (job.cancelRequested || signal === 'SIGTERM' || signal === 'SIGKILL') {
-      finalizeCancelled(job, outDir);
+      if (job.timedOut) {
+        job.status = 'failed';
+        job.phase = 'failed';
+        job.activity = `The agent took longer than ${Math.round(timeoutMs / 1000)} s`;
+        job.message = job.activity;
+        append(job, `✗ ${job.activity}`, { activity: job.activity, kind: 'error' });
+      } else finalizeCancelled(job, outDir);
       return;
     }
     const text = jobLogText(job);
@@ -790,14 +816,87 @@ export function startImprove(video, goal, opts = {}) {
       );
       return;
     }
-    const ok = code === 0 && job.result?.ok !== false;
+    let ok = code === 0 && job.result?.ok !== false;
+    let failure = '';
+    if (ok && onDone) {
+      try {
+        failure = onDone(job, { code }) || '';
+      } catch (err) {
+        failure = err.message || String(err);
+      }
+      if (failure) ok = false;
+    }
     job.status = ok ? 'done' : 'failed';
     job.phase = ok ? 'done' : 'failed';
-    job.activity = ok ? 'Finished' : job.result?.text ? tail(job.result.text) : `Failed (exit ${code})`;
-    append(job, ok ? '✓ agent finished' : `✗ agent exit ${code}`, { activity: job.activity, kind: 'system' });
+    job.activity = ok ? 'Finished' : failure || (job.result?.text ? tail(job.result.text) : `Failed (exit ${code})`);
+    if (!ok) job.message = job.activity;
+    append(job, ok ? '✓ agent finished' : `✗ ${failure || `agent exit ${code}`}`, { activity: job.activity, kind: ok ? 'system' : 'error' });
     writeFileSync(join(outDir, `${job.id}.json`), JSON.stringify(jobView({ ...job, log: job.log.slice(-80) }), null, 2));
   });
   return job;
+}
+
+/** How long the one-description brief may take before Studio gives up and falls back. */
+const BRIEF_DRAFT_TIMEOUT_MS = Number(process.env.WALKTHROUGH_BRIEF_TIMEOUT_MS) || 4 * 60 * 1000;
+
+/**
+ * Deconstruct one free-form description into a complete wizard brief. The agent may read the
+ * workspace and fetch the start URL; it writes one JSON file and nothing else. Resolves on the
+ * job with `job.brief` (normalized payload) when done.
+ */
+export function startBriefDraft({ description, startUrl, language = 'en' } = {}) {
+  const text = String(description || '').trim();
+  if (!text) throw new Error('Describe what to show, for whom, and about how long');
+  let url;
+  try {
+    url = new URL(String(startUrl || '').trim());
+  } catch {
+    url = null;
+  }
+  if (!url || !/^https?:$/.test(url.protocol)) throw new Error('Start URL must be a full http(s) URL.');
+
+  const brands = listBrands();
+  const outDir = join(OUT_ROOT, 'brief-drafts');
+  const job = newJob({ kind: 'brief', goal: 'brief', slug: '', brief: null });
+  const outFile = join(outDir, `${job.id}.brief.json`);
+  const prompt = briefDraftPrompt({
+    description: text,
+    startUrl: url.href,
+    language,
+    brands,
+    workspace: workspaceRoot(),
+    outFile,
+  });
+  job.prompt = prompt;
+  const lang = String(language || 'en');
+
+  return launchAgent(job, {
+    prompt,
+    outDir,
+    force: true,
+    retryLabel: 'Draft the video',
+    timeoutMs: BRIEF_DRAFT_TIMEOUT_MS,
+    onDone: (j) => {
+      let raw = null;
+      if (existsSync(outFile)) {
+        try {
+          raw = JSON.parse(readFileSync(outFile, 'utf8'));
+        } catch {
+          raw = null;
+        }
+      }
+      if (!raw) raw = parseBriefDraft(j.result?.text || '');
+      if (!raw) {
+        const said = (j.stream?.entries || []).filter((e) => e.kind === 'say').map((e) => e.text).join('\n');
+        raw = parseBriefDraft(said);
+      }
+      if (!raw) return 'The agent finished without returning a brief. Fill the fields by hand or try again.';
+      j.brief = normalizeBriefDraft(raw, { brands, startUrl: url.href, language: lang });
+      if (!j.brief.title) return 'The agent returned a brief without a title. Try a fuller description.';
+      if (!j.brief.story.mustShow.length) return 'The agent could not find anything to show. Name the screens or steps to record.';
+      return '';
+    },
+  });
 }
 
 /** First line the Studio shows, before the step has printed anything of its own. */

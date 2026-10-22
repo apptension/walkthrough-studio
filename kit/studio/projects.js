@@ -7,12 +7,13 @@ import { createCreationView } from './creation.js';
 import { draftFromDescription } from './shortBrief.js';
 import { maskCredentials, revisePlan } from './briefRevise.js';
 import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
+import { ask } from './ask.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = 5;
 
 export function initProjects(ctx) {
-  const { api, toast, escapeHtml, openVideo, openScript, watchJob } = ctx;
+  const { api, toast, escapeHtml, openVideo, openScript, watchJob, startRender } = ctx;
   const form = $('projectForm');
   const dialog = $('projectDialog');
   const creation = createCreationView({ dialog, escapeHtml });
@@ -23,6 +24,13 @@ export function initProjects(ctx) {
   let creating = false;
   let currentJobId = null;
   let stopRequested = false;
+  /** One-description draft: the agent job that fills the brief, and what it returned. */
+  let briefJobId = null;
+  let briefDrafting = false;
+  let briefCancelled = false;
+  let agentBrief = null;
+  /** Slug whose first script waits in the Ready view for Approve & render. */
+  let readySlug = null;
 
   const val = (name) => form.elements[name]?.value?.trim() || '';
   const checked = (name) => Boolean(form.elements[name]?.checked);
@@ -103,9 +111,10 @@ export function initProjects(ctx) {
       if (i === step) btn?.setAttribute('aria-current', 'step');
       else btn?.removeAttribute('aria-current');
     });
-    $('btnWizardBack').disabled = step === 0;
-    $('btnWizardBack').lastChild.textContent = 'Back';
     const settings = form.dataset.mode === 'settings';
+    // On Basics of a new video, Back returns to the one-description form.
+    $('btnWizardBack').disabled = step === 0 && settings;
+    $('btnWizardBack').lastChild.textContent = step === 0 && !settings ? 'Description' : 'Back';
     $('btnWizardNext').textContent =
       step === STEPS - 1 ? (settings ? 'Save and replan' : checked('runDraft') ? 'Create & draft' : 'Create project') : 'Continue';
     $('wizardStepMeta').textContent = `Step ${step + 1} of ${STEPS}`;
@@ -130,13 +139,16 @@ export function initProjects(ctx) {
     const stepsNav = $('wizardSteps');
     if (stepsNav) stepsNav.hidden = true;
     $('btnWizardBack').disabled = true;
+    $('btnWizardBack').lastChild.textContent = 'Back';
     $('btnWizardNext').textContent = 'Draft the video';
     $('wizardStepMeta').textContent = 'One description';
     $('wizardProgressBar').style.width = '8%';
+    setDrafting(false);
     clearError();
     placeLanguage();
   }
 
+  /** Rough fallback when no agent can read the description: a few regex guesses, then the form. */
   function applyDraft(draft) {
     form.elements.title.value = draft.title;
     if (draft.audience) form.elements.audience.value = draft.audience;
@@ -146,6 +158,156 @@ export function initProjects(ctx) {
     if (purpose) purpose.checked = true;
     const length = form.querySelector(`input[name="lengthSec"][value="${draft.lengthSec}"]`);
     if (length) length.checked = true;
+  }
+
+  /** The agent's brief fills every field of the five steps; the reviewer only checks. */
+  function applyAgentBrief(brief) {
+    const set = (name, value) => {
+      const el = form.elements[name];
+      if (el && !(el instanceof RadioNodeList) && value != null) el.value = value;
+    };
+    const pick = (name, value) => {
+      const el = form.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (el) el.checked = true;
+    };
+    set('title', brief.title);
+    set('slug', brief.slug || '');
+    set('product', brief.product || '');
+    set('audience', brief.audience || '');
+    set('outcome', brief.outcome || '');
+    set('tone', brief.story?.tone || '');
+    pick('purpose', brief.purpose || 'overview');
+    pick('lengthSec', String(brief.story?.lengthSec || 120));
+    const brand = brief.brand || {};
+    if (brand.mode === 'existing' && brand.id && form.elements.brandId) {
+      pick('brandMode', 'existing');
+      form.elements.brandId.value = brand.id;
+    } else {
+      pick('brandMode', 'new');
+      set('brandName', brand.name || brief.product || '');
+      set('brandUrl', brand.url || brief.app?.marketingUrl || '');
+    }
+    const app = brief.app || {};
+    set('startUrl', app.startUrl || val('shortStartUrl'));
+    set('appUrl', app.appUrl || '');
+    set('marketingUrl', app.marketingUrl || '');
+    const login = form.querySelector('input[name="loginRequired"]');
+    if (login) login.checked = Boolean(app.loginRequired);
+    set('email', app.loginRequired ? app.email || '' : '');
+    if (form.elements.password) form.elements.password.value = '';
+    set('sourcePath', app.sourcePath || '');
+    set('notes', app.notes || '');
+    const story = brief.story || {};
+    set('mustShow', (story.mustShow || []).join('\n'));
+    set('keyMessages', (story.keyMessages || []).join('\n'));
+    set('mustSay', (story.mustSay || []).join('\n'));
+    set('avoid', (story.avoid || []).join('\n'));
+    const proof = brief.proof || {};
+    const plates = proof.plates || [];
+    form.querySelectorAll('input[name="plates"]').forEach((input) => {
+      input.checked = plates.includes(input.value);
+    });
+    set('stats', (proof.stats || []).join('\n'));
+    set('quotes', (proof.quotes || []).join('\n'));
+    set('logos', (proof.logos || []).join('\n'));
+    syncConditional();
+  }
+
+  /** While the agent reads the description: the short form dims, the feed shows, Back cancels. */
+  function setDrafting(on) {
+    briefDrafting = on;
+    form.classList.toggle('is-drafting', on);
+    const box = $('shortDraft');
+    if (box) {
+      box.hidden = !on;
+      box.classList.remove('is-failed');
+    }
+    const next = $('btnWizardNext');
+    next.classList.toggle('busy', on);
+    next.disabled = on;
+    const back = $('btnWizardBack');
+    if (on) {
+      back.disabled = false;
+      back.lastChild.textContent = 'Cancel';
+      $('wizardStepMeta').textContent = 'Drafting the brief…';
+      $('shortDraftTitle').textContent = 'Reading your description…';
+      $('shortDraftLine').textContent = 'The agent finds the product, the audience, the beats to show, and the brand.';
+      paintAgentStream($('shortDraftStream'), null);
+      requestAnimationFrame(() => box?.scrollIntoView({ block: 'end', behavior: 'smooth' }));
+    }
+  }
+
+  const httpOk = (s) => {
+    try {
+      return /^https?:$/.test(new URL(s).protocol);
+    } catch {
+      return false;
+    }
+  };
+
+  /** No agent, or it failed: a rough regex draft so the reviewer is never left with empty fields. */
+  function fallbackDraft(reason) {
+    try {
+      applyDraft(draftFromDescription({ description: val('description'), startUrl: val('shortStartUrl') }));
+    } catch {
+      /* the description was already validated; keep whatever is in the form */
+    }
+    showStep(0);
+    showError(`${reason} The fields below were prefilled roughly from your description — check each step.`);
+  }
+
+  /** Draft the video: the agent deconstructs the description and fills every brief field. */
+  async function draftBrief() {
+    const description = val('description');
+    const startUrl = val('shortStartUrl');
+    if (!description) return showError('Describe what to show, for whom, and about how long', 'description');
+    if (!httpOk(startUrl)) return showError('Start URL must be a full http(s) URL.', 'shortStartUrl');
+    clearError();
+    briefCancelled = false;
+    agentBrief = null;
+    setDrafting(true);
+    const stream = $('shortDraftStream');
+    try {
+      const r = await api('/api/brief/draft', { method: 'POST', body: { description, startUrl, language: val('language') || 'en' } });
+      const job = r.job;
+      if (job.status === 'needs-agent') {
+        fallbackDraft(job.message || 'No agent is signed in.');
+        return;
+      }
+      briefJobId = job.id;
+      paintAgentStream(stream, job, { variant: 'wizard' });
+      const done = await watchJob(job.id, {
+        onUpdate: (j) => {
+          paintAgentStream(stream, j, { variant: 'wizard' });
+          if (j.activity) $('shortDraftLine').textContent = j.activity;
+          if (j.phase === 'tool') $('shortDraftTitle').textContent = 'Discovering the product and brand…';
+          else if (j.phase === 'writing' || j.phase === 'finishing') $('shortDraftTitle').textContent = 'Writing the brief…';
+        },
+      });
+      if (briefCancelled) return;
+      if (!done?.brief) throw new Error('The agent finished without a brief.');
+      agentBrief = done.brief;
+      applyAgentBrief(done.brief);
+      setDrafting(false);
+      toast('Brief drafted', `${done.brief.title} · check the fields, then create the video`, 'ok');
+      step = 0;
+      goTo(STEPS - 1);
+    } catch (err) {
+      if (briefCancelled) {
+        showShort();
+        return;
+      }
+      fallbackDraft(err.message || 'The agent could not draft the brief.');
+    } finally {
+      briefJobId = null;
+      if (briefDrafting) setDrafting(false);
+    }
+  }
+
+  async function cancelBriefDraft() {
+    briefCancelled = true;
+    $('shortDraftTitle').textContent = 'Stopping…';
+    if (briefJobId) await api(`/api/jobs/${briefJobId}/cancel`, { method: 'POST' }).catch(() => {});
   }
 
   /** Point each plate tile at a frozen still of that template in the chosen brand. */
@@ -193,7 +355,9 @@ export function initProjects(ctx) {
       if (!val('audience')) return ['Say who watches — the agent writes for them.', 'audience'];
       if (radio('brandMode') === 'new') {
         if (!val('brandName')) return ['Name the new brand.', 'brandName'];
-        if (!url(val('brandUrl') || val('marketingUrl'))) return ['Brand website must be a full https:// URL.', 'brandUrl'];
+        const site = val('brandUrl') || val('marketingUrl') || val('appUrl') || val('startUrl');
+        if (val('brandUrl') && !url(val('brandUrl'))) return ['Brand website must be a full https:// URL.', 'brandUrl'];
+        if (!url(site)) return ['Give a brand website, or a start URL in App access — discovery reads the brand from the live app.', 'brandUrl'];
       } else if (!val('brandId')) return ['Pick a brand pack, or discover a new one.', 'brandId'];
     }
     if (n === 0 && !videoLanguage(val('language'))) return ['Choose a video language.', 'language'];
@@ -217,7 +381,9 @@ export function initProjects(ctx) {
       audience: val('audience'),
       outcome: val('outcome'),
       purpose: radio('purpose') || 'overview',
-      brand: isNew ? { mode: 'new', name: val('brandName'), url: val('brandUrl') || val('marketingUrl') } : { mode: 'existing', id: val('brandId') },
+      brand: isNew
+        ? { mode: 'new', name: val('brandName'), url: val('brandUrl') || val('marketingUrl') || val('appUrl') || val('startUrl') }
+        : { mode: 'existing', id: val('brandId') },
       app: {
         startUrl: val('startUrl'),
         appUrl: val('appUrl'),
@@ -295,6 +461,18 @@ export function initProjects(ctx) {
         rows: [['Plates', p.proof.plates.map((x) => x[0].toUpperCase() + x.slice(1)).join(', ') || 'None — open and close only']],
       },
     ];
+    if (agentBrief && form.dataset.mode !== 'settings') {
+      const conf = { high: 'High — the description covered most of it', medium: 'Medium — a few fields are inferred', low: 'Low — check every step' };
+      groups.push({
+        title: 'Drafted from your description',
+        step: 'short',
+        rows: [
+          ['Confidence', conf[agentBrief.confidence] || conf.medium],
+          ['Assumptions', (agentBrief.assumptions || []).map((s) => `• ${s}`).join('\n') || 'None noted'],
+          ['Open questions', (agentBrief.questions || []).map((s) => `• ${s}`).join('\n') || 'None'],
+        ],
+      });
+    }
     if (form.dataset.mode === 'settings' && settingsBrief) {
       const plan = revisePlan(settingsBrief, p);
       groups.push({
@@ -367,12 +545,22 @@ export function initProjects(ctx) {
       ensureNotStopped();
       const draft = checked('runDraft');
       if (r.needsDiscovery) {
-        paintCreation('brand', 'Opening the official website and inspecting its visual system…');
+        const host = (u) => {
+          try {
+            return new URL(u).host;
+          } catch {
+            return u;
+          }
+        };
+        const site = host(p.brand.url);
+        const app = host(p.app.appUrl || p.app.startUrl);
+        const where = app && app !== site ? `${site} and the app at ${app}` : site;
+        paintCreation('brand', `Opening ${where} in a browser to capture the lockup, palette and type…`);
         const d = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'discover' } });
-        await follow(d.job.id, () => creation.stage('brand', 'Capturing logo, colors and type from the official site…'));
+        await follow(d.job.id, (job) => creation.stage('brand', job.activity || `Reading ${where}…`));
         ensureNotStopped();
       } else {
-        creation.stage('brand', 'Checking the existing brand pack…');
+        creation.stage('brand', `Reusing the ${p.brand.id} brand pack — no discovery needed`);
       }
       const prepared = await api(`/api/video/${r.slug}`);
       if (!prepared.brandFoundation?.ready) {
@@ -407,13 +595,27 @@ export function initProjects(ctx) {
         await follow(j.job.id);
         ensureNotStopped();
       }
-      paintCreation('ready', `${brandName} is ready. Opening the script for review…`);
       await openVideo(r.slug);
-      const watching = dialog.open;
-      toast('Video ready for review', `${brandName} · brand and script are in sync`, 'ok');
-      if (watching) await new Promise((resolve) => setTimeout(resolve, 650));
-      finishCreation();
-      if (watching) openScript();
+      if (!draft) {
+        // Project only, no script yet: the desk's stage bar takes over.
+        toast('Project created', `${brandName} · draft the script when you are ready`, 'ok');
+        finishCreation();
+        return;
+      }
+      paintCreation('ready', `${brandName} · approve the script to record and render.`);
+      let script = null;
+      try {
+        script = (await api(`/api/video/${r.slug}/script`)).script;
+      } catch {
+        /* the summary card is a convenience; approval still works without it */
+      }
+      readySlug = r.slug;
+      creation.script(script, { brandName });
+      if (!dialog.open) {
+        // Prepared in the background: the desk shows the video; the Script stage asks for approval.
+        toast('First script ready', `${brandName} · open Script, approve it, and Studio records and renders`, 'ok');
+        finishCreation();
+      }
     } catch (raw) {
       const err = stopRequested ? new Error('Stopped. The brief is saved — retry when ready.') : raw;
       creation.fail(err.message);
@@ -433,19 +635,63 @@ export function initProjects(ctx) {
   }
 
   function finishCreation() {
+    readySlug = null;
     if (dialog.open) dialog.close();
     form.reset();
     created = null;
     creationStage = null;
+    agentBrief = null;
     creation.reset();
     paintAgentStream($('wizardStream'), null);
     showStep(0);
   }
 
-  $('btnCreationHide').onclick = () => {
-    dialog.close();
-    toast('Still preparing in the background', 'Studio will tell you when the script is ready.', 'info');
+  /** Approve the first script and start the first render: record → plates → produce → voice → deliver. */
+  async function approveAndRender() {
+    const slug = readySlug;
+    if (!slug) return;
+    const btn = $('btnCreationRender');
+    btn.classList.add('busy');
+    btn.disabled = true;
+    $('btnCreationReview').disabled = true;
+    try {
+      try {
+        await api(`/api/video/${encodeURIComponent(slug)}/script/approve`, { method: 'POST', body: { note: 'Approved from the new-video flow' } });
+      } catch (err) {
+        if (!/blocking/i.test(err.message)) throw err;
+        const force = await ask({
+          title: 'Approve with blocking issues?',
+          detail: `${err.message}\n\nThe recorder may stop at the affected step. Review script first to fix them, or approve anyway.`,
+          ok: 'Approve anyway',
+          tone: 'warn',
+        });
+        if (!force) return;
+        await api(`/api/video/${encodeURIComponent(slug)}/script/approve`, { method: 'POST', body: { note: 'Approved from the new-video flow', force: true } });
+      }
+      await openVideo(slug);
+      finishCreation();
+      toast('Script approved', 'Recording the app, then cutting, voicing and exporting. Watch the Render tab.', 'ok');
+      startRender?.();
+    } catch (err) {
+      toast('Could not approve the script', err.message, 'err');
+    } finally {
+      btn.classList.remove('busy');
+      btn.disabled = false;
+      $('btnCreationReview').disabled = false;
+    }
+  }
+
+  $('btnCreationRender').onclick = approveAndRender;
+  $('btnCreationReview').onclick = async () => {
+    const slug = readySlug;
+    finishCreation();
+    if (slug) await openVideo(slug);
+    openScript();
   };
+  // Closing the Ready view with X leaves the video open on the desk; the Script stage asks for approval.
+  dialog.addEventListener('close', () => {
+    if (readySlug && !creating) finishCreation();
+  });
   $('btnCreationStop').onclick = async () => {
     if (!creating) {
       creation.exit();
@@ -567,7 +813,7 @@ export function initProjects(ctx) {
   }
 
   async function open() {
-    if (creating || dialog.classList.contains('is-creating')) {
+    if (creating || briefDrafting || dialog.classList.contains('is-creating')) {
       dialog.showModal();
       return;
     }
@@ -585,7 +831,12 @@ export function initProjects(ctx) {
     } catch {
       $('wizardBrand').innerHTML = '<option value="" disabled selected>Could not load brand packs</option>';
     }
-    showShort();
+    // A brief the agent finished while the dialog was closed is still in the form: resume at Review.
+    if (agentBrief) {
+      if (agentBrief.brand?.mode === 'existing' && form.elements.brandId) form.elements.brandId.value = agentBrief.brand.id;
+      step = 0;
+      goTo(STEPS - 1);
+    } else showShort();
     syncConditional();
     created = null;
     creationStage = null;
@@ -609,14 +860,7 @@ export function initProjects(ctx) {
 
   function next() {
     if (form.dataset.mode === 'short') {
-      try {
-        const draft = draftFromDescription({ description: val('description'), startUrl: val('shortStartUrl') });
-        if (draft.records) throw new Error('A draft must not record');
-        applyDraft(draft);
-        showStep(0);
-      } catch (err) {
-        showError(err.message, err.field);
-      }
+      if (!briefDrafting) draftBrief();
       return;
     }
     const err = validate(step);
@@ -645,13 +889,24 @@ export function initProjects(ctx) {
   });
   form.addEventListener('click', (e) => {
     const go = e.target.closest('[data-goto]');
-    if (go) showStep(Number(go.dataset.goto));
-    if (e.target.closest('[data-full-brief]')) showStep(0);
+    if (go) {
+      if (go.dataset.goto === 'short') showShort();
+      else showStep(Number(go.dataset.goto));
+    }
+    if (e.target.closest('[data-full-brief]') && !briefDrafting) showStep(0);
   });
   $('btnWizardBack').onclick = () => {
+    if (briefDrafting) {
+      cancelBriefDraft();
+      return;
+    }
     if (dialog.classList.contains('is-creating')) {
       creation.exit();
       showStep(STEPS - 1);
+      return;
+    }
+    if (step === 0 && form.dataset.mode !== 'settings') {
+      showShort();
       return;
     }
     showStep(step - 1);

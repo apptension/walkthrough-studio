@@ -6019,6 +6019,18 @@ html:not(.has-custom-select) .lang-filter { display: block; }
   #wizardLanguage, #wizardLanguage option { transition: none; }
 }
 .wf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* One description → the agent fills the brief. Shown under the short form while it works. */
+.short-draft { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 6%, transparent); animation: step-in 0.26s var(--ease-out); }
+.short-draft[hidden] { display: none; }
+.short-draft-head { display: flex; align-items: center; gap: 12px; }
+.short-draft-head .spinner { flex: 0 0 auto; width: 20px; height: 20px; }
+.short-draft-head div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.short-draft-head strong { font-size: 13px; letter-spacing: -0.01em; }
+.short-draft-head em { font-style: normal; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.short-draft .agent-stream--wizard { min-height: 0; max-height: 220px; }
+.short-draft.is-failed { border-color: color-mix(in srgb, var(--danger) 38%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.short-draft.is-failed .spinner { animation: none; border-color: var(--danger); border-top-color: var(--danger); }
+.wizard-body[data-mode="short"].is-drafting .wf, .wizard-body[data-mode="short"].is-drafting .lang-slot, .wizard-body[data-mode="short"].is-drafting [data-full-brief] { opacity: 0.55; pointer-events: none; }
 .wf-note { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 11.5px; color: var(--muted); }
 .wf-note svg { flex-shrink: 0; color: var(--good); }
 .wf-note code, .wizard-body code { padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); font: 11px var(--mono); color: var(--ink-dim); }
@@ -6164,14 +6176,41 @@ html:not(.has-custom-select) .lang-filter { display: block; }
 .sheet-dialog.wizard.is-creating .wizard-body { display: flex; flex-direction: column; padding: 18px 22px 18px; overflow: auto; }
 .creation-view > * { flex-shrink: 0; }
 .creation-view > .agent-stream--wizard { flex-shrink: 1; }
-[data-creating-only] { display: none; }
-.sheet-dialog.wizard.is-creating.is-running [data-creating-only] { display: inline-flex; }
+/* Footer per moment: running → Stop only; ready → Review script first / Approve & render; failed → Edit brief / Retry.
+   Selectors are specific enough to beat `.btn`'s own display. */
+[data-creating-only], .sheet-dialog.wizard:not(.is-creating.is-running) [data-creating-only],
+[data-ready-only], .sheet-dialog.wizard:not(.is-creating.is-ready) [data-ready-only] { display: none; }
+.sheet-dialog.wizard.is-creating.is-running:not(.is-ready) [data-creating-only],
+.sheet-dialog.wizard.is-creating.is-ready [data-ready-only] { display: inline-flex; }
 .sheet-dialog.wizard.is-creating.is-running #btnWizardBack,
 .sheet-dialog.wizard.is-creating.is-running #btnWizardNext,
+.sheet-dialog.wizard.is-creating.is-ready #btnWizardBack,
+.sheet-dialog.wizard.is-creating.is-ready #btnWizardNext,
 .sheet-dialog.wizard.is-creating .wizard-progress,
 .sheet-dialog.wizard.is-creating #wizardStepMeta { display: none; }
-.creation-foot-note { flex: 1; align-items: center; min-width: 0; color: var(--muted); font-size: 11.5px; }
-.sheet-dialog.wizard.is-creating:not(.is-running) .wizard-foot::before { content: ''; flex: 1; }
+.sheet-dialog.wizard.is-creating .wizard-foot::before { content: ''; flex: 1; }
+
+/* The first script, summarised where the progress view ends. */
+.creation-script { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--good) 32%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--good) 6%, transparent); animation: step-in 0.3s var(--ease-out); }
+.creation-script[hidden] { display: none; }
+.creation-script-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+.creation-script-head h4 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.015em; }
+.creation-script-meta { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.creation-script-next { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-dim); }
+.creation-script-scenes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.creation-script-scenes li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; padding: 9px 11px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); }
+.creation-script-scenes li b { flex: 0 0 auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display: grid; place-items: center; font: 700 10.5px/1 var(--mono); color: var(--accent); background: var(--accent-soft); }
+.creation-script-scenes li.is-plate b { color: var(--good); background: color-mix(in srgb, var(--good) 18%, transparent); }
+.creation-script-scenes li.is-open b, .creation-script-scenes li.is-close b { color: var(--muted); background: rgba(255, 255, 255, 0.08); }
+.creation-script-scenes li div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.creation-script-scenes li strong { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.creation-script-scenes li em { font-style: normal; font-size: 11.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.creation-script-lint { margin: 0; font-size: 11.5px; color: var(--muted); }
+.creation-script-lint.is-error { color: var(--danger); }
+.creation-view.is-ready .creation-grid, .creation-view.is-ready .agent-stream--wizard { display: none; }
+@media (max-width: 760px) {
+  .creation-script-head { grid-template-columns: 1fr; }
+}
 
 .creation-view { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 14px; animation: step-in 0.26s var(--ease-out); }
 .creation-view[hidden] { display: none; }

@@ -150,7 +150,7 @@ export function listVideos() {
 }
 
 const DEFAULTS = {
-  brand: 'admiral',
+  brand: 'walkthrough-studio',
   record: { viewport: { width: DELIVERY.width, height: DELIVERY.height }, slowMo: 35, timeoutMs: 600000 },
   env: {},
 };

@@ -229,7 +229,7 @@ walkthrough-studio/
 ├── kit/                   # the engine
 │   ├── cli.mjs            # every command
 │   ├── studio/            # local web UI (http://127.0.0.1:4747)
-│   ├── brands/<name>/     # logo, five-color scale, motion brief
+│   ├── brands/<name>/     # logo, five-color scale, motion brief — ships with apptension/ and walkthrough-studio/
 │   ├── templates/         # plate and overlay HTML/CSS
 │   └── .env               # ELEVENLABS_API_KEY, demo logins (gitignored)
 ├── videos/<slug>/         # one video: video.config.json, flow.mjs, narration.mjs

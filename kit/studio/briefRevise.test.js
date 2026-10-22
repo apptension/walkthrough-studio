@@ -11,7 +11,7 @@ const before = {
   audience: 'Admins',
   purpose: 'overview',
   lengthSec: 120,
-  brand: { id: 'admiral', mode: 'existing' },
+  brand: { id: 'walkthrough-studio', mode: 'existing' },
   app: { startUrl: 'https://app.example/home', loginRequired: false, password: 'old-secret' },
   story: { mustShow: ['Home'], keyMessages: [], mustSay: [], avoid: [] },
   proof: { plates: ['features'], stats: [], quotes: [], logos: [] },

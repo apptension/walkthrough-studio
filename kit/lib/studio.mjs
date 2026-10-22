@@ -29,6 +29,7 @@ import {
   jobView as jobPayload,
   listJobs,
   setAgentPreference,
+  startBriefDraft,
   startImprove,
   startKitJob,
 } from './agentRunner.mjs';
@@ -1334,6 +1335,17 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // One description → the agent fills every brief field. Nothing is created until the reviewer confirms.
+  if (path === '/api/brief/draft' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    try {
+      const job = startBriefDraft({ description: body.description, startUrl: body.startUrl, language: body.language });
+      return json(res, 200, { ok: true, job: jobPayload(job) });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
   if (path === '/api/jobs' && req.method === 'GET') {
     return json(res, 200, { jobs: listJobs().map(jobPayload) });
   }
@@ -2244,10 +2256,13 @@ async function handleApi(req, res, url) {
     const brief = readJsonSafe(join(video.dir, 'brief.json'));
     if (body.step === 'discover') {
       const b = brief?.brand || {};
-      if (!b.url) return json(res, 400, { error: 'Brief has no brand website to discover from' });
-      const args = ['--name', b.name || video.config.brand, '--url', b.url, '--force'];
-      if (b.appUrl) args.push('--app-url', b.appUrl);
-      if (brief.audience) args.push('--audience', brief.audience);
+      const site = b.url || brief?.app?.marketingUrl || brief?.app?.appUrl || brief?.app?.startUrl || video.config.record?.startUrl;
+      if (!site) return json(res, 400, { error: 'Brief has no brand website or app URL to discover from' });
+      const args = ['--name', b.name || video.config.brand, '--url', site, '--force'];
+      // Always read the live product too: its header lockup and favicon are the real mark when the site is a landing page.
+      const app = b.appUrl || brief?.app?.appUrl || brief?.app?.startUrl || video.config.record?.startUrl;
+      if (app && app !== site) args.push('--app-url', app);
+      if (brief?.audience) args.push('--audience', brief.audience);
       return json(res, 200, { ok: true, job: jobPayload(startKitJob(video, 'discover-brand', args)) });
     }
     if (body.step === 'analyze') {

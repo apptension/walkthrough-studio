@@ -175,6 +175,10 @@ export function startFrameRecorder(outPath, { width, height }) {
   let stderr = '';
   ff.stderr.on('data', (d) => (stderr += d));
   let killed = false;
+  // A frame can land after kill() (hand-off, failure). Without a listener that EPIPE takes the process down.
+  ff.stdin.on('error', (e) => {
+    if (!killed) stderr += `\n${e.message}`;
+  });
   const closed = new Promise((resolve, reject) =>
     ff.on('close', (code) =>
       code === 0 || killed ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-1500)}`))
@@ -190,7 +194,11 @@ export function startFrameRecorder(outPath, { width, height }) {
   let received = 0;
   let lastTs = 0;
   const gaps = [];
-  const push = (buf) => new Promise((resolve, reject) => ff.stdin.write(buf, (e) => (e ? reject(e) : resolve())));
+  const push = (buf) =>
+    new Promise((resolve, reject) => {
+      if (killed) return resolve();
+      ff.stdin.write(buf, (e) => (e && !killed ? reject(e) : resolve()));
+    });
 
   const fillTo = (epochMs) => {
     if (!last || !t0) return;

@@ -1,7 +1,7 @@
 {
   "title": "Walkthrough Studio",
   "audience": "People who need a tool to build walkthroughs of their products based on Cursor / Claude Code agents",
-  "brand": "apptension-walkthrough-studio",
+  "brand": "walkthrough-studio",
   "open": {
     "eyebrow": "The showcase cut",
     "title": [
@@ -285,16 +285,6 @@
         "h": 184,
         "zoom": 1.9,
         "label": "stages"
-      },
-      {
-        "id": "m891",
-        "t": 89.148,
-        "dur": 1.039,
-        "x": 234,
-        "y": 954,
-        "w": 243,
-        "h": 1029,
-        "label": "render-bay"
       },
       {
         "id": "m925",

@@ -8,9 +8,9 @@
   "lengthSec": 120,
   "tone": "confident, warm, plain-spoken",
   "brand": {
-    "id": "apptension-walkthrough-studio",
-    "mode": "new",
-    "name": "Apptension Walkthrough Studio",
+    "id": "walkthrough-studio",
+    "mode": "existing",
+    "name": "Walkthrough Studio",
     "url": "http://localhost:4747",
     "appUrl": "http://localhost:4747"
   },

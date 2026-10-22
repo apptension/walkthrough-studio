@@ -6154,6 +6154,7 @@ function initStages() {
     getState: () => state,
     reload: ({ quiet } = {}) => (quiet ? refreshSummary() : loadVideo(state.slug)),
     onPreviewLiveCard: previewLiveCard,
+    onFirstRender: () => requestMake('full'),
     onStageAction: async (key, opts = {}) => {
       if (key === 'record') {
         const r = state.video?.review?.script;
@@ -6192,6 +6193,7 @@ function initStages() {
     openVideo,
     followAgentJob: workflow.followAgentJob,
     openScript: workflow.openScript,
+    startRender: () => requestMake('full'),
   });
   $('btnProjectSettings')?.addEventListener('click', () => projects.openSettings(state.video));
 }

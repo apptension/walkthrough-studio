@@ -25,11 +25,13 @@ import { clearSelectorReport, installRecordedSelectorRetry, writeSelectorReport 
 import { clearOverlayReport, installOverlayRetry, writeOverlayReport } from './overlayRetry.mjs';
 import { describeRecordFailure } from '../studio/recordFailure.js';
 import {
+  collectPersonSignals,
   contextUsesSession,
   pageNeedsPerson,
   sessionFile,
   shouldKeepWaiting,
   shouldRelaunchHeaded,
+  shouldReturnHeadless,
   signInWaitCopy,
   waitFiles,
 } from './signInPause.mjs';
@@ -45,7 +47,19 @@ export function livePath(video) {
   return join(video.out, 'live.mp4');
 }
 
-export async function recordLive(video, { headed = false, flow, outFile, writeMeta = true, pace: paceArg } = {}) {
+/**
+ * @param {object} opts
+ * @param {boolean} [opts.headed] Visible browser. Off by default: a headless take has no window to
+ *   wander into, and Studio shows the live page on Program.
+ * @param {boolean} [opts.handoff] Internal — this headed run exists only because the page asked
+ *   for a person. Once they are through, capture returns to the background (see shouldReturnHeadless).
+ * @param {number} [opts.signInRound] Internal — how many times the take already went
+ *   headless → visible → headless for sign-in.
+ */
+export async function recordLive(
+  video,
+  { headed = false, flow, outFile, writeMeta = true, pace: paceArg, handoff = false, signInRound = 0 } = {}
+) {
   const { config, brand, out } = video;
   // Every capture attempt owns fresh failure evidence. A later recording job must never
   // repair from a stall, overlay, or selector report left by an earlier attempt.
@@ -482,17 +496,21 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   }
 
   async function pageState() {
-    const text = await page.locator('body').innerText({ timeout: 1500 }).catch(() => '');
-    const hasPassword = (await page.locator('input[type="password"]').count().catch(() => 0)) > 0;
-    return pageNeedsPerson({ text, url: page.url(), hasPassword });
+    return pageNeedsPerson(await collectPersonSignals(page));
   }
 
+  // The window opened for the person goes away once they are through — unless the session did not
+  // survive the trip to a background browser, in which case the take stays visible.
+  const returnsHeadless = shouldReturnHeadless({ handoff, round: signInRound });
+
+  /** @returns {Promise<boolean>} whether the take waited for a person */
   async function pauseIfPerson() {
-    if (!(await pageState())) return;
+    if (!(await pageState())) return false;
     const files = waitFiles(out);
-    const copy = signInWaitCopy();
+    const copy = signInWaitCopy({ returnsHeadless });
     writeFileSync(files.wait, JSON.stringify({ url: page.url(), ...copy, at: new Date().toISOString() }));
     rmSync(files.resume, { force: true });
+    if (headed) await page.bringToFront().catch(() => {});
     console.log(`» sign-in · ${copy.title}. ${copy.next}`);
     let typed = false;
     const onStdin = (chunk) => {
@@ -506,6 +524,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     const started = Date.now();
     try {
       while (true) {
+        // A person typing a password is not a stalled take; keep the watchdog quiet while we wait.
+        stallWatchdog.touchMark('waiting for sign-in');
         const still = await pageState();
         const gate = shouldKeepWaiting({
           needed: true,
@@ -523,9 +543,24 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     rmSync(files.resume, { force: true });
     await context.storageState({ path: sessionFile(video) }).catch(() => {});
     console.log('» sign-in · continuing in this session');
+    return true;
+  }
+
+  /** Close this browser without finishing the take; the caller starts another recordLive. */
+  async function handOff() {
+    handedOff = true;
+    if (screencastOn) await page.screencast.stop().catch(() => {});
+    recorder.kill();
+    rmSync(outPath, { force: true });
+    stallWatchdog.stop();
+    focus.uninstall();
+    restoreKeys.forEach((fn) => fn());
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 
   let handedOff = false;
+  let screencastOn = false;
   try {
     console.log('» open · Loading the start page');
     const candidates = startUrlCandidates(startUrl);
@@ -536,15 +571,13 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     await wait(500);
 
     if (shouldRelaunchHeaded({ headed, needsPerson: await pageState() })) {
-      console.log('» sign-in · This page needs you. Opening a visible browser.');
-      recorder.kill();
-      stallWatchdog.stop();
-      focus.uninstall();
-      restoreKeys.forEach((fn) => fn());
-      await context.close().catch(() => {});
-      await browser.close().catch(() => {});
-      handedOff = true;
-      return recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg });
+      console.log(
+        signInRound
+          ? '» sign-in · The saved session did not carry over to a background browser. Opening a visible one; this take stays visible.'
+          : '» sign-in · This page needs you. Opening a visible browser for the sign-in step only.'
+      );
+      await handOff();
+      return await recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg, handoff: true, signInRound });
     }
 
     // Optional pre-roll (cookie banners, login shells) — runs before capture so it never appears on camera.
@@ -573,11 +606,17 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
         }
       },
     });
+    screencastOn = true;
     await page.screencast.showActions(actionLook());
     mark('start', 'live start');
     stallWatchdog.start();
     await wait(900);
-    await pauseIfPerson();
+    const waited = await pauseIfPerson();
+    if (waited && returnsHeadless) {
+      console.log('» sign-in · Session saved. Closing the window; capture continues in the background.');
+      await handOff();
+      return await recordLive(video, { headed: false, flow, outFile, writeMeta, pace: paceArg, signInRound: signInRound + 1 });
+    }
 
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -613,6 +652,7 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     await page.screencast.hideActions();
     const endedAt = Date.now();
     await page.screencast.stop();
+    screencastOn = false;
     const capture = await recorder.finish(endedAt);
     renameSync(outPath, finalOut);
     await context.storageState({ path: sessionFile(video) }).catch(() => {});
@@ -680,11 +720,14 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     console.error(`  Next: ${described.next}`);
     throw err;
   } finally {
-    if (handedOff) return;
-    stallWatchdog.stop();
-    focus.uninstall();
-    restoreKeys.forEach((fn) => fn());
-    await context.close();
-    await browser.close();
+    // A hand-off already tore this browser down and returned the next take's result; a `return`
+    // here would replace that result with undefined.
+    if (!handedOff) {
+      stallWatchdog.stop();
+      focus.uninstall();
+      restoreKeys.forEach((fn) => fn());
+      await context.close();
+      await browser.close();
+    }
   }
 }
