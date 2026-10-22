@@ -28,6 +28,8 @@ import {
 } from './plateSync.js';
 import { FRAME_EDITOR_HIT, lensLoupe, lensZoomCeiling, planAfterSeeked, planFrameEditor, planLensPaint, planLiveSeek } from './livePreview.js';
 import { clampZoomCenter, zoomPreviewStyle } from './zoomAim.js';
+import { curveOf, minJerk } from './easing.js';
+import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from './lensGlass.js';
 import { narratorKeyNote } from './narratorNote.js';
 import { applyCardMotionToDocument } from './cardMotion.js';
 import {
@@ -53,30 +55,28 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const fmtRate = (r) => `${Number(r).toFixed(2).replace(/\.?0+$/, '')}×`;
 
-/** Smootherstep — same curve as camera.mjs so the stage preview lands where the render does. */
-const ease = (u) => {
-  const x = clamp(u, 0, 1);
-  return x * x * x * (x * (x * 6 - 15) + 10);
-};
+/** Smootherstep — the stage's own transition preview curve (xfade dissolves use the same). */
+const ease = minJerk;
 
 /** Zoom factor + centre at recording time t (mirrors zoomExpr/centerExpr in camera.mjs). */
 export function zoomStateAt(shots, t, timing) {
-  const IN = timing?.in ?? 0.75;
-  const OUT = timing?.out ?? 0.85;
-  const PAN = timing?.pan ?? 0.65;
+  const IN = timing?.in ?? 0.9;
+  const OUT = timing?.out ?? 1.05;
+  const PAN = timing?.pan ?? 0.7;
+  const curve = curveOf(timing?.curve).fn;
   let z = 1;
   let cx = null;
   let cy = null;
   for (const s of shots || []) {
     if (t < s.start || t > s.end) continue;
-    z += (s.zoom - 1) * ease((t - s.start) / IN) * (1 - ease((t - (s.end - OUT)) / OUT));
+    z += (s.zoom - 1) * curve((t - s.start) / IN) * (1 - curve((t - (s.end - OUT)) / OUT));
     const pts = s.points || [];
     if (!pts.length) continue;
     let x = pts[0].cx;
     let y = pts[0].cy;
     for (let i = 1; i < pts.length; i++) {
       const from = Math.max(pts[i - 1].t, pts[i].t - PAN);
-      const k = ease((t - from) / Math.max(0.001, pts[i].t - from));
+      const k = curve((t - from) / Math.max(0.001, pts[i].t - from));
       x += (pts[i].cx - x) * k;
       y += (pts[i].cy - y) * k;
     }
@@ -86,27 +86,24 @@ export function zoomStateAt(shots, t, timing) {
   return { zoom: z, cx, cy };
 }
 
-// Loupe constants and curves mirror lib/lens.mjs, so the stage shows the lens the render draws.
-const LENS_IN = 0.5;
-const LENS_OUT = 0.38;
+// Loupe geometry mirrors lib/lens.mjs and the optics come from lensGlass.js, so the stage shows
+// the glass the render draws.
 const LENS_PAD = 36;
-const LENS_RIM = 3.5;
-const clip01 = (v) => clamp(v, 0, 1);
 
 /** Top-left of the S×S loupe, centred on the target (may hang off-frame; mirrors lib/lens.mjs). */
 export function loupeOrigin(cx, cy, S, _width, _height) {
   return {
-    ox: Math.round(cx - S / 2),
-    oy: Math.round(cy - S / 2),
+    ox: cx - S / 2,
+    oy: cy - S / 2,
   };
 }
 
-/** How far the iris is open `T` seconds into a lens that lasts `dur`. */
-export function lensOpen(T, dur) {
-  return Math.max(0, Math.min(1 - 2 ** (-10 * clip01(T / LENS_IN)), 1 - (1 - clip01((dur - T) / LENS_OUT)) ** 3));
+/** How far the glass is in `T` seconds into a lens that lasts `dur` (0..1; alpha/scale/swell in lensOpenState). */
+export function lensOpen(T, dur, timing) {
+  return lensOpenState(T, dur, timing).open;
 }
 
-/** Target centre of a lens at `T` seconds in (pointer-follow paths interpolate linearly). */
+/** Target centre of a lens at `T` seconds in: pointer-follow paths travel on the pointer's own minimum-jerk bell. */
 export function lensCentre(lens, T) {
   const path = lens.path?.length ? lens.path : [{ at: 0, rect: lens.rect }];
   const c = (r) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
@@ -115,11 +112,19 @@ export function lensCentre(lens, T) {
     if (T < path[i].at) {
       const a = c(path[i - 1].rect);
       const b = c(path[i].rect);
-      const k = (T - path[i - 1].at) / Math.max(0.001, path[i].at - path[i - 1].at);
+      const k = minJerk((T - path[i - 1].at) / Math.max(0.001, path[i].at - path[i - 1].at));
       return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
     }
   }
   return c(path.at(-1).rect);
+}
+
+/** `#rrggbb` scaled by `k` (lit / shaded metal), clamped. */
+function shadeHex(hex, k) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const v = [0, 2, 4].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(m[1].slice(i, i + 2), 16) * k))));
+  return `rgb(${v.join(',')})`;
 }
 
 function clockFromPieces(pieces = []) {
@@ -1442,48 +1447,110 @@ export function initEditor(ctx) {
     const k = cw / W;
     const aiming = ed.lensAim && !ed.playing && lens.key === ed.sel?.key;
     const T = rec - lens.t;
-    const open = aiming ? 1 : lensOpen(T, lens.dur);
-    if (open <= 0.001) return null;
+    const st = aiming ? { open: 1, scale: 1, alpha: 1, swell: 1 } : lensOpenState(T, lens.dur, ed.deck.lensTiming);
+    if (st.alpha <= 0.001) return null;
     const { x: tx, y: ty } = lensCentre(lens, clamp(T, 0, lens.dur));
     const cx = clamp(tx, 0, W);
     const cy = clamp(ty, 0, H);
-    const S = lens.S;
-    const { ox, oy } = loupeOrigin(cx, cy, S, W, H);
-    const R = (lens.diameter / 2) * (0.25 + 0.75 * open);
-    const mx = (ox + S / 2) * k;
-    const my = (oy + S / 2) * k;
-    const crop = S / lens.zoom;
+    const R0 = lens.diameter / 2;
+    const R = R0 * st.scale;
+    const mx = cx * k;
+    const my = cy * k;
+    const Rk = R * k;
+    const rim = rimWidth(lens.diameter);
+    const rimHex = ed.deck.lensRim || '#F6AA1E';
+    // Source: the frame around the target at full zoom, over the glass's whole reach.
+    const reach = (1 + GLASS.bulge + GLASS.bevel) / st.swell;
+    const crop = (2 * R * reach + 8) / lens.zoom;
     g.save();
-    g.globalAlpha = clamp(open * 3, 0, 1);
-    g.shadowColor = `rgba(0,0,0,${(0.5 * open).toFixed(3)})`;
+    g.globalAlpha = st.alpha;
+    // Drop shadow, falling slightly below the glass.
+    g.save();
+    g.shadowColor = `rgba(0,0,0,${(GLASS.shadow / 255).toFixed(3)})`;
     g.shadowBlur = LENS_PAD * k * 1.1;
-    g.shadowOffsetY = 6 * k;
+    g.shadowOffsetY = GLASS.shadowDrop * Rk;
     g.beginPath();
-    g.arc(mx, my, R * k, 0, Math.PI * 2);
+    g.arc(mx, my, Rk, 0, Math.PI * 2);
     g.fillStyle = '#000';
     g.fill();
     g.restore();
+    // Glass: concentric bands, each drawing the magnified frame at that radius' sampling factor
+    // (outer bands squeeze toward the bevel, the centre stays flat) — the canvas take on geq's
+    // per-pixel refraction.
     g.save();
     g.beginPath();
-    g.arc(mx, my, R * k, 0, Math.PI * 2);
+    g.arc(mx, my, Rk, 0, Math.PI * 2);
     g.clip();
     try {
       const src = loupeSourceCanvas(v, cx, cy, crop, W, H);
-      g.drawImage(src, 0, 0, src.width, src.height, ox * k, oy * k, S * k, S * k);
+      const full = src.width * lens.zoom * k; // on-screen size of the source at full magnification
+      const bands = 14;
+      for (let i = bands - 1; i >= 0; i--) {
+        const d1 = (i + 1) / bands;
+        const dm = (i + 0.5) / bands;
+        const gF = glassProfile(dm) / st.swell;
+        if (i < bands - 1) {
+          g.save();
+          g.beginPath();
+          g.arc(mx, my, Rk * d1, 0, Math.PI * 2);
+          g.clip();
+        }
+        const size = full / gF;
+        g.drawImage(src, mx - size / 2, my - size / 2, size, size);
+        if (i < bands - 1) g.restore();
+      }
     } catch {
       /* frame not decodable yet */
     }
-    const sheen = g.createLinearGradient(0, my - R * k, 0, my - R * k + R * 0.7 * k);
-    sheen.addColorStop(0, 'rgba(255,255,255,0.1)');
-    sheen.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = sheen;
-    g.fillRect(mx - R * k, my - R * k, 2 * R * k, 0.7 * R * k);
-    g.restore();
+    // Shade: vignette toward the rim and the dark bevel band.
+    const vig = g.createRadialGradient(mx, my, 0, mx, my, Rk);
+    for (const d of [0, 0.6, 0.8, 0.88, 0.94, 1]) vig.addColorStop(d, `rgba(0,0,0,${(1 - glassShade(d)).toFixed(3)})`);
+    g.fillStyle = vig;
+    g.fillRect(mx - Rk, my - Rk, 2 * Rk, 2 * Rk);
+    // Light: specular blob upper-left, soft top light, edge arc on the lit side, Fresnel crescent lower-right.
+    const spec = g.createRadialGradient(mx - 0.5 * Rk, my - 0.52 * Rk, 0, mx - 0.5 * Rk, my - 0.52 * Rk, 0.3 * Rk);
+    spec.addColorStop(0, `rgba(255,255,255,${(GLASS.specular / 255).toFixed(3)})`);
+    spec.addColorStop(0.5, `rgba(255,255,255,${(GLASS.specular / 255 / 3).toFixed(3)})`);
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = spec;
+    g.fillRect(mx - Rk, my - Rk, 2 * Rk, 2 * Rk);
+    const top = g.createLinearGradient(0, my - Rk, 0, my);
+    top.addColorStop(0, `rgba(255,255,255,${(GLASS.topLight / 255).toFixed(3)})`);
+    top.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = top;
+    g.fillRect(mx - Rk, my - Rk, 2 * Rk, Rk);
+    g.lineCap = 'round';
     g.beginPath();
-    g.arc(mx, my, Math.max(0, R - LENS_RIM / 2) * k, 0, Math.PI * 2);
-    g.lineWidth = LENS_RIM * k;
-    g.strokeStyle = ed.deck.lensRim || '#F6AA1E';
+    g.arc(mx, my, Rk * 0.955, Math.PI * 0.95, Math.PI * 1.55);
+    g.lineWidth = Math.max(1, 0.03 * Rk);
+    g.strokeStyle = `rgba(255,255,255,${(GLASS.edgeLight / 255).toFixed(3)})`;
     g.stroke();
+    g.beginPath();
+    g.arc(mx, my, Rk * 0.93, Math.PI * 0.05, Math.PI * 0.45);
+    g.lineWidth = 0.12 * Rk;
+    g.strokeStyle = `rgba(255,255,255,${(GLASS.crescent / 255 / 2).toFixed(3)})`;
+    g.stroke();
+    g.restore();
+    // Rim: lit metal from the top, a dark outer line, a bright inner bevel.
+    const metal = g.createLinearGradient(0, my - Rk, 0, my + Rk);
+    metal.addColorStop(0, shadeHex(rimHex, 1 + GLASS.rimLight / 2));
+    metal.addColorStop(1, shadeHex(rimHex, 1 - GLASS.rimLight / 2));
+    g.beginPath();
+    g.arc(mx, my, Math.max(0, R - rim / 2) * k, 0, Math.PI * 2);
+    g.lineWidth = rim * k;
+    g.strokeStyle = metal;
+    g.stroke();
+    g.beginPath();
+    g.arc(mx, my, Math.max(0, R - 0.6) * k, 0, Math.PI * 2);
+    g.lineWidth = Math.max(1, 1.2 * k);
+    g.strokeStyle = 'rgba(0,0,0,0.35)';
+    g.stroke();
+    g.beginPath();
+    g.arc(mx, my, Math.max(0, R - rim) * k, 0, Math.PI * 2);
+    g.lineWidth = Math.max(1, 1.1 * k);
+    g.strokeStyle = 'rgba(255,255,255,0.28)';
+    g.stroke();
+    g.restore();
     return lens;
   }
 
@@ -1911,11 +1978,16 @@ export function initEditor(ctx) {
   function paintLensHud(lens, zNow, sizeNow) {
     const hud = $('liveLensHud');
     if (!hud) return;
+    const ico = hud.querySelector('[data-lens-hud-ico]');
     const title = hud.querySelector('[data-lens-hud-title]');
     const meta = hud.querySelector('[data-lens-hud-meta]');
     const controls = hud.querySelector('[data-lens-hud-controls]');
     const hint = hud.querySelector('[data-lens-hud-hint]');
+    const take = hud.querySelector('[data-lens-hud-take]');
+    const rm = hud.querySelector('[data-frame-remove="lens"]');
     const recorded = lens.source === 'auto';
+    if (ico && !ico.querySelector('svg')) ico.innerHTML = ICONS.lens;
+    if (rm && !rm.querySelector('svg')) rm.innerHTML = ICONS.x;
     if (title) title.textContent = recorded ? 'Recorded magnifier' : 'Magnifier';
     if (meta) {
       meta.textContent = recorded ? '' : `${Number(zNow).toFixed(1)}×`;
@@ -1923,9 +1995,14 @@ export function initEditor(ctx) {
     }
     if (controls) controls.hidden = recorded;
     if (hint) {
-      hint.textContent = recorded ? 'Drag to take over and aim' : 'Drag the ring to aim';
+      hint.textContent = recorded ? 'Drag the ring to claim and aim' : 'Drag the ring to aim';
       hint.hidden = false;
     }
+    if (take) {
+      take.hidden = !recorded;
+      take.setAttribute('aria-label', 'Take over this recorded magnifier');
+    }
+    if (rm) rm.setAttribute('aria-label', recorded ? 'Switch off recorded magnifier' : 'Remove magnifier');
     hud.classList.toggle('is-recorded', recorded);
   }
 
@@ -2048,6 +2125,10 @@ export function initEditor(ctx) {
     });
     hud?.querySelector('[data-frame-remove="lens"]')?.addEventListener('click', () => {
       document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
+    });
+    hud?.querySelector('[data-lens-hud-take]')?.addEventListener('click', () => {
+      const lens = selectedLens();
+      if (lens?.source === 'auto') adoptLens(lens);
     });
   }
 
@@ -4419,6 +4500,13 @@ export function initEditor(ctx) {
         <button type="button" class="ins-btn wide" data-act="add-zoom">${ICONS.plus}Zoom in at the playhead</button>`
       ) +
       section(
+        'speed',
+        'Motion',
+        `<div class="ins-quick"><span>Curve</span>${segBtns('data-cam-curve', Object.keys(ed.deck.curves || { glide: 1, smooth: 1, cinematic: 1, snappy: 1 }), cam.curve || 'glide', (v) => ed.deck.curves?.[v]?.label || v)}</div>
+        <div class="ins-quick"><span>Length</span>${segBtns('data-cam-motion', Object.keys(ed.deck.motions || { unhurried: 1, natural: 1, swift: 1 }), cam.motion || 'natural', (v) => ed.deck.motions?.[v]?.label || v)}</div>
+        <p class="ins-note subtle">${escapeHtml(ed.deck.curves?.[cam.curve || 'glide']?.hint || '')}. Shapes every push-in, pan and the magnifier's open and close; the stage previews it live.</p>`
+      ) +
+      section(
         'lens',
         'Magnifier',
         `${
@@ -5209,6 +5297,14 @@ export function initEditor(ctx) {
     });
     on('[data-cam-zoom]', 'click', async (el) => {
       await ctx.saveDirection?.({ camera: { zoom: el.dataset.camZoom } }, { quiet: true });
+      await refresh();
+    });
+    on('[data-cam-curve]', 'click', async (el) => {
+      await ctx.saveDirection?.({ camera: { curve: el.dataset.camCurve } }, { quiet: true });
+      await refresh();
+    });
+    on('[data-cam-motion]', 'click', async (el) => {
+      await ctx.saveDirection?.({ camera: { motion: el.dataset.camMotion } }, { quiet: true });
       await refresh();
     });
     on('[data-cursor-style]', 'click', (el) => ctx.saveDirection?.({ cursor: { style: el.dataset.cursorStyle } }, { quiet: true }).then(refresh));

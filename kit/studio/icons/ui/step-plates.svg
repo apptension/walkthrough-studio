@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <rect x="4" y="5" width="16" height="3" rx="1"/>
+  <rect x="4" y="10.5" width="16" height="3" rx="1"/>
+  <rect x="4" y="16" width="10" height="3" rx="1"/>
+</svg>

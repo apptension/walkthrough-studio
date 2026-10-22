@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="22" y="29" width="52" height="25" rx="4"/>
-     <path d="M30 41h14M30 47h22" opacity=".55"/>
-     <g class="z-flap">
-       <path d="M22 29h52l-4-11H18z"/>
-       <path d="M31 18l5 11M44 18l5 11M57 18l5 11" opacity=".7"/>
-     </g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="24" y="29.33" width="48" height="24" rx="5.33"/>
+  <path d="M34.67 40 H50.67" opacity=".45"/>
+  <path d="M34.67 46.67 H58.67" opacity=".45"/>
+  <g class="z-flap">
+    <path d="M24 29.33 L72 29.33 L67.2 16 L19.2 16 Z"/>
+    <path d="M32.53 16 L37.33 29.33 M45.87 16 L50.67 29.33 M59.2 16 L64 29.33" opacity=".7"/>
+  </g>
+</svg>

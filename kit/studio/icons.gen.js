@@ -14,21 +14,33 @@ export const ICON_META = {
     "viewBox": "0 0 64 64",
     "file": "empty/capture.svg",
     "present": {
-      "fill": "none"
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "4.67",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
     }
   },
   "empty-play": {
     "viewBox": "0 0 64 64",
     "file": "empty/play.svg",
     "present": {
-      "fill": "none"
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "4.67",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
     }
   },
   "empty-stale": {
     "viewBox": "0 0 64 64",
     "file": "empty/stale.svg",
     "present": {
-      "fill": "none"
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "4.67",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
     }
   },
   "focus-guided": {
@@ -58,7 +70,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -69,7 +81,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -80,7 +92,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -91,7 +103,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -102,7 +114,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -113,7 +125,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -124,7 +136,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -132,7 +144,13 @@ export const ICON_META = {
   "ui-bulb": {
     "viewBox": "0 0 24 24",
     "file": "ui/bulb.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-camera": {
     "viewBox": "0 0 24 24",
@@ -140,7 +158,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -151,8 +169,9 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
-      "stroke-linecap": "round"
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
     }
   },
   "ui-chapters": {
@@ -161,7 +180,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -172,7 +191,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -183,7 +202,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -194,7 +213,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -205,7 +224,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2.2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -216,7 +235,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -227,7 +246,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -235,7 +254,13 @@ export const ICON_META = {
   "ui-compare": {
     "viewBox": "0 0 24 24",
     "file": "ui/compare.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-cursor": {
     "viewBox": "0 0 24 24",
@@ -243,7 +268,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -254,7 +279,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -262,7 +287,12 @@ export const ICON_META = {
   "ui-download-fill": {
     "viewBox": "0 0 24 24",
     "file": "ui/download-fill.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-download": {
     "viewBox": "0 0 24 24",
@@ -270,7 +300,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -281,7 +311,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -292,7 +322,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -303,7 +333,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -314,7 +344,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -325,7 +355,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -333,7 +363,9 @@ export const ICON_META = {
   "ui-fullscreen-fill": {
     "viewBox": "0 0 24 24",
     "file": "ui/fullscreen-fill.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-fullscreen": {
     "viewBox": "0 0 24 24",
@@ -341,7 +373,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -352,7 +384,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -361,11 +393,7 @@ export const ICON_META = {
     "viewBox": "0 0 24 24",
     "file": "ui/grip.svg",
     "present": {
-      "fill": "none",
-      "stroke": "currentColor",
-      "stroke-width": "1.8",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round"
+      "fill": "currentColor"
     }
   },
   "ui-history": {
@@ -374,7 +402,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -385,7 +413,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -396,7 +424,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -407,7 +435,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -418,7 +446,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -429,7 +457,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2.2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -440,7 +468,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -451,7 +479,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -462,7 +490,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -473,7 +501,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -484,7 +512,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -495,7 +523,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -506,7 +534,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -517,8 +545,9 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
-      "stroke-linecap": "round"
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
     }
   },
   "ui-music": {
@@ -527,7 +556,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -535,7 +564,13 @@ export const ICON_META = {
   "ui-mute": {
     "viewBox": "0 0 24 24",
     "file": "ui/mute.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-no-zoom": {
     "viewBox": "0 0 24 24",
@@ -543,7 +578,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -554,7 +589,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -565,7 +600,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -576,7 +611,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -587,7 +622,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -598,7 +633,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -606,43 +641,71 @@ export const ICON_META = {
   "ui-pause-fill": {
     "viewBox": "0 0 24 24",
     "file": "ui/pause-fill.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-pause": {
     "viewBox": "0 0 24 24",
     "file": "ui/pause.svg",
     "present": {
-      "fill": "none",
-      "stroke": "currentColor",
-      "stroke-width": "1.8",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round"
+      "fill": "currentColor"
     }
   },
   "ui-pencil": {
     "viewBox": "0 0 24 24",
     "file": "ui/pencil.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-pip-done": {
     "viewBox": "0 0 24 24",
     "file": "ui/pip-done.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "2.25",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-pip-fail": {
     "viewBox": "0 0 24 24",
     "file": "ui/pip-fail.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "2.25",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-pip-run": {
     "viewBox": "0 0 24 24",
     "file": "ui/pip-run.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "2.25",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-pip-todo": {
     "viewBox": "0 0 24 24",
     "file": "ui/pip-todo.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-pipeline": {
     "viewBox": "0 0 24 24",
@@ -650,7 +713,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -661,7 +724,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -672,7 +735,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -680,7 +743,12 @@ export const ICON_META = {
   "ui-play-fill": {
     "viewBox": "0 0 24 24",
     "file": "ui/play-fill.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-play": {
     "viewBox": "0 0 24 24",
@@ -688,7 +756,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -696,7 +764,9 @@ export const ICON_META = {
   "ui-plus-fill": {
     "viewBox": "0 0 24 24",
     "file": "ui/plus-fill.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-plus": {
     "viewBox": "0 0 24 24",
@@ -704,7 +774,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -715,7 +785,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -723,7 +793,13 @@ export const ICON_META = {
   "ui-preview": {
     "viewBox": "0 0 24 24",
     "file": "ui/preview.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-produce-queue": {
     "viewBox": "0 0 24 24",
@@ -731,7 +807,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -742,7 +818,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -750,7 +826,9 @@ export const ICON_META = {
   "ui-record": {
     "viewBox": "0 0 24 24",
     "file": "ui/record.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-redo": {
     "viewBox": "0 0 24 24",
@@ -758,7 +836,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -769,7 +847,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -780,7 +858,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -791,7 +869,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -799,12 +877,24 @@ export const ICON_META = {
   "ui-restore": {
     "viewBox": "0 0 24 24",
     "file": "ui/restore.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-search": {
     "viewBox": "0 0 24 24",
     "file": "ui/search.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-settings": {
     "viewBox": "0 0 24 24",
@@ -812,7 +902,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -820,12 +910,24 @@ export const ICON_META = {
   "ui-skip-back": {
     "viewBox": "0 0 24 24",
     "file": "ui/skip-back.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-skip-fwd": {
     "viewBox": "0 0 24 24",
     "file": "ui/skip-fwd.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-slow": {
     "viewBox": "0 0 24 24",
@@ -833,7 +935,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -844,7 +946,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -855,7 +957,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -866,7 +968,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -874,37 +976,46 @@ export const ICON_META = {
   "ui-step-audio": {
     "viewBox": "0 0 24 24",
     "file": "ui/step-audio.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-step-deliver": {
     "viewBox": "0 0 24 24",
     "file": "ui/step-deliver.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-step-plates": {
     "viewBox": "0 0 24 24",
     "file": "ui/step-plates.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-step-produce": {
     "viewBox": "0 0 24 24",
     "file": "ui/step-produce.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-step-record": {
     "viewBox": "0 0 24 24",
     "file": "ui/step-record.svg",
-    "present": {}
+    "present": {
+      "fill": "currentColor"
+    }
   },
   "ui-stop": {
     "viewBox": "0 0 24 24",
     "file": "ui/stop.svg",
     "present": {
-      "fill": "none",
-      "stroke": "currentColor",
-      "stroke-width": "1.8",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round"
+      "fill": "currentColor"
     }
   },
   "ui-story": {
@@ -913,7 +1024,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -924,7 +1035,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -935,7 +1046,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -946,7 +1057,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -957,7 +1068,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -968,7 +1079,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -979,7 +1090,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -990,7 +1101,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1001,7 +1112,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1012,7 +1123,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1023,7 +1134,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1034,7 +1145,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1045,7 +1156,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1056,7 +1167,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1067,7 +1178,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1078,7 +1189,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1089,7 +1200,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1100,7 +1211,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1111,7 +1222,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1122,7 +1233,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1133,7 +1244,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1144,7 +1255,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1152,12 +1263,24 @@ export const ICON_META = {
   "ui-volume": {
     "viewBox": "0 0 24 24",
     "file": "ui/volume.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-walk": {
     "viewBox": "0 0 24 24",
     "file": "ui/walk.svg",
-    "present": {}
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
   },
   "ui-warn-tri": {
     "viewBox": "0 0 24 24",
@@ -1165,7 +1288,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "2",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1176,7 +1299,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1187,7 +1310,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1198,7 +1321,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.8",
+      "stroke-width": "1.75",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1209,7 +1332,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1220,7 +1343,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1231,7 +1354,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1242,7 +1365,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1253,7 +1376,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1264,7 +1387,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1275,7 +1398,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1286,7 +1409,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1297,7 +1420,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1308,7 +1431,7 @@ export const ICON_META = {
     "present": {
       "fill": "none",
       "stroke": "currentColor",
-      "stroke-width": "1.6",
+      "stroke-width": "4.67",
       "stroke-linecap": "round",
       "stroke-linejoin": "round"
     }
@@ -1318,139 +1441,139 @@ export const ICON_META = {
 export const ICON_BODY = {
   "agents-claude": "<path fill=\"currentColor\" d=\"m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z\"/>",
   "agents-cursor": "<path fill=\"currentColor\" d=\"M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23\"/>",
-  "empty-capture": "<rect x=\"10\" y=\"16\" width=\"44\" height=\"32\" rx=\"6\" stroke=\"currentColor\" stroke-width=\"2\"/>\n                    <circle cx=\"32\" cy=\"32\" r=\"8\" stroke=\"currentColor\" stroke-width=\"2\"/>\n                    <circle cx=\"32\" cy=\"32\" r=\"3.5\" fill=\"currentColor\"/>\n                    <path d=\"M22 16l3-5h14l3 5\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/>",
-  "empty-play": "<rect x=\"8\" y=\"14\" width=\"48\" height=\"36\" rx=\"8\" stroke=\"currentColor\" stroke-width=\"2\"/>\n                    <path d=\"M26 24v16l16-8-16-8z\" fill=\"currentColor\"/>\n                    <path d=\"M14 10h6M44 10h6M14 54h6M44 54h6\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" opacity=\"0.45\"/>",
-  "empty-stale": "<path d=\"M18 32a14 14 0 1 0 4.2-10\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\"/>\n                    <path d=\"M18 17v8h8\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n                    <path d=\"M28.5 25.5v13l12-6.5-12-6.5z\" fill=\"currentColor\"/>\n                    <path d=\"M14 10h6M44 10h6M14 54h6M44 54h6\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" opacity=\"0.45\"/>",
-  "focus-guided": "<rect class=\"fg-ui\" x=\"2\" y=\"4\" width=\"40\" height=\"26\" rx=\"3.5\"/>\n                      <rect class=\"fg-chip\" x=\"6\" y=\"8.5\" width=\"7.5\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip\" x=\"15.5\" y=\"8.5\" width=\"9\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip\" x=\"6\" y=\"16\" width=\"12\" height=\"8\" rx=\"1.4\"/>\n                      <path class=\"fg-path\" d=\"M12 11c5.5-1.2 11 2.2 17.5 8\"/>\n                      <circle class=\"fg-lens\" cx=\"30.5\" cy=\"20.5\" r=\"7.6\"/>\n                      <circle class=\"fg-lens-glass\" cx=\"30.5\" cy=\"20.5\" r=\"4.8\"/>\n                      <path class=\"fg-cursor\" d=\"M19.4 14.2 20.7 19.2l1.5-1.25 1.85 2.75 1.25-.85-1.85-2.7 2.05-.4z\"/>",
-  "focus-ring": "<rect class=\"fg-ui\" x=\"2\" y=\"4\" width=\"40\" height=\"26\" rx=\"3.5\"/>\n                      <rect class=\"fg-chip\" x=\"6\" y=\"8.5\" width=\"7\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip\" x=\"15\" y=\"8.5\" width=\"8\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip\" x=\"25.5\" y=\"8.5\" width=\"7\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip\" x=\"6\" y=\"16.5\" width=\"10\" height=\"7.5\" rx=\"1.3\"/>\n                      <rect class=\"fg-target\" x=\"19.5\" y=\"15.5\" width=\"12\" height=\"9.5\" rx=\"1.5\"/>\n                      <rect class=\"fg-chip\" x=\"33.5\" y=\"16.5\" width=\"5.5\" height=\"7.5\" rx=\"1.2\"/>\n                      <rect class=\"fg-ring\" x=\"17.3\" y=\"13.3\" width=\"16.4\" height=\"13.9\" rx=\"2.4\"/>",
-  "focus-spotlight": "<defs>\n                        <mask id=\"focusGlyphSpotMask\">\n                          <rect x=\"2\" y=\"4\" width=\"40\" height=\"26\" rx=\"3.5\" fill=\"#fff\"/>\n                          <ellipse cx=\"26\" cy=\"18.5\" rx=\"10.2\" ry=\"8\" fill=\"#000\"/>\n                        </mask>\n                      </defs>\n                      <rect class=\"fg-ui\" x=\"2\" y=\"4\" width=\"40\" height=\"26\" rx=\"3.5\"/>\n                      <rect class=\"fg-chip muted\" x=\"6\" y=\"8.5\" width=\"7.5\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-chip muted\" x=\"15.5\" y=\"8.5\" width=\"9\" height=\"4.5\" rx=\"1\"/>\n                      <rect class=\"fg-proof\" x=\"18\" y=\"13.5\" width=\"16\" height=\"10\" rx=\"1.6\"/>\n                      <rect class=\"fg-dim\" x=\"2\" y=\"4\" width=\"40\" height=\"26\" rx=\"3.5\" mask=\"url(#focusGlyphSpotMask)\"/>\n                      <path class=\"fg-cone\" d=\"M18 4.2L26 18.5L34 4.2Z\"/>\n                      <ellipse class=\"fg-beam\" cx=\"26\" cy=\"18.5\" rx=\"10.2\" ry=\"8\"/>\n                      <ellipse class=\"fg-hot\" cx=\"26\" cy=\"18.5\" rx=\"5.6\" ry=\"4.2\"/>",
-  "ui-activity": "<path d=\"M3 12h4l3-8 4 16 3-8h4\"/>",
-  "ui-ask": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 3.9\"/><path d=\"M12 17h.01\"/>",
-  "ui-audio-queue": "<path d=\"M12 4v10\"/><path d=\"M8 9v5M16 7v7\"/><circle cx=\"12\" cy=\"17\" r=\"2.5\"/><circle cx=\"8\" cy=\"16\" r=\"1.5\"/><circle cx=\"16\" cy=\"16\" r=\"1.5\"/>",
-  "ui-book": "<path d=\"M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z\"/><path d=\"M8 9h6M8 13h4\"/>",
-  "ui-bookmark": "<path d=\"M6 4h12a1 1 0 0 1 1 1v16l-7-4-7 4V5a1 1 0 0 1 1-1z\"/>",
-  "ui-box": "<path d=\"M21 8l-9-4-9 4 9 4z\"/><path d=\"M3 8v8l9 4 9-4V8\"/><path d=\"M12 12v8\"/>",
-  "ui-branch": "<circle cx=\"6\" cy=\"6\" r=\"2.5\"/><circle cx=\"18\" cy=\"6\" r=\"2.5\"/><circle cx=\"12\" cy=\"18\" r=\"2.5\"/><path d=\"M8.2 7.5 10.5 15M15.8 7.5 13.5 15\"/>",
-  "ui-bulb": "<path fill=\"currentColor\" stroke=\"none\" d=\"M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7zm-2 18h4v2h-4v-2z\"/>",
-  "ui-camera": "<path d=\"M15 10l5-3v10l-5-3\"/><rect x=\"3\" y=\"6\" width=\"12\" height=\"12\" rx=\"2\"/>",
-  "ui-captions": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M7 12h4M13 12h4M7 15h6\"/>",
-  "ui-chapters": "<path d=\"M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z\"/><path d=\"M8 9h6M8 13h4\"/>",
-  "ui-check-box": "<path d=\"M9 11l3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/>",
-  "ui-check": "<path d=\"m5 12 5 5 9-10\"/>",
-  "ui-checklist-done": "<path d=\"M4 6h16M4 12h10M4 18h7\"/><path d=\"m15 15 2 2 4-4\"/>",
-  "ui-chevron-left": "<path d=\"m15 18-6-6 6-6\"/>",
+  "empty-capture": "<rect x=\"8\" y=\"18.67\" width=\"48\" height=\"32\" rx=\"5.33\"/>\n  <path d=\"M21.33 18.67 L25.33 10.67 L38.67 10.67 L42.67 18.67\"/>\n  <circle cx=\"32\" cy=\"34.67\" r=\"9.33\"/>\n  <circle cx=\"32\" cy=\"34.67\" r=\"4.67\"/>\n  <circle cx=\"45.87\" cy=\"24.8\" r=\"1.6\" fill=\"currentColor\" stroke=\"none\"/>\n  <path d=\"M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52\" opacity=\".45\"/>",
+  "empty-play": "<rect x=\"8\" y=\"13.33\" width=\"48\" height=\"37.33\" rx=\"5.33\"/>\n  <path d=\"M26.67 24 L40 32 L26.67 40 Z\" fill=\"currentColor\"/>\n  <path d=\"M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52\" opacity=\".45\"/>",
+  "empty-stale": "<path d=\"M12 32 A20 20 0 1 0 18.67 17.07 L12 22.67\"/>\n  <path d=\"M12 10.67 L12 22.67 L24 22.67\"/>\n  <path d=\"M29.33 25.07 L29.33 41.6 L43.33 33.33 Z\" fill=\"currentColor\"/>\n  <path d=\"M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52\" opacity=\".45\"/>",
+  "focus-guided": "<rect class=\"fg-ui\" x=\"2\" y=\"3\" width=\"40\" height=\"28\" rx=\"3\"/>\n  <rect class=\"fg-chip\" x=\"5\" y=\"6\" width=\"7\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"14\" y=\"6\" width=\"9\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"5\" y=\"16\" width=\"8\" height=\"7\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"15.5\" y=\"16\" width=\"8\" height=\"7\" rx=\"1.5\"/>\n  <rect class=\"fg-target\" x=\"26\" y=\"15\" width=\"12\" height=\"9\" rx=\"2\"/>\n  <path class=\"fg-path\" d=\"M13 13.5Q18.5 8 25 16\"/>\n  <circle class=\"fg-lens\" cx=\"32\" cy=\"19.5\" r=\"7\"/>\n  <circle class=\"fg-lens-glass\" cx=\"32\" cy=\"19.5\" r=\"3.5\"/>\n  <path class=\"fg-cursor\" d=\"M7 11L13.1 13.5 10.5 14.4 9.4 17.1Z\"/>",
+  "focus-ring": "<rect class=\"fg-ui\" x=\"2\" y=\"3\" width=\"40\" height=\"28\" rx=\"3\"/>\n  <rect class=\"fg-chip\" x=\"5\" y=\"6\" width=\"7\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"14\" y=\"6\" width=\"9\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"26\" y=\"6\" width=\"7\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"5\" y=\"13\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"13.5\" y=\"13\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-target\" x=\"22\" y=\"13\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"30.5\" y=\"13\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"5\" y=\"20\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"13.5\" y=\"20\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"22\" y=\"20\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip\" x=\"30.5\" y=\"20\" width=\"7\" height=\"5\" rx=\"1.5\"/>\n  <rect class=\"fg-ring\" x=\"18.5\" y=\"9.5\" width=\"14\" height=\"12\" rx=\"3\" opacity=\".28\"/>\n  <rect class=\"fg-ring\" x=\"20.5\" y=\"11.5\" width=\"10\" height=\"8\" rx=\"2\"/>",
+  "focus-spotlight": "<defs>\n    <mask id=\"focusGlyphSpotMask\">\n      <rect x=\"2\" y=\"3\" width=\"40\" height=\"28\" rx=\"3\" fill=\"#fff\"/>\n      <ellipse cx=\"24\" cy=\"19\" rx=\"12\" ry=\"8\" fill=\"#000\"/>\n    </mask>\n  </defs>\n  <rect class=\"fg-ui\" x=\"2\" y=\"3\" width=\"40\" height=\"28\" rx=\"3\"/>\n  <rect class=\"fg-chip muted\" x=\"5\" y=\"6\" width=\"7\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip muted\" x=\"14\" y=\"6\" width=\"9\" height=\"3.5\" rx=\"1.5\"/>\n  <rect class=\"fg-chip muted\" x=\"5\" y=\"15\" width=\"8\" height=\"10\" rx=\"1.5\"/>\n  <rect class=\"fg-chip muted\" x=\"33.5\" y=\"15\" width=\"6\" height=\"10\" rx=\"1.5\"/>\n  <rect class=\"fg-proof\" x=\"16\" y=\"15\" width=\"16\" height=\"8\" rx=\"2\"/>\n  <rect class=\"fg-hot\" x=\"18.5\" y=\"17.5\" width=\"8\" height=\"1.5\" rx=\".75\"/>\n  <rect class=\"fg-hot\" x=\"18.5\" y=\"20\" width=\"5\" height=\"1.5\" rx=\".75\"/>\n  <rect class=\"fg-dim\" x=\"2\" y=\"3\" width=\"40\" height=\"28\" rx=\"3\" mask=\"url(#focusGlyphSpotMask)\"/>\n  <path class=\"fg-cone\" d=\"M15 3 24 19 33 3Z\"/>\n  <ellipse class=\"fg-beam\" cx=\"24\" cy=\"19\" rx=\"12\" ry=\"8\"/>",
+  "ui-activity": "<path d=\"M3 12h4l3-7 4 14 3-7h4\"/>",
+  "ui-ask": "<circle cx=\"12\" cy=\"12\" r=\"9\"/>\n  <path d=\"M9.6 9.4a2.4 2.4 0 0 1 4.8.4c0 1.6-2.4 2.1-2.4 3.7\"/>\n  <path d=\"M12 17h.01\"/>",
+  "ui-audio-queue": "<path d=\"M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2\"/>",
+  "ui-book": "<path d=\"M19.5 21H7a2.5 2.5 0 0 1 0-5h12.5V3H7a2.5 2.5 0 0 0-2.5 2.5v13\"/>",
+  "ui-bookmark": "<path d=\"M6 4.5h12v15.5l-6-3.8-6 3.8Z\"/>",
+  "ui-box": "<path d=\"M12 3 20.5 7.75 12 12.5 3.5 7.75Z\"/>\n  <path d=\"M3.5 7.75v8.5L12 21l8.5-4.75v-8.5\"/>\n  <path d=\"M3.5 7.75 12 12.5l8.5-4.75\"/>\n  <path d=\"M12 12.5V21\"/>\n  <path d=\"m7.75 5.4 8.5 4.7\"/>",
+  "ui-branch": "<circle cx=\"7\" cy=\"5.5\" r=\"2.5\"/>\n  <circle cx=\"17\" cy=\"5.5\" r=\"2.5\"/>\n  <circle cx=\"12\" cy=\"18.5\" r=\"2.5\"/>\n  <path d=\"M7 8v1a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V8M12 12v4\"/>",
+  "ui-bulb": "<path d=\"M8.75 15.1a6.5 6.5 0 1 1 6.5 0c-.8.7-1.25 1.6-1.25 2.65v.75h-4v-.75c0-1.05-.45-1.95-1.25-2.65Z\"/>\n  <path d=\"M9.5 21.5h5\"/>",
+  "ui-camera": "<rect x=\"3\" y=\"6.5\" width=\"12.5\" height=\"11\" rx=\"2\"/>\n  <path d=\"m15.5 10.5 5-3v9l-5-3\"/>",
+  "ui-captions": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M7 11.5h4M14 11.5h3M7 15h7\"/>",
+  "ui-chapters": "<rect x=\"3\" y=\"8\" width=\"5\" height=\"8\" rx=\"1.25\" fill=\"currentColor\" fill-opacity=\".25\"/>\n  <rect x=\"9.5\" y=\"8\" width=\"5\" height=\"8\" rx=\"1.25\"/>\n  <rect x=\"16\" y=\"8\" width=\"5\" height=\"8\" rx=\"1.25\"/>",
+  "ui-check-box": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"3.5\"/>\n  <path d=\"m8 12 3 3 5.5-6.5\"/>",
+  "ui-check": "<path d=\"m5 12.5 4.5 4.5L19 7\"/>",
+  "ui-checklist-done": "<path d=\"M4 6.5h16M4 12h9M4 17.5h7\"/>\n  <path d=\"m14 16.5 2.25 2.25L21 13.5\"/>",
+  "ui-chevron-left": "<path d=\"m15 6-6 6 6 6\"/>",
   "ui-chevron": "<path d=\"m6 9 6 6 6-6\"/>",
-  "ui-close": "<path d=\"M4 6h16M4 12h10M4 18h7\"/><path d=\"m17 15 2 2 4-4\"/>",
-  "ui-compare": "<path fill=\"currentColor\" stroke=\"none\" d=\"M10 3H3v18h7V3zm2 0v18h7V3h-7zM8 7v2H5V7h3zm0 4v2H5v-2h3zm0 4v2H5v-2h3zm11-8v2h-3V7h3zm0 4v2h-3v-2h3zm0 4v2h-3v-2h3z\"/>",
-  "ui-cursor": "<path d=\"M5 3 19 11l-6 2-3 6L5 3z\"/>",
-  "ui-depth": "<path d=\"m12 3 9 5-9 5-9-5 9-5z\"/><path d=\"m3 13 9 5 9-5\"/>",
-  "ui-download-fill": "<path fill=\"currentColor\" stroke=\"none\" d=\"M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z\"/>",
-  "ui-download": "<path d=\"M12 4v12\"/><path d=\"M8 12l4 4 4-4\"/><path d=\"M5 20h14\"/>",
-  "ui-eye": "<path d=\"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
-  "ui-film": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4\"/>",
-  "ui-fit": "<path d=\"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5\"/>",
-  "ui-focus": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M3 9V5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4\"/>",
-  "ui-formats": "<rect x=\"3\" y=\"3\" width=\"8\" height=\"8\" rx=\"1.5\"/><rect x=\"13\" y=\"3\" width=\"8\" height=\"8\" rx=\"1.5\"/><rect x=\"3\" y=\"13\" width=\"8\" height=\"8\" rx=\"1.5\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.5\"/>",
-  "ui-fullscreen-fill": "<path fill=\"currentColor\" stroke=\"none\" d=\"M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z\"/>",
-  "ui-fullscreen": "<path d=\"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5\"/>",
-  "ui-grid": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/>",
-  "ui-grip": "<circle cx=\"9\" cy=\"6\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"15\" cy=\"6\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"9\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"15\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"9\" cy=\"18\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"15\" cy=\"18\" r=\"1.2\" fill=\"currentColor\"/>",
-  "ui-history": "<path d=\"M3 12a9 9 0 1 0 3-6.7\"/><path d=\"M3 4v5h5\"/><path d=\"M12 7v5l3 2\"/>",
-  "ui-keep": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"m8 12 3 3 5-6\"/>",
-  "ui-lens-off": "<circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m20 20-4.9-4.9\"/><path d=\"M4 4l16 16\"/>",
-  "ui-lens": "<circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path d=\"m20 20-4.9-4.9\"/><path d=\"M7.4 9.2a3.4 3.4 0 0 1 2.4-2.3\"/>",
-  "ui-list": "<path d=\"M4 7h16M4 12h10M4 17h7\"/><path d=\"M16 14l4 3-4 3v-6z\"/>",
-  "ui-lock": "<rect x=\"4\" y=\"11\" width=\"16\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 8 0v4\"/>",
-  "ui-lockup": "<rect x=\"4\" y=\"5\" width=\"16\" height=\"10\" rx=\"2\"/><path d=\"M8 19h8\"/>",
-  "ui-logo": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 15l4-7 4 7\"/><path d=\"M9.5 12.5h5\"/>",
-  "ui-loop": "<path d=\"M17 2l3 3-3 3\"/><path d=\"M4 11V9a4 4 0 0 1 4-4h12\"/><path d=\"M7 22l-3-3 3-3\"/><path d=\"M20 13v2a4 4 0 0 1-4 4H4\"/>",
-  "ui-loupe": "<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"M20 20l-4-4\"/>",
-  "ui-mic": "<rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/><path d=\"M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8\"/>",
-  "ui-motion-sec": "<path d=\"M5 12h14\"/><path d=\"M13 6l6 6-6 6\"/><path d=\"M3 6v12\" opacity=\".5\"/>",
+  "ui-close": "<circle cx=\"12\" cy=\"12\" r=\"9\"/>\n  <path d=\"m9 9 6 6M15 9l-6 6\"/>",
+  "ui-compare": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/>\n  <path d=\"M12 4v16\"/>\n  <path d=\"M5 4h7v16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
+  "ui-cursor": "<path d=\"M5 4.5 19.5 10.5l-6.2 2.2-2.6 6.3Z\"/>",
+  "ui-depth": "<path d=\"m12 3 8.5 4.75L12 12.5 3.5 7.75Z\"/>\n  <path d=\"m3.5 12 8.5 4.75L20.5 12\"/>\n  <path d=\"m3.5 16.25 8.5 4.75 8.5-4.75\"/>",
+  "ui-download-fill": "<path d=\"M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z\"/>\n  <path d=\"M4.5 20h15\" stroke-linecap=\"round\"/>",
+  "ui-download": "<path d=\"M12 4v11\"/>\n  <path d=\"m7.5 10.5 4.5 4.5 4.5-4.5\"/>\n  <path d=\"M4.5 20h15\"/>",
+  "ui-eye": "<path d=\"M2.5 12c2.3-4.3 5.5-6.5 9.5-6.5s7.2 2.2 9.5 6.5c-2.3 4.3-5.5 6.5-9.5 6.5S4.8 16.3 2.5 12Z\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+  "ui-film": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/>\n  <path d=\"M7.5 4v16M16.5 4v16\"/>\n  <path d=\"M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21\"/>",
+  "ui-fit": "<path d=\"M3.5 8.5v-3a2 2 0 0 1 2-2h3M15.5 3.5h3a2 2 0 0 1 2 2v3M20.5 15.5v3a2 2 0 0 1-2 2h-3M8.5 20.5h-3a2 2 0 0 1-2-2v-3\"/>\n  <rect x=\"8\" y=\"9\" width=\"8\" height=\"6\" rx=\"1\"/>",
+  "ui-focus": "<circle cx=\"12\" cy=\"12\" r=\"3.25\"/>\n  <path d=\"M3.5 8.5v-3a2 2 0 0 1 2-2h3M15.5 3.5h3a2 2 0 0 1 2 2v3M20.5 15.5v3a2 2 0 0 1-2 2h-3M8.5 20.5h-3a2 2 0 0 1-2-2v-3\"/>",
+  "ui-formats": "<rect x=\"3\" y=\"4\" width=\"12\" height=\"7.5\" rx=\"1.5\"/>\n  <rect x=\"17\" y=\"4\" width=\"4\" height=\"16\" rx=\"1.5\"/>\n  <rect x=\"3\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.5\"/>",
+  "ui-fullscreen-fill": "<path d=\"M3.5 9.5v-4a2 2 0 0 1 2-2h4V6H6v3.5Z\"/>\n  <path d=\"M14.5 3.5h4a2 2 0 0 1 2 2v4H18V6h-3.5Z\"/>\n  <path d=\"M20.5 14.5v4a2 2 0 0 1-2 2h-4V18H18v-3.5Z\"/>\n  <path d=\"M9.5 20.5h-4a2 2 0 0 1-2-2v-4H6V18h3.5Z\"/>",
+  "ui-fullscreen": "<path d=\"M3.5 9.5v-4a2 2 0 0 1 2-2h4M14.5 3.5h4a2 2 0 0 1 2 2v4M20.5 14.5v4a2 2 0 0 1-2 2h-4M9.5 20.5h-4a2 2 0 0 1-2-2v-4\"/>",
+  "ui-grid": "<rect x=\"3\" y=\"3\" width=\"7.5\" height=\"7.5\" rx=\"1.75\"/>\n  <rect x=\"13.5\" y=\"3\" width=\"7.5\" height=\"7.5\" rx=\"1.75\"/>\n  <rect x=\"3\" y=\"13.5\" width=\"7.5\" height=\"7.5\" rx=\"1.75\"/>\n  <rect x=\"13.5\" y=\"13.5\" width=\"7.5\" height=\"7.5\" rx=\"1.75\"/>",
+  "ui-grip": "<circle cx=\"9\" cy=\"6\" r=\"1.25\"/>\n  <circle cx=\"15\" cy=\"6\" r=\"1.25\"/>\n  <circle cx=\"9\" cy=\"12\" r=\"1.25\"/>\n  <circle cx=\"15\" cy=\"12\" r=\"1.25\"/>\n  <circle cx=\"9\" cy=\"18\" r=\"1.25\"/>\n  <circle cx=\"15\" cy=\"18\" r=\"1.25\"/>",
+  "ui-history": "<path d=\"M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5\"/>\n  <path d=\"M4.5 4v4.5H9\"/>\n  <path d=\"M12 8.5V12l2.5 1.5\"/>",
+  "ui-keep": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"m8 12 3 3 5-6\"/>",
+  "ui-lens-off": "<circle cx=\"11\" cy=\"11\" r=\"7.5\"/>\n  <circle cx=\"11\" cy=\"11\" r=\"3.75\"/>\n  <path d=\"m20.5 20.5-4.2-4.2\"/>\n  <path d=\"M19.5 4.5 4.5 19.5\"/>",
+  "ui-lens": "<circle cx=\"11\" cy=\"11\" r=\"7.5\"/>\n  <circle cx=\"11\" cy=\"11\" r=\"3.75\"/>\n  <path d=\"m20.5 20.5-4.2-4.2\"/>",
+  "ui-list": "<path d=\"M4 6.5h12M4 12h12M4 17.5h7\"/>\n  <path d=\"M15.5 14v6l4.5-3Z\" fill=\"currentColor\"/>",
+  "ui-lock": "<rect x=\"4.5\" y=\"10.5\" width=\"15\" height=\"10.5\" rx=\"2.5\"/>\n  <path d=\"M8 10.5v-3a4 4 0 0 1 8 0v3\"/>\n  <path d=\"M12 15.75h.01\"/>",
+  "ui-lockup": "<rect x=\"3\" y=\"7\" width=\"8\" height=\"10\" rx=\"2\"/>\n  <path d=\"M14.5 9.5H21M14.5 14.5h4.5\"/>",
+  "ui-logo": "<path d=\"M12 3 20.5 7.75 12 12.5 3.5 7.75Z\"/>\n  <path d=\"M3.5 7.75v8.5L12 21l8.5-4.75v-8.5\"/>\n  <path d=\"M3.5 7.75 12 12.5l8.5-4.75\"/>\n  <path d=\"M12 12.5V21\"/>\n  <path d=\"M5 10.1 10.5 13.15v4L5 14.1Z\" fill=\"currentColor\" fill-opacity=\".5\" stroke=\"none\"/>",
+  "ui-loop": "<path d=\"m17 3.5 3 3-3 3\"/>\n  <path d=\"M4 11.5v-2a3 3 0 0 1 3-3h13\"/>\n  <path d=\"m7 20.5-3-3 3-3\"/>\n  <path d=\"M20 12.5v2a3 3 0 0 1-3 3H4\"/>",
+  "ui-loupe": "<circle cx=\"10.5\" cy=\"10.5\" r=\"7\"/>\n  <path d=\"m20.5 20.5-5-5\"/>",
+  "ui-mic": "<rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/>\n  <path d=\"M6 11.5a6 6 0 0 0 12 0M12 17.5V21M8.5 21h7\"/>",
+  "ui-motion-sec": "<circle cx=\"15\" cy=\"12\" r=\"4.5\"/>\n  <path d=\"M3 8.5h5M3 12h4M3 15.5h5\" opacity=\".55\"/>",
   "ui-motion": "<path d=\"M3 12c3-6 6-6 9 0s6 6 9 0\"/>",
-  "ui-music-sm": "<path d=\"M9 18V6l11-2v12\"/><circle cx=\"6\" cy=\"18\" r=\"2.4\"/><circle cx=\"17\" cy=\"16\" r=\"2.4\"/>",
-  "ui-music": "<path d=\"M9 18V6l12-2v12\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><circle cx=\"18\" cy=\"16\" r=\"3\"/>",
-  "ui-mute": "<path fill=\"currentColor\" stroke=\"none\" d=\"M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v4h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z\"/>",
-  "ui-no-zoom": "<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"m20 20-4.3-4.3M8.5 11h5\"/><path d=\"M4 4l16 16\"/>",
-  "ui-note": "<path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/>",
-  "ui-open": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 8v4l3 2\"/>",
-  "ui-pace": "<path d=\"M12 12l4-4\"/><path d=\"M4 14a8 8 0 1 1 16 0\"/><path d=\"M4 14h2M18 14h2\"/>",
-  "ui-palette-sec": "<path d=\"M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 21 10c0-3.9-4-7-9-7z\"/><circle cx=\"7.5\" cy=\"11.5\" r=\"1\"/><circle cx=\"11\" cy=\"7.5\" r=\"1\"/><circle cx=\"16\" cy=\"8\" r=\"1\"/>",
-  "ui-palette": "<path d=\"M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2v-1a2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 9 9 0 0 0-9-9z\"/><circle cx=\"7.5\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"10\" cy=\"7.5\" r=\"1.2\" fill=\"currentColor\"/><circle cx=\"15\" cy=\"7.5\" r=\"1.2\" fill=\"currentColor\"/>",
-  "ui-pause-fill": "<path fill=\"currentColor\" stroke=\"none\" d=\"M6 5h4v14H6zm8 0h4v14h-4z\"/>",
-  "ui-pause": "<path d=\"M7 5h3v14H7zM14 5h3v14h-3z\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-pencil": "<path fill=\"currentColor\" stroke=\"none\" d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z\"/>",
-  "ui-pip-done": "<path fill=\"currentColor\" stroke=\"none\" d=\"M9.6 16.7 5.4 12.5l1.4-1.4 2.8 2.8 7-7.1 1.4 1.4-8.4 8.5z\"/>",
-  "ui-pip-fail": "<path fill=\"currentColor\" stroke=\"none\" d=\"M7.1 6 6 7.1 10.9 12 6 16.9 7.1 18 12 13.1 16.9 18 18 16.9 13.1 12 18 7.1 16.9 6 12 10.9 7.1 6z\"/>",
-  "ui-pip-run": "<circle class=\"pip-track\" cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"/><circle class=\"pip-arc\" cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-dasharray=\"14 43\" transform=\"rotate(-90 12 12)\"/>",
-  "ui-pip-todo": "<circle cx=\"12\" cy=\"12\" r=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"/>",
-  "ui-pipeline": "<path d=\"M4 6h16M4 12h16M4 18h10\"/><circle cx=\"18\" cy=\"18\" r=\"2\"/>",
-  "ui-plate": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M7 9h10M7 13h6\"/>",
-  "ui-plates-queue": "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\" rx=\"2\"/><path d=\"M4 10h16M9 5v14\"/>",
-  "ui-play-fill": "<path fill=\"currentColor\" stroke=\"none\" d=\"M8 5v14l11-7z\"/>",
-  "ui-play": "<path d=\"M7 5v14l11-7z\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-plus-fill": "<path fill=\"currentColor\" stroke=\"none\" d=\"M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z\"/>",
+  "ui-music-sm": "<path d=\"M9 18V5.5l11-2.5v12.5\"/>\n  <circle cx=\"6.25\" cy=\"18\" r=\"2.75\"/>\n  <circle cx=\"17.25\" cy=\"15.5\" r=\"2.75\"/>",
+  "ui-music": "<path d=\"M9 18V5.5l11-2.5v12.5\"/>\n  <circle cx=\"6.25\" cy=\"18\" r=\"2.75\"/>\n  <circle cx=\"17.25\" cy=\"15.5\" r=\"2.75\"/>",
+  "ui-mute": "<path d=\"M3.5 9.5v5H7l5 4v-13l-5 4Z\"/>\n  <path d=\"m16 9.5 5 5M21 9.5l-5 5\"/>",
+  "ui-no-zoom": "<circle cx=\"10.5\" cy=\"10.5\" r=\"7\"/>\n  <path d=\"m20.5 20.5-5-5\"/>\n  <path d=\"M19.5 4.5 4.5 19.5\"/>",
+  "ui-note": "<path d=\"M13 20.5h8\"/>\n  <path d=\"M16.75 3.75a2.3 2.3 0 0 1 3.5 3.5L8 19.5 3.5 20.5l1-4.5Z\"/>",
+  "ui-open": "<path d=\"M14 3.5h6.5V10\"/>\n  <path d=\"M20.5 3.5 11.5 12.5\"/>\n  <path d=\"M18.5 14v4.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2H10\"/>",
+  "ui-pace": "<path d=\"M9.5 3.5h5l3.5 17H6Z\"/>\n  <path d=\"m12 15.5 3-8\"/>\n  <path d=\"M7 15.5h10\"/>",
+  "ui-palette-sec": "<rect x=\"3.5\" y=\"4.5\" width=\"4.5\" height=\"15\" rx=\"1.25\"/>\n  <rect x=\"9.75\" y=\"4.5\" width=\"4.5\" height=\"15\" rx=\"1.25\"/>\n  <rect x=\"16\" y=\"4.5\" width=\"4.5\" height=\"15\" rx=\"1.25\"/>",
+  "ui-palette": "<path d=\"M3 6a2 2 0 0 1 2-2h4v16H5a2 2 0 0 1-2-2Z\" fill=\"currentColor\" fill-opacity=\".15\"/>\n  <path d=\"M9 4h6v16H9Z\" fill=\"currentColor\" fill-opacity=\".35\"/>\n  <path d=\"M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4Z\" fill=\"currentColor\" fill-opacity=\".6\"/>",
+  "ui-pause-fill": "<rect x=\"6.5\" y=\"5\" width=\"3.5\" height=\"14\" rx=\"1.25\"/>\n  <rect x=\"14\" y=\"5\" width=\"3.5\" height=\"14\" rx=\"1.25\"/>",
+  "ui-pause": "<rect x=\"6.5\" y=\"5\" width=\"3.5\" height=\"14\" rx=\"1.25\"/>\n  <rect x=\"14\" y=\"5\" width=\"3.5\" height=\"14\" rx=\"1.25\"/>",
+  "ui-pencil": "<path d=\"M16.75 3.75a2.3 2.3 0 0 1 3.5 3.5L7.5 20 3 21l1-4.5Z\"/>\n  <path d=\"m14.5 6 3.5 3.5\"/>",
+  "ui-pip-done": "<path d=\"m6 12.5 4 4 8-9\"/>",
+  "ui-pip-fail": "<path d=\"m7 7 10 10M17 7 7 17\"/>",
+  "ui-pip-run": "<circle class=\"pip-track\" cx=\"12\" cy=\"12\" r=\"8.5\"/>\n  <circle class=\"pip-arc\" cx=\"12\" cy=\"12\" r=\"8.5\" stroke-dasharray=\"14 39.4\" transform=\"rotate(-90 12 12)\"/>",
+  "ui-pip-todo": "<circle cx=\"12\" cy=\"12\" r=\"8.5\" stroke-dasharray=\"2.9 2.9\"/>",
+  "ui-pipeline": "<circle cx=\"5\" cy=\"12\" r=\"2\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"2\"/>\n  <circle cx=\"19\" cy=\"12\" r=\"2\"/>\n  <path d=\"M7 12h3M14 12h3\"/>",
+  "ui-plate": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M7 10h10M7 14h6\"/>",
+  "ui-plates-queue": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M3 10h18M9 10v9\"/>",
+  "ui-play-fill": "<path d=\"M8 5.75v12.5L18.5 12Z\"/>",
+  "ui-play": "<path d=\"M8 5.75v12.5L18.5 12Z\" fill=\"currentColor\"/>",
+  "ui-plus-fill": "<path fill-rule=\"evenodd\" d=\"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-1.1 4.5h2.2v3.4h3.4v2.2h-3.4v3.4h-2.2v-3.4H7.5v-2.2h3.4Z\"/>",
   "ui-plus": "<path d=\"M12 5v14M5 12h14\"/>",
-  "ui-poster": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><path d=\"M3 16l5-5 4 4 3-3 6 6\"/><circle cx=\"16\" cy=\"9\" r=\"1.5\"/>",
-  "ui-preview": "<path fill=\"currentColor\" stroke=\"none\" d=\"M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z\"/>",
-  "ui-produce-queue": "<rect x=\"3\" y=\"6\" width=\"18\" height=\"12\" rx=\"2\"/><path d=\"M8 10l4 2.5L8 15V10z\"/>",
-  "ui-queue": "<path d=\"M8 6h13M8 12h13M8 18h13\"/><circle cx=\"4\" cy=\"6\" r=\"1\"/><circle cx=\"4\" cy=\"12\" r=\"1\"/><circle cx=\"4\" cy=\"18\" r=\"1\"/>",
-  "ui-record": "<circle cx=\"12\" cy=\"12\" r=\"6\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" opacity=\"0.35\"/>",
-  "ui-redo": "<path d=\"m15 14 5-5-5-5\"/><path d=\"M20 9H9a5 5 0 0 0 0 10h3\"/>",
-  "ui-render": "<path d=\"m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z\"/><path d=\"M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z\"/>",
-  "ui-replay": "<path d=\"M4 12a8 8 0 1 0 2.4-5.7\"/><path d=\"M4 4v4h4\"/><path d=\"m10.5 9 4.5 3-4.5 3z\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-reset": "<path d=\"M4 10a8 8 0 1 1 2 6\"/><path d=\"M4 4v6h6\"/>",
-  "ui-restore": "<path fill=\"currentColor\" stroke=\"none\" d=\"M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z\"/>",
-  "ui-search": "<path fill=\"currentColor\" d=\"m20.7 19.3-4.4-4.4a7 7 0 1 0-1.4 1.4l4.4 4.4 1.4-1.4ZM5 11a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z\"/>",
-  "ui-settings": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/>",
-  "ui-skip-back": "<path fill=\"currentColor\" stroke=\"none\" d=\"M11 18V6l-8.5 6 8.5 6zm.5-6 8.5 6V6l-8.5 6z\"/>",
-  "ui-skip-fwd": "<path fill=\"currentColor\" stroke=\"none\" d=\"M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z\"/>",
-  "ui-slow": "<path d=\"M4 15a8 8 0 1 1 16 0\"/><path d=\"M12 15 8 9\"/><circle cx=\"12\" cy=\"15\" r=\"1.4\" fill=\"currentColor\"/>",
-  "ui-sound": "<path d=\"M4 10v4h4l5 4V6L8 10H4z\"/><path d=\"M16 9a4 4 0 0 1 0 6M18.5 7a7 7 0 0 1 0 10\"/>",
-  "ui-sparkle": "<path d=\"m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z\"/>",
-  "ui-speed": "<path d=\"M4 15a8 8 0 1 1 16 0\"/><path d=\"M12 15 16 9\"/><circle cx=\"12\" cy=\"15\" r=\"1.4\" fill=\"currentColor\"/>",
-  "ui-step-audio": "<path fill=\"currentColor\" stroke=\"none\" d=\"M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z\"/>",
-  "ui-step-deliver": "<path fill=\"currentColor\" stroke=\"none\" d=\"M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z\"/>",
-  "ui-step-plates": "<path fill=\"currentColor\" stroke=\"none\" d=\"M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z\"/>",
-  "ui-step-produce": "<path fill=\"currentColor\" stroke=\"none\" d=\"M4 6h16v12H4V6zm2 2v8h12V8H6z\"/>",
-  "ui-step-record": "<circle cx=\"12\" cy=\"12\" r=\"6\" fill=\"currentColor\"/>",
-  "ui-stop": "<rect x=\"6\" y=\"6\" width=\"12\" height=\"12\" rx=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-story": "<path d=\"M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14\"/><path d=\"M4 19a2 2 0 0 0 2 2h14\"/><path d=\"M8 7h8M8 11h5\"/>",
-  "ui-tag": "<path d=\"M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z\"/><path d=\"M7.5 7.5h.01\"/>",
-  "ui-target-sec": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/>",
-  "ui-target": "<circle cx=\"12\" cy=\"12\" r=\"7\"/><circle cx=\"12\" cy=\"12\" r=\"2.5\"/><path d=\"M12 2v3M12 19v3M2 12h3M19 12h3\"/>",
-  "ui-text": "<path d=\"M4 7V5h16v2M9 19h6M12 5v14\"/>",
-  "ui-to-start": "<path d=\"M6 5v14\"/><path d=\"M18 6v12l-9-6z\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-tr-blur": "<path d=\"M4 8c2-2 4 2 6 0s4-2 6 0 4 2 4 2M4 13c2-2 4 2 6 0s4-2 6 0 4 2 4 2M4 18c2-2 4 2 6 0s4-2 6 0\"/>",
-  "ui-tr-diagonal": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 5h18L3 19z\" fill=\"currentColor\" fill-opacity=\".35\" stroke=\"none\"/>",
-  "ui-tr-dip": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 12h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" fill=\"currentColor\" stroke=\"none\"/>",
-  "ui-tr-directed": "<path d=\"m4 20 10-10\"/><path d=\"m15 3 1.2 2.8L19 7l-2.8 1.2L15 11l-1.2-2.8L11 7l2.8-1.2z\"/>",
-  "ui-tr-dissolve": "<rect x=\"3\" y=\"5\" width=\"12\" height=\"12\" rx=\"2\"/><rect x=\"9\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\" fill-opacity=\".35\"/>",
-  "ui-tr-iris": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"4.5\" fill=\"currentColor\" fill-opacity=\".4\"/>",
-  "ui-tr-push": "<rect x=\"2\" y=\"6\" width=\"9\" height=\"12\" rx=\"1.5\"/><rect x=\"13\" y=\"6\" width=\"9\" height=\"12\" rx=\"1.5\" fill=\"currentColor\" fill-opacity=\".4\"/>",
-  "ui-tr-radial": "<circle cx=\"12\" cy=\"12\" r=\"8\"/><path d=\"M12 12V4a8 8 0 0 1 8 8z\" fill=\"currentColor\" fill-opacity=\".4\"/>",
-  "ui-tr-slice": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M3 9.7h18M3 14.3h18\"/><path d=\"M3 9.7h11v4.6H3z\" fill=\"currentColor\" fill-opacity=\".4\" stroke=\"none\"/>",
-  "ui-tr-wipe": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7z\" fill=\"currentColor\" fill-opacity=\".4\" stroke=\"none\"/><path d=\"M12 5v14\"/>",
-  "ui-tr-zoom": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><rect x=\"8\" y=\"8.5\" width=\"8\" height=\"7\" rx=\"1\" fill=\"currentColor\" fill-opacity=\".4\"/>",
-  "ui-transition": "<rect x=\"3\" y=\"6\" width=\"11\" height=\"11\" rx=\"1.5\"/><rect x=\"10\" y=\"9\" width=\"11\" height=\"11\" rx=\"1.5\"/>",
-  "ui-trash": "<path d=\"M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13\"/>",
-  "ui-undo": "<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h11a5 5 0 0 1 0 10h-3\"/>",
-  "ui-upload": "<path d=\"M12 16V5\"/><path d=\"m8 9 4-4 4 4\"/><path d=\"M5 19h14\"/>",
-  "ui-video": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"m10 9 5 3-5 3z\"/>",
-  "ui-volume": "<path fill=\"currentColor\" stroke=\"none\" d=\"M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z\"/>",
-  "ui-walk": "<path fill=\"currentColor\" stroke=\"none\" d=\"M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z\"/>",
-  "ui-warn-tri": "<path d=\"M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>",
-  "ui-warn": "<path d=\"M12 3 2 21h20L12 3z\"/><path d=\"M12 10v5M12 18h.01\"/>",
-  "ui-x": "<path d=\"M6 6l12 12M18 6 6 18\"/>",
-  "ui-zoom": "<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"m20 20-4.3-4.3M11 8.5v5M8.5 11h5\"/>",
-  "zen-box": "<path d=\"M24 30h48v24H24z\"/>\n     <g class=\"z-lid\"><path d=\"M24 30l-6-10h60l-6 10\"/></g>\n     <path d=\"M48 30v24M40 42h16\" opacity=\".55\"/>",
-  "zen-checklist": "<rect x=\"24\" y=\"12\" width=\"48\" height=\"42\" rx=\"6\"/>\n     <g class=\"z-tick\"><rect x=\"31\" y=\"20\" width=\"8\" height=\"8\" rx=\"2\"/><path d=\"M33 24l2 2 4-4\"/></g>\n     <g class=\"z-tick\"><rect x=\"31\" y=\"32\" width=\"8\" height=\"8\" rx=\"2\"/><path d=\"M33 36l2 2 4-4\"/></g>\n     <g class=\"z-tick\"><rect x=\"31\" y=\"44\" width=\"8\" height=\"8\" rx=\"2\"/><path d=\"M33 48l2 2 4-4\"/></g>\n     <path d=\"M44 24h20M44 36h16M44 48h12\" opacity=\".55\"/>",
-  "zen-clapper": "<rect x=\"22\" y=\"29\" width=\"52\" height=\"25\" rx=\"4\"/>\n     <path d=\"M30 41h14M30 47h22\" opacity=\".55\"/>\n     <g class=\"z-flap\">\n       <path d=\"M22 29h52l-4-11H18z\"/>\n       <path d=\"M31 18l5 11M44 18l5 11M57 18l5 11\" opacity=\".7\"/>\n     </g>",
-  "zen-dashes": "<g class=\"z-dash\"><path d=\"M28 24h40\" opacity=\".3\"/><path d=\"M28 32h28\" opacity=\".5\"/><path d=\"M28 40h34\" opacity=\".3\"/></g>",
-  "zen-film": "<rect x=\"16\" y=\"20\" width=\"64\" height=\"24\" rx=\"4\"/>\n     <path d=\"M16 26h64M16 38h64\" opacity=\".5\"/>\n     <path d=\"M24 20v6M34 20v6M44 20v6M54 20v6M64 20v6M74 20v6M24 38v6M34 38v6M44 38v6M54 38v6M64 38v6M74 38v6\" opacity=\".5\"/>\n     <g class=\"z-reel\"><circle cx=\"48\" cy=\"32\" r=\"3\"/></g>",
-  "zen-frame": "<rect x=\"18\" y=\"14\" width=\"60\" height=\"40\" rx=\"5\"/>\n     <path d=\"M18 48l16-14 12 10 8-6 24 14\" />\n     <circle class=\"z-sun\" cx=\"62\" cy=\"27\" r=\"5\"/>",
-  "zen-loupe": "<g class=\"z-loupe\">\n       <circle cx=\"44\" cy=\"30\" r=\"15\"/>\n       <path d=\"M55 41l16 16\"/>\n       <path d=\"M36 27a9 9 0 0 1 8-6\" opacity=\".55\"/>\n     </g>",
-  "zen-pointer": "<rect x=\"16\" y=\"22\" width=\"48\" height=\"20\" rx=\"5\"/>\n     <path d=\"M26 22v20M36 22v20M46 22v20\" opacity=\".45\"/>\n     <g class=\"z-pointer\"><path d=\"M56 30l16 7-7 2-2 7z\" fill=\"currentColor\" fill-opacity=\".18\"/></g>",
-  "zen-sleep": "<rect x=\"30\" y=\"26\" width=\"36\" height=\"26\" rx=\"8\"/>\n     <path d=\"M39 39h7M50 39h7\"/>\n     <path d=\"M48 26v-6\"/><circle cx=\"48\" cy=\"17\" r=\"2.2\"/>\n     <path d=\"M40 52v4M56 52v4\"/>\n     <g class=\"z-zz\" fill=\"currentColor\" stroke=\"none\" font-family=\"Plus Jakarta Sans, system-ui, sans-serif\" font-weight=\"800\">\n       <text x=\"68\" y=\"30\" font-size=\"8\">z</text>\n       <text x=\"74\" y=\"22\" font-size=\"10\">z</text>\n       <text x=\"82\" y=\"13\" font-size=\"12\">z</text>\n     </g>",
-  "zen-tumbleweed": "<path class=\"z-ground\" d=\"M4 55h88\" stroke-dasharray=\"2 6\"/>\n     <g class=\"z-weed\">\n       <circle cx=\"48\" cy=\"38\" r=\"14\"/>\n       <path d=\"M38 29c7 3 13 11 10 19M58 29c-7 3-13 11-10 19M35 42c8-7 18-7 26 0M41 25c3 9 3 17-1 26M55 25c-3 9-3 17 1 26M34 36h28\" opacity=\".65\"/>\n     </g>\n     <g class=\"z-dust\">\n       <circle cx=\"24\" cy=\"51\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/>\n       <circle cx=\"18\" cy=\"47\" r=\".8\" fill=\"currentColor\" stroke=\"none\"/>\n       <circle cx=\"29\" cy=\"46\" r=\".7\" fill=\"currentColor\" stroke=\"none\"/>\n     </g>",
+  "ui-poster": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/>\n  <circle cx=\"8.5\" cy=\"9\" r=\"1.75\"/>\n  <path d=\"m21 15.5-5-5L6.5 20\"/>",
+  "ui-preview": "<path d=\"M2.5 12c2.3-4.3 5.5-6.5 9.5-6.5s7.2 2.2 9.5 6.5c-2.3 4.3-5.5 6.5-9.5 6.5S4.8 16.3 2.5 12Z\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+  "ui-produce-queue": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"m10 9 5 3-5 3Z\" fill=\"currentColor\"/>",
+  "ui-queue": "<path d=\"M9 6.5h12M9 12h12M9 17.5h12\"/>\n  <circle cx=\"4.5\" cy=\"6.5\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/>\n  <circle cx=\"4.5\" cy=\"12\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/>\n  <circle cx=\"4.5\" cy=\"17.5\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/>",
+  "ui-record": "<circle cx=\"12\" cy=\"12\" r=\"5.5\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" opacity=\".4\"/>",
+  "ui-redo": "<path d=\"m15.5 14 4.5-4.5L15.5 5\"/>\n  <path d=\"M20 9.5H9.5a5 5 0 0 0 0 10H13\"/>",
+  "ui-render": "<path d=\"M10.5 6Q11.9 11.6 17.5 13Q11.9 14.4 10.5 20Q9.1 14.4 3.5 13Q9.1 11.6 10.5 6Z\"/>\n  <path d=\"M18.5 2.75Q19.05 4.95 21.25 5.5Q19.05 6.05 18.5 8.25Q17.95 6.05 15.75 5.5Q17.95 4.95 18.5 2.75Z\"/>",
+  "ui-replay": "<path d=\"M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5\"/>\n  <path d=\"M4.5 4v4.5H9\"/>\n  <path d=\"M10.5 9.5v5l4.5-2.5Z\" fill=\"currentColor\"/>",
+  "ui-reset": "<path d=\"M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5\"/>\n  <path d=\"M4.5 4v4.5H9\"/>",
+  "ui-restore": "<path d=\"M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5\"/>\n  <path d=\"M4.5 4v4.5H9\"/>\n  <path d=\"m8.75 12.75 2.25 2.25L15.5 10.25\"/>",
+  "ui-search": "<circle cx=\"10.5\" cy=\"10.5\" r=\"7\"/>\n  <path d=\"m20.5 20.5-5-5\"/>",
+  "ui-settings": "<path d=\"M4 7h8M16 7h4M14 4.5v5\"/>\n  <path d=\"M4 12h3M11 12h9M9 9.5v5\"/>\n  <path d=\"M4 17h10M18 17h2M16 14.5v5\"/>",
+  "ui-skip-back": "<path d=\"M11 6.5v11L3.5 12Z\" fill=\"currentColor\"/>\n  <path d=\"M20.5 6.5v11L13 12Z\" fill=\"currentColor\"/>",
+  "ui-skip-fwd": "<path d=\"M3.5 6.5v11L11 12Z\" fill=\"currentColor\"/>\n  <path d=\"M13 6.5v11l7.5-5.5Z\" fill=\"currentColor\"/>",
+  "ui-slow": "<path d=\"M4 15.5a8 8 0 1 1 16 0\"/>\n  <path d=\"m12 15.5-4-5.5\"/>\n  <circle cx=\"12\" cy=\"15.5\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "ui-sound": "<path d=\"M3.5 9.5v5H7l5 4v-13l-5 4Z\"/>\n  <path d=\"M15.5 9a4.5 4.5 0 0 1 0 6\"/>",
+  "ui-sparkle": "<path d=\"M12 3.5Q13.7 10.3 20.5 12Q13.7 13.7 12 20.5Q10.3 13.7 3.5 12Q10.3 10.3 12 3.5Z\"/>",
+  "ui-speed": "<path d=\"M4 15.5a8 8 0 1 1 16 0\"/>\n  <path d=\"m12 15.5 4-5.5\"/>\n  <circle cx=\"12\" cy=\"15.5\" r=\"1.5\" fill=\"currentColor\" stroke=\"none\"/>",
+  "ui-step-audio": "<rect x=\"2.75\" y=\"9\" width=\"2.5\" height=\"6\" rx=\"1.25\"/>\n  <rect x=\"6.75\" y=\"6\" width=\"2.5\" height=\"12\" rx=\"1.25\"/>\n  <rect x=\"10.75\" y=\"3\" width=\"2.5\" height=\"18\" rx=\"1.25\"/>\n  <rect x=\"14.75\" y=\"7\" width=\"2.5\" height=\"10\" rx=\"1.25\"/>\n  <rect x=\"18.75\" y=\"10\" width=\"2.5\" height=\"4\" rx=\"1.25\"/>",
+  "ui-step-deliver": "<path d=\"M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z\"/>\n  <path d=\"M4.5 20h15\" stroke-linecap=\"round\"/>",
+  "ui-step-plates": "<rect x=\"4\" y=\"5\" width=\"16\" height=\"3\" rx=\"1\"/>\n  <rect x=\"4\" y=\"10.5\" width=\"16\" height=\"3\" rx=\"1\"/>\n  <rect x=\"4\" y=\"16\" width=\"10\" height=\"3\" rx=\"1\"/>",
+  "ui-step-produce": "<path fill-rule=\"evenodd\" d=\"M5 4.5a2.5 2.5 0 0 0-2.5 2.5v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5Zm.25 2.25h13.5v10.5H5.25Z\"/>\n  <path d=\"M10.25 9.25v5.5l4.5-2.75Z\"/>",
+  "ui-step-record": "<circle cx=\"12\" cy=\"12\" r=\"6\"/>",
+  "ui-stop": "<rect x=\"5.5\" y=\"5.5\" width=\"13\" height=\"13\" rx=\"2.5\"/>",
+  "ui-story": "<path d=\"M6 3h8.5l5 5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4.5A1.5 1.5 0 0 1 6 3Z\"/>\n  <path d=\"M14.5 3v5h5\"/>\n  <path d=\"M8.5 12.5h7M8.5 16.5h4.5\"/>",
+  "ui-tag": "<path d=\"M3.5 3.5h7.6l9.4 9.4a1.5 1.5 0 0 1 0 2.1l-5.5 5.5a1.5 1.5 0 0 1-2.1 0L3.5 11.1Z\"/>\n  <path d=\"M7.75 7.75h.01\"/>",
+  "ui-target-sec": "<circle cx=\"12\" cy=\"12\" r=\"9\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"5.25\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"1.75\" fill=\"currentColor\" stroke=\"none\"/>",
+  "ui-target": "<circle cx=\"12\" cy=\"12\" r=\"7.5\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"2.75\"/>\n  <path d=\"M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2\"/>",
+  "ui-text": "<path d=\"M5 7.5v-3h14v3M12 4.5v15M9 19.5h6\"/>",
+  "ui-to-start": "<path d=\"M6 5.5v13\"/>\n  <path d=\"M18 6.5v11L9.5 12Z\" fill=\"currentColor\"/>",
+  "ui-tr-blur": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\" opacity=\".35\"/>\n  <rect x=\"6\" y=\"7.5\" width=\"12\" height=\"9\" rx=\"1.5\" opacity=\".65\"/>\n  <rect x=\"9\" y=\"10\" width=\"6\" height=\"4\" rx=\"1\"/>",
+  "ui-tr-diagonal": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M5 5h16L3 17V7a2 2 0 0 1 2-2Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
+  "ui-tr-dip": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M3 12h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z\" fill=\"currentColor\" stroke=\"none\"/>",
+  "ui-tr-directed": "<path d=\"m3.5 20.5 9.5-9.5\"/>\n  <path d=\"M16.5 3Q17.4 6.6 21 7.5Q17.4 8.4 16.5 12Q15.6 8.4 12 7.5Q15.6 6.6 16.5 3Z\"/>",
+  "ui-tr-dissolve": "<rect x=\"3\" y=\"4.5\" width=\"12.5\" height=\"11\" rx=\"1.5\" stroke-dasharray=\"2.2 2\"/>\n  <rect x=\"8.5\" y=\"8.5\" width=\"12.5\" height=\"11\" rx=\"1.5\"/>",
+  "ui-tr-iris": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <circle cx=\"12\" cy=\"12\" r=\"4.25\" fill=\"currentColor\" fill-opacity=\".25\"/>",
+  "ui-tr-push": "<rect x=\"2.5\" y=\"6\" width=\"9\" height=\"12\" rx=\"1.5\"/>\n  <rect x=\"12.5\" y=\"6\" width=\"9\" height=\"12\" rx=\"1.5\" fill=\"currentColor\" fill-opacity=\".25\"/>",
+  "ui-tr-radial": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>\n  <path d=\"M12 12V3.5a8.5 8.5 0 0 1 8.5 8.5Z\" fill=\"currentColor\" fill-opacity=\".25\"/>",
+  "ui-tr-slice": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M3 9.67h18M3 14.33h18\"/>\n  <path d=\"M3 9.67h11v4.66H3Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
+  "ui-tr-wipe": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M12 5v14\"/>\n  <path d=\"M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
+  "ui-tr-zoom": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <rect x=\"8\" y=\"8.75\" width=\"8\" height=\"6.5\" rx=\"1\" fill=\"currentColor\" fill-opacity=\".25\"/>",
+  "ui-transition": "<rect x=\"3\" y=\"5.5\" width=\"11\" height=\"11\" rx=\"1.5\"/>\n  <rect x=\"10\" y=\"8.5\" width=\"11\" height=\"11\" rx=\"1.5\" fill=\"currentColor\" fill-opacity=\".2\"/>",
+  "ui-trash": "<path d=\"M4 6.5h16\"/>\n  <path d=\"M9.5 6.5v-2h5v2\"/>\n  <path d=\"m6 6.5.9 12.6a1.5 1.5 0 0 0 1.5 1.4h7.2a1.5 1.5 0 0 0 1.5-1.4L18 6.5\"/>\n  <path d=\"M10 10.5v6M14 10.5v6\"/>",
+  "ui-undo": "<path d=\"M8.5 14 4 9.5 8.5 5\"/>\n  <path d=\"M4 9.5h10.5a5 5 0 0 1 0 10H11\"/>",
+  "ui-upload": "<path d=\"M12 15.5v-11\"/>\n  <path d=\"m7.5 9 4.5-4.5L16.5 9\"/>\n  <path d=\"M4.5 20h15\"/>",
+  "ui-video": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"m10 9 5 3-5 3Z\" fill=\"currentColor\"/>",
+  "ui-volume": "<path d=\"M3.5 9.5v5H7l5 4v-13l-5 4Z\"/>\n  <path d=\"M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11\"/>",
+  "ui-walk": "<circle cx=\"12.5\" cy=\"4.5\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>\n  <path d=\"M11.75 8.5 10.25 14\"/>\n  <path d=\"m8 12 3.75-3.5 3.5 2.75 2.5-1.25\"/>\n  <path d=\"m10.25 14-3.5 7.5M10.25 14l3.25 3.25.75 4.25\"/>",
+  "ui-warn-tri": "<path d=\"M10.3 4.2 2.9 17.2a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z\"/>\n  <path d=\"M12 9.5v4M12 17h.01\"/>",
+  "ui-warn": "<circle cx=\"12\" cy=\"12\" r=\"9\"/>\n  <path d=\"M12 7.5v5M12 16.5h.01\"/>",
+  "ui-x": "<path d=\"m6.5 6.5 11 11M17.5 6.5l-11 11\"/>",
+  "ui-zoom": "<circle cx=\"10.5\" cy=\"10.5\" r=\"7\"/>\n  <path d=\"m20.5 20.5-5-5\"/>\n  <path d=\"M10.5 7.5v6M7.5 10.5h6\"/>",
+  "zen-box": "<rect x=\"26.67\" y=\"29.33\" width=\"42.67\" height=\"24\" rx=\"5.33\"/>\n  <g class=\"z-lid\">\n    <path d=\"M26.67 29.33 L21.33 17.33 L74.67 17.33 L69.33 29.33\"/>\n  </g>\n  <path d=\"M48 29.33 V53.33\" opacity=\".45\"/>\n  <path d=\"M38.67 41.33 H57.33\" opacity=\".45\"/>",
+  "zen-checklist": "<rect x=\"25.33\" y=\"4\" width=\"45.33\" height=\"56\" rx=\"5.33\"/>\n  <g class=\"z-tick\">\n    <rect x=\"32\" y=\"9.33\" width=\"10.67\" height=\"10.67\" rx=\"2.67\"/>\n    <path d=\"M34.13 14.93 L37.07 18.4 L43.2 12.27\"/>\n  </g>\n  <path d=\"M46.67 14.67 H64\" opacity=\".45\"/>\n  <g class=\"z-tick\">\n    <rect x=\"32\" y=\"25.33\" width=\"10.67\" height=\"10.67\" rx=\"2.67\"/>\n    <path d=\"M34.13 30.93 L37.07 34.4 L43.2 28.27\"/>\n  </g>\n  <path d=\"M46.67 30.67 H60\" opacity=\".45\"/>\n  <g class=\"z-tick\">\n    <rect x=\"32\" y=\"41.33\" width=\"10.67\" height=\"10.67\" rx=\"2.67\"/>\n    <path d=\"M34.13 46.93 L37.07 50.4 L43.2 44.27\"/>\n  </g>\n  <path d=\"M46.67 46.67 H56\" opacity=\".45\"/>",
+  "zen-clapper": "<rect x=\"24\" y=\"29.33\" width=\"48\" height=\"24\" rx=\"5.33\"/>\n  <path d=\"M34.67 40 H50.67\" opacity=\".45\"/>\n  <path d=\"M34.67 46.67 H58.67\" opacity=\".45\"/>\n  <g class=\"z-flap\">\n    <path d=\"M24 29.33 L72 29.33 L67.2 16 L19.2 16 Z\"/>\n    <path d=\"M32.53 16 L37.33 29.33 M45.87 16 L50.67 29.33 M59.2 16 L64 29.33\" opacity=\".7\"/>\n  </g>",
+  "zen-dashes": "<g class=\"z-dash\">\n    <path d=\"M26.67 21.33 H69.33\" opacity=\".3\"/>\n    <path d=\"M26.67 32 H50.67\" opacity=\".5\"/>\n    <path d=\"M26.67 42.67 H61.33\" opacity=\".3\"/>\n  </g>",
+  "zen-film": "<rect x=\"24\" y=\"10.67\" width=\"48\" height=\"42.67\" rx=\"5.33\"/>\n  <path d=\"M36 10.67 V53.33 M60 10.67 V53.33\"/>\n  <path d=\"M24 25.33 H36 M24 38.67 H36 M60 25.33 H72 M60 38.67 H72\"/>\n  <circle cx=\"48\" cy=\"32\" r=\"5.33\" class=\"z-reel\"/>",
+  "zen-frame": "<rect x=\"24\" y=\"10.67\" width=\"48\" height=\"42.67\" rx=\"5.33\"/>\n  <path d=\"M24 42.67 L38.67 32 L49.33 38.67 L58.67 33.33 L72 42.67\"/>\n  <circle cx=\"59.2\" cy=\"19.2\" r=\"4\" class=\"z-sun\"/>",
+  "zen-loupe": "<g class=\"z-loupe\">\n    <circle cx=\"46\" cy=\"26.67\" r=\"17.33\"/>\n    <circle cx=\"46\" cy=\"26.67\" r=\"8.67\" opacity=\".45\"/>\n    <path d=\"M58.53 39.2 L72.67 53.33\"/>\n  </g>",
+  "zen-pointer": "<rect x=\"19.33\" y=\"21.33\" width=\"32\" height=\"21.33\" rx=\"5.33\"/>\n  <path d=\"M27.33 21.33 V42.67 M35.33 21.33 V42.67 M43.33 21.33 V42.67\" opacity=\".45\"/>\n  <g class=\"z-pointer\">\n    <path d=\"M51.33 21.33 L72.67 30.13 L63.6 33.33 L59.6 42.67 Z\"/>\n  </g>",
+  "zen-sleep": "<path d=\"M34 8 L56.67 20.67 L34 33.33 L11.33 20.67 Z\"/>\n  <path d=\"M11.33 20.67 L11.33 43.33 L34 56 L56.67 43.33 L56.67 20.67\"/>\n  <path d=\"M11.33 20.67 L34 33.33 L56.67 20.67\"/>\n  <path d=\"M34 33.33 L34 56\"/>\n  <path d=\"M15.33 26.93 L30 35.07 L30 45.73 L15.33 37.6 Z\" fill=\"currentColor\" fill-opacity=\".5\" stroke=\"none\"/>\n  <g class=\"z-zz\"><path d=\"M64 42H76L64 54H76\"/><path d=\"M74 24H88L74 36H88\"/><path d=\"M84 6H94L84 18H94\"/></g>",
+  "zen-tumbleweed": "<path class=\"z-ground\" d=\"M6 56H90\" stroke-dasharray=\"0.01 7.99\"/>\n  <ellipse cx=\"52\" cy=\"55.5\" rx=\"14\" ry=\"1.6\" fill=\"currentColor\" stroke=\"none\" opacity=\".16\"/>\n  <g class=\"z-weed\">\n    <circle cx=\"52\" cy=\"32.53\" r=\"16\"/>\n    <ellipse cx=\"52\" cy=\"32.53\" rx=\"16\" ry=\"6.4\" opacity=\".45\"/>\n    <ellipse cx=\"52\" cy=\"32.53\" rx=\"6.93\" ry=\"16\" opacity=\".45\"/>\n  </g>\n  <g class=\"z-dust\" fill=\"currentColor\" stroke=\"none\"><circle cx=\"28\" cy=\"50\" r=\"1.5\"/><circle cx=\"21\" cy=\"46\" r=\"1.15\"/><circle cx=\"33\" cy=\"44.5\" r=\".9\"/><circle cx=\"16\" cy=\"52\" r=\".75\"/></g>",
 };

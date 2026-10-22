@@ -10,10 +10,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflashGraph, flashesFor } from './deflash.mjs';
-import { frameAssets, frameGraph, planZooms, zoomFilter } from './camera.mjs';
-import { buildEditPlan, resolveEdit } from './edit.mjs';
+import { frameAssets, frameGraph, planZooms, zoomFilter, zoomTiming } from './camera.mjs';
+import { buildEditPlan, resolveEdit, xfadeArgs } from './edit.mjs';
 import { compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
-import { lensGeometry, lensGraph } from './lens.mjs';
+import { lensGeometry, lensGraph, lensTiming } from './lens.mjs';
 import {
   assertX264Args,
   BT709_PARAMS,
@@ -82,8 +82,9 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
   // The editor deck: manual zooms / zoom-free windows join the recorded marks; speed ramps apply last.
   const deck = resolveEdit(video, { liveDur: liveSec });
   const cameraTimeline = [...withEditLenses(timeline, deck), ...editCameraMarks(deck)].sort((a, b) => a.t - b.t);
-  const zoomPlan = planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveSec });
-  const zoom = zoomFilter(zoomPlan.shots, { width, height });
+  const timing = zoomTiming(camera);
+  const zoomPlan = planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveSec, timing });
+  const zoom = zoomFilter(zoomPlan.shots, { width, height, timing });
   if (zoom) {
     filter.push(`${lv}${zoom},format=yuv420p,${BT709_PARAMS}[lzoom]`);
     lv = '[lzoom]';
@@ -95,7 +96,7 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
     const geo = lensGeometry(m, { width, height });
     const idx = inBase + i;
     lensInputs.push('-ss', m.t.toFixed(3), '-t', m.dur.toFixed(3), '-i', LIVE);
-    filter.push(lensGraph(idx, i, m, geo, video.brand.colors.gold));
+    filter.push(lensGraph(idx, i, m, geo, video.brand.colors.gold, lensTiming(camera)));
     filter.push(
       `${lv}[lens${i}]overlay=x='${geo.ox}':y='${geo.oy}':eval=frame:eof_action=pass:format=auto,` +
         `format=yuv420p,${BT709_PARAMS}[lz${i}]`
@@ -328,7 +329,7 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     const { xfade, dur } = plan.segments[i].transitionIn;
     const label = `[x${i}]`;
     filter.push(
-      `${acc}[v${i}]xfade=transition=${xfade}:duration=${dur.toFixed(4)}:offset=${plan.segments[i].at.toFixed(4)}${label}`
+      `${acc}[v${i}]xfade=${xfadeArgs(xfade)}:duration=${dur.toFixed(4)}:offset=${plan.segments[i].at.toFixed(4)}${label}`
     );
     acc = label;
   }

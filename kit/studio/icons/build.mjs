@@ -92,47 +92,55 @@ ${entries.map((e) => `  ${JSON.stringify(e.id)}: ${JSON.stringify(e.body)},`).jo
 
 writeFileSync(join(STUDIO, 'icons.gen.js'), gen);
 
-/** Rewrite index.html <use href="/icons.svg#id"> into inlined SVGs (currentColor-safe). */
+const PAINT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'];
+
+/**
+ * Inline one icon into a host <svg>. Caller attrs (class, width, height, hidden,
+ * data-*) stay; the source file's paint attrs are added when the host lacks them.
+ * The host is tagged data-sprite="id" so the next build can refresh the body.
+ */
+function inlineInto(svgAttrs, e) {
+  let attrs = svgAttrs.trim();
+  for (const k of PAINT) attrs = attrs.replace(new RegExp(`\\s*\\b${k}="[^"]*"`), '');
+  attrs = attrs.replace(/\s*\bdata-sprite="[^"]*"/, '').replace(/\s*\bviewBox="[^"]*"/, '').trim();
+  const extra = PAINT.filter((k) => e.present[k] != null)
+    .map((k) => ` ${k}="${e.present[k]}"`)
+    .join('');
+  return `<svg viewBox="${e.viewBox}" data-sprite="${e.id}" ${attrs}${extra}>${e.body}</svg>`;
+}
+
+/**
+ * index.html: turn <use href="/icons.svg#id"> into inlined SVGs (currentColor-safe),
+ * and refresh every <svg data-sprite="id"> inlined by an earlier build.
+ */
 function inlineHtmlUses() {
   const htmlPath = join(STUDIO, 'index.html');
   let html = readFileSync(htmlPath, 'utf8');
   const byId = Object.fromEntries(entries.map((e) => [e.id, e]));
-  let n = 0;
-  html = html.replace(/<svg\b([^>]*)>\s*<use\b[^>]*href="\/icons\.svg#([^"]+)"[^>]*\/>\s*<\/svg>/g, (full, svgAttrs, id) => {
+  let inlined = 0;
+  let refreshed = 0;
+  const spriteRe = /<svg\b([^>]*\bdata-sprite="([^"]+)"[^>]*)>[\s\S]*?<\/svg>/g;
+  html = html.replace(spriteRe, (full, svgAttrs, id) => {
+    const e = byId[id];
+    if (!e) {
+      console.warn('missing icon for data-sprite:', id);
+      return full;
+    }
+    refreshed++;
+    return inlineInto(svgAttrs, e);
+  });
+  const useRe = /<svg\b([^>]*)>\s*<use\b[^>]*href="\/icons\.svg#([^"]+)"[^>]*(?:\/>|>\s*<\/use>)\s*<\/svg>/g;
+  html = html.replace(useRe, (full, svgAttrs, id) => {
     const e = byId[id];
     if (!e) {
       console.warn('missing icon for use:', id);
       return full;
     }
-    n++;
-    // Keep caller attrs (class, width, height, hidden, data-*) but drop bare viewBox if we set ours.
-    let attrs = svgAttrs.trim();
-    if (!/\bviewBox=/.test(attrs)) attrs = `viewBox="${e.viewBox}" ${attrs}`;
-    const present = presentAttrString(e.present);
-    // Avoid duplicating fill/stroke if already on the host
-    const hostHas = (k) => new RegExp(`\\b${k}=`).test(attrs);
-    const extra = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']
-      .filter((k) => e.present[k] != null && !hostHas(k))
-      .map((k) => ` ${k}="${e.present[k]}"`)
-      .join('');
-    return `<svg ${attrs}${extra}>${e.body}</svg>`;
-  });
-  // Also catch <use></use> form
-  html = html.replace(/<svg\b([^>]*)>\s*<use\b[^>]*href="\/icons\.svg#([^"]+)"[^>]*>\s*<\/use>\s*<\/svg>/g, (full, svgAttrs, id) => {
-    const e = byId[id];
-    if (!e) return full;
-    n++;
-    let attrs = svgAttrs.trim();
-    if (!/\bviewBox=/.test(attrs)) attrs = `viewBox="${e.viewBox}" ${attrs}`;
-    const hostHas = (k) => new RegExp(`\\b${k}=`).test(attrs);
-    const extra = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']
-      .filter((k) => e.present[k] != null && !hostHas(k))
-      .map((k) => ` ${k}="${e.present[k]}"`)
-      .join('');
-    return `<svg ${attrs}${extra}>${e.body}</svg>`;
+    inlined++;
+    return inlineInto(svgAttrs, e);
   });
   writeFileSync(htmlPath, html);
-  console.log(`icons: inlined ${n} <use> embeds in index.html`);
+  console.log(`icons: inlined ${inlined} <use> embeds, refreshed ${refreshed} data-sprite embeds in index.html`);
 }
 
 inlineHtmlUses();

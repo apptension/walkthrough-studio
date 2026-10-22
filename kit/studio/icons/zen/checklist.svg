@@ -1,5 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="24" y="12" width="48" height="42" rx="6"/>
-     <g class="z-tick"><rect x="31" y="20" width="8" height="8" rx="2"/><path d="M33 24l2 2 4-4"/></g>
-     <g class="z-tick"><rect x="31" y="32" width="8" height="8" rx="2"/><path d="M33 36l2 2 4-4"/></g>
-     <g class="z-tick"><rect x="31" y="44" width="8" height="8" rx="2"/><path d="M33 48l2 2 4-4"/></g>
-     <path d="M44 24h20M44 36h16M44 48h12" opacity=".55"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="25.33" y="4" width="45.33" height="56" rx="5.33"/>
+  <g class="z-tick">
+    <rect x="32" y="9.33" width="10.67" height="10.67" rx="2.67"/>
+    <path d="M34.13 14.93 L37.07 18.4 L43.2 12.27"/>
+  </g>
+  <path d="M46.67 14.67 H64" opacity=".45"/>
+  <g class="z-tick">
+    <rect x="32" y="25.33" width="10.67" height="10.67" rx="2.67"/>
+    <path d="M34.13 30.93 L37.07 34.4 L43.2 28.27"/>
+  </g>
+  <path d="M46.67 30.67 H60" opacity=".45"/>
+  <g class="z-tick">
+    <rect x="32" y="41.33" width="10.67" height="10.67" rx="2.67"/>
+    <path d="M34.13 46.93 L37.07 50.4 L43.2 44.27"/>
+  </g>
+  <path d="M46.67 46.67 H56" opacity=".45"/>
+</svg>

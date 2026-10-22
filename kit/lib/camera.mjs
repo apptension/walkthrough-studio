@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { BT709_PARAMS, BT709_SCALE_OPTS } from './encode.mjs';
 import { run } from './media.mjs';
 import { clampZoomCenter } from '../studio/zoomAim.js';
+import { CURVE_IDS, DEFAULT_CURVE, DEFAULT_MOTION, MOTION_IDS, curveOf, motionScale, unitExpr } from '../studio/easing.js';
 
 export const ZOOM_LEVELS = Object.freeze({ off: 0, subtle: 1.3, bold: 1.65 });
 export const FRAME_STYLES = Object.freeze(['full', 'inset']);
@@ -18,12 +19,27 @@ export const BACKGROUNDS = Object.freeze(['brand', 'ink', 'accent']);
 export const FRAME_PADDING = Object.freeze({ tight: 0.95, balanced: 0.9, roomy: 0.82 });
 export const FRAME_CORNERS = Object.freeze({ square: 0, soft: 22, round: 42 });
 export const FRAME_SHADOWS = Object.freeze(['off', 'soft', 'deep']);
+export const CAMERA_CURVES = CURVE_IDS;
+export const CAMERA_MOTIONS = MOTION_IDS;
 
-const IN = 0.75;
-const OUT = 0.85;
-const PAN = 0.65;
-/** Ease lengths shared with the Studio's live preview so the on-screen push-in matches the render. */
-export const ZOOM_TIMING = Object.freeze({ in: IN, out: OUT, pan: PAN });
+/**
+ * Base move lengths at `natural` motion. The push-in is quick enough to read as a response to the
+ * click, the pull-back is a touch longer (the eye forgives a slow release, never a slow attack),
+ * and a pan between targets arrives with the pointer.
+ */
+const IN = 0.9;
+const OUT = 1.05;
+const PAN = 0.7;
+/** Ease lengths + curve shared with the Studio's live preview so the on-screen push-in matches the render. */
+export const ZOOM_TIMING = Object.freeze({ in: IN, out: OUT, pan: PAN, curve: DEFAULT_CURVE, motion: DEFAULT_MOTION });
+
+/** Timing for a video's camera direction: `motion` scales the lengths, `curve` shapes them. */
+export function zoomTiming(camera = {}) {
+  const k = motionScale(camera.motion);
+  const curve = CURVE_IDS.includes(camera.curve) ? camera.curve : DEFAULT_CURVE;
+  const motion = MOTION_IDS.includes(camera.motion) ? camera.motion : DEFAULT_MOTION;
+  return { in: Number((IN * k).toFixed(3)), out: Number((OUT * k).toFixed(3)), pan: Number((PAN * k).toFixed(3)), curve, motion };
+}
 const HOLD_AFTER = 1.6;
 const MERGE_GAP = 2.8;
 const MIN_HOLD = 0.5;
@@ -50,7 +66,8 @@ export function blockedWindows(timeline) {
  * Group pointer targets into zoom shots. Returns [{ start, end, zoom, points: [{ t, cx, cy }] }]
  * plus how many targets fell inside a blocked window.
  */
-export function planZooms(timeline = [], { width, height, level = 'off', duration = Infinity } = {}) {
+export function planZooms(timeline = [], { width, height, level = 'off', duration = Infinity, timing = ZOOM_TIMING } = {}) {
+  const { in: IN, out: OUT } = timing;
   const zoom = ZOOM_LEVELS[level] || 0;
   const targets = timeline
     .filter((m) => (m.kind === 'click' || m.kind === 'type') && Number.isFinite(m.x) && Number.isFinite(m.y))
@@ -109,22 +126,21 @@ export function planZooms(timeline = [], { width, height, level = 'off', duratio
   return { shots, skipped: zoom ? targets.length - usable.length : 0, targets: targets.length, manual: manual.length };
 }
 
-/** Smootherstep: zero velocity and acceleration at both ends. */
-const ease = (from, dur) => {
-  const u = `clip((t-${f3(from)})/${f3(Math.max(0.001, dur))},0,1)`;
-  return `(${u}*${u}*${u}*(${u}*(${u}*6-15)+10))`;
-};
+/** The video's curve over `dur` seconds from `from`, as an ffmpeg expression in `t`. */
+const ease = (curve, from, dur) => curveOf(curve).expr(unitExpr('t', from, dur));
 
-function zoomExpr(shots) {
+function zoomExpr(shots, timing) {
+  const { in: IN, out: OUT, curve } = timing;
   const terms = shots.map((s) => {
-    const inE = ease(s.start, IN);
-    const outE = ease(s.end - OUT, OUT);
+    const inE = ease(curve, s.start, IN);
+    const outE = ease(curve, s.end - OUT, OUT);
     return `${(s.zoom - 1).toFixed(4)}*${inE}*(1-${outE})*between(t,${f3(s.start)},${f3(s.end)})`;
   });
   return `(1+${terms.join('+')})`;
 }
 
-function centerExpr(shots, key) {
+function centerExpr(shots, key, timing) {
+  const { pan: PAN, curve } = timing;
   const points = [];
   for (const s of shots) {
     const pts = s.points;
@@ -139,7 +155,7 @@ function centerExpr(shots, key) {
   for (let i = points.length - 2; i >= 0; i--) {
     const a = points[i];
     const b = points[i + 1];
-    const value = a.v === b.v ? String(a.v) : `${a.v}+(${b.v - a.v})*${ease(a.t, b.t - a.t)}`;
+    const value = a.v === b.v ? String(a.v) : `${a.v}+(${b.v - a.v})*${ease(curve, a.t, b.t - a.t)}`;
     out = `if(lt(t,${f3(b.t)}),${value},${out})`;
   }
   return out;
@@ -149,11 +165,11 @@ function centerExpr(shots, key) {
  * Per-frame push-in. Scale first (lanczos, continuous zoom), then crop at output resolution, so a
  * pan never steps by whole source pixels. No colour conversion happens here.
  */
-export function zoomFilter(shots, { width, height }) {
+export function zoomFilter(shots, { width, height, timing = ZOOM_TIMING }) {
   if (!shots?.length) return null;
-  const Z = zoomExpr(shots);
-  const cx = centerExpr(shots, 'cx');
-  const cy = centerExpr(shots, 'cy');
+  const Z = zoomExpr(shots, timing);
+  const cx = centerExpr(shots, 'cx', timing);
+  const cy = centerExpr(shots, 'cy', timing);
   const sw = `trunc(${width}*${Z}/2)*2`;
   const sh = `trunc(${height}*${Z}/2)*2`;
   const keep = 'in_color_matrix=bt709:out_color_matrix=bt709:in_range=tv:out_range=tv';

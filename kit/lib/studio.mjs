@@ -35,8 +35,13 @@ import {
 } from './agentRunner.mjs';
 import { loadNarrationLines, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
-import { ZOOM_LEVELS, ZOOM_TIMING, insetGeometry, planZooms } from './camera.mjs';
-import { lensGeometry } from './lens.mjs';
+import { ZOOM_LEVELS, insetGeometry, planZooms, zoomTiming } from './camera.mjs';
+import { lensGeometry, lensTiming } from './lens.mjs';
+import { CURVES, MOTION_SPEEDS } from '../studio/easing.js';
+
+/** Curve / motion presets for the Studio UI (labels, hints, CSS equivalents — no functions). */
+const CURVES_META = Object.fromEntries(Object.entries(CURVES).map(([id, c]) => [id, { label: c.label, hint: c.hint, css: c.css }]));
+const MOTIONS_META = Object.fromEntries(Object.entries(MOTION_SPEEDS).map(([id, m]) => [id, { label: m.label, hint: m.hint, scale: m.scale }]));
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { recordFailureView } from './recordFailure.mjs';
 import { nextBrief, revisePlan } from '../studio/briefRevise.js';
@@ -996,8 +1001,9 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   const timeline = loadRawTimeline(video);
   const camera = video.brand.direction?.camera || { zoom: 'off', frame: 'full', background: 'brand' };
   const cameraTimeline = [...withEditLenses(timeline, deck), ...editCameraMarks(deck)].sort((a, b) => a.t - b.t);
+  const timing = zoomTiming(camera);
   const zoomPlan = hasLive
-    ? planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveDur })
+    ? planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveDur, timing })
     : { shots: [], skipped: 0, targets: 0, manual: 0 };
   const map = liveTimeMap(deck.speed, liveDur);
   const meta = readJsonSafe(join(video.out, 'produce-meta.json'));
@@ -1213,7 +1219,10 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
     marks,
     zoomShots: zoomPlan.shots,
     zoomPlan: { skipped: zoomPlan.skipped, targets: zoomPlan.targets, manual: zoomPlan.manual },
-    zoomTiming: ZOOM_TIMING,
+    zoomTiming: timing,
+    lensTiming: lensTiming(camera),
+    curves: CURVES_META,
+    motions: MOTIONS_META,
     zoomLevels: ZOOM_LEVELS,
     conflicts: rampConflicts(deck, timeline),
     joins,

@@ -1,14 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 34" fill="none"><defs>
-                        <mask id="focusGlyphSpotMask">
-                          <rect x="2" y="4" width="40" height="26" rx="3.5" fill="#fff"/>
-                          <ellipse cx="26" cy="18.5" rx="10.2" ry="8" fill="#000"/>
-                        </mask>
-                      </defs>
-                      <rect class="fg-ui" x="2" y="4" width="40" height="26" rx="3.5"/>
-                      <rect class="fg-chip muted" x="6" y="8.5" width="7.5" height="4.5" rx="1"/>
-                      <rect class="fg-chip muted" x="15.5" y="8.5" width="9" height="4.5" rx="1"/>
-                      <rect class="fg-proof" x="18" y="13.5" width="16" height="10" rx="1.6"/>
-                      <rect class="fg-dim" x="2" y="4" width="40" height="26" rx="3.5" mask="url(#focusGlyphSpotMask)"/>
-                      <path class="fg-cone" d="M18 4.2L26 18.5L34 4.2Z"/>
-                      <ellipse class="fg-beam" cx="26" cy="18.5" rx="10.2" ry="8"/>
-                      <ellipse class="fg-hot" cx="26" cy="18.5" rx="5.6" ry="4.2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 34" fill="none">
+  <defs>
+    <mask id="focusGlyphSpotMask">
+      <rect x="2" y="3" width="40" height="28" rx="3" fill="#fff"/>
+      <ellipse cx="24" cy="19" rx="12" ry="8" fill="#000"/>
+    </mask>
+  </defs>
+  <rect class="fg-ui" x="2" y="3" width="40" height="28" rx="3"/>
+  <rect class="fg-chip muted" x="5" y="6" width="7" height="3.5" rx="1.5"/>
+  <rect class="fg-chip muted" x="14" y="6" width="9" height="3.5" rx="1.5"/>
+  <rect class="fg-chip muted" x="5" y="15" width="8" height="10" rx="1.5"/>
+  <rect class="fg-chip muted" x="33.5" y="15" width="6" height="10" rx="1.5"/>
+  <rect class="fg-proof" x="16" y="15" width="16" height="8" rx="2"/>
+  <rect class="fg-hot" x="18.5" y="17.5" width="8" height="1.5" rx=".75"/>
+  <rect class="fg-hot" x="18.5" y="20" width="5" height="1.5" rx=".75"/>
+  <rect class="fg-dim" x="2" y="3" width="40" height="28" rx="3" mask="url(#focusGlyphSpotMask)"/>
+  <path class="fg-cone" d="M15 3 24 19 33 3Z"/>
+  <ellipse class="fg-beam" cx="24" cy="19" rx="12" ry="8"/>
+</svg>

@@ -4927,6 +4927,8 @@ function renderCamera(direction) {
   for (const key of ['zoom', 'frame', 'background', 'padding', 'corners', 'shadow']) {
     mark(`[data-camera="${key}"]`, camera[key]);
   }
+  mark('[data-camera="curve"]', camera.curve || 'glide');
+  mark('[data-camera="motion"]', camera.motion || 'natural');
   for (const key of ['style', 'size']) mark(`[data-cursor="${key}"]`, cursor[key]);
   $('backgroundRow').hidden = camera.frame !== 'inset';
   document.querySelectorAll('.frameDetailRow').forEach((row) => (row.hidden = camera.frame !== 'inset'));
@@ -6503,6 +6505,10 @@ function wire() {
       // Auto zoom re-plans from this recording's click marks — refresh so the Editor stage matches.
       await syncEditorAfterDirection();
       toast('Auto zoom set', `${r.direction.camera.zoom} · live on the stage`, 'ok');
+    } else if (group.dataset.camera === 'curve' || group.dataset.camera === 'motion') {
+      // Curve and move length shape every zoom and loupe — the stage previews them live.
+      await syncEditorAfterDirection();
+      toast('Motion set', `${r.direction.camera.curve} · ${r.direction.camera.motion} · live on the stage`, 'ok');
     } else {
       toast('Cursor set', `${r.direction.cursor.style} · ${r.direction.cursor.size.toUpperCase()} · next recording`, 'ok');
     }
