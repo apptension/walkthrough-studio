@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g class="z-loupe">
-       <circle cx="44" cy="30" r="15"/>
-       <path d="M55 41l16 16"/>
-       <path d="M36 27a9 9 0 0 1 8-6" opacity=".55"/>
-     </g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+  <g class="z-loupe">
+    <circle cx="46" cy="26.67" r="17.33"/>
+    <circle cx="46" cy="26.67" r="8.67" opacity=".45"/>
+    <path d="M58.53 39.2 L72.67 53.33"/>
+  </g>
+</svg>

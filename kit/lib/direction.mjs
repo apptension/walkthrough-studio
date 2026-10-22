@@ -10,12 +10,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import {
   BACKGROUNDS,
+  CAMERA_CURVES,
+  CAMERA_MOTIONS,
   FRAME_CORNERS,
   FRAME_PADDING,
   FRAME_SHADOWS,
   FRAME_STYLES,
   ZOOM_LEVELS,
 } from './camera.mjs';
+import { DEFAULT_CURVE, DEFAULT_MOTION } from '../studio/easing.js';
 import { CURSOR_SIZES, CURSOR_STYLES } from './cursor.mjs';
 import { sampleColors } from './logoTone.mjs';
 import { mergeMotion } from './plateMotion.mjs';
@@ -382,6 +385,9 @@ export const CAMERA_OPTIONS = Object.freeze({
   padding: Object.keys(FRAME_PADDING),
   corners: Object.keys(FRAME_CORNERS),
   shadow: FRAME_SHADOWS,
+  // Motion: the curve every camera move and the loupe follow, and how long they take.
+  curve: CAMERA_CURVES,
+  motion: CAMERA_MOTIONS,
 });
 export const CURSOR_OPTIONS = Object.freeze({
   style: CURSOR_STYLES,
@@ -391,28 +397,28 @@ export const LOOK_PRESETS = Object.freeze({
   studio: {
     label: 'Studio',
     hint: 'Balanced and polished',
-    camera: { zoom: 'subtle', frame: 'inset', background: 'brand', padding: 'balanced', corners: 'soft', shadow: 'soft' },
+    camera: { zoom: 'subtle', frame: 'inset', background: 'brand', padding: 'balanced', corners: 'soft', shadow: 'soft', curve: 'glide', motion: 'natural' },
     cursor: { style: 'arrow', size: 'm', glide: true, hideIdle: true, loop: false },
     keys: true,
   },
   cinematic: {
     label: 'Cinematic',
     hint: 'Roomy frame, deep shadow',
-    camera: { zoom: 'bold', frame: 'inset', background: 'ink', padding: 'roomy', corners: 'round', shadow: 'deep' },
+    camera: { zoom: 'bold', frame: 'inset', background: 'ink', padding: 'roomy', corners: 'round', shadow: 'deep', curve: 'cinematic', motion: 'unhurried' },
     cursor: { style: 'dot', size: 'm', glide: true, hideIdle: true, loop: false },
     keys: true,
   },
   social: {
     label: 'Social',
     hint: 'Bold focus for small screens',
-    camera: { zoom: 'bold', frame: 'inset', background: 'accent', padding: 'balanced', corners: 'round', shadow: 'soft' },
+    camera: { zoom: 'bold', frame: 'inset', background: 'accent', padding: 'balanced', corners: 'round', shadow: 'soft', curve: 'snappy', motion: 'swift' },
     cursor: { style: 'arrow', size: 'l', glide: true, hideIdle: true, loop: true },
     keys: true,
   },
   minimal: {
     label: 'Minimal',
     hint: 'Full bleed, quiet pointer',
-    camera: { zoom: 'off', frame: 'full', background: 'brand', padding: 'tight', corners: 'square', shadow: 'off' },
+    camera: { zoom: 'off', frame: 'full', background: 'brand', padding: 'tight', corners: 'square', shadow: 'off', curve: 'smooth', motion: 'natural' },
     cursor: { style: 'classic', size: 'm', glide: false, hideIdle: false, loop: false },
     keys: false,
   },
@@ -428,6 +434,8 @@ export function resolveCamera(raw = {}) {
     padding: pick(raw?.padding, CAMERA_OPTIONS.padding, 'balanced'),
     corners: pick(raw?.corners, CAMERA_OPTIONS.corners, 'soft'),
     shadow: pick(raw?.shadow, CAMERA_OPTIONS.shadow, 'soft'),
+    curve: pick(raw?.curve, CAMERA_OPTIONS.curve, DEFAULT_CURVE),
+    motion: pick(raw?.motion, CAMERA_OPTIONS.motion, DEFAULT_MOTION),
   };
 }
 

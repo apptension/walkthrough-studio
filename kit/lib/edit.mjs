@@ -62,6 +62,18 @@ export const TRANSITION_STYLES = Object.freeze({
 
 const snap = (s) => Math.round(s * FPS) / FPS;
 
+/**
+ * xfade arguments for a style's transition. A plain `fade` mixes linearly, which reads as a
+ * sudden start and a lingering ghost at the end; the dissolve instead follows a smootherstep so
+ * it eases in and out of the mix — the same curve the Studio stage previews. `P` runs 1 → 0.
+ */
+export function xfadeArgs(xfade) {
+  if (xfade === 'fade') {
+    return "transition=custom:expr='st(0,1-P);st(0,ld(0)*ld(0)*ld(0)*(ld(0)*(ld(0)*6-15)+10));A*(1-ld(0))+B*ld(0)'";
+  }
+  return `transition=${xfade}`;
+}
+
 /** Brand default (brand.json → motion.transitions) overridden per video (video.config.json → transitions). */
 export function resolveTransitions(video) {
   const merged = {

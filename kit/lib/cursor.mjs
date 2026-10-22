@@ -10,12 +10,12 @@
  * switches the morph (default on for the arrow; the dot keeps its pulse).
  */
 import { hexA } from './text.mjs';
+import { minJerk } from '../studio/easing.js';
 
 export const CURSOR_STYLES = Object.freeze(['classic', 'arrow', 'dot']);
 export const CURSOR_SIZES = Object.freeze({ s: 1, m: 1.3, l: 1.65 });
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
 
 /**
  * Timing of the click gesture at a given pace: `armMs` is how long the hand is on screen before
@@ -134,17 +134,28 @@ function pageCursor({ style, scale, accent, halo, font, hideIdle, hand, handSvg,
       ripple.classList.add('go');
     }, { capture: true, passive: true });
     addEventListener('mouseup', () => el.classList.remove('down'), { capture: true, passive: true });
-    /** Play a precomputed route on the compositor clock; one round trip per glide. */
+    /**
+     * Play a precomputed route on the compositor clock; one round trip per glide. The route is
+     * sampled, not stepped: each frame lands between its two neighbours by elapsed time, so the
+     * pointer never pauses on a waypoint when the page paints slower than the route was built.
+     */
     const glide = (points) =>
       new Promise((resolve) => {
         if (!points.length) return resolve();
         const t0 = performance.now();
+        const last = points[points.length - 1];
         let i = 0;
         const tick = (now) => {
           const at = now - t0;
-          while (i < points.length - 1 && points[i].at < at) i++;
-          place(points[i].x, points[i].y);
-          if (i >= points.length - 1) return resolve();
+          if (at >= last.at) {
+            place(last.x, last.y);
+            return resolve();
+          }
+          while (i < points.length - 1 && points[i + 1].at <= at) i++;
+          const a = points[i];
+          const b = points[Math.min(i + 1, points.length - 1)];
+          const k = b.at > a.at ? Math.min(1, Math.max(0, (at - a.at) / (b.at - a.at))) : 1;
+          place(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
@@ -199,7 +210,12 @@ export function keyLabel(key) {
   return parts.map((p) => KEY_GLYPHS[p] || (p.length === 1 ? p.toUpperCase() : p.replace(/^Key/, '')));
 }
 
-/** Eased, gently arced pointer route. Duration follows distance. */
+/**
+ * Gently arced pointer route on a minimum-jerk profile — the velocity bell a hand draws when it
+ * points at something: it leaves softly, peaks mid-way and settles onto the target with no jolt.
+ * Starts from the current seat (a point at 0 ms) so playback can interpolate from the first frame.
+ * Duration follows distance.
+ */
 export function glidePath(from, to, { ms, fps = 60, speed = 1 } = {}) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -211,9 +227,9 @@ export function glidePath(from, to, { ms, fps = 60, speed = 1 } = {}) {
   const bend = Math.min(56, dist * 0.07) * (dx >= 0 ? 1 : -1);
   const cx = (from.x + to.x) / 2 - (dy / dist) * bend;
   const cy = (from.y + to.y) / 2 + (dx / dist) * bend;
-  const points = [];
+  const points = [{ x: from.x, y: from.y, at: 0 }];
   for (let i = 1; i <= steps; i++) {
-    const u = easeInOut(i / steps);
+    const u = minJerk(i / steps);
     const a = (1 - u) * (1 - u);
     const b = 2 * (1 - u) * u;
     const c = u * u;

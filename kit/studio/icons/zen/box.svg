@@ -1,3 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M24 30h48v24H24z"/>
-     <g class="z-lid"><path d="M24 30l-6-10h60l-6 10"/></g>
-     <path d="M48 30v24M40 42h16" opacity=".55"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="26.67" y="29.33" width="42.67" height="24" rx="5.33"/>
+  <g class="z-lid">
+    <path d="M26.67 29.33 L21.33 17.33 L74.67 17.33 L69.33 29.33"/>
+  </g>
+  <path d="M48 29.33 V53.33" opacity=".45"/>
+  <path d="M38.67 41.33 H57.33" opacity=".45"/>
+</svg>

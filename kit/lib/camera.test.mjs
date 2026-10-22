@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { insetGeometry, planZooms, zoomFilter } from './camera.mjs';
+import { insetGeometry, planZooms, zoomFilter, zoomTiming } from './camera.mjs';
 import { glidePath, keyLabel } from './cursor.mjs';
+import { CURVE_IDS, curveOf } from '../studio/easing.js';
 import { patchDirection, resolveDirection } from './direction.mjs';
 import { assertX264Args } from './encode.mjs';
 import { socialGeometry, teaserWindow, variantArgs } from './exports.mjs';
@@ -25,6 +26,31 @@ test('clicks close together share one shot that pans between them', () => {
   const vf = zoomFilter(shots, size);
   assert.match(vf, /^scale=.*eval=frame.*,crop=1920:1080:.*exact=1$/);
   assert.match(vf, /out_color_matrix=bt709/);
+});
+
+test('camera curve and move length shape the push-in expression and the Studio timing', () => {
+  const glide = zoomTiming({ curve: 'glide', motion: 'natural' });
+  assert.deepEqual(glide, { in: 0.9, out: 1.05, pan: 0.7, curve: 'glide', motion: 'natural' });
+  const slow = zoomTiming({ curve: 'cinematic', motion: 'unhurried' });
+  assert.ok(slow.in > glide.in && slow.pan > glide.pan);
+  assert.deepEqual(zoomTiming({ curve: 'nope', motion: 'nope' }), glide, 'unknown ids fall back to the defaults');
+  const { shots } = planZooms([click(4, 300, 200)], { ...size, level: 'bold', duration: 30 });
+  const g = zoomFilter(shots, { ...size, timing: glide });
+  const c = zoomFilter(shots, { ...size, timing: zoomTiming({ curve: 'cinematic' }) });
+  const s = zoomFilter(shots, { ...size, timing: zoomTiming({ curve: 'snappy' }) });
+  assert.match(g, /\(1-pow\(1-clip\(\(t-[\d.]+\)\/0\.900,0,1\),4\)\)/);
+  assert.match(c, /if\(lt\(clip\(\(t-[\d.]+\)\/0\.900,0,1\),0\.5\),4\*/);
+  assert.match(s, /pow\(2,-10\*clip/);
+  // Every curve starts at rest and ends fully in.
+  for (const id of CURVE_IDS) {
+    const fn = curveOf(id).fn;
+    assert.ok(Math.abs(fn(0)) < 1e-9 && Math.abs(fn(1) - 1) < 1e-9, id);
+    assert.ok(fn(0.25) < fn(0.5) && fn(0.5) < fn(0.75), `${id} rises monotonically`);
+  }
+  // A longer move length pushes the shot's start earlier so the attack still lands on the click.
+  const quick = planZooms([click(6, 300, 200)], { ...size, level: 'bold', duration: 30, timing: zoomTiming({ motion: 'swift' }) });
+  const long = planZooms([click(6, 300, 200)], { ...size, level: 'bold', duration: 30, timing: zoomTiming({ motion: 'unhurried' }) });
+  assert.ok(long.shots[0].start < quick.shots[0].start);
 });
 
 test('chapter cards and captions keep the frame whole', () => {
@@ -75,6 +101,20 @@ test('keystroke labels and glide timing', () => {
   const end = long.points.at(-1);
   assert.deepEqual([Math.round(end.x), Math.round(end.y)], [1800, 1000]);
   assert.equal(glidePath({ x: 5, y: 5 }, { x: 6, y: 5 }).points.length, 0);
+  // Minimum-jerk: the route starts at the seat, leaves softly and arrives softly (small end steps).
+  assert.deepEqual([long.points[0].x, long.points[0].y, long.points[0].at], [0, 0, 0]);
+  const step = (i) => Math.hypot(long.points[i].x - long.points[i - 1].x, long.points[i].y - long.points[i - 1].y);
+  const mid = Math.floor(long.points.length / 2);
+  assert.ok(step(1) < step(mid) / 6 && step(long.points.length - 1) < step(mid) / 6, 'bell-shaped velocity');
+});
+
+test('direction accepts a motion curve and move length and look presets carry them', () => {
+  const next = patchDirection({}, { camera: { curve: 'cinematic', motion: 'unhurried' } });
+  assert.deepEqual(next.camera, { curve: 'cinematic', motion: 'unhurried' });
+  assert.throws(() => patchDirection({}, { camera: { curve: 'bouncy' } }), /Unknown camera.curve/);
+  const resolved = resolveDirection({ direction: {} }, {});
+  assert.deepEqual([resolved.camera.curve, resolved.camera.motion], ['glide', 'natural']);
+  assert.deepEqual([patchDirection({}, { look: 'social' }).camera.curve, patchDirection({}, { look: 'cinematic' }).camera.motion], ['snappy', 'unhurried']);
 });
 
 test('direction patches validate camera, cursor and keys and drop approval', () => {

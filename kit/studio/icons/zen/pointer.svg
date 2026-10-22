@@ -1,3 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="22" width="48" height="20" rx="5"/>
-     <path d="M26 22v20M36 22v20M46 22v20" opacity=".45"/>
-     <g class="z-pointer"><path d="M56 30l16 7-7 2-2 7z" fill="currentColor" fill-opacity=".18"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="19.33" y="21.33" width="32" height="21.33" rx="5.33"/>
+  <path d="M27.33 21.33 V42.67 M35.33 21.33 V42.67 M43.33 21.33 V42.67" opacity=".45"/>
+  <g class="z-pointer">
+    <path d="M51.33 21.33 L72.67 30.13 L63.6 33.33 L59.6 42.67 Z"/>
+  </g>
+</svg>
