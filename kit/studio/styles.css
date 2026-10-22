@@ -5755,6 +5755,21 @@ kbd {
   background: rgba(0, 0, 0, 0.2);
   animation: slide-down 0.22s var(--ease-out);
 }
+.cred-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--good) 28%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
+.cred-status[hidden] { display: none; }
+.cred-status svg { flex-shrink: 0; margin-top: 2px; color: var(--good); }
 
 /* —— Help —— */
 .howto { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 9px; color: var(--ink-dim); font-size: 12.5px; }
@@ -7080,13 +7095,16 @@ html:not(.has-custom-select) .lang-filter { display: block; }
 .creation-view > * { flex-shrink: 0; }
 .creation-view > .agent-stream--wizard { flex-shrink: 1; }
 /* Footer per moment: running → Stop only; ready → Review script first / Approve & render; failed → Edit brief / Retry.
-   Selectors are specific enough to beat `.btn`'s own display. */
-[data-creating-only], .sheet-dialog.wizard:not(.is-creating.is-running) [data-creating-only],
-[data-ready-only], .sheet-dialog.wizard:not(.is-creating.is-ready) [data-ready-only],
-[data-failed-only], .sheet-dialog.wizard:not(.is-creating.is-failed) [data-failed-only] { display: none; }
+   Scope hides to the wizard so a bare [data-*-only] cannot fight `.btn { display: inline-flex }`.
+   Show rules use !important so a stuck is-running / specificity tie never leaves the foot empty. */
+.sheet-dialog.wizard [data-creating-only],
+.sheet-dialog.wizard [data-ready-only],
+.sheet-dialog.wizard [data-failed-only] { display: none; }
 .sheet-dialog.wizard.is-creating.is-running:not(.is-ready) [data-creating-only],
 .sheet-dialog.wizard.is-creating.is-ready [data-ready-only],
-.sheet-dialog.wizard.is-creating.is-failed:not(.is-running) [data-failed-only] { display: inline-flex; }
+.sheet-dialog.wizard.is-creating.is-failed:not(.is-running) [data-failed-only] {
+  display: inline-flex !important;
+}
 .sheet-dialog.wizard.is-creating #btnWizardBack,
 .sheet-dialog.wizard.is-creating #btnWizardNext,
 .sheet-dialog.wizard.is-creating .wizard-progress,

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { maskCredentials, nextBrief, revisePlan, scrubSecrets } from './briefRevise.js';
+import { hasStoredCredentials, maskCredentials, nextBrief, revisePlan, scrubSecrets } from './briefRevise.js';
 import { applyBriefRevision, saveSourceRevision } from '../lib/briefRevise.mjs';
 
 const before = {
@@ -26,6 +26,44 @@ test('project settings masks credentials and a story change does not rediscover 
   assert.equal(story.changed.some((item) => item.field === 'password'), false);
 });
 
+test('settings form does not echo stored email and blank fields keep the saved credentials', () => {
+  const signedIn = {
+    ...before,
+    app: {
+      startUrl: 'https://app.example/home',
+      loginRequired: true,
+      email: 'demo@acme.com',
+      envVars: ['INVITE_ADMIN_EMAIL', 'INVITE_ADMIN_PASSWORD'],
+    },
+  };
+  assert.equal(hasStoredCredentials(signedIn), true);
+  const masked = maskCredentials(signedIn);
+  assert.equal(masked.app.loginRequired, true);
+  assert.equal(masked.app.credentialsOnFile, true);
+  assert.equal(masked.app.email, '');
+  assert.equal(masked.app.password || '', '');
+  const keep = revisePlan(signedIn, {
+    ...signedIn,
+    audience: 'New admins',
+    app: { startUrl: signedIn.app.startUrl, loginRequired: true },
+  });
+  assert.equal(keep.changed.some((item) => item.field === 'email' || item.field === 'password'), false);
+  const kept = nextBrief(signedIn, {
+    ...signedIn,
+    audience: 'New admins',
+    story: signedIn.story,
+    app: { startUrl: signedIn.app.startUrl, loginRequired: true },
+  });
+  assert.equal(kept.app.email, 'demo@acme.com');
+  assert.equal(kept.app.loginRequired, true);
+  const replaced = nextBrief(signedIn, {
+    ...signedIn,
+    story: signedIn.story,
+    app: { startUrl: signedIn.app.startUrl, loginRequired: true, email: 'new@acme.com' },
+  });
+  assert.equal(replaced.app.email, 'new@acme.com');
+});
+
 test('a language change replans the script and keeps the current take', () => {
   const untouched = revisePlan(before, { ...before, app: { ...before.app, password: '' } });
   assert.equal(untouched.changed.some((item) => item.field === 'language'), false);
@@ -35,6 +73,17 @@ test('a language change replans the script and keeps the current take', () => {
   assert.equal(plan.changed.some((item) => item.label === 'Language'), true);
   assert.equal(nextBrief(before, { ...before, language: 'PL', story: before.story, app: before.app }).language, 'pl');
   assert.throws(() => nextBrief(before, { ...before, language: 'xx', story: before.story }), /Eleven v4/);
+});
+
+test('chapter list changes re-explore before the planner rewrites the script', () => {
+  const plan = revisePlan(before, {
+    ...before,
+    story: { ...before.story, mustShow: ['Dashboard', 'Invite'] },
+    app: { ...before.app, password: '' },
+  });
+  assert.ok(plan.stages.includes('analyze'));
+  assert.ok(plan.stages.includes('planner'));
+  assert.equal(plan.stages.indexOf('analyze') < plan.stages.indexOf('planner'), true);
 });
 
 test('access changes re-record and brand changes discover, without writing the password into the revision', () => {

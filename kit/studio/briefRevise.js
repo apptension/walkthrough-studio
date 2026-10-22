@@ -88,17 +88,37 @@ export function comparable(input = {}) {
   };
 }
 
-/** Credential values are blank in the form. The saved password stays in kit/.env. */
-export function maskCredentials(brief) {
+/** True when the brief (or freshness) says this tour signs in with env-backed credentials. */
+export function hasStoredCredentials(brief, freshness = null) {
+  const app = brief?.app || {};
+  if (app.loginRequired) return true;
+  if (Array.isArray(app.envVars) && app.envVars.some((v) => /_(EMAIL|PASSWORD)$/i.test(String(v || '')))) return true;
+  if (freshness?.loginRequired) return true;
+  return false;
+}
+
+/**
+ * Credential values are blank in the form. The saved password stays in kit/.env.
+ * Email is cleared for display too — settings shows “on file”, not the address.
+ */
+export function maskCredentials(brief, freshness = null) {
   if (!brief) return brief;
   const app = { ...(brief.app || {}) };
+  const onFile = hasStoredCredentials(brief, freshness) || Boolean(String(app.email || '').trim());
   if (app.password) app.password = '';
+  if (onFile) {
+    app.credentialsOnFile = true;
+    app.loginRequired = true;
+    app.email = '';
+  }
   return { ...brief, app };
 }
 
 export function revisePlan(before, after) {
   const left = comparable(before);
   const right = comparable(after);
+  // Empty credential fields in the form mean “keep what is saved”, not “clear them”.
+  if (!String(after?.app?.email || '').trim()) right.email = left.email;
   const changed = [];
   for (const key of Object.keys(LABEL)) {
     if (key === 'password') continue;
@@ -107,7 +127,8 @@ export function revisePlan(before, after) {
   if (String(after?.app?.password || '').trim()) changed.push('password');
   const stages = [];
   if (changed.some((key) => BRAND.has(key))) stages.push('discover');
-  if (changed.some((key) => ACCESS.has(key))) stages.push('analyze');
+  // Chapters (mustShow) re-run explore so unreachable beats can be recrafted before the planner.
+  if (changed.some((key) => ACCESS.has(key)) || changed.includes('mustShow')) stages.push('analyze');
   if (changed.some((key) => STORY.has(key))) stages.push('planner');
   return {
     changed: changed.map((field) => ({ field, label: LABEL[field] || field })),
@@ -126,11 +147,26 @@ export function scrubSecrets(text, secrets = []) {
   return out;
 }
 
-/** Wizard payload → brief.json shape. The password is omitted. */
+/** Wizard payload → brief.json shape. The password is omitted. Blank email/password keep the saved values. */
 export function nextBrief(current = {}, payload = {}) {
   const story = payload.story || {};
-  const app = { ...(current.app || {}), ...(payload.app || {}) };
+  const incoming = { ...(payload.app || {}) };
+  delete incoming.password;
+  // Empty strings mean “leave as-is” so settings can offer replace-only fields.
+  if (!String(incoming.email || '').trim()) delete incoming.email;
+  const app = { ...(current.app || {}), ...incoming };
   delete app.password;
+  delete app.credentialsOnFile;
+  if ('loginRequired' in (payload.app || {})) {
+    app.loginRequired = Boolean(payload.app.loginRequired);
+    if (!app.loginRequired) {
+      app.envVars = [];
+      delete app.email;
+    } else if (!Array.isArray(app.envVars) || !app.envVars.length) {
+      // Env var names are minted at project create; keep any existing list when turning sign-in back on.
+      app.envVars = current.app?.envVars || app.envVars || [];
+    }
+  }
   const brand = payload.brand || {};
   return {
     ...current,

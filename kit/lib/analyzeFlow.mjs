@@ -5,13 +5,21 @@
  * inventories with generated fill values that should pass validation. WebGL / canvas
  * surfaces get a pointer-interaction probe (listener spy, frameworks, drag/wheel/click).
  *
- *   node cli.mjs analyze <slug> [--headed] [--url https://…]
+ * With --explore: sign in when credentials exist, crawl safe nav targets, score mustShow
+ * coverage, go deeper if unmet, then recraft the brief journey to what was actually found.
+ *
+ *   node cli.mjs analyze <slug> [--headed] [--url https://…] [--explore]
  *
  * Writes videos/<slug>/flow-analysis.json + flow-analysis.md for the draft agent.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import {
+  applyJourneyRecraft,
+  craftJourneyFromCoverage,
+  scoreMustShowCoverage,
+} from './mustShowCoverage.mjs';
 
 /* ---------- form fill recipes (Node-side, testable) ---------- */
 
@@ -387,7 +395,43 @@ export function analysisToMarkdown(report) {
   lines.push('');
   lines.push(`Analyzed \`${report.url}\` at ${report.analyzedAt}.`);
   if (report.title) lines.push(`Page title: ${report.title}`);
+  if (report.explore) {
+    lines.push(
+      `Explore: **${report.pages?.length || 1} page(s)** · signed-in: ${report.signedIn ? 'yes' : 'no'} · coverage: ${Math.round((report.coverage?.ratio || 0) * 100)}%`
+    );
+  }
   lines.push('');
+
+  if (report.coverage) {
+    lines.push('## Must-show coverage');
+    lines.push(
+      `${report.coverage.matched}/${report.coverage.total || 0} beats matched` +
+        (report.coverage.complete ? ' (complete).' : '.')
+    );
+    for (const row of report.coverage.items || []) {
+      lines.push(
+        `- ${row.matched ? '✓' : '✗'} ${row.item}${row.page ? ` → \`${row.page}\`` : ''}${row.evidence ? ` (${row.evidence})` : ''}`
+      );
+    }
+    if (report.journey?.adapted) {
+      lines.push('');
+      lines.push('### Recrafted journey (brief updated)');
+      if (report.journey.dropped?.length) lines.push(`Dropped: ${report.journey.dropped.join('; ')}`);
+      if (report.journey.added?.length) lines.push(`Added: ${report.journey.added.join('; ')}`);
+      lines.push(`Use this order: ${(report.journey.mustShow || []).join(' → ')}`);
+    }
+    lines.push('');
+  }
+
+  if (report.pages?.length > 1) {
+    lines.push('## Explored routes');
+    for (const p of report.pages) {
+      lines.push(
+        `- hop ${p.hop}: \`${p.path || p.url}\`${p.title ? ` — ${p.title}` : ''}${p.via ? ` (via ${p.via})` : ''}`
+      );
+    }
+    lines.push('');
+  }
 
   if (report.recommendations?.length) {
     lines.push('## Recommendations for flow.mjs');
@@ -483,7 +527,9 @@ export function analysisToMarkdown(report) {
     lines.push('');
   }
 
-  lines.push('_Source of truth: `flow-analysis.json`. Re-run `node cli.mjs analyze <slug>` after login or route changes._');
+  lines.push(
+    '_Source of truth: `flow-analysis.json`. Re-run `node cli.mjs analyze <slug> --explore` after login or route changes (Studio always explores)._'
+  );
   lines.push('');
   return lines.join('\n');
 }
@@ -1009,26 +1055,280 @@ async function probeFormFills(page, forms) {
   }, forms);
 }
 
+const DANGEROUS_NAV =
+  /log\s*out|sign\s*out|delete|remove account|destroy|cancel sub|unsubscribe|pay now|checkout|purchase|buy now|empty trash|permanently|wipe|reset password/i;
+
+const NAV_BOOST =
+  /nav|sidebar|menu|settings|dashboard|home|project|inbox|people|team|board|workspace|account|profile|docs|report|calendar|invite|billing|admin|overview|library|files|search/i;
+
+function readMustShow(video) {
+  const p = join(video.dir, 'brief.json');
+  if (!existsSync(p)) return [];
+  try {
+    const brief = JSON.parse(readFileSync(p, 'utf8'));
+    return Array.isArray(brief?.story?.mustShow) ? brief.story.mustShow.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pathOf(url) {
+  try {
+    return new URL(url).pathname || '/';
+  } catch {
+    return url || '/';
+  }
+}
+
+/** Inventory + form fills + canvas probes for the current page. */
+export async function capturePageReport(page, video, { say = () => {}, runId, probeForms = true, probeCanvasesFull = true } = {}) {
+  const inv = await page.evaluate(inventoryInPage);
+  for (const c of inv.canvases) {
+    c.frameworks = inv.frameworks.slice();
+    const fromLog = (inv.listenerLog || [])
+      .filter((e) => e.index === c.index || (c.id && e.id === c.id))
+      .map((e) => e.type);
+    c.listenerTypes = [...new Set([...(c.listenerTypes || []), ...fromLog])];
+  }
+
+  let forms = enrichFormsWithFills(inv.forms || [], { runId, slug: video.slug });
+  const fillCount = forms.reduce((n, f) => n + (f.fields || []).filter((x) => x.fill && !x.fill.skip).length, 0);
+  if (probeForms && fillCount) {
+    say(`Probing ${fillCount} fill recipe(s) against HTML validity (no submit)`);
+    try {
+      forms = await probeFormFills(page, forms);
+    } catch (err) {
+      say(`Form validity probe skipped: ${err.message || err}`);
+    }
+  }
+
+  const visible = inv.canvases.filter((c) => c.visible);
+  if (probeCanvasesFull && visible.length) {
+    say(`Probing ${visible.length} visible canvas(es) for pointer reactions`);
+  }
+  for (const c of inv.canvases) {
+    if (!c.visible) {
+      c.interactions = {
+        reactsToDrag: false,
+        reactsToWheel: false,
+        reactsToClick: false,
+        listenerTypes: c.listenerTypes || [],
+        confidence: 'low',
+      };
+      continue;
+    }
+    if (probeCanvasesFull) {
+      c.interactions = await probeCanvasInteractions(page, c);
+    } else {
+      c.interactions = {
+        reactsToDrag: false,
+        reactsToWheel: false,
+        reactsToClick: false,
+        listenerTypes: c.listenerTypes || [],
+        confidence: c.listenerTypes?.length ? 'medium' : 'low',
+      };
+    }
+    c.score = scoreCanvas(c);
+    c.flowSnippet = canvasFlowSnippet(c);
+  }
+
+  const needsLogin =
+    Boolean(inv.loginHints) ||
+    forms.some((f) => f.kind === 'login' || (f.fields || []).some((x) => x.purpose === 'password' && f.kind !== 'signup'));
+
+  return {
+    url: inv.url || page.url(),
+    path: pathOf(inv.url || page.url()),
+    title: inv.title || '',
+    dom: {
+      controls: inv.controls,
+      headings: inv.headings,
+      nav: inv.nav,
+      forms,
+    },
+    frameworks: inv.frameworks,
+    canvases: inv.canvases.sort((a, b) => (b.score || 0) - (a.score || 0)),
+    hints: {
+      needsLogin,
+      hasWebGL: inv.canvases.some((c) => c.contexts?.some((t) => String(t).startsWith('webgl'))),
+      interactiveCanvasCount: inv.canvases.filter((c) => c.interactions?.reactsToDrag || c.interactions?.reactsToWheel).length,
+      formCount: forms.length,
+      fillableFieldCount: fillCount,
+      requiredFieldCount: forms.reduce(
+        (n, f) => n + (f.fields || []).filter((x) => x.required && x.fill && !x.fill.skip).length,
+        0
+      ),
+    },
+    loginHints: inv.loginHints || null,
+  };
+}
+
+function pageHintsAggregate(pages) {
+  return {
+    needsLogin: pages.some((p) => p.hints?.needsLogin),
+    hasWebGL: pages.some((p) => p.hints?.hasWebGL),
+    interactiveCanvasCount: pages.reduce((n, p) => n + (p.hints?.interactiveCanvasCount || 0), 0),
+    formCount: pages.reduce((n, p) => n + (p.hints?.formCount || 0), 0),
+    fillableFieldCount: pages.reduce((n, p) => n + (p.hints?.fillableFieldCount || 0), 0),
+    requiredFieldCount: pages.reduce((n, p) => n + (p.hints?.requiredFieldCount || 0), 0),
+  };
+}
+
+function pickPrimaryPage(pages) {
+  if (!pages.length) return null;
+  // Prefer the richest signed-in page; else the last hop; else first.
+  const scored = [...pages].sort((a, b) => {
+    const ac = (a.dom?.controls?.length || 0) + (a.dom?.forms?.length || 0) * 3 + (a.canvases?.length || 0);
+    const bc = (b.dom?.controls?.length || 0) + (b.dom?.forms?.length || 0) * 3 + (b.canvases?.length || 0);
+    return bc - ac;
+  });
+  return scored[0];
+}
+
+function navCandidates(pageReport, triedKeys, { deeper = false } = {}) {
+  const items = [];
+  for (const c of pageReport.dom?.controls || []) {
+    const name = String(c.name || '');
+    const hint = String(c.playwright || '');
+    if (DANGEROUS_NAV.test(name) || DANGEROUS_NAV.test(hint)) continue;
+    const key = `${c.role}|${name}|${hint}`.toLowerCase();
+    if (triedKeys.has(key)) continue;
+    let score = 0;
+    if (c.role === 'link') score += 3;
+    if (c.role === 'tab') score += 4;
+    if (c.role === 'menuitem') score += 4;
+    if (c.tag === 'a') score += 2;
+    if (NAV_BOOST.test(name)) score += 5;
+    if (c.role === 'button' && NAV_BOOST.test(name)) score += 3;
+    if (deeper && c.role === 'button') score += 1;
+    if (score < (deeper ? 2 : 3)) continue;
+    items.push({ ...c, key, score });
+  }
+  for (const n of pageReport.dom?.nav || []) {
+    const name = String(n.text || n.name || n.label || '');
+    const hint = String(n.playwright || n.href || '');
+    if (!name || DANGEROUS_NAV.test(name)) continue;
+    const key = `nav|${name}|${hint}`.toLowerCase();
+    if (triedKeys.has(key)) continue;
+    items.push({
+      role: 'link',
+      name,
+      playwright: n.playwright || null,
+      href: n.href || null,
+      key,
+      score: 6 + (NAV_BOOST.test(name) ? 2 : 0),
+    });
+  }
+  return items.sort((a, b) => b.score - a.score).slice(0, deeper ? 16 : 12);
+}
+
+async function tryClickCandidate(page, candidate) {
+  const before = page.url();
+  try {
+    if (candidate.playwright) {
+      const loc = page.locator(candidate.playwright).first();
+      if (await loc.isVisible({ timeout: 2500 }).catch(() => false)) {
+        await loc.click({ timeout: 8000 });
+        await page.waitForTimeout(900);
+        return { ok: true, via: candidate.name || candidate.playwright, urlChanged: page.url() !== before };
+      }
+    }
+    if (candidate.href && /^https?:/i.test(candidate.href)) {
+      await page.goto(candidate.href, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(800);
+      return { ok: true, via: candidate.name || candidate.href, urlChanged: page.url() !== before };
+    }
+    if (candidate.name) {
+      const byRole = page.getByRole(candidate.role || 'link', { name: candidate.name }).first();
+      if (await byRole.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await byRole.click({ timeout: 8000 });
+        await page.waitForTimeout(900);
+        return { ok: true, via: candidate.name, urlChanged: page.url() !== before };
+      }
+      const byText = page.getByText(candidate.name, { exact: true }).first();
+      if (await byText.isVisible({ timeout: 1500 }).catch(() => false)) {
+        await byText.click({ timeout: 8000 });
+        await page.waitForTimeout(900);
+        return { ok: true, via: candidate.name, urlChanged: page.url() !== before };
+      }
+    }
+  } catch {
+    /* candidate best-effort */
+  }
+  return { ok: false };
+}
+
+async function trySignIn(page, video, say) {
+  const email = video.config.env?.email;
+  const password = video.config.env?.password;
+  if (!email || !password) {
+    say('No demo credentials in env — exploring signed-out surface');
+    return { ok: false, reason: 'no-credentials' };
+  }
+  const pwd = page.locator('input[type="password"]').first();
+  if (!(await pwd.isVisible({ timeout: 3500 }).catch(() => false))) {
+    return { ok: false, reason: 'no-login-form' };
+  }
+  say('Signing in with project demo credentials');
+  const emailLoc = page
+    .locator(
+      'input[type="email"], input[name*="email" i], input[autocomplete="username"], input[autocomplete="email"], input[type="text"]'
+    )
+    .first();
+  if (await emailLoc.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await emailLoc.fill(String(email));
+  }
+  await pwd.fill(String(password));
+  const submit = page.getByRole('button', { name: /log\s*in|sign\s*in|continue|submit|zaloguj|anmelden/i }).first();
+  if (await submit.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await submit.click({ timeout: 10000 }).catch(() => pwd.press('Enter'));
+  } else {
+    await pwd.press('Enter');
+  }
+  await page.waitForTimeout(2800);
+  await dismissCookies(page);
+  const stillPwd = await pwd.isVisible({ timeout: 800 }).catch(() => false);
+  if (stillPwd) {
+    say('Sign-in may have failed — continuing with the current page');
+    return { ok: false, reason: 'still-on-login' };
+  }
+  return { ok: true };
+}
+
+function writeAnalysisFiles(video, report, say) {
+  mkdirSync(video.dir, { recursive: true });
+  const jsonPath = join(video.dir, 'flow-analysis.json');
+  const mdPath = join(video.dir, 'flow-analysis.md');
+  writeFileSync(jsonPath, JSON.stringify(report, null, 2) + '\n');
+  writeFileSync(mdPath, analysisToMarkdown(report));
+  say(`Wrote ${jsonPath}`);
+  return { jsonPath, mdPath };
+}
+
 /**
  * Analyze a video's start URL (or override) and write flow-analysis.json / .md.
+ * Pass explore:true (or CLI --explore) to crawl, cover mustShow, and recraft the brief.
  * @param {object} video loadVideo() result
- * @param {{ headed?: boolean, url?: string, onProgress?: (msg: string) => void }} [opts]
+ * @param {{ headed?: boolean, url?: string, onProgress?: (msg: string) => void, explore?: boolean, maxPages?: number, maxMs?: number }} [opts]
  */
-export async function analyzeFlow(video, { headed = false, url, onProgress } = {}) {
+export async function analyzeFlow(video, opts = {}) {
+  if (opts.explore) return exploreFlow(video, opts);
+
   const say = (msg) => {
-    onProgress?.(msg);
+    opts.onProgress?.(msg);
     console.log(`› ${msg}`);
   };
 
-  const startUrl = url || video.config.record?.startUrl || video.config.env?.appUrl || video.config.env?.marketingUrl;
+  const startUrl = opts.url || video.config.record?.startUrl || video.config.env?.appUrl || video.config.env?.marketingUrl;
   if (!startUrl) throw new Error('No URL to analyze — set record.startUrl or pass --url');
 
   const viewport = video.config.record?.viewport || { width: 1920, height: 1080 };
   const dpr = video.config.record?.deviceScaleFactor === 1 ? 1 : 2;
+  const runId = Date.now().toString(36);
 
   say(`Opening ${startUrl}`);
   const browser = await chromium.launch({
-    headless: !headed,
+    headless: !opts.headed,
     args: ['--use-gl=angle', '--ignore-gpu-blocklist'],
   });
   try {
@@ -1039,82 +1339,246 @@ export async function analyzeFlow(video, { headed = false, url, onProgress } = {
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(1500);
     await dismissCookies(page);
-    // Let SPA / WebGL warm up
     await page.waitForTimeout(1200);
 
     say('Inventorying controls, forms and canvases');
-    const inv = await page.evaluate(inventoryInPage);
-    // Attach page-level frameworks onto each canvas for scoring
-    for (const c of inv.canvases) {
-      c.frameworks = inv.frameworks.slice();
-      // Prefer listener types already collected
-      const fromLog = (inv.listenerLog || [])
-        .filter((e) => e.index === c.index || (c.id && e.id === c.id))
-        .map((e) => e.type);
-      c.listenerTypes = [...new Set([...(c.listenerTypes || []), ...fromLog])];
-    }
-
-    const runId = Date.now().toString(36);
-    let forms = enrichFormsWithFills(inv.forms || [], { runId, slug: video.slug });
-    const fillCount = forms.reduce((n, f) => n + (f.fields || []).filter((x) => x.fill && !x.fill.skip).length, 0);
-    if (fillCount) {
-      say(`Probing ${fillCount} fill recipe(s) against HTML validity (no submit)`);
-      try {
-        forms = await probeFormFills(page, forms);
-      } catch (err) {
-        say(`Form validity probe skipped: ${err.message || err}`);
-      }
-    }
-
-    say(`Probing ${inv.canvases.filter((c) => c.visible).length} visible canvas(es) for pointer reactions`);
-    for (const c of inv.canvases) {
-      if (!c.visible) {
-        c.interactions = { reactsToDrag: false, reactsToWheel: false, reactsToClick: false, listenerTypes: c.listenerTypes || [], confidence: 'low' };
-        continue;
-      }
-      c.interactions = await probeCanvasInteractions(page, c);
-      c.score = scoreCanvas(c);
-      c.flowSnippet = canvasFlowSnippet(c);
-    }
-
-    const needsLogin =
-      Boolean(inv.loginHints) || forms.some((f) => f.kind === 'login' || (f.fields || []).some((x) => x.purpose === 'password' && f.kind !== 'signup'));
+    const snap = await capturePageReport(page, video, { say, runId });
 
     const report = {
       slug: video.slug,
       analyzedAt: new Date().toISOString(),
-      url: inv.url || startUrl,
-      title: inv.title || '',
+      url: snap.url || startUrl,
+      title: snap.title || '',
       viewport,
       deviceScaleFactor: dpr,
       runId,
-      dom: {
-        controls: inv.controls,
-        headings: inv.headings,
-        nav: inv.nav,
-        forms,
-      },
-      frameworks: inv.frameworks,
-      canvases: inv.canvases.sort((a, b) => (b.score || 0) - (a.score || 0)),
-      hints: {
-        needsLogin,
-        hasWebGL: inv.canvases.some((c) => c.contexts?.some((t) => String(t).startsWith('webgl'))),
-        interactiveCanvasCount: inv.canvases.filter((c) => c.interactions?.reactsToDrag || c.interactions?.reactsToWheel).length,
-        formCount: forms.length,
-        fillableFieldCount: fillCount,
-        requiredFieldCount: forms.reduce((n, f) => n + (f.fields || []).filter((x) => x.required && x.fill && !x.fill.skip).length, 0),
-      },
+      dom: snap.dom,
+      frameworks: snap.frameworks,
+      canvases: snap.canvases,
+      hints: snap.hints,
     };
     report.recommendations = buildRecommendations(report);
-
-    mkdirSync(video.dir, { recursive: true });
-    const jsonPath = join(video.dir, 'flow-analysis.json');
-    const mdPath = join(video.dir, 'flow-analysis.md');
-    writeFileSync(jsonPath, JSON.stringify(report, null, 2) + '\n');
-    writeFileSync(mdPath, analysisToMarkdown(report));
-    say(`Wrote ${jsonPath}`);
+    writeAnalysisFiles(video, report, say);
     say(
-      `${report.dom.controls.length} controls · ${forms.length} forms · ${fillCount} fills · ${report.canvases.length} canvases · ${report.hints.interactiveCanvasCount} pointer-reactive · ${report.recommendations.length} tips`
+      `${report.dom.controls.length} controls · ${report.hints.formCount} forms · ${report.hints.fillableFieldCount} fills · ${report.canvases.length} canvases · ${report.hints.interactiveCanvasCount} pointer-reactive · ${report.recommendations.length} tips`
+    );
+    return report;
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+/**
+ * Bounded signed-in explore: map multiple routes, score mustShow, deepen if unmet, recraft brief.
+ */
+export async function exploreFlow(
+  video,
+  { headed = false, url, onProgress, maxPages = 18, maxMs = 3 * 60 * 1000 } = {}
+) {
+  const say = (msg) => {
+    onProgress?.(msg);
+    console.log(`› ${msg}`);
+  };
+
+  const startUrl = url || video.config.record?.startUrl || video.config.env?.appUrl || video.config.env?.marketingUrl;
+  if (!startUrl) throw new Error('No URL to analyze — set record.startUrl or pass --url');
+
+  const mustShow = readMustShow(video);
+  const viewport = video.config.record?.viewport || { width: 1920, height: 1080 };
+  const dpr = video.config.record?.deviceScaleFactor === 1 ? 1 : 2;
+  const runId = Date.now().toString(36);
+  const t0 = Date.now();
+
+  say(`Exploring ${startUrl} (up to ${maxPages} pages / ${Math.round(maxMs / 1000)}s)`);
+  const browser = await chromium.launch({
+    headless: !headed,
+    args: ['--use-gl=angle', '--ignore-gpu-blocklist'],
+  });
+
+  const pages = [];
+  const visitedPaths = new Set();
+  const triedKeys = new Set();
+  let signedIn = false;
+  let deeper = false;
+
+  try {
+    const context = await browser.newContext({ viewport, deviceScaleFactor: dpr });
+    await context.addInitScript(listenerSpyInit);
+    const page = await context.newPage();
+    page.setDefaultTimeout(20000);
+    await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(1200);
+    await dismissCookies(page);
+    await page.waitForTimeout(800);
+
+    // First inventory — may be a login wall
+    say('Inventorying start page');
+    let snap = await capturePageReport(page, video, { say, runId, probeCanvasesFull: true });
+    pages.push({ ...snap, hop: 0, via: null, signedIn: false });
+    visitedPaths.add(snap.path);
+
+    if (snap.hints?.needsLogin || snap.loginHints) {
+      const login = await trySignIn(page, video, say);
+      if (login.ok) {
+        signedIn = true;
+        await page.waitForTimeout(1000);
+        say('Re-inventorying after sign-in');
+        snap = await capturePageReport(page, video, { say, runId, probeCanvasesFull: true });
+        pages.push({ ...snap, hop: pages.length, via: 'sign-in', signedIn: true });
+        visitedPaths.add(snap.path);
+      }
+    }
+
+    const queue = [];
+    const enqueueFrom = (report) => {
+      for (const c of navCandidates(report, triedKeys, { deeper })) {
+        triedKeys.add(c.key);
+        queue.push(c);
+      }
+    };
+    enqueueFrom(snap);
+
+    while (queue.length && pages.length < maxPages && Date.now() - t0 < maxMs) {
+      // Prefer coverage gaps: if mustShow unmet, keep going; else stop early when rich enough
+      let coverage = scoreMustShowCoverage(mustShow, pages);
+      if (coverage.complete && pages.length >= Math.min(6, maxPages) && !deeper) break;
+
+      const candidate = queue.shift();
+      if (!candidate) break;
+      say(`Following “${candidate.name || candidate.playwright || 'control'}”`);
+      const clicked = await tryClickCandidate(page, candidate);
+      if (!clicked.ok) continue;
+
+      await dismissCookies(page);
+      const path = pathOf(page.url());
+      if (visitedPaths.has(path) && !clicked.urlChanged) {
+        // Same URL — still capture if DOM likely changed (tabs)
+        const same = pages.filter((p) => p.path === path);
+        if (same.length >= 2) continue;
+      }
+      visitedPaths.add(path);
+
+      const probeFull = pages.length < 4 || /canvas|webgl|3d|editor|viewer/i.test(candidate.name || '');
+      say(`Inventorying ${path}`);
+      snap = await capturePageReport(page, video, {
+        say,
+        runId,
+        probeForms: pages.length < 5,
+        probeCanvasesFull: probeFull,
+      });
+      pages.push({
+        ...snap,
+        hop: pages.length,
+        via: clicked.via || candidate.name,
+        signedIn,
+      });
+      enqueueFrom(snap);
+
+      coverage = scoreMustShowCoverage(mustShow, pages);
+      if (!coverage.complete && !deeper && pages.length >= Math.min(8, maxPages - 2) && Date.now() - t0 < maxMs * 0.7) {
+        deeper = true;
+        say(`Must-show incomplete (${coverage.matched}/${coverage.total}) — exploring deeper`);
+        enqueueFrom(snap);
+      }
+    }
+
+    // Final coverage + optional last deepen pass from best page
+    let coverage = scoreMustShowCoverage(mustShow, pages);
+    if (!coverage.complete && pages.length < maxPages && Date.now() - t0 < maxMs) {
+      deeper = true;
+      say(`Coverage ${coverage.matched}/${coverage.total} — one deeper sweep`);
+      const primary = pickPrimaryPage(pages);
+      if (primary?.url && page.url() !== primary.url) {
+        await page.goto(primary.url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+        await page.waitForTimeout(800);
+      }
+      enqueueFrom(primary || snap);
+      while (queue.length && pages.length < maxPages && Date.now() - t0 < maxMs) {
+        coverage = scoreMustShowCoverage(mustShow, pages);
+        if (coverage.complete) break;
+        const candidate = queue.shift();
+        if (!candidate) break;
+        const clicked = await tryClickCandidate(page, candidate);
+        if (!clicked.ok) continue;
+        await dismissCookies(page);
+        const path = pathOf(page.url());
+        if (visitedPaths.has(path)) continue;
+        visitedPaths.add(path);
+        say(`Deeper: ${path}`);
+        snap = await capturePageReport(page, video, {
+          say,
+          runId,
+          probeForms: false,
+          probeCanvasesFull: false,
+        });
+        pages.push({ ...snap, hop: pages.length, via: clicked.via, signedIn });
+      }
+      coverage = scoreMustShowCoverage(mustShow, pages);
+    }
+
+    const journey = craftJourneyFromCoverage(mustShow, coverage, pages);
+    if (journey.adapted) {
+      say(
+        journey.dropped.length
+          ? `Recrafting journey — could not reach: ${journey.dropped.join('; ')}`
+          : 'Recrafting journey from explored routes'
+      );
+      applyJourneyRecraft(video, journey);
+    }
+
+    const primary = pickPrimaryPage(pages) || pages[0];
+    const report = {
+      slug: video.slug,
+      analyzedAt: new Date().toISOString(),
+      url: primary?.url || startUrl,
+      title: primary?.title || '',
+      viewport,
+      deviceScaleFactor: dpr,
+      runId,
+      explore: true,
+      signedIn,
+      deeper,
+      maxPages,
+      pages: pages.map((p) => ({
+        hop: p.hop,
+        url: p.url,
+        path: p.path,
+        title: p.title,
+        via: p.via,
+        signedIn: p.signedIn,
+        dom: p.dom,
+        frameworks: p.frameworks,
+        canvases: p.canvases,
+        hints: p.hints,
+      })),
+      // Backward-compatible top-level fields = richest page
+      dom: primary?.dom || { controls: [], headings: [], nav: [], forms: [] },
+      frameworks: primary?.frameworks || [],
+      canvases: primary?.canvases || [],
+      hints: pageHintsAggregate(pages),
+      coverage,
+      journey,
+    };
+    report.recommendations = buildRecommendations(report);
+    if (!coverage.complete) {
+      report.recommendations.unshift({
+        kind: 'explore',
+        text: journey.adapted
+          ? `Original must-show was partially unreachable. Brief journey recrafted to: ${(journey.mustShow || []).join(' → ')}. Author flow.mjs to this list only.`
+          : `Must-show still incomplete (${coverage.unmet.join('; ')}). Prefer explored routes in flow.mjs and mark missing beats // TODO(verify selector).`,
+      });
+    } else if (report.explore) {
+      report.recommendations.unshift({
+        kind: 'explore',
+        text: `Explored ${pages.length} page(s)${signedIn ? ' while signed in' : ''}. Prefer Playwright hints from the matching route hop when writing each chapter.`,
+      });
+    }
+
+    writeAnalysisFiles(video, report, say);
+    say(
+      `${pages.length} pages · coverage ${coverage.matched}/${coverage.total || 0}` +
+        (journey.adapted ? ' · brief recrafted' : '') +
+        ` · ${report.dom.controls.length} controls on primary · ${report.recommendations.length} tips`
     );
     return report;
   } finally {

@@ -1639,13 +1639,19 @@
             <span class="tog"><input type="checkbox" name="loginRequired" /></span>
           </label>
           <div class="login-box" data-login hidden>
-            <div class="wf-row">
-              <label class="wf"><span class="field-label">Demo account email</span><input name="email" type="email" autocomplete="off" spellcheck="false" /></label>
-              <label class="wf"><span class="field-label">Password</span><input name="password" type="password" autocomplete="new-password" /></label>
-            </div>
-            <p class="wf-note"><svg viewBox="0 0 24 24" data-sprite="ui-lock" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/>
+            <p class="cred-status" id="wizardCredStatus" hidden>
+              <svg viewBox="0 0 24 24" data-sprite="ui-lock" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/>
   <path d="M8 10.5v-3a4 4 0 0 1 8 0v3"/>
-  <path d="M12 15.75h.01"/></svg>Stored only in <code>kit/.env</code> (gitignored); the project references it as <code>$VAR</code>.</p>
+  <path d="M12 15.75h.01"/></svg>
+              <span id="wizardCredStatusText">Credentials are saved for this project.</span>
+            </p>
+            <div class="wf-row">
+              <label class="wf"><span class="field-label" id="wizardEmailLabel">Demo account email</span><input name="email" type="email" autocomplete="off" spellcheck="false" /></label>
+              <label class="wf"><span class="field-label" id="wizardPasswordLabel">Password</span><input name="password" type="password" autocomplete="new-password" /></label>
+            </div>
+            <p class="wf-note" id="wizardCredNote"><svg viewBox="0 0 24 24" data-sprite="ui-lock" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/>
+  <path d="M8 10.5v-3a4 4 0 0 1 8 0v3"/>
+  <path d="M12 15.75h.01"/></svg><span id="wizardCredNoteText">Stored only in <code>kit/.env</code> (gitignored); the project references it as <code>$VAR</code>.</span></p>
           </div>
           <label class="wf"><span class="field-label">App source in this workspace</span><input name="sourcePath" placeholder="packages/webapp" spellcheck="false" /><small>Lets the agent read real labels and routes for reliable selectors.</small></label>
           <label class="wf"><span class="field-label">Access notes</span><textarea name="notes" rows="2" placeholder="Cookie banner on first load; seed org “Demo Agency”; avoid the billing page"></textarea></label>
@@ -1714,7 +1720,7 @@
             <ol class="creation-stages">
               <li data-create-stage="project"><span class="cs-dot"></span><div><strong>Project brief</strong><em data-stage-note>Pin story, audience and access</em></div><time data-stage-time></time></li>
               <li data-create-stage="brand"><span class="cs-dot"></span><div><strong>Brand foundation</strong><em data-stage-note>Capture the official lockup, palette and type</em></div><time data-stage-time></time></li>
-              <li data-create-stage="analyze"><span class="cs-dot"></span><div><strong>Product map</strong><em data-stage-note>Controls, routes, and WebGL/canvas interactions</em></div><time data-stage-time></time></li>
+              <li data-create-stage="analyze"><span class="cs-dot"></span><div><strong>Product map</strong><em data-stage-note>Sign in, explore routes, adapt the journey to what exists</em></div><time data-stage-time></time></li>
               <li data-create-stage="draft"><span class="cs-dot"></span><div><strong>First script</strong><em data-stage-note>The agent writes config, flow, narration and plates</em></div><time data-stage-time></time></li>
               <li data-create-stage="ready"><span class="cs-dot"></span><div><strong>Approve &amp; render</strong><em data-stage-note>You approve the script; Studio records, cuts, voices and exports</em></div><time data-stage-time></time></li>
             </ol>
