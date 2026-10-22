@@ -32,7 +32,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /**
  * CSS variables a plate exposes to the editor. Each entry says how to edit it (control type,
  * range, unit) so the Studio renders the right control and the pipeline accepts only sane values.
- * `only` restricts a group to plate ids (the open lockup geometry means nothing on a stats plate).
+ * `only` restricts a group to plate ids (open/close). `onlyTypes` restricts to interstitial
+ * types (features/quote/…) — brand mark geometry means nothing on a stats plate.
  */
 export const STYLE_GROUPS = Object.freeze([
   {
@@ -79,31 +80,101 @@ export const STYLE_GROUPS = Object.freeze([
     icon: 'lockup',
     only: ['open'],
     vars: [
+      { name: '--open-logo', label: 'Show logo', type: 'toggle' },
       { name: '--open-logo-top', label: 'Logo top', type: 'number', unit: '%', min: 20, max: 70, step: 1 },
       { name: '--open-logo-width', label: 'Logo width', type: 'number', unit: 'px', min: 320, max: 1200, step: 10 },
       { name: '--open-lift-scale', label: 'Settled scale', type: 'number', unit: '', min: 0.35, max: 0.9, step: 0.01 },
       { name: '--open-lift-y', label: 'Settled lift', type: 'number', unit: '%', min: -320, max: 0, step: 5 },
     ],
   },
+  {
+    id: 'close',
+    label: 'Close lockup',
+    icon: 'lockup',
+    only: ['close'],
+    vars: [
+      { name: '--close-logo', label: 'Show logo', type: 'toggle' },
+      { name: '--close-logo-top', label: 'Logo top', type: 'number', unit: '%', min: 50, max: 92, step: 1 },
+      { name: '--close-logo-width', label: 'Logo width', type: 'number', unit: 'px', min: 160, max: 720, step: 10 },
+      { name: '--close-lift-scale', label: 'Settled scale', type: 'number', unit: '', min: 0.5, max: 1.4, step: 0.01 },
+      { name: '--close-lift-y', label: 'Settled lift', type: 'number', unit: '%', min: -40, max: 40, step: 1 },
+    ],
+  },
+  {
+    id: 'mark',
+    label: 'Brand mark',
+    icon: 'lockup',
+    /** Corner / footer brand lockup on these interstitial types. */
+    onlyTypes: ['features', 'quote', 'statement'],
+    vars: [
+      { name: '--mark-logo', label: 'Show logo', type: 'toggle' },
+      { name: '--mark-logo-size', label: 'Logo size', type: 'number', unit: 'px', min: 16, max: 72, step: 1 },
+      { name: '--mark-logo-width', label: 'Logo width', type: 'number', unit: 'px', min: 80, max: 320, step: 4 },
+      { name: '--mark-logo-x', label: 'Inset X', type: 'number', unit: 'px', min: 0, max: 240, step: 4 },
+      { name: '--mark-logo-y', label: 'Inset Y', type: 'number', unit: 'px', min: 0, max: 200, step: 4 },
+    ],
+  },
+  {
+    id: 'orbit',
+    label: 'Orbit lockup',
+    icon: 'lockup',
+    onlyTypes: ['orbit'],
+    vars: [
+      { name: '--orbit-logo', label: 'Show logo', type: 'toggle' },
+      { name: '--orbit-logo-size', label: 'Logo size', type: 'number', unit: 'px', min: 28, max: 120, step: 2 },
+      { name: '--orbit-center-scale', label: 'Centre scale', type: 'number', unit: '', min: 0.7, max: 1.4, step: 0.01 },
+    ],
+  },
 ]);
 
+/** Plate types that expose a brand-mark / orbit lockup style group. */
+export const LOCKUP_STYLE_TYPES = Object.freeze(['open', 'close', 'features', 'quote', 'statement', 'orbit']);
+
 export const STYLE_VARS = Object.freeze(
-  Object.fromEntries(STYLE_GROUPS.flatMap((g) => g.vars.map((v) => [v.name, { ...v, group: g.id, only: g.only || null }])))
+  Object.fromEntries(
+    STYLE_GROUPS.flatMap((g) =>
+      g.vars.map((v) => [v.name, { ...v, group: g.id, only: g.only || null, onlyTypes: g.onlyTypes || null }])
+    )
+  )
 );
 
-/** Groups that apply to a plate id (open gets the lockup group, everything else does not). */
-export function styleGroupsFor(plateId) {
-  return STYLE_GROUPS.filter((g) => !g.only || g.only.includes(plateId));
+/**
+ * Groups that apply to a plate. `only` matches fixed ids (open/close); `onlyTypes` matches
+ * interstitial `type` (and open/close when those ids are passed as the type).
+ */
+export function styleGroupsFor(plateId, plateType = null) {
+  const type = plateType || plateId;
+  return STYLE_GROUPS.filter((g) => {
+    if (g.only?.length && !g.only.includes(plateId)) return false;
+    if (g.onlyTypes?.length && !g.onlyTypes.includes(type)) return false;
+    return true;
+  });
+}
+
+/** Normalize the plateId / plateType argument accepted by patchStyle / normalizeStyleValue. */
+export function styleCtx(plateIdOrCtx, plateType = null) {
+  if (plateIdOrCtx && typeof plateIdOrCtx === 'object') {
+    return {
+      plateId: plateIdOrCtx.plateId ?? null,
+      plateType: plateIdOrCtx.plateType ?? plateIdOrCtx.plateId ?? null,
+    };
+  }
+  const plateId = plateIdOrCtx ?? null;
+  return { plateId, plateType: plateType ?? plateId };
 }
 
 const COLOR_RE = /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\([^()]*\)|[a-z]{3,20})$/i;
 
 /** One CSS value, validated against the catalog. Returns the string to store, or throws. */
-export function normalizeStyleValue(name, value, plateId = null) {
+export function normalizeStyleValue(name, value, plateIdOrCtx = null) {
   const def = STYLE_VARS[name];
   if (!def) throw new Error(`Unknown plate variable ${name}`);
-  if (def.only && plateId && !def.only.includes(plateId)) {
+  const { plateId, plateType } = styleCtx(plateIdOrCtx);
+  if (def.only?.length && plateId && !def.only.includes(plateId)) {
     throw new Error(`${name} only applies to the ${def.only.join('/')} plate`);
+  }
+  if (def.onlyTypes?.length && plateType && !def.onlyTypes.includes(plateType)) {
+    throw new Error(`${name} only applies to ${def.onlyTypes.join('/')} plates`);
   }
   const raw = String(value ?? '').trim();
   if (!raw) throw new Error(`${name} needs a value`);
@@ -126,15 +197,17 @@ export function normalizeStyleValue(name, value, plateId = null) {
 /**
  * Validate a style map. Unknown variables throw (a typo would silently do nothing in the plate),
  * `null`/'' removes a variable. Returns a fresh object or `undefined` when nothing is left.
+ * Third arg: plate id string, or `{ plateId, plateType }` when type-gated groups must be checked.
  */
-export function patchStyle(current = {}, patch = {}, plateId = null) {
+export function patchStyle(current = {}, patch = {}, plateIdOrCtx = null) {
   const next = { ...(current || {}) };
+  const ctx = styleCtx(plateIdOrCtx);
   for (const [name, value] of Object.entries(patch || {})) {
     if (value === null || value === '' || value === undefined) {
       delete next[name];
       continue;
     }
-    next[name] = normalizeStyleValue(name, value, plateId);
+    next[name] = normalizeStyleValue(name, value, ctx);
   }
   return Object.keys(next).length ? next : undefined;
 }

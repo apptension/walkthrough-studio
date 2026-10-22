@@ -10,7 +10,7 @@ import { initWorkflow } from './workflow.js';
 import { initEditor } from './editor.js';
 import { mountZen, zen } from './zen.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
-import { needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
+import { liveTabVisible, needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
@@ -37,6 +37,8 @@ const state = {
   job: null,
   activityExpanded: false,
   activityDismissed: false,
+  /** Key of the last dismissed record-failure banner (slug|shot|reason); cleared when a new failure lands. */
+  recordFailureDismissed: null,
   compare: false,
   pipeline: null,
   motionApplied: false,
@@ -102,6 +104,44 @@ body.studio-edit .head {
   filter: none !important;
   transform: none !important;
   translate: none !important;
+}
+/* Lockups: honour Show logo + settle size/lift while editing (do not force marks on). */
+body.studio-edit .lockup-exit {
+  opacity: var(--close-logo, var(--open-logo, 1)) !important;
+}
+body.studio-edit body[data-plate="open"] .lockup-exit,
+body.studio-edit .open-plate .lockup-exit {
+  opacity: var(--open-logo, 1) !important;
+}
+body.studio-edit body[data-plate="close"] .lockup-exit {
+  opacity: var(--close-logo, 1) !important;
+}
+body.studio-edit .lockup-exit .logo {
+  transform: translateY(var(--close-lift-y, 0%)) scale(var(--close-lift-scale, 1)) !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent)) !important;
+}
+body.studio-edit .corner-logo {
+  opacity: var(--mark-logo, 1) !important;
+  width: var(--mark-logo-width, 180px) !important;
+  filter: none !important;
+  transform: none !important;
+  animation: none !important;
+}
+body.studio-edit .corner-logo .logo svg,
+body.studio-edit .corner-logo .logo-img {
+  max-height: var(--mark-logo-size, 30px) !important;
+}
+body.studio-edit .o-center {
+  opacity: var(--orbit-logo, 1) !important;
+  scale: var(--orbit-center-scale, 1) !important;
+  transform: none !important;
+  animation: none !important;
+  filter: none !important;
+}
+body.studio-edit .o-center .logo svg,
+body.studio-edit .o-center .logo-img {
+  max-height: var(--orbit-logo-size, 56px) !important;
 }
 body.studio-edit .rise,
 body.studio-edit .word,
@@ -537,7 +577,7 @@ function composePlateForEdit(doc) {
   // 2) Open every clip / overflow gate
   forceAll(
     doc,
-    '.mask, .mask.word, .title-line, .line-exit, .copy-exit, .title-exit, .steps-exit, .lockup-exit, .compose, .flood, .head, .title, [data-edit]',
+    '.mask, .mask.word, .title-line, .line-exit, .copy-exit, .title-exit, .steps-exit, .compose, .flood, .head, .title, [data-edit]',
     {
       overflow: 'visible',
       'clip-path': 'none',
@@ -550,6 +590,16 @@ function composePlateForEdit(doc) {
       'will-change': 'auto',
     }
   );
+  // Lockup seats: open clip gates but keep Show-logo opacity from CSS vars (do not force 1).
+  forceAll(doc, '.lockup-exit, .corner-logo, .o-center', {
+    overflow: 'visible',
+    'clip-path': 'none',
+    '-webkit-clip-path': 'none',
+    'mask-image': 'none',
+    '-webkit-mask-image': 'none',
+    filter: 'none',
+    'will-change': 'auto',
+  });
 
   // 3) Finish rises / wipes / letters / image logos
   forceAll(doc, '.rise, .word, .letter, .wipe-l, .wipe-r, .logo-img', {
@@ -649,8 +699,14 @@ function composePlateForEdit(doc) {
 
   // 7) Open-plate lockup: keep post-lift seat when vars exist; otherwise identity
   const root = doc.documentElement;
-  const liftY = getComputedStyle(root).getPropertyValue('--open-lift-y').trim();
-  const liftS = getComputedStyle(root).getPropertyValue('--open-lift-scale').trim();
+  const cs = getComputedStyle(root);
+  const liftY = cs.getPropertyValue('--open-lift-y').trim();
+  const liftS = cs.getPropertyValue('--open-lift-scale').trim();
+  const openShow = cs.getPropertyValue('--open-logo').trim();
+  const closeShow = cs.getPropertyValue('--close-logo').trim();
+  const markShow = cs.getPropertyValue('--mark-logo').trim();
+  const orbitShow = cs.getPropertyValue('--orbit-logo').trim();
+  const shown = (v) => (v === '0' || v === '0px' ? '0' : '1');
   doc.querySelectorAll('.lockup').forEach((el) => {
     if (liftY || liftS) {
       forceStyle(el, {
@@ -662,6 +718,13 @@ function composePlateForEdit(doc) {
       forceStyle(el, { transform: 'none', opacity: '1', filter: 'none' });
     }
   });
+  // Honour Show logo toggles after the generic opacity:1 freeze above.
+  doc.querySelectorAll('.lockup-exit').forEach((el) => {
+    const onClose = Boolean(el.querySelector('.logo') && !el.querySelector('.lockup'));
+    forceStyle(el, { opacity: shown(onClose ? closeShow || '1' : openShow || '1') });
+  });
+  doc.querySelectorAll('.corner-logo').forEach((el) => forceStyle(el, { opacity: shown(markShow || '1') }));
+  doc.querySelectorAll('.o-center').forEach((el) => forceStyle(el, { opacity: shown(orbitShow || '1') }));
 }
 
 /** Clear inline reveal overrides (replay / leave edit). */
@@ -751,6 +814,39 @@ function iconBtn(act, verId, label) {
   return `<button type="button" class="btn icon-only" data-ver="${verId}" data-act="${act}" title="${label}" aria-label="${label}">${ICONS[act] || ''}</button>`;
 }
 
+function syncLiveTab(view, { recording = false, repairing = false } = {}) {
+  const tab = $('modeLive');
+  if (!tab) return;
+  const show = liveTabVisible({
+    recording,
+    repairing,
+    badge: view?.badge || '',
+    hasPreview: Boolean(view?.show && view?.url),
+  });
+  if (show) {
+    tab.hidden = false;
+    tab.setAttribute('aria-hidden', 'false');
+    // Double rAF so max-width:0 → is-in animates instead of popping in.
+    requestAnimationFrame(() => requestAnimationFrame(() => tab.classList.add('is-in')));
+    // Switch onto Live once when capture starts — do not re-enter every preview tick.
+    if (
+      (recording || repairing || view?.badge === 'Live' || view?.badge === 'Repairing') &&
+      state.monitorMode === 'program'
+    ) {
+      setMonitorMode('live', { keepPreview: true });
+    }
+  } else {
+    tab.classList.remove('is-in');
+    tab.setAttribute('aria-hidden', 'true');
+    const hide = () => {
+      if (!tab.classList.contains('is-in')) tab.hidden = true;
+    };
+    tab.addEventListener('transitionend', hide, { once: true });
+    setTimeout(hide, 360);
+    if (state.monitorMode === 'live') setMonitorMode('program');
+  }
+}
+
 function paintLivePreview(v, { recording = false, repairing = false } = {}) {
   const img = $('livePreview');
   if (!img) return;
@@ -761,12 +857,13 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
     hasLive: Boolean(v?.freshness?.liveAt),
     hasDelivery: Boolean(v?.hasDelivery || v?.deliveryUrl),
   });
+  const onLivePane = state.monitorMode === 'live';
   if (view.show && view.url) {
     img.dataset.url = view.url;
     const src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
     img.src = src;
-    img.hidden = false;
-    $('noVideo')?.classList.remove('show');
+    img.hidden = !onLivePane;
+    if (onLivePane) $('noVideo')?.classList.remove('show');
     const thumb = $('activityLive');
     if (thumb) {
       thumb.hidden = false;
@@ -779,7 +876,7 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
   }
   const badge = $('liveBadge');
   if (badge) {
-    badge.hidden = !view.badge;
+    badge.hidden = !onLivePane || !view.badge;
     badge.classList.toggle('is-live', view.badge === 'Live');
     if ($('liveBadgeText')) $('liveBadgeText').textContent = view.badge || '';
   }
@@ -787,18 +884,19 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
     const failure = $('recordFailure');
     if (failure) failure.hidden = true;
   }
-  if (view.badge) {
+  syncLiveTab(view, { recording, repairing });
+  if (view.badge && onLivePane) {
     const hint =
       view.badge === 'Live'
         ? 'Recording the page now'
         : view.badge === 'Repairing'
           ? 'Repairing the flow, then capture starts again'
           : 'Last frame from the recording';
-    setMonitorLabel('Program', hint);
+    setMonitorLabel('Live', hint);
   }
   if (!state.jobBusy && view.badge === 'Last frame') {
-    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Last frame is on Program';
-    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'The page the recorder stopped on.';
+    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Last frame is on Live';
+    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'The page the recorder stopped on — Program shows the master.';
     if ($('renderLiveArt')) $('renderLiveArt').hidden = true;
   }
 }
@@ -1315,11 +1413,13 @@ function renderActionCard(v) {
     const info = v?.recordFailure
       ? v.recordFailure.technical
         ? v.recordFailure
-        : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical }
+        : { ...v.recordFailure, reason: parsed.reason, technical: parsed.technical, next: parsed.next, url: parsed.url || v.recordFailure.url }
       : null;
-    failure.hidden = !info;
+    const key = info ? `${state.slug || ''}|${info.screenshot || ''}|${info.reason || ''}` : null;
+    const dismissed = Boolean(key && state.recordFailureDismissed === key);
+    failure.hidden = !info || dismissed;
     const shot = $('recordFailureShot');
-    if (info && shot) shot.src = info.screenshot;
+    if (info && shot && shot.getAttribute('src') !== info.screenshot) shot.src = info.screenshot || '';
     if ($('recordFailureReason')) {
       $('recordFailureReason').textContent = info?.reason || '';
       $('recordFailureReason').title = info?.technical || '';
@@ -1983,13 +2083,24 @@ function setMonitorMode(mode, { keepPreview = false } = {}) {
   }
   state.monitorMode = mode;
   state.compare = mode === 'compare';
-  $('playerSingle').hidden = mode !== 'program';
+  const showProgram = mode === 'program' || mode === 'live';
+  $('playerSingle').hidden = !showProgram;
   $('playerPlate').hidden = mode !== 'plate';
   $('playerCompare').hidden = mode !== 'compare';
+  const liveImg = $('livePreview');
+  if (liveImg) liveImg.hidden = mode !== 'live' || !liveImg.dataset.url;
+  const badge = $('liveBadge');
+  if (badge && mode !== 'live') badge.hidden = true;
+  const player = $('player');
+  if (player) {
+    // Keep the element mounted for Program restore; hide it while Live owns the stage.
+    player.classList.toggle('is-live-covered', mode === 'live');
+  }
   const monitor = document.querySelector('.monitor');
-  if (monitor) monitor.dataset.mode = mode === 'compare' ? 'compare' : mode;
+  if (monitor) monitor.dataset.mode = mode === 'compare' ? 'compare' : mode === 'live' ? 'live' : mode;
   document.querySelectorAll('.mode-tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.mode === (mode === 'compare' ? 'program' : mode));
+    const id = mode === 'compare' ? 'program' : mode;
+    t.classList.toggle('active', t.dataset.mode === id);
   });
   if (mode !== 'plate') editor?.onLeave();
   if (mode === 'program') {
@@ -1999,6 +2110,19 @@ function setMonitorMode(mode, { keepPreview = false } = {}) {
     if ($('captionOverlay')) $('captionOverlay').hidden = false;
     editor?.onLeave();
     if (!keepPreview) ensureProgramMaster();
+  } else if (mode === 'live') {
+    setMonitorLabel('Live', 'Page capture — Program returns to the master');
+    $('platePicker').hidden = true;
+    if ($('plateEditBar')) $('plateEditBar').hidden = true;
+    if ($('captionOverlay')) {
+      $('captionOverlay').classList.remove('on');
+      $('captionOverlay').hidden = true;
+    }
+    player?.pause?.();
+    if (liveImg?.dataset.url) {
+      liveImg.hidden = false;
+      $('noVideo')?.classList.remove('show');
+    }
   } else if (mode === 'plate') {
     setMonitorLabel('Editor', 'Changes save as you go · Render to bake them into the video');
     $('platePicker').hidden = true;
@@ -5272,9 +5396,18 @@ function wire() {
     state.previewingPlate = null;
     setMonitorMode('program');
     highlightTimelinePlate(null);
-    // Always re-assert the delivery master after leaving Editor / plate preview.
+    // Always re-assert the delivery master after leaving Editor / Live / plate preview.
     ensureProgramMaster({ force: true });
   };
+  $('modeLive')?.addEventListener('click', () => {
+    if (state.plateDirty) {
+      toast('Unsaved plate edits', 'Save or Discard first', 'warn');
+      return;
+    }
+    $('togCompare').checked = false;
+    state.previewingPlate = null;
+    setMonitorMode('live');
+  });
   $('modePlate').onclick = async () => {
     $('togCompare').checked = false;
     if (!state.htmlPlates?.length && !editor?.deck?.scenes?.length) {
@@ -5453,6 +5586,15 @@ function wire() {
     if (noteEl) noteEl.value = note;
     document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
     startImprove('full');
+  });
+  $('recordFailureDismiss')?.addEventListener('click', () => {
+    const info = state.video?.recordFailure;
+    if (info) {
+      const parsed = info.technical ? info : describeRecordFailure(info.reason);
+      state.recordFailureDismissed = `${state.slug || ''}|${info.screenshot || ''}|${parsed.reason || info.reason || ''}`;
+    }
+    const el = $('recordFailure');
+    if (el) el.hidden = true;
   });
   $('signInContinue')?.addEventListener('click', async () => {
     if (!state.slug) return;

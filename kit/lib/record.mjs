@@ -4,7 +4,7 @@
  * The flow only describes the product journey; this file owns quality.
  */
 import { chromium } from 'playwright';
-import { renameSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { renameSync, rmSync, statSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { actionStyle, createStory, installBrandFonts, startFrameRecorder } from './motion.mjs';
@@ -66,6 +66,13 @@ export async function recordLive(
   clearStallReport(video);
   clearOverlayReport(video);
   clearSelectorReport(video);
+  for (const name of ['error.png', 'error.txt']) {
+    try {
+      unlinkSync(join(out, name));
+    } catch {
+      /* no stale failure file */
+    }
+  }
   // Live pace: one tempo over every authored hold. `pace` (CLI --pace) overrides the stored direction
   // for this take only; flows may shift it mid-tour with ctx.pace().
   const basePace = paceArg !== undefined ? resolvePace(paceArg) : brand.direction?.pace || resolvePace();
@@ -694,6 +701,14 @@ export async function recordLive(
           pct >= 20 ? ' — a faster pace cannot shorten this; trim those lines or raise audio.voice.settings.speed' : ''
         }`
       );
+    }
+    // Successful take — drop any failure banner artefacts from an earlier aborted attempt.
+    for (const name of ['error.png', 'error.txt']) {
+      try {
+        unlinkSync(join(out, name));
+      } catch {
+        /* none */
+      }
     }
     return { outPath: finalOut, capture, timeline, pace: paceSummary, wallSec: (endedAt - startedAt) / 1000 };
   } catch (err) {

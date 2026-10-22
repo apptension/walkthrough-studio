@@ -19,6 +19,10 @@
         --t-trace: 0.75s;
         --t-travel: 0.5s;
         --t-sweep: 2.1s;
+        /* Orbit lockup — Editor Colours & motion → Orbit lockup */
+        --orbit-logo: 1;
+        --orbit-logo-size: 56px;
+        --orbit-center-scale: 1;
       }
       .compose {
         position: absolute; inset: 0;
@@ -63,10 +67,16 @@
         box-shadow:
           0 22px 48px color-mix(in srgb, var(--shade, var(--ink)) 48%, transparent),
           inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
-        animation: fxPop 0.7s 0.42s var(--pop) both;
+        /* `scale` (not transform) so fxPop's transform does not wipe the editor control. */
+        scale: var(--orbit-center-scale, 1);
+        opacity: var(--orbit-logo, 1);
+        animation: fxPop calc(0.7s * var(--orbit-logo, 1)) 0.42s var(--pop) both;
       }
-      .o-center .logo svg { max-height: 56px; }
-      .o-center .logo-img { max-height: 56px; width: auto; }
+      .o-center .logo svg,
+      .o-center .logo-img {
+        max-height: var(--orbit-logo-size, 56px);
+        width: auto;
+      }
       .o-pulse {
         position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px;
         border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--gold) 55%, transparent);

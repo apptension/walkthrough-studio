@@ -34,6 +34,56 @@ test('patchStyle validates against the catalog and formats units', () => {
   assert.equal(patchStyle({ '--gold': '#fff' }, { '--gold': null }), undefined);
   assert.ok(styleGroupsFor('open').some((g) => g.id === 'open'));
   assert.ok(!styleGroupsFor('stats-1').some((g) => g.id === 'open'));
+  assert.ok(styleGroupsFor('close').some((g) => g.id === 'close'));
+  assert.ok(!styleGroupsFor('open').some((g) => g.id === 'close'));
+  const close = patchStyle({}, { '--close-logo': 'off', '--close-logo-top': 82, '--close-logo-width': 360, '--close-lift-scale': 1.1, '--close-lift-y': -8 }, 'close');
+  assert.deepEqual(close, {
+    '--close-logo': '0',
+    '--close-logo-top': '82%',
+    '--close-logo-width': '360px',
+    '--close-lift-scale': '1.1',
+    '--close-lift-y': '-8%',
+  });
+  assert.throws(() => patchStyle({}, { '--close-logo-top': 70 }, 'open'), /only applies/);
+
+  // Type-gated brand mark / orbit groups (interstitial ids are arbitrary; type decides).
+  assert.ok(styleGroupsFor('real-browser', 'statement').some((g) => g.id === 'mark'));
+  assert.ok(styleGroupsFor('caps', 'features').some((g) => g.id === 'mark'));
+  assert.ok(styleGroupsFor('hero-q', 'quote').some((g) => g.id === 'mark'));
+  assert.ok(!styleGroupsFor('stats-1', 'stats').some((g) => g.id === 'mark'));
+  assert.ok(styleGroupsFor('ring', 'orbit').some((g) => g.id === 'orbit'));
+  assert.ok(!styleGroupsFor('wall', 'logos').some((g) => g.id === 'orbit'));
+
+  const mark = patchStyle(
+    {},
+    { '--mark-logo': 'off', '--mark-logo-size': 40, '--mark-logo-width': 200, '--mark-logo-x': 80, '--mark-logo-y': 40 },
+    { plateId: 'real-browser', plateType: 'statement' }
+  );
+  assert.deepEqual(mark, {
+    '--mark-logo': '0',
+    '--mark-logo-size': '40px',
+    '--mark-logo-width': '200px',
+    '--mark-logo-x': '80px',
+    '--mark-logo-y': '40px',
+  });
+  assert.throws(
+    () => patchStyle({}, { '--mark-logo-size': 40 }, { plateId: 'stats-1', plateType: 'stats' }),
+    /only applies/
+  );
+
+  const orbit = patchStyle(
+    {},
+    { '--orbit-logo': 'on', '--orbit-logo-size': 72, '--orbit-center-scale': 1.15 },
+    { plateId: 'integrations', plateType: 'orbit' }
+  );
+  assert.deepEqual(orbit, {
+    '--orbit-logo': '1',
+    '--orbit-logo-size': '72px',
+    '--orbit-center-scale': '1.15',
+  });
+
+  const openHide = patchStyle({}, { '--open-logo': 'off' }, 'open');
+  assert.equal(openHide['--open-logo'], '0');
 });
 
 test('injectStyle appends one late style block and is idempotent', () => {

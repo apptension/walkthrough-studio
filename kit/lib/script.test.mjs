@@ -5,14 +5,17 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import {
   applyScriptStructure,
+  approveScript,
   buildScript,
   insertFlowCallAfter,
   moveFlowCall,
   moveFlowCallTo,
   parseFlowCalls,
+  refreshScriptApproval,
   removeFlowCallAt,
   replaceFlowCallAt,
   scaffoldPlate,
+  scriptStatus,
   setNarrationLine,
 } from './script.mjs';
 
@@ -322,5 +325,53 @@ describe('plate CRUD', () => {
     await applyScriptStructure(video, { op: 'plate-remove', plateId: id });
     cfg = JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8'));
     assert.equal(cfg.interstitials.length, 0);
+  });
+});
+
+describe('script approval hash', () => {
+  const root = mkdtempSync(join(tmpdir(), 'wt-approve-'));
+  const dir = join(root, 'demo');
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  function seed() {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'video.config.json'),
+      JSON.stringify(
+        {
+          title: 'Demo',
+          brand: 'acme',
+          open: { title: ['Hi'] },
+          close: { title: ['Bye'], steps: [] },
+          interstitials: [],
+          edit: { audio: { voice: [] } },
+        },
+        null,
+        2
+      ) + '\n'
+    );
+    writeFileSync(join(dir, 'flow.mjs'), SAMPLE);
+    writeFileSync(
+      join(dir, 'narration.mjs'),
+      `export default { intro: 'Hello', outro: 'Bye', plates: {}, lines: { 'Meet Studio': 'Welcome.' } };\n`
+    );
+  }
+
+  it('keeps approval when only the edit desk changes; refreshes after narration', async () => {
+    seed();
+    const video = { dir, slug: 'demo', config: JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8')) };
+    approveScript(video, { note: 'ok' });
+    assert.equal(scriptStatus(video).effective, 'approved');
+
+    const cfg = JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8'));
+    cfg.edit = { audio: { voice: [{ key: 'Meet Studio', text: 'Welcome — rewrite for voice', take: 2 }] } };
+    cfg.direction = { pace: 'brisk' };
+    writeFileSync(join(dir, 'video.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+    assert.equal(scriptStatus(video).effective, 'approved', 'voice desk / direction must not void approval');
+
+    await setNarrationLine(video, { kind: 'line', key: 'Meet Studio', text: 'Welcome aboard.' });
+    assert.equal(scriptStatus(video).effective, 'changed', 'narration change is a real script change');
+    refreshScriptApproval(video, { reason: 'narration' });
+    assert.equal(scriptStatus(video).effective, 'approved', 'quiet narration edit auto-keeps approval');
   });
 });

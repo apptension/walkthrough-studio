@@ -3293,7 +3293,7 @@ export function initEditor(ctx) {
       .join('');
     musicEl.innerHTML = bed + rides;
     voiceEl.dataset.empty = !clips.length
-      ? 'Voice · Mix builds narration, or Add voice in the inspector to upload / record'
+      ? 'Voice · Mix builds narration, or Voice in the toolbar to add a line'
       : '';
     musicEl.dataset.empty = audio?.music ? '' : 'Music · compose with ElevenLabs or upload an MP3';
   }
@@ -3338,6 +3338,8 @@ export function initEditor(ctx) {
       mg.disabled = !onLive && ed.sel?.type !== 'range';
       mg.title = `Magnify a detail at the playhead (M)${tip}`;
     }
+    const vo = $('etlAddVoice');
+    if (vo) vo.title = 'Add a voice line at the playhead';
     if ($('etlUndo')) $('etlUndo').disabled = !ed.undo.length;
     if ($('etlRedo')) $('etlRedo').disabled = !ed.redo.length;
     paintContext();
@@ -4121,6 +4123,12 @@ export function initEditor(ctx) {
     return addLensAt(edToRec(c, ed.t));
   }
 
+  /** Create a blank ad-lib voice line at the playhead and select it. */
+  async function toolVoice() {
+    if (ed.playing) pause();
+    return addVoiceLine({ text: '' });
+  }
+
   // ─── Selection ───────────────────────────────────────────────────────────────────────────
   /** Change what is selected without painting — for callers whose next deck paint draws it. */
   function setSelection(sel) {
@@ -4359,7 +4367,12 @@ export function initEditor(ctx) {
   }
 
   function renderStyle(id, info) {
-    const groups = (ed.deck.styleGroups || []).filter((g) => !g.only || g.only.includes(id));
+    const plateType = info?.type || id;
+    const groups = (ed.deck.styleGroups || []).filter((g) => {
+      if (g.only?.length && !g.only.includes(id)) return false;
+      if (g.onlyTypes?.length && !g.onlyTypes.includes(plateType)) return false;
+      return true;
+    });
     const style = info?.style || {};
     const ready = plateReady(id);
     if (!ready) return `<p class="ins-note">Loading the plate…</p>`;
@@ -6010,6 +6023,7 @@ export function initEditor(ctx) {
     $('etlAddSpeed')?.addEventListener('click', toolSpeed);
     $('etlAddZoom')?.addEventListener('click', toolZoom);
     $('etlAddLens')?.addEventListener('click', toolLens);
+    $('etlAddVoice')?.addEventListener('click', toolVoice);
     $('etlUndo')?.addEventListener('click', undo);
     $('etlRedo')?.addEventListener('click', redo);
     $('etlFit')?.addEventListener('click', () => setScale(1));

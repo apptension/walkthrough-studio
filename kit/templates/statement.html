@@ -12,6 +12,12 @@
         --black-out: 5.0s;
         --title-size: {{TITLE_SIZE}}px;
         --t-sub: {{T_SUB}}s;
+        /* Brand mark — Editor Colours & motion → Brand mark (bottom-right seat). */
+        --mark-logo: 1;
+        --mark-logo-size: 30px;
+        --mark-logo-width: 180px;
+        --mark-logo-x: 120px;
+        --mark-logo-y: 96px;
       }
       /* Editorial, left-anchored: an accent bar, the eyebrow, 1–3 kinetic lines, a rule, one sub. */
       .compose {
@@ -59,10 +65,13 @@
         opacity: 0; animation: fadeIn 1.2s 0.1s ease-out both, fadeOut 0.7s 4.6s var(--exit) forwards;
       }
       .corner-logo {
-        position: absolute; right: 120px; bottom: 96px; width: 180px; opacity: 0;
-        animation: fadeUp 0.85s calc(var(--t-sub) + 0.35s) var(--expo) both;
+        position: absolute;
+        right: var(--mark-logo-x, 120px);
+        bottom: var(--mark-logo-y, 96px);
+        width: var(--mark-logo-width, 180px);
+        opacity: 0;
+        animation: markIn 0.85s calc(var(--t-sub) + 0.35s) var(--expo) both;
       }
-      .corner-logo .logo svg { max-height: 30px; }
     </style>
   </head>
   <body data-duration="5.6">

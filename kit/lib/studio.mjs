@@ -98,6 +98,7 @@ import { EXPORT_PRESETS, listExports } from './exports.mjs';
 import {
   applyScriptStructure,
   approveScript,
+  refreshScriptApproval,
   buildScript,
   readReview,
   requestScriptChanges,
@@ -1439,8 +1440,11 @@ async function handleApi(req, res, url) {
       text: body.text,
       ...(body.speed !== undefined ? { speed: body.speed } : {}),
     });
-    const script = await buildScript(video);
-    return json(res, 200, { ok: true, script, review: reviewSummary(video) });
+    // Narration/pace edits keep an approved script approved — no re-approve dialog, no re-render.
+    refreshScriptApproval(loadVideo(slug), { reason: 'narration' });
+    const fresh = loadVideo(slug);
+    const script = await buildScript(fresh);
+    return json(res, 200, { ok: true, script, review: reviewSummary(fresh) });
   }
 
   if (rest === '/script/structure' && req.method === 'PUT') {
@@ -2021,7 +2025,8 @@ async function handleApi(req, res, url) {
     const target = plateTarget(current, plateId, { create: true });
     if (!target) return json(res, 404, { error: `No plate "${plateId}"` });
     try {
-      const next = body.reset ? undefined : patchStyle(target.style || {}, body.style || {}, plateId);
+      const plateType = plateId === 'open' || plateId === 'close' ? plateId : target.type || null;
+      const next = body.reset ? undefined : patchStyle(target.style || {}, body.style || {}, { plateId, plateType });
       if (next) target.style = next;
       else delete target.style;
     } catch (err) {
@@ -2074,7 +2079,8 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     if (typeof body.source !== 'string') return json(res, 400, { error: 'source required' });
     writeFileSync(join(video.dir, 'narration.mjs'), body.source);
-    return json(res, 200, { ok: true });
+    refreshScriptApproval(loadVideo(slug), { reason: 'narration' });
+    return json(res, 200, { ok: true, review: reviewSummary(loadVideo(slug)) });
   }
 
   if (rest === '/versions' && req.method === 'GET') {

@@ -156,15 +156,22 @@ export default async function flow(ctx) {
     }
   }
 
-  const scriptDlg = page.getByRole('dialog', { name: /^script$/i });
+  // Dialog title is "Scenario" (aria-labelledby → #scriptDialogTitle).
+  const scriptDlg = page
+    .getByRole('dialog', { name: /scenario/i })
+    .or(page.locator('#scriptDialog'));
   if (await scriptDlg.isVisible().catch(() => false)) {
-    const approve = scriptDlg.getByRole('button', { name: /approve script/i });
-    if (await approve.isVisible().catch(() => false)) {
+    const approve = scriptDlg.getByRole('button', { name: /approve and close|re-approve and close/i });
+    const approveReady =
+      (await approve.isVisible().catch(() => false)) && (await approve.isEnabled().catch(() => false));
+    if (approveReady) {
       await magnify(approve, { holdMs: 1500, zoom: 1.9, label: 'approve-script' });
+      await approve.click();
+      await wait(500);
     } else {
-      await wait(700);
+      // Already approved (button disabled) or missing — close and keep going.
+      await closeTopDialog(page, wait);
     }
-    await closeTopDialog(page, wait);
   }
 
   // —— Render pipeline ——

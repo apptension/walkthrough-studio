@@ -1843,13 +1843,54 @@ body.is-editor .monitor-head {
   border-radius: 6px;
   padding: 6px 10px;
   cursor: pointer;
-  transition: color 0.2s var(--ease-out), background 0.22s var(--ease-out), box-shadow 0.22s var(--ease-out), transform 0.22s var(--ease-spring);
+  transition: color 0.2s var(--ease-out), background 0.22s var(--ease-out), box-shadow 0.22s var(--ease-out), transform 0.22s var(--ease-spring), opacity 0.28s var(--ease-out), max-width 0.32s var(--ease-spring), padding 0.28s var(--ease-out), margin 0.28s var(--ease-out);
 }
 .mode-tab:hover { color: var(--ink-dim); }
 .mode-tab.active {
   color: #0b0d0b;
   background: #fff;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset, 0 4px 12px -6px rgba(0, 0, 0, 0.45);
+}
+.mode-tab-live {
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--etl-live) 70%, var(--muted));
+}
+.mode-tab-live.is-in {
+  max-width: 72px;
+  padding-left: 10px;
+  padding-right: 10px;
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Animate with max-width/opacity; only fully collapse after leave. */
+.mode-tab-live[hidden]:not(.is-in) { display: none; }
+.mode-tab-live.active {
+  color: #041004;
+  background: var(--brand-fill);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 4px 14px -6px var(--accent-glow);
+}
+.mode-tab-live.is-in:not(.active)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--etl-live);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--etl-live) 45%, transparent);
+  animation: livePulse 1.4s ease-out infinite;
+}
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--etl-live) 45%, transparent); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 .monitor-context {
   display: flex;
@@ -1996,6 +2037,14 @@ body.is-editor .monitor-head {
   background: #000;
 }
 .live-preview[hidden] { display: none; }
+#player.is-live-covered {
+  visibility: hidden;
+  pointer-events: none;
+}
+.monitor[data-mode="live"] .transport {
+  opacity: 0.45;
+  pointer-events: none;
+}
 .sign-in-wait {
   position: absolute;
   left: 12px;
@@ -2014,31 +2063,107 @@ body.is-editor .monitor-head {
 #signInContinue { min-width: 44px; min-height: 44px; }
 .record-failure {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
   z-index: 4;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  max-height: 72px;
+  gap: 12px 14px;
   margin: 0;
-  padding: 8px;
-  border-radius: 12px;
-  background: rgba(10, 10, 10, 0.92);
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, var(--line-2));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--warn) 14%, transparent), transparent 28%),
+    color-mix(in srgb, var(--panel) 88%, #000 12%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 16px 40px -12px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
   overflow: hidden;
 }
 .record-failure[hidden] { display: none; }
 .record-failure img {
-  width: 96px;
-  height: 54px;
+  width: 112px;
+  height: 63px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2);
+  background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.record-failure figcaption {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.record-failure-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.record-failure figcaption strong {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-failure-url {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-failure-url:empty { display: none; }
+.record-failure-next {
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-failure-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }
 #recordFailureFix {
-  min-width: 44px;
-  min-height: 44px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.record-failure-dismiss {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.record-failure-dismiss:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line);
+}
+.record-failure-dismiss:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 .program-build {
   position: absolute;
@@ -2059,17 +2184,6 @@ body.is-editor .monitor-head {
 .program-build p { margin: 0; color: rgba(255,255,255,0.78); font-size: 13px; }
 .program-build-actions { display: flex; gap: 8px; }
 .program-build-actions .btn { min-width: 44px; min-height: 44px; }
-.record-failure figcaption {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  min-width: 0;
-  max-height: 56px;
-  overflow: hidden;
-  color: var(--warn);
-  font-size: 12px;
-  line-height: 1.35;
-}
 .stage {
   position: relative;
   width: min(100cqw, calc(100cqh * 16 / 9));
@@ -8369,6 +8483,7 @@ button.var-reset:hover { color: var(--accent); }
 }
 .ed-chip.lens { color: #a4f0e6; }
 .etl-tool.lens svg { color: var(--etl-lens); }
+.etl-tool.voice svg { color: var(--etl-voice); }
 .fx.lens { --c: var(--etl-lens); z-index: 2; }
 .fx.lens.auto { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--c) 16%, #151715) 0 6px, color-mix(in srgb, var(--c) 24%, #151715) 6px 12px); border-style: dashed; color: var(--ink-dim); }
 .fx.lens.off { --c: #8b938b; background: rgba(255, 255, 255, 0.03); border-style: dashed; color: var(--ink-faint, #6f766f); opacity: 0.8; }
