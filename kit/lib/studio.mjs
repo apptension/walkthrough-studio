@@ -30,6 +30,7 @@ import {
   listJobs,
   setAgentPreference,
   startBriefDraft,
+  startDiscoverBrand,
   startImprove,
   startKitJob,
 } from './agentRunner.mjs';
@@ -2304,12 +2305,24 @@ async function handleApi(req, res, url) {
       const b = brief?.brand || {};
       const site = b.url || brief?.app?.marketingUrl || brief?.app?.appUrl || brief?.app?.startUrl || video.config.record?.startUrl;
       if (!site) return json(res, 400, { error: 'Brief has no brand website or app URL to discover from' });
-      const args = ['--name', b.name || video.config.brand, '--url', site, '--force'];
-      // Always read the live product too: its header lockup and favicon are the real mark when the site is a landing page.
+      // Always read the live product too: its header lockup is often the real mark when the site is a landing page.
       const app = b.appUrl || brief?.app?.appUrl || brief?.app?.startUrl || video.config.record?.startUrl;
-      if (app && app !== site) args.push('--app-url', app);
-      if (brief?.audience) args.push('--audience', brief.audience);
-      return json(res, 200, { ok: true, job: jobPayload(startKitJob(video, 'discover-brand', args)) });
+      return json(
+        res,
+        200,
+        {
+          ok: true,
+          job: jobPayload(
+            startDiscoverBrand(video, {
+              name: b.name || video.config.brand,
+              url: site,
+              appUrl: app && app !== site ? app : undefined,
+              audience: brief?.audience || '',
+              force: true,
+            })
+          ),
+        }
+      );
     }
     if (body.step === 'analyze') {
       const startUrl = video.config.record?.startUrl || brief?.brand?.appUrl || brief?.brand?.url;

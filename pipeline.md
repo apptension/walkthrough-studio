@@ -103,16 +103,17 @@ and `onAccent` is the text color on accent chips.
 
 `motion-brief.md` is the durable creative memory for the brand (audience, tone, logo rules, motion language, audio). Agents read it before every video.
 
-Harvest a pack from a live site:
+Harvest a pack from a live site (Playwright collects candidates; the signed-in agent picks the official lockup,
+palette and type — no regex ranking):
 
 ```
 node cli.mjs discover-brand --name Acme --url https://acme.example --app-url https://app.acme.example
 ```
 
-The Studio new-video bootstrap is ordered and gated: pin brief → discover brand → validate logo/palette/type →
-reload the project → draft script → review. `brand.json` is initially a neutral `placeholder: true` record, never a
-copy of another customer. Draft and plate endpoints reject that state. Discovery promotes it only after a usable
-official lockup and complete role palette exist; Studio then refreshes the Direction foundation before continuing.
+The Studio new-video bootstrap is ordered and gated: pin brief → discover brand (harvest + agent) → validate
+logo/palette/type → reload the project → draft script → review. `brand.json` starts as `placeholder: true` after
+harvest and stays blocked until the agent writes a real lockup and complete role palette. Draft and plate endpoints
+reject that state; Studio then refreshes the Direction foundation before continuing.
 
 ### Interstitial plates
 

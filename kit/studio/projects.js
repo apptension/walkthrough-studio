@@ -568,8 +568,19 @@ export function initProjects(ctx) {
         const where = app && app !== site ? `${site} and the app at ${app}` : site;
         paintCreation('brand', `Opening ${where} in a browser to capture the lockup, palette and type…`);
         const d = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'discover' } });
-        await follow(d.job.id, (job) => creation.stage('brand', job.activity || `Reading ${where}…`));
+        if (d.job?.status === 'needs-agent') {
+          throw new Error(d.job.message || 'Agent sign-in is required to discover the brand');
+        }
+        const discoverJob = await follow(d.job.id, (job) =>
+          creation.stage('brand', job.activity || `Reading ${where}…`)
+        );
         ensureNotStopped();
+        if (discoverJob?.status === 'needs-agent') {
+          throw new Error(discoverJob.message || 'Agent sign-in is required to discover the brand');
+        }
+        if (discoverJob?.status === 'failed' || discoverJob?.status === 'cancelled') {
+          throw new Error(discoverJob.message || discoverJob.activity || 'Brand discovery failed');
+        }
       } else {
         creation.stage('brand', `Reusing the ${p.brand.id} brand pack — no discovery needed`);
       }

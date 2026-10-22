@@ -63,7 +63,7 @@ Before the first run, install with `npm install && npx playwright install chromi
 
 ```
 - [ ] 1. Brand pack: if missing, discover from the live site/app
-        node cli.mjs discover-brand --name Brand --url https://… [--app-url https://…]
+        node cli.mjs discover-brand --name Brand --url https://… [--app-url https://…]   # harvest → agent authors pack
         Then read brands/<name>/motion-brief.md and confirm logo.html is the official lockup
         (never invent a mark). Refine motion-brief for audience, tone, and motion language.
 - [ ] 2. Plan: read authoring.md + the brand motion-brief, then write the story
@@ -228,7 +228,7 @@ guarantees a run spends nothing.
    8b. **One recording at a time.** The screencast only captures what the browser can paint; several recordings (or heavy jobs) at once starve it and the result stutters. `record` prints `capture health` — distinct fps should be well above 8 and the p95 frame gap under 400 ms; a `⚠` there means re-record on a quiet machine, not re-encode. Do not edit webapp code while a take runs (Vite's reload overlay ends up in the frame).
 9. **Mastered, not loud.** Delivery is −14 LUFS / −1 dBTP, narration −16 LUFS, music ducked under speech. Don't touch gains by ear in a single video; adjust `brand.json → audio.mix` so every video matches.
 10. **Demo data looks real.** A workspace, tenant or account on screen has its own name, logo, photos, colours and copy. Placeholder names, lorem ipsum, or the house Walkthrough Studio brand standing in for the client's brand on a client-facing frame is a bug.
-11. **Official logo only.** Plates use the real brand lockup (SVG/PNG from the site or app). Harvest with `discover-brand` when sources are missing. Homemade wordmarks, wrong marks, or mis-scaled lockups are bugs — check open + close frames on the contact sheet.
+11. **Official logo only.** Plates use the real brand lockup (SVG/PNG from the site or app). `discover-brand` harvests candidates; the agent authors `logo.html` — never invent a wordmark when a real mark exists. Homemade wordmarks, wrong marks, or mis-scaled lockups are bugs — check open + close frames on the contact sheet.
 12. **Full HD.** Default delivery is 1920×1080 for plates and live capture. Do not ship 1440×900 for client-facing videos.
 13. **Motion brief is memory.** Every brand pack keeps `motion-brief.md` (audience, tone, visual system, motion language, audio, plate palette). Read it before every new video for that brand; update it when the product look or voice changes.
 14. **Plate variety.** A proper walkthrough is not only title cards. Prefer 2–5 visual interstitials
