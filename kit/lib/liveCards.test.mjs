@@ -198,6 +198,80 @@ test('saveLiveCardCopy: chapter label and ghost number round-trip, defaults are 
   }
 });
 
+test('patchOverlays: a chapter keeps its own background and backdrop; the rest of the video is untouched', () => {
+  const video = patchOverlays({}, { chapter: { atmosphere: 'waves', backdrop: '#050505' }, caption: { backdrop: 'ink' } });
+  const next = patchOverlays(video, { chapterNo: 2, chapter: { atmosphere: 'mesh', backdrop: 'auto' }, caption: { backdrop: 'none', backdropOpacity: 40 } });
+  assert.deepEqual(next.chapter, { atmosphere: 'waves', backdrop: '#050505' }, 'video look unchanged');
+  assert.deepEqual(next.chapters, {
+    2: { chapter: { atmosphere: 'mesh', backdrop: 'auto' }, caption: { backdrop: 'none', backdropOpacity: 40 } },
+  });
+  // Only the background trio is per chapter; everything else stays a video-wide setting.
+  assert.throws(() => patchOverlays(next, { chapterNo: 2, chapter: { ghost: false } }), /per chapter/);
+  assert.throws(() => patchOverlays(next, { chapterNo: 0, chapter: { atmosphere: 'mesh' } }), /chapterNo/);
+  assert.throws(() => patchOverlays(next, { chapterNo: 2, chapter: { atmosphere: 'lava' } }), /atmosphere must be/);
+  // null hands a key back to the video; an empty entry disappears.
+  const back = patchOverlays(next, { chapterNo: 2, chapter: { atmosphere: null, backdrop: null }, caption: { backdrop: null, backdropOpacity: null } });
+  assert.equal(back.chapters, undefined);
+  assert.deepEqual(back.chapter, { atmosphere: 'waves', backdrop: '#050505' });
+});
+
+test('patchOverlays: reset drops a chapter’s own look; applyToAll promotes it to the whole video', () => {
+  let o = patchOverlays({}, { chapter: { atmosphere: 'waves', backdrop: '#050505' } });
+  o = patchOverlays(o, { chapterNo: 1, chapter: { backdrop: 'none' } });
+  o = patchOverlays(o, { chapterNo: 3, chapter: { atmosphere: 'mesh', backdrop: 'gold', backdropOpacity: 50 }, caption: { atmosphere: 'mesh' } });
+  const reset = patchOverlays(o, { chapterNo: 1, slot: 'chapter', reset: true });
+  assert.equal(reset.chapters[1], undefined);
+  assert.ok(reset.chapters[3]);
+
+  const all = patchOverlays(o, { applyToAll: true, chapterNo: 3, slot: 'chapter' });
+  assert.deepEqual(all.chapter, { atmosphere: 'mesh', backdrop: 'gold', backdropOpacity: 50 }, 'chapter 3 became the video look');
+  assert.equal(all.chapters[1], undefined, 'other chapters follow the video again');
+  assert.deepEqual(all.chapters[3], { caption: { atmosphere: 'mesh' } }, 'the caption slot was not part of the apply');
+
+  const both = patchOverlays(o, { applyToAll: true, chapterNo: 3 });
+  assert.equal(both.chapters, undefined);
+  assert.equal(both.caption.atmosphere, 'mesh');
+  // Applying a chapter whose backdrop is `auto` clears the video's colour.
+  const autoAll = patchOverlays(patchOverlays(o, { chapterNo: 2, chapter: { backdrop: 'auto' } }), { applyToAll: true, chapterNo: 2, slot: 'chapter' });
+  assert.equal('backdrop' in autoAll.chapter, false);
+  assert.equal(autoAll.chapter.atmosphere, 'waves');
+});
+
+test('resolveOverlays + renderLiveCardHtml: a chapter’s own background wins for its chapter and caption cards', () => {
+  const overlays = patchOverlays(
+    { chapter: { atmosphere: 'waves', backdrop: '#050505' } },
+    { chapterNo: 2, chapter: { atmosphere: 'none', backdrop: 'auto' }, caption: { backdrop: 'surface', backdropOpacity: 60 } }
+  );
+  const all = resolveOverlays(brand, { overlays });
+  assert.equal(all.chapter.backdrop, '#050505');
+  assert.deepEqual(all.chapters[2].chapter, { atmosphere: 'none', backdrop: 'auto' });
+  assert.equal(all.chapters[2].caption.backdropOpacity, 60);
+  const bogus = resolveOverlays(brand, { overlays: { chapters: { x: { chapter: { atmosphere: 'lava' } }, 2: { chapter: { backdrop: 'red' } } } } });
+  assert.equal(bogus.chapters, undefined, 'invalid per-chapter rows are dropped');
+
+  const two = resolveOverlays(brand, { overlays }, { chapterNo: 2 });
+  assert.equal(two.chapterNo, 2);
+  assert.equal(two.chapter.atmosphere, 'none');
+  assert.equal(two.chapter.backdrop, 'auto');
+  assert.deepEqual(two.scope, { chapter: ['atmosphere', 'backdrop'], caption: ['backdrop', 'backdropOpacity'] });
+  const one = resolveOverlays(brand, { overlays }, { chapterNo: 1 });
+  assert.equal(one.chapter.backdrop, '#050505');
+  assert.deepEqual(one.scope, { chapter: [], caption: [] });
+
+  const b = { ...brand, direction: { overlays } };
+  const ch1 = renderLiveCardHtml(b, 'chapter', { chapterNo: 1, title: 'A', ms: 2400 });
+  const ch2 = renderLiveCardHtml(b, 'chapter', { chapterNo: 2, title: 'B', ms: 2400 });
+  assert.match(ch1, /data-backdrop="color"/);
+  assert.match(ch1, /--wt-backdrop: rgba\(5, 5, 5, 1\);/);
+  assert.match(ch2, /data-backdrop="auto"/);
+  assert.match(ch2, /class="wt wt-ch atm-none /);
+  assert.match(ch1, /class="wt wt-ch atm-waves /);
+  const cap2 = renderLiveCardHtml(b, 'caption', { chapterNo: 2, chapterTitle: 'B', title: 'C', ms: 2000 });
+  assert.match(cap2, /--wt-backdrop: rgba\(18, 20, 18, 0\.6\);/, 'captions inside chapter 2 take its caption backdrop');
+  const cap1 = renderLiveCardHtml(b, 'caption', { chapterNo: 1, chapterTitle: 'A', title: 'C', ms: 2000 });
+  assert.match(cap1, /data-backdrop="auto"/);
+});
+
 test('cardId / parseCardId round-trip', () => {
   assert.equal(cardId('chapter', 3), 'overlay:chapter:3');
   assert.deepEqual(parseCardId('overlay:caption:7'), { kind: 'caption', flowIndex: 7 });

@@ -8,10 +8,22 @@ import {
   alphaPipeArgs,
   bakeClipKey,
   bakeClipName,
+  bakeStamp,
   cardBakeOverlayGraph,
   overlaysModeFromLiveMeta,
   planCardBakes,
 } from './liveCardBake.mjs';
+
+describe('bakeStamp', () => {
+  test('changes when a card’s baked content changes, even at the same path and time', () => {
+    const live = { size: 10, mtimeMs: 1 };
+    const plan = { cardId: 'overlay:chapter:0', t: 1, dur: 2, htmlPath: '/x/overlay-chapter-0.html', key: 'aaaa' };
+    const a = bakeStamp(live, [plan], { preset: 'editorial' });
+    const b = bakeStamp(live, [{ ...plan, key: 'bbbb' }], { preset: 'editorial' });
+    assert.notEqual(a, b, 'a per-chapter backdrop edit rewrites the card html → new key → clean pass re-runs');
+    assert.equal(a, bakeStamp(live, [{ ...plan }], { preset: 'editorial' }));
+  });
+});
 
 describe('overlaysModeFromLiveMeta', () => {
   test('defaults to burned for legacy takes', () => {

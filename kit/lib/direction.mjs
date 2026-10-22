@@ -438,6 +438,8 @@ export function resolveCursor(raw = {}) {
     size: pick(raw?.size, CURSOR_OPTIONS.size, 'm'),
     glide: typeof raw?.glide === 'boolean' ? raw.glide : style !== 'classic',
     hideIdle: typeof raw?.hideIdle === 'boolean' ? raw.hideIdle : style !== 'classic',
+    // Pointing-hand morph on clicks: the arrow's default; the dot keeps its pulse unless asked.
+    hand: typeof raw?.hand === 'boolean' ? raw.hand : style === 'arrow',
     loop: raw?.loop === true,
   };
 }
@@ -523,7 +525,7 @@ export function patchDirection(current = {}, body = {}, brand = {}) {
     if (!body[key] || typeof body[key] !== 'object') continue;
     const next = { ...(direction[key] || {}) };
     for (const [field, value] of Object.entries(body[key])) {
-      if (key === 'cursor' && ['glide', 'hideIdle', 'loop'].includes(field)) {
+      if (key === 'cursor' && ['glide', 'hideIdle', 'hand', 'loop'].includes(field)) {
         if (typeof value !== 'boolean') throw new Error(`cursor.${field} must be true or false`);
         next[field] = value;
         continue;

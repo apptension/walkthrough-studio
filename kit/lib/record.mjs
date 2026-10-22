@@ -161,7 +161,9 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
   const cursor = await createCursor({ context, page, brand, wait, viewport, settings: brand.direction?.cursor, tempo: speed });
   const showKeys = brand.direction?.keys === true;
   const actionLook = () => actionStyle(brand, { cursor: cursor.playwrightCursor });
-  if (cursor.style !== 'classic') console.log(`· cursor ${cursor.style} · glide ${cursor.glide ? 'on' : 'off'}`);
+  if (cursor.style !== 'classic') {
+    console.log(`· cursor ${cursor.style} · glide ${cursor.glide ? 'on' : 'off'} · hand on click ${cursor.hand ? 'on' : 'off'}`);
+  }
 
   /** Glide to the target, then log where the pointer acted (auto zoom follows these). */
   async function beforeAction(locator, name) {
@@ -173,6 +175,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     if (cursor.glide || PRESS_ACTIONS.has(name)) await cursor.moveTo(x, y);
+    // A press: the arrow becomes a pointing hand before the real mousedown pushes it down.
+    if (PRESS_ACTIONS.has(name)) await cursor.arm();
     const kind = PRESS_ACTIONS.has(name) ? 'click' : TYPE_ACTIONS.has(name) ? 'type' : null;
     if (kind) {
       timeline.push({
@@ -457,6 +461,8 @@ export async function recordLive(video, { headed = false, flow, outFile, writeMe
     after: (ctx) => {
       stallWatchdog.endAction();
       if (ctx) cursor.sync(ctx.x, ctx.y);
+      // Lets the hand linger a beat, then relaxes to the arrow (no-op when nothing was armed).
+      cursor.release();
     },
   });
   const restoreKeys = [];

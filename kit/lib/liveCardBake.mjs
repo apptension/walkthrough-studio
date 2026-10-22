@@ -96,6 +96,9 @@ export function bakeStamp(liveStat, plans, look) {
           t: p.t,
           dur: p.dur,
           html: p.htmlPath,
+          // Content key of the baked clip: a card whose html changed (copy, per-chapter
+          // background) re-runs the clean pass even though its path and timing are the same.
+          key: p.key || null,
           ox: p.ox || 0,
           oy: p.oy || 0,
           w: p.w || 0,
@@ -355,11 +358,13 @@ export async function ensureCardBakeClips(video, plans, { force = false } = {}) 
   const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : '';
   const paths = plans.map((p, i) => join(dir, bakeClipName(p, i)));
   const keyPath = (out) => out.replace(/\.mov$/, '.json');
+  // Every plan carries its content key so the clean-pass stamp follows card content, not paths.
+  for (const p of plans) p.key = clipKeyFor(p, css, bakeRaster());
   const fresh = (p, out) => {
     if (!existsSync(out) || !existsSync(keyPath(out))) return false;
     try {
       const saved = JSON.parse(readFileSync(keyPath(out), 'utf8'));
-      return saved.key === clipKeyFor(p, css, bakeRaster()) && saved.pipeline === BAKE_PIPELINE;
+      return saved.key === p.key && saved.pipeline === BAKE_PIPELINE;
     } catch {
       return false;
     }
@@ -397,7 +402,7 @@ export async function ensureCardBakeClips(video, plans, { force = false } = {}) 
         seconds[i] = Number(((Date.now() - t0) / 1000).toFixed(1));
         writeFileSync(
           keyPath(out),
-          JSON.stringify({ key: clipKeyFor(p, css, raster), pipeline: BAKE_PIPELINE, raster, clip: placed, sec: seconds[i] })
+          JSON.stringify({ key: p.key, pipeline: BAKE_PIPELINE, raster, clip: placed, sec: seconds[i] })
         );
       }
     };

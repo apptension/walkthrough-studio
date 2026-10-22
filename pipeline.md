@@ -35,7 +35,7 @@
 | `kit/lib/editDeck.mjs`         | The edit deck (`video.config.json → edit`: speed ramps, manual zooms, zoom-free windows, pinned joins) and plate `style` variables — validation, the recording→clean time map, the `setpts` speed graph, the `STYLE_GROUPS` catalog and the `<style data-plate-style>` injection |
 | `kit/studio/editor.js`         | Studio Editor mode: one playback engine over the whole cut (plates stepped on their own clock, `live.mp4` with simulated speed/zoom, transitions drawn between layers), the unified timeline (clips, join markers, speed and zoom rows, drag to select / move / retime, undo), text mode, and the Inspector (plate text / look / style variables / joins; recording speed / zoom / joins / cursor & pace) |
 | `kit/lib/camera.mjs`           | Auto zoom planner (`planZooms`) and its per-frame scale/crop graph, inset frame geometry, background and rounded mask (cached in `out/camera/`)                                       |
-| `kit/lib/cursor.mjs`           | Presentation cursor (arrow / dot, sizes, eased arc glide played in-page, click pulse) and keystroke keycaps                                                                          |
+| `kit/lib/cursor.mjs`           | Presentation cursor (arrow / dot, sizes, eased arc glide played in-page, arrow → pointing-hand morph with a push-down on clicks) and keystroke keycaps                                |
 | `kit/lib/exports.mjs`          | Format presets (square, vertical, lite 720p, GIF teaser) built from the master into `exports/`                                                                                       |
 | `kit/lib/produce.mjs`          | Single concat encode (deflash + lenses + fades) + chapters → `<slug>.mp4`, `produce-meta.json`                                                                                      |
 | `kit/lib/validate.mjs`         | QC frames, contact sheet, flash re-scan of the delivered file, `review.html`                                                                                                        |
@@ -64,7 +64,7 @@ installed from a marketplace outside the checkout — `tmp/videos` lands there).
 | `audio`             | Optional deep-merge override of the brand's `audio` block (voice, music, mix) for this video                                                                                                                       |
 | `edit`              | The edit deck written by Studio's Editor / `cli.mjs edit`: `speed [{from,to,rate}]`, `zooms [{id,t,dur,zoom,x,y}]`, `zoomSkips [{from,to}]`, `lenses [{id,t,dur,x,y,w,h,zoom?}]` (target centre + area in live px), `lensOff [t]` (recorded `magnify` start times left out), `transitions {"prev>next": {style, duration}}`, `audio` (the mix desk: `music` slip/level/mute/fades/rides, `voice` per-line `at` (an absolute place on the cut), nudge/level/mute plus shape `trimStart/trimEnd/fadeIn/fadeOut` and what to speak `text/speed/take/takes`, `master` LUFS and duck), `order` (segment ids in the sequence the cut plays; the render plan permutes its slices to match). Studio's `POST …/voice/line` saves a line's desk entry and re-synthesizes that one clip in `voice/voice.json` (`regenerateLine`); `POST …/narrator` writes `audio.voice.{voiceId,name}` into the video config, which `deepMerge`s over the brand voice. Picture times are recording seconds (`live.mp4`); audio times are delivery seconds. Live slices are keyed `live` in join names |
 | `open.style`, `close.style`, `interstitials[].style` | CSS variable map for one plate (`{"--gold": "#ff5a36", "--card-tilt": "20deg"}`), injected after the template's `:root` — see `STYLE_GROUPS` in `lib/editDeck.mjs` for the catalog and units                                              |
-| `direction.overlays` | Live chapter/caption look: `preset` (`plateMatch` \| `editorial` \| `punchy` \| `minimal` \| `spotlight`) plus `chapter` / `caption` overrides (`atmosphere` any plate field, or `blobs` / `none`, `energy`, `sheen`, caption `seat` bottom-center\|left\|right, `maxWidth`, `align`). New records are **clean** (cards not burned into `live.mp4`); Studio composites HTML for edit/preview; Produce bakes cards. Set `recordMode: "burned"` only to debug legacy paint-into-screencast. |
+| `direction.overlays` | Live chapter/caption look: `preset` (`plateMatch` \| `editorial` \| `punchy` \| `minimal` \| `spotlight`) plus `chapter` / `caption` overrides (`atmosphere` any plate field, or `blobs` / `none`, `energy`, `sheen`, caption `seat` bottom-center\|left\|right, `maxWidth`, `align`, `backdrop`, `backdropOpacity`). `chapters.<n>.chapter` / `.caption` hold one chapter's own background trio (`atmosphere`, `backdrop`, `backdropOpacity`) for its chapter card and the captions inside it; Studio's Look & reveal saves there by default, **Apply to all chapters** promotes a chapter's trio to the video slot and clears every chapter's copy, **Follow video** drops it. New records are **clean** (cards not burned into `live.mp4`); Studio composites HTML for edit/preview; Produce bakes cards. Set `recordMode: "burned"` only to debug legacy paint-into-screencast. |
 
 ## Brand packs
 
@@ -334,7 +334,12 @@ scale plus accent glow) through a cached `geq` rounded mask. The cleaned reel's 
 only when they are set, so a video with camera off keeps its cache.
 
 **Capture polish.** The page-side arrow/dot cursor owns its own compositor animation, click ripple and 1.5 s idle
-timer. `cursor.loop` returns it to the opening seat before capture ends. `ctx.privacy.mask(locator)` inserts a fixed,
+timer. Clicks read as clicks: before a press action the recorder calls `cursor.arm()`, which morphs the arrow into a
+pointing hand in the page and holds ~160 ms (÷ pace) so the change is on screen; the real `mousedown` then plays a
+0.38 s push-down keyframe on the glyph plus the ripple; after the action `cursor.release()` keeps the hand ~340 ms and
+eases back to the arrow (a following click cancels the release). `direction.cursor.hand` switches it — on for the
+arrow, off for the dot unless set (`direction --hand on|off`, Studio → Direction → Hand on click). The hand's fingertip
+sits on the hotspot, so the morph never moves the pointer. `cursor.loop` returns it to the opening seat before capture ends. `ctx.privacy.mask(locator)` inserts a fixed,
 adaptive solid cover that follows the locator on each animation frame and is recorded instead of the sensitive source
 pixels; backdrop blur is intentionally not used because Chromium screencast does not paint it reliably.
 
@@ -387,7 +392,8 @@ on the second chapter.
 The bake browser uses the same Metal flags as plates, four pages at a time (`WALKTHROUGH_BAKE_JOBS`).
 Chapter cards stay full frame. Captions are cropped to the card's box plus a 64 px margin and overlaid at
 that origin. Each clip has a `<name>.json` content key (html, overlays.css, motion, time, duration,
-pipeline, raster). mtime does not invalidate a clip. `produce` draws plates and bakes together, then the
+pipeline, raster). mtime does not invalidate a clip. Every plan carries that key and the clean-pass stamp hashes it, so a
+card whose html changed at the same path and time (copy, a per-chapter backdrop) re-runs the clean pass. `produce` draws plates and bakes together, then the
 clean pass. `live-clean.mp4` is lossless and has no `+faststart` (only ffmpeg reads it); the delivery
 master keeps faststart. `produce-meta.json → timing` records plates, cards, clean and encode seconds, plus
 the previous run. `node cli.mjs bench <slug>` prints that table, each plate's `msPerFrame`, and each bake

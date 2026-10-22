@@ -490,7 +490,7 @@ async function main() {
             '       [--look studio|cinematic|social|minimal] [--zoom off|subtle|bold] [--frame full|inset]\n' +
             '       [--background brand|ink|accent] [--padding tight|balanced|roomy] [--corners square|soft|round]\n' +
             '       [--shadow off|soft|deep] [--cursor classic|arrow|dot] [--cursor-size s|m|l]\n' +
-            '       [--glide on|off] [--hide-idle on|off] [--loop on|off] [--keys on|off]\n' +
+            '       [--glide on|off] [--hand on|off] [--hide-idle on|off] [--loop on|off] [--keys on|off]\n' +
             '       [--pace calm|steady|brisk|quick|<0.6–2>] [--approve]'
         );
       }
@@ -517,6 +517,7 @@ async function main() {
           ['style', opt('--cursor')],
           ['size', opt('--cursor-size')],
           ['glide', onOff('--glide')],
+          ['hand', onOff('--hand')],
           ['hideIdle', onOff('--hide-idle')],
           ['loop', onOff('--loop')],
         ].filter(([, v]) => v !== undefined)
@@ -552,7 +553,7 @@ async function main() {
         }`
       );
       console.log(
-        `  cursor    ${d.cursor.style} · size ${d.cursor.size} · glide ${d.cursor.glide ? 'on' : 'off'} · idle ${
+        `  cursor    ${d.cursor.style} · size ${d.cursor.size} · glide ${d.cursor.glide ? 'on' : 'off'} · hand ${d.cursor.hand ? 'on' : 'off'} · idle ${
           d.cursor.hideIdle ? 'hide' : 'show'
         } · loop ${d.cursor.loop ? 'on' : 'off'} · keys ${d.keys ? 'on' : 'off'}`
       );

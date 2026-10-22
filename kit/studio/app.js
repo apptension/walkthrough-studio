@@ -4452,6 +4452,7 @@ function renderCamera(direction) {
   document.querySelectorAll('.cursorDetailRow').forEach((row) => (row.hidden = cursor.style === 'classic'));
   $('keysToggle').checked = Boolean(direction.keys);
   $('glideToggle').checked = Boolean(cursor.glide);
+  $('handToggle').checked = typeof cursor.hand === 'boolean' ? cursor.hand : cursor.style === 'arrow';
   $('idleToggle').checked = Boolean(cursor.hideIdle);
   $('loopToggle').checked = Boolean(cursor.loop);
   const c = direction.colors || {};
@@ -5764,6 +5765,7 @@ function wire() {
   };
   for (const [id, key, label] of [
     ['glideToggle', 'glide', 'Smooth glide'],
+    ['handToggle', 'hand', 'Hand on click'],
     ['idleToggle', 'hideIdle', 'Hide when idle'],
     ['loopToggle', 'loop', 'Loop cursor'],
   ]) {
