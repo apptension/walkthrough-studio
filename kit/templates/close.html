@@ -21,6 +21,12 @@
         --x-steps: 4.87s;
         --x-logo: 5.0s;
         --n: {{STEP_COUNT}};
+        /* Close lockup — editor Colours & motion → Close lockup (defaults match the classic seat). */
+        --close-logo: 1;
+        --close-logo-top: 78%;
+        --close-logo-width: 480px;
+        --close-lift-scale: 1;
+        --close-lift-y: 0%;
         /* Hint only: renderer probes motion/pixels and will shrink or disable if anything still moves */
         --hold-from: 2.4s;
         --hold-until: 3.85s;
@@ -66,17 +72,28 @@
         opacity: 0; animation: fadeUp 0.8s calc(var(--s) + 0.22s) var(--expo) both;
       }
       .lockup-exit {
-        position: absolute; left: 50%; top: 78%; width: min(480px, 28vw); margin-left: calc(min(480px, 28vw) / -2);
-        animation: exitScale 0.75s var(--x-logo) var(--exit) forwards;
+        position: absolute; left: 50%;
+        top: var(--close-logo-top, 78%);
+        width: min(var(--close-logo-width, 480px), 28vw);
+        margin-left: calc(min(var(--close-logo-width, 480px), 28vw) / -2);
+        /* Show logo off (--close-logo: 0) zeros opacity and collapses the exit so keyframes never force it back on. */
+        opacity: var(--close-logo, 1);
+        animation: exitScale calc(0.75s * var(--close-logo, 1)) var(--x-logo) var(--exit) forwards;
       }
-      .logo { filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent)); }
+      .logo {
+        filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent));
+        transform: translateY(var(--close-lift-y, 0%)) scale(var(--close-lift-scale, 1));
+        transform-origin: 50% 50%;
+      }
       .platform {
         margin: 20px -140px 0; text-align: center; white-space: nowrap;
         font-size: 13px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
         opacity: 0; animation: fadeUp 0.9s 3.35s var(--expo) both;
       }
       .bloom {
-        position: absolute; left: 50%; top: 82%; width: 900px; height: 360px;
+        position: absolute; left: 50%;
+        top: calc(var(--close-logo-top, 78%) + 4%);
+        width: 900px; height: 360px;
         margin: -180px 0 0 -450px; border-radius: 50%;
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 16%, transparent), transparent 70%);
         opacity: 0;

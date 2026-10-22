@@ -24,6 +24,8 @@
         --t-eyebrow: 3.22s;
         --t-title: 3.42s;
         --t-sub: 3.95s;
+        /* Open lockup — Editor Colours & motion → Open lockup */
+        --open-logo: 1;
         /* No mid-plate hold: lift/title/sub run until ~4.9s; exits start at 5.0s */
         --hold-from: 0s;
         --hold-until: 0s;
@@ -43,7 +45,8 @@
         width: min(var(--open-logo-width, 820px), 46vw);
         margin-left: calc(min(var(--open-logo-width, 820px), 46vw) / -2);
         transform-origin: 50% 0;
-        animation: exitScale 0.75s var(--x-logo) var(--exit) forwards;
+        opacity: var(--open-logo, 1);
+        animation: exitScale calc(0.75s * var(--open-logo, 1)) var(--x-logo) var(--exit) forwards;
       }
       .lockup { transform: translateY(-50%); animation: lift 1.25s var(--t-lift) var(--inout) both; }
       @keyframes lift {

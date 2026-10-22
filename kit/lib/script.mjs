@@ -211,12 +211,41 @@ export async function loadNarration(video) {
   return { intro: n.intro || '', outro: n.outro || '', plates: n.plates || {}, lines: n.lines || {} };
 }
 
+/**
+ * Story-facing slice of video.config.json. Desk edits (voice takes, zooms, direction,
+ * record settings) live on the same file but must not void an approved script.
+ */
+function scriptConfigSurface(cfg) {
+  const content = (block) => {
+    if (!block || typeof block !== 'object') return null;
+    const { style: _style, motion: _motion, ...rest } = block;
+    return rest;
+  };
+  return {
+    title: cfg.title || '',
+    audience: cfg.audience || '',
+    open: content(cfg.open),
+    close: content(cfg.close),
+    interstitials: (cfg.interstitials || []).map(content),
+  };
+}
+
+/** Hash of the approved script surface — narration, flow, and plate/open/close copy. */
 function sourcesHash(video) {
   const h = createHash('sha1');
-  for (const f of ['video.config.json', 'narration.mjs', 'flow.mjs']) {
+  for (const f of ['narration.mjs', 'flow.mjs']) {
     const p = join(video.dir, f);
     h.update(f);
     if (existsSync(p)) h.update(readFileSync(p));
+  }
+  const cfgPath = join(video.dir, 'video.config.json');
+  h.update('video.config.json:script');
+  if (existsSync(cfgPath)) {
+    try {
+      h.update(JSON.stringify(scriptConfigSurface(JSON.parse(readFileSync(cfgPath, 'utf8')))));
+    } catch {
+      h.update(readFileSync(cfgPath));
+    }
   }
   return h.digest('hex').slice(0, 12);
 }
@@ -1281,6 +1310,28 @@ export function approveScript(video, { note, by } = {}) {
     ...(by ? { approvedBy: by } : {}),
     note: note || '',
     history: [...(review.script.history || []), logEntry('approved', { note, by, extra: { hash } })].slice(-40),
+  };
+  writeReview(video, review);
+  return review;
+}
+
+/**
+ * Keep an approved script approved after a quiet edit (narration line / pace).
+ * Structure changes (flow / plates) still flip to "changed" until the human re-approves.
+ */
+export function refreshScriptApproval(video, { reason = 'narration' } = {}) {
+  const review = readReview(video);
+  if (review.script.status !== 'approved') return null;
+  const hash = sourcesHash(video);
+  if (review.script.hash === hash) return review;
+  review.script = {
+    ...review.script,
+    hash,
+    approvedAt: new Date().toISOString(),
+    history: [
+      ...(review.script.history || []),
+      logEntry('approved', { note: `auto · ${reason}`, by: 'studio', extra: { hash, auto: true } }),
+    ].slice(-40),
   };
   writeReview(video, review);
   return review;

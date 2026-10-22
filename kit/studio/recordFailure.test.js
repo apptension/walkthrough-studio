@@ -41,20 +41,34 @@ test('a playwright line stays off the headline', () => {
   assert.match(view.technical, /browser has been closed/);
 });
 
-test('a newer take hides the failure, and plates alone are not a captured tour', () => {
+test('a good live take hides the failure banner, even if a later retry left a newer error.png', () => {
   assert.equal(recordFailureView({ shotMtime: 20, liveMtime: 30, note: 'failed' }), null);
+  assert.equal(recordFailureView({ shotMtime: 40, liveMtime: 20, note: 'failed' }), null);
+  assert.ok(recordFailureView({ shotMtime: 20, liveMtime: null, note: 'page.goto: Timeout 30000ms exceeded.\nnavigating to "http://localhost:3000"' }));
   assert.equal(capturedTour({ hasLive: false, recordFailed: true }), false);
   assert.equal(capturedTour({ hasLive: true, recordFailed: false }), true);
   assert.equal(recordFailureAction().label, 'Re-record');
 });
 
-test('the failure panel sits on Program with Fix with AI', () => {
+test('a disabled Approve click is not reported as a start-URL timeout', () => {
+  const view = recordFailureView({
+    shotMtime: 5,
+    note: 'proxy.click: Timeout 30000ms exceeded.\nwaiting for locator(\'button#btnScriptApprove\')\nelement is not enabled',
+  });
+  assert.match(view.reason, /already approved/i);
+  assert.doesNotMatch(view.reason, /start URL/i);
+});
+
+test('the failure panel sits on Program with Fix with AI and a dismiss control', () => {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   const stage = html.indexOf('id="stage"');
   const panel = html.indexOf('id="recordFailure"');
   const shot = html.indexOf('id="recordFailureShot"');
   const fix = html.indexOf('id="recordFailureFix"');
+  const dismiss = html.indexOf('id="recordFailureDismiss"');
   assert.ok(stage > 0 && panel > stage && shot > panel && fix > panel);
+  assert.ok(dismiss > panel, 'dismiss control sits on the failure panel');
+  assert.match(html, /Recording failed/);
   const stream = readFileSync(new URL('./agentStream.js', import.meta.url), 'utf8');
   assert.match(stream, /class="as-shot"/);
   assert.match(stream, /error\.png/);

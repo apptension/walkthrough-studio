@@ -3,13 +3,30 @@
  * after plate preview, encode, or mode switches can be unit-tested.
  */
 
-export const MONITOR_MODES = Object.freeze(['program', 'plate', 'compare']);
+export const MONITOR_MODES = Object.freeze(['program', 'live', 'plate', 'compare']);
 
-/** Map legacy / mistaken mode ids onto the three real panes. */
+/** Map legacy / mistaken mode ids onto the real panes. */
 export function normalizeMonitorMode(mode) {
   if (mode === 'html' || mode === 'editor') return 'plate';
   if (MONITOR_MODES.includes(mode)) return mode;
   return 'program';
+}
+
+/** Whether the Live tab should be offered (recording, repairing, or a page-capture frame). */
+export function liveTabVisible({
+  recording = false,
+  repairing = false,
+  badge = '',
+  hasPreview = false,
+} = {}) {
+  return Boolean(
+    recording ||
+      repairing ||
+      hasPreview ||
+      badge === 'Live' ||
+      badge === 'Repairing' ||
+      badge === 'Last frame'
+  );
 }
 
 /** True when the video element is already pointed at the delivery master (ignore ?t=). */

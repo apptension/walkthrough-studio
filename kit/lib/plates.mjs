@@ -122,7 +122,8 @@ const writePlateHtml = (path, html, brand, style) => writeIfChanged(path, inject
 /** Validated per-plate CSS variables from video.config (open.style / close.style / interstitials[].style). */
 function plateStyle(it, plateId) {
   if (!it?.style || typeof it.style !== 'object') return undefined;
-  return patchStyle({}, it.style, plateId);
+  const plateType = it.type || (plateId === 'open' || plateId === 'close' ? plateId : null);
+  return patchStyle({}, it.style, { plateId, plateType });
 }
 
 const contentHash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 16);

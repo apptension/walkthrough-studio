@@ -33,6 +33,18 @@ test('a record that stops on a login page keeps that frame', () => {
   assert.equal(after.empty, false);
 });
 
+test('a finished master still offers the last frame on the Live tab', () => {
+  const view = programPreview({
+    recording: false,
+    previewUrl: '/media/demo/live-preview.jpg',
+    hasLive: true,
+    hasDelivery: true,
+  });
+  assert.equal(view.show, true);
+  assert.equal(view.badge, 'Last frame');
+  assert.match(view.url, /live-preview\.jpg/);
+});
+
 test('repair keeps the last frame visible and labels it as repairing', () => {
   const view = programPreview({
     repairing: true,

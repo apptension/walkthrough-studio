@@ -360,11 +360,11 @@ ${singlePlate}`,
     scene: `You are editing ONE scene (brand plate) in the walkthrough "${video.slug}". ${singlePlate}
 Read ${config}, ${brief}, and ${critic} if present.
 
-If the plate is "open" / Introduction / Opening and the note is about logo size or position, edit ${config} → direction.motion:
-- openLogoWidth (px, default 820) — smaller number = smaller logo
-- openLogoTop (percent, default 52) — smaller number = higher on the plate
-- openLiftScale (default ~0.58) — settled size after the lift animation
-- openLiftY (percent, default -210) — more negative = rests higher after lift
+If the note is about logo size, position or visibility:
+- open / Introduction: prefer open.style (\`--open-logo\`, \`--open-logo-top\`, \`--open-logo-width\`, \`--open-lift-scale\`, \`--open-lift-y\`); direction.motion openLogo* / openLift* still work as brand defaults
+- close: close.style \`--close-logo\`, \`--close-logo-top\`, \`--close-logo-width\`, \`--close-lift-scale\`, \`--close-lift-y\`
+- features / quote / statement: that interstitial's style \`--mark-logo\`, \`--mark-logo-size\`, \`--mark-logo-width\`, \`--mark-logo-x\`, \`--mark-logo-y\`
+- orbit: style \`--orbit-logo\`, \`--orbit-logo-size\`, \`--orbit-center-scale\`
 
 For copy changes on open/close/interstitials, edit ${config}. For energy-only notes, set motion.energy to calm|clear|punchy.
 

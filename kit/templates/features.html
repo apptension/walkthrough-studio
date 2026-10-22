@@ -13,6 +13,12 @@
         --n: {{ITEM_COUNT}};
         --card-in: var(--motion-enter, 0.9s);
         --card-pop: var(--motion-pop, 0.94);
+        /* Brand mark — Editor Colours & motion → Brand mark (below the cards). */
+        --mark-logo: 1;
+        --mark-logo-size: 32px;
+        --mark-logo-width: 200px;
+        --mark-logo-x: 0px;
+        --mark-logo-y: 0px;
       }
       /* One vertical composition — title + capability grid fill the FHD frame */
       .compose {
@@ -110,10 +116,13 @@
         text-wrap: balance; max-width: 22ch;
       }
       .corner-logo {
-        flex: none; width: 200px; opacity: 0;
-        animation: fadeUp 0.85s 1.35s var(--expo) both;
+        flex: none;
+        width: var(--mark-logo-width, 200px);
+        margin-top: var(--mark-logo-y, 0px);
+        margin-left: var(--mark-logo-x, 0px);
+        opacity: 0;
+        animation: markIn 0.85s 1.35s var(--expo) both;
       }
-      .corner-logo .logo svg { max-height: 32px; }
       .bloom {
         position: absolute; left: 50%; top: 52%; width: 1500px; height: 720px; margin: -360px 0 0 -750px;
         border-radius: 50%;

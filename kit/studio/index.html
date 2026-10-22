@@ -260,6 +260,7 @@
         <div class="monitor-head">
           <div class="monitor-modes" role="tablist" aria-label="Monitor mode">
             <button type="button" class="mode-tab active" data-mode="program" id="modeProgram" title="Watch the rendered video">Program</button>
+            <button type="button" class="mode-tab mode-tab-live" data-mode="live" id="modeLive" title="Watch the live page capture" hidden>Live</button>
             <button type="button" class="mode-tab" data-mode="plate" id="modePlate" title="Edit the cut: play it, change speed, zooms, transitions, plate text and colours">Editor</button>
           </div>
           <div class="monitor-context">
@@ -282,14 +283,20 @@
                 <p id="signInWaitNext"></p>
                 <button type="button" id="signInContinue" class="btn primary">Continue</button>
               </div>
-            <figure id="recordFailure" class="record-failure" hidden>
+            <figure id="recordFailure" class="record-failure" hidden role="status" aria-live="polite">
               <img id="recordFailureShot" alt="Page when the recording failed" />
               <figcaption>
+                <span class="record-failure-label">Recording failed</span>
                 <strong id="recordFailureReason"></strong>
-                <span id="recordFailureUrl"></span>
-                <span id="recordFailureNext"></span>
+                <span id="recordFailureUrl" class="record-failure-url"></span>
+                <span id="recordFailureNext" class="record-failure-next"></span>
               </figcaption>
-              <button type="button" id="recordFailureFix" class="btn primary">Fix with AI</button>
+              <div class="record-failure-actions">
+                <button type="button" id="recordFailureFix" class="btn primary compact">Fix with AI</button>
+                <button type="button" id="recordFailureDismiss" class="record-failure-dismiss" title="Dismiss" aria-label="Dismiss recording failure">
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+              </div>
             </figure>
             <div id="programBuild" class="program-build" hidden>
               <strong id="programBuildTitle"></strong>
@@ -1014,6 +1021,7 @@
             <button type="button" id="etlAddSpeed" class="etl-tool speed"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>Speed</button>
             <button type="button" id="etlAddZoom" class="etl-tool zoom"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M11 8.5v5M8.5 11h5"/></svg>Zoom</button>
             <button type="button" id="etlAddLens" class="etl-tool lens"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/><path d="M7.4 9.2a3.4 3.4 0 0 1 2.4-2.3"/></svg>Magnify</button>
+            <button type="button" id="etlAddVoice" class="etl-tool voice" title="Add a voice line at the playhead"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg>Voice</button>
             <button type="button" id="etlMix" class="etl-tool mix"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Mix</button>
             <span class="etl-sep" aria-hidden="true"></span>
             <button type="button" id="etlUndo" class="etl-icon" title="Undo (⌘Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>

@@ -265,6 +265,38 @@ body {
   transform-origin: center;
 }
 
+/*
+  Brand mark seat (features / quote / statement). Templates set position; these vars
+  drive size + show from the Editor "Brand mark" group. Entrance lands on --mark-logo
+  so hiding the mark never fights a keyframed opacity:1.
+*/
+.corner-logo {
+  --mark-logo: 1;
+  --mark-logo-size: 30px;
+  --mark-logo-width: 180px;
+  --mark-logo-x: 72px;
+  --mark-logo-y: 48px;
+  width: var(--mark-logo-width);
+  z-index: 2;
+}
+.corner-logo .logo svg,
+.corner-logo .logo-img {
+  max-height: var(--mark-logo-size);
+  width: auto;
+}
+@keyframes markIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: var(--mark-logo, 1);
+    transform: none;
+    filter: none;
+  }
+}
+
 .wipe-l {
   clip-path: inset(0 100% 0 0);
   animation: wipeL 0.75s var(--t-wipe-l) var(--expo) both;
@@ -339,12 +371,13 @@ body {
   }
 }
 /* Drawing build (logo.html: .trace pieces with --px). Each piece traces its outline, then fills,
-   staggered left to right across --t-travel starting at --t-trace. */
+   staggered left to right across --t-travel starting at --t-trace.
+   Do not set `fill` here — keep the SVG’s own fills (gradients, currentColor). Forcing
+   `fill: var(--text)` painted multi-colour marks white on the open plate. */
 .trace {
   --d: calc(var(--t-trace, 0.6s) + var(--px, 0) * var(--t-travel, 1s));
-  fill: var(--text);
   fill-opacity: 0;
-  stroke: var(--stroke, var(--text));
+  stroke: var(--stroke, currentColor);
   stroke-width: 3;
   stroke-linejoin: round;
   stroke-dasharray: 1;

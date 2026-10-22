@@ -17,6 +17,12 @@
         --t-travel: 0.4s;
         --t-wipe-l: 0.85s;
         --t-wipe-r: 0.97s;
+        /* Brand mark — Editor Colours & motion → Brand mark (top-right of the card). */
+        --mark-logo: 1;
+        --mark-logo-size: 30px;
+        --mark-logo-width: 170px;
+        --mark-logo-x: 72px;
+        --mark-logo-y: 36px;
       }
       .compose {
         position: absolute; inset: 0;
@@ -107,10 +113,13 @@
       .author { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
       .role { font-size: 17px; color: var(--muted); letter-spacing: 0.01em; }
       .corner-logo {
-        position: absolute; right: 72px; top: 36px; width: 170px; opacity: 0; z-index: 2;
-        animation: fadeUp 0.85s 1.1s var(--expo) both;
+        position: absolute;
+        right: var(--mark-logo-x, 72px);
+        top: var(--mark-logo-y, 36px);
+        width: var(--mark-logo-width, 170px);
+        opacity: 0; z-index: 2;
+        animation: markIn 0.85s 1.1s var(--expo) both;
       }
-      .corner-logo .logo svg { max-height: 30px; }
       .bloom {
         position: absolute; left: 50%; top: 50%; width: 1500px; height: 700px; margin: -350px 0 0 -750px;
         border-radius: 50%;
