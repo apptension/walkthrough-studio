@@ -5,11 +5,25 @@ import { tmpdir } from 'node:os';
 import { describe, test } from 'node:test';
 import { applyCardEdits, cardMarkKey } from './editDeck.mjs';
 import {
+  alphaPipeArgs,
+  bakeClipKey,
   bakeClipName,
+  bakeStamp,
   cardBakeOverlayGraph,
   overlaysModeFromLiveMeta,
   planCardBakes,
 } from './liveCardBake.mjs';
+
+describe('bakeStamp', () => {
+  test('changes when a card’s baked content changes, even at the same path and time', () => {
+    const live = { size: 10, mtimeMs: 1 };
+    const plan = { cardId: 'overlay:chapter:0', t: 1, dur: 2, htmlPath: '/x/overlay-chapter-0.html', key: 'aaaa' };
+    const a = bakeStamp(live, [plan], { preset: 'editorial' });
+    const b = bakeStamp(live, [{ ...plan, key: 'bbbb' }], { preset: 'editorial' });
+    assert.notEqual(a, b, 'a per-chapter backdrop edit rewrites the card html → new key → clean pass re-runs');
+    assert.equal(a, bakeStamp(live, [{ ...plan }], { preset: 'editorial' }));
+  });
+});
 
 describe('overlaysModeFromLiveMeta', () => {
   test('defaults to burned for legacy takes', () => {
@@ -98,10 +112,48 @@ describe('cardBakeOverlayGraph', () => {
       assert.ok(graph.filter.some((f) => f.includes('format=rgba,setpts=PTS+1.000/TB')));
       assert.ok(graph.filter.some((f) => f.includes('format=rgba,setpts=PTS+4.000/TB')));
       assert.ok(graph.filter.some((f) => f.includes("between(t\\,1.000\\,3.000)")));
+      assert.ok(graph.filter.some((f) => f.includes('repeatlast=0')));
       assert.ok(graph.filter.some((f) => f.includes('eof_action=pass')));
       assert.equal(graph.outLabel, '[lbake]');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test('places a cropped caption at its measured origin', () => {
+    const dir = join(tmpdir(), `wt-bake-crop-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, 'cap.mov');
+    writeFileSync(file, 'x');
+    try {
+      const graph = cardBakeOverlayGraph(
+        [{ kind: 'caption', t: 11.73, dur: 4.36, ox: 624, oy: 884 }],
+        [file]
+      );
+      assert.ok(graph.filter.some((f) => f.includes('overlay=x=624:y=884:')));
+      assert.ok(!graph.filter.some((f) => f.includes('overlay=x=0:y=0:')));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('bakeClipKey', () => {
+  test('ignores mtime and changes when the card html changes', () => {
+    const base = { html: '<p>A</p>', css: 'body{}', motion: 'rise', t: 1, dur: 2, pipeline: 7, raster: 'metal' };
+    const a = bakeClipKey(base);
+    assert.equal(bakeClipKey({ ...base }), a);
+    assert.notEqual(bakeClipKey({ ...base, html: '<p>B</p>' }), a);
+    assert.equal(bakeClipKey({ ...base, ox: 10, oy: 20, w: 100, h: 40 }), a);
+  });
+});
+
+describe('alphaPipeArgs', () => {
+  test('muxes png frames without decoding them', () => {
+    const args = alphaPipeArgs('/tmp/card.mov', { fps: 30 });
+    assert.ok(args.includes('-c:v') && args[args.indexOf('-c:v') + 1] === 'copy');
+    assert.ok(!args.some((a) => String(a).includes('scale=')));
+    const chapter = alphaPipeArgs('/tmp/chapter.mov', { fps: 30, copy: false });
+    assert.equal(chapter[chapter.indexOf('-c:v') + 1], 'png');
   });
 });

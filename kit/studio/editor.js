@@ -283,6 +283,8 @@ export function initEditor(ctx) {
     loopClip: null,
     fx: true,
     textMode: false,
+    /** Look & reveal background edits: 'chapter' saves for the selected card's chapter, 'video' for all. */
+    lookScope: 'chapter',
     /** When set, text mode is editing a chapter/caption template (overlay:…) over a live clip. */
     liveCardId: null,
     /** Overlay id currently composited for preview (motion mode), if any. */
@@ -343,9 +345,26 @@ export function initEditor(ctx) {
     return state.video?.overlays || { preset: 'plateMatch', chapter: {}, caption: {}, catalog: {} };
   }
 
-  function renderCardLook(kind) {
+  /** The Program row (listLiveCards) behind a selected card: carries chapterNo + its effective look. */
+  function liveCardRow(sel) {
+    if (!sel) return null;
+    return (
+      (state.htmlPlates || []).find((p) => p.liveCard && sel.cardId && p.id === sel.cardId) ||
+      (state.htmlPlates || []).find((p) => p.liveCard && sel.key && p.markKey === sel.key) ||
+      null
+    );
+  }
+
+  function renderCardLook(kind, card = null) {
     const look = overlayLook();
-    const slot = kind === 'caption' ? look.caption || {} : look.chapter || {};
+    const videoSlot = kind === 'caption' ? look.caption || {} : look.chapter || {};
+    const chapterNo = Number(card?.chapterNo) || 0;
+    const ownKeys = Array.isArray(card?.lookScope) ? card.lookScope : [];
+    const scope = ed.lookScope === 'video' ? 'video' : 'chapter';
+    const perChapter = Boolean(chapterNo) && scope === 'chapter';
+    // Background rows show what this card will actually paint (chapter look over the video's)
+    // in chapter scope, and the video-wide values in video scope. Everything else is video-wide.
+    const slot = perChapter && card?.look ? card.look : videoSlot;
     const cat = look.catalog || {};
     const atmospheres = cat.atmospheres || ['waves', 'mesh', 'blobs', 'none'];
     const energies = cat.energies || ['calm', 'clear', 'punchy'];
@@ -425,13 +444,41 @@ export function initEditor(ctx) {
           ) +
           row('Seat', `<select class="ins-select" data-overlay="seat">${opt(seats, slot.seat || 'bottom-center', seatLabels)}</select>`) +
           row('Text', `<select class="ins-select" data-overlay="align">${opt(aligns, slot.align || 'left', { left: 'Left', center: 'Center' })}</select>`);
+    const keyLabels = { atmosphere: 'background', backdrop: 'backdrop', backdropOpacity: 'opacity' };
+    const scopeRow = chapterNo
+      ? row(
+          'Save for',
+          `<div class="ins-seg" data-look-scope-seg>${[
+            ['chapter', `Chapter ${chapterNo}`, `Background and backdrop changes below apply to chapter ${chapterNo} only (its chapter card and the captions inside it)`],
+            ['video', 'All chapters', `Background and backdrop changes below apply to every chapter that has no look of its own`],
+          ]
+            .map(
+              ([v, label, title]) =>
+                `<button type="button" data-look-scope="${v}" class="${scope === v ? 'on' : ''}" aria-pressed="${scope === v}" title="${escapeHtml(title)}">${label}</button>`
+            )
+            .join('')}</div>`
+        )
+      : '';
+    const ownNote = chapterNo
+      ? ownKeys.length
+        ? `<p class="ins-note"><b>Chapter ${chapterNo}</b> has its own ${kindLabel.replace(/s$/, '')} ${ownKeys.map((k) => keyLabels[k] || k).join(' · ')}.</p>` +
+          `<div class="ins-actions">` +
+          `<button type="button" class="ins-btn" data-act="look-apply-all" title="Make chapter ${chapterNo}’s ${kindLabel.replace(/s$/, '')} background the video’s — every chapter follows it">${ICONS.sparkle || ''}<span>Apply to all chapters</span></button>` +
+          `<button type="button" class="ins-btn" data-act="look-follow-video" title="Drop chapter ${chapterNo}’s own background and follow the video look again"><span>Follow video</span></button>` +
+          `</div>`
+        : perChapter
+          ? `<p class="ins-note subtle">Chapter ${chapterNo} follows the video look. Changing Background or Backdrop here saves it for this chapter only; switch to <b>All chapters</b> to change the video.</p>`
+          : ''
+      : '';
     return (
       row('Preset', `<select class="ins-select" data-overlay-preset>${opt(presets, look.preset || 'plateMatch')}</select>`) +
+      scopeRow +
       row('Background', `<select class="ins-select" data-overlay="atmosphere">${opt(atmospheres, slot.atmosphere || 'waves', atmLabels)}</select>`) +
       backdropRows +
+      ownNote +
       row('Entrance', `<select class="ins-select" data-overlay="energy">${opt(energies, slot.energy || 'clear', energyLabels)}</select>`) +
       toggles +
-      `<p class="ins-note subtle">Look applies to all ${kindLabel} (same as Direction → Live cards). Timing above is this card only. Double-click the block to edit copy.</p>`
+      `<p class="ins-note subtle">Preset, entrance and ornaments apply to all ${kindLabel} (same as Direction → Live cards). Timing above is this card only. Double-click the block to edit copy.</p>`
     );
   }
 
@@ -457,7 +504,7 @@ export function initEditor(ctx) {
         `<div class="ins-big"><output id="insCardDurOut">${dur.toFixed(1)}s</output><input type="range" min="${lo}" max="${hi}" step="0.1" value="${clamp(dur, lo, hi)}" data-card-dur aria-label="How long this card stays on screen" /></div>
         <p class="ins-note subtle">How long this ${slot} stays on the recording.</p>`
       ) +
-      section('motion', 'Look & reveal', renderCardLook(slot)) +
+      section('motion', 'Look & reveal', renderCardLook(slot, liveCardRow(s))) +
       fields
     );
   }
@@ -5264,6 +5311,26 @@ export function initEditor(ctx) {
       }
     }
 
+    // Background trio (atmosphere · backdrop · opacity) saves for the card's chapter unless the
+    // scope is "All chapters"; preset, entrance, ornaments, seat and text are always video-wide.
+    const lookChapterNo = Number(liveCardRow(cardSel)?.chapterNo) || 0;
+    const chapterScoped = () => lookChapterNo && ed.lookScope !== 'video';
+    const scopeHint = () => (chapterScoped() ? `chapter ${lookChapterNo}` : 'all chapters');
+    const backgroundPatch = (slotPatch) => (chapterScoped() ? { chapterNo: lookChapterNo, [cardKind]: slotPatch } : { [cardKind]: slotPatch });
+
+    on('[data-look-scope]', 'click', (el) => {
+      ed.lookScope = el.dataset.lookScope === 'video' ? 'video' : 'chapter';
+      renderInspector();
+    });
+    act('look-apply-all', () => {
+      if (!cardKind || !lookChapterNo) return;
+      saveCardOverlays({ applyToAll: true, chapterNo: lookChapterNo, slot: cardKind }, `Chapter ${lookChapterNo} ${cardKind} background → all chapters`);
+    });
+    act('look-follow-video', () => {
+      if (!cardKind || !lookChapterNo) return;
+      saveCardOverlays({ reset: true, chapterNo: lookChapterNo, slot: cardKind }, `Chapter ${lookChapterNo} ${cardKind} · follows the video`);
+    });
+
     on('[data-overlay-preset]', 'change', (el) => {
       if (!cardKind) return;
       saveCardOverlays({ preset: el.value }, `Preset · ${el.value}`);
@@ -5272,6 +5339,10 @@ export function initEditor(ctx) {
       if (!cardKind) return;
       const key = el.dataset.overlay;
       if (!key) return;
+      if (key === 'atmosphere') {
+        saveCardOverlays(backgroundPatch({ atmosphere: el.value }), `${cardKind} · background ${el.value} · ${scopeHint()}`);
+        return;
+      }
       saveCardOverlays({ [cardKind]: { [key]: el.value } }, `${cardKind} · ${key}`);
     });
     on('[data-overlay-backdrop]', 'change', (el) => {
@@ -5285,7 +5356,10 @@ export function initEditor(ctx) {
           return;
         }
       }
-      saveCardOverlays({ [cardKind]: { backdrop: v === 'auto' ? null : v } }, `${cardKind} · backdrop ${v}`);
+      // Video-wide "auto" is the default (cleared); for one chapter it is an explicit choice that
+      // can override a coloured video backdrop, so it is stored as-is.
+      const backdrop = v === 'auto' && !chapterScoped() ? null : v;
+      saveCardOverlays(backgroundPatch({ backdrop }), `${cardKind} · backdrop ${v} · ${scopeHint()}`);
     });
     on('[data-overlay-backdrop-color]', 'input', (el) => {
       const sw = el.closest('.ins-swatch');
@@ -5296,7 +5370,7 @@ export function initEditor(ctx) {
     });
     on('[data-overlay-backdrop-color]', 'change', (el) => {
       if (!cardKind) return;
-      saveCardOverlays({ [cardKind]: { backdrop: el.value } }, `${cardKind} · backdrop ${el.value}`);
+      saveCardOverlays(backgroundPatch({ backdrop: el.value }), `${cardKind} · backdrop ${el.value} · ${scopeHint()}`);
     });
     on('[data-overlay-backdrop-opacity]', 'input', (el) => {
       const out = el.parentElement?.querySelector('output');
@@ -5304,7 +5378,7 @@ export function initEditor(ctx) {
     });
     on('[data-overlay-backdrop-opacity]', 'change', (el) => {
       if (!cardKind) return;
-      saveCardOverlays({ [cardKind]: { backdropOpacity: Number(el.value) } }, `${cardKind} · backdrop ${el.value}%`);
+      saveCardOverlays(backgroundPatch({ backdropOpacity: Number(el.value) }), `${cardKind} · backdrop ${el.value}% · ${scopeHint()}`);
     });
     on('[data-overlay-bool]', 'click', (el) => {
       if (!cardKind) return;

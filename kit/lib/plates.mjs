@@ -9,7 +9,6 @@
  * Bump RENDER_PIPELINE when changing capture/encode defaults.
  */
 import { chromium } from 'playwright';
-import { cpus } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -18,7 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { DELIVERY } from './format.mjs';
 import { FPS } from './motion.mjs';
 import { motionCssVars, resolveMotion, withMotion } from './plateMotion.mjs';
-import { KIT, TEMPLATES, brandReadiness, isStale } from './project.mjs';
+import { TEMPLATES, brandReadiness } from './project.mjs';
 import { logoTileTone } from './logoTone.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
 import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } from './encode.mjs';
@@ -79,7 +78,8 @@ function cascadeChars(line, { from = 0 } = {}) {
 }
 
 /** Bump when capture/encode/QC defaults change so content-hash cache rebuilds. */
-const RENDER_PIPELINE = 15;
+export const PLATE_RENDER_PIPELINE = 16;
+const RENDER_PIPELINE = PLATE_RENDER_PIPELINE;
 /**
  * Encoded plates drop the template's `.black` in/out: produce owns every join (xfade through
  * the plate's own brand background, head/tail fades on the master). HTML previews keep it.
@@ -98,10 +98,13 @@ const HOLD_MIN_SEC = 0.25;
  * Measured ~15× faster than piping 4K PNG/JPEG into ffmpeg.
  */
 const JPEG_Q = plateJpegQ();
-/** Parallel plate encodes — leave headroom for concurrent ffmpeg procs. */
+/**
+ * Two plates at a time. Four pages in one browser contend for the GPU and push a frame
+ * past 60 ms; two stay under it. WALKTHROUGH_PLATE_JOBS can raise the pool to 4.
+ */
 const PLATE_CONCURRENCY = Math.max(
-  2,
-  Math.min(4, Number(process.env.WALKTHROUGH_PLATE_JOBS) || Math.max(2, (cpus()?.length || 4) - 2))
+  1,
+  Math.min(4, Number(process.env.WALKTHROUGH_PLATE_JOBS) || 2)
 );
 
 const writeIfChanged = (path, content) => {
@@ -1678,22 +1681,28 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
     durationSec = meta.durationSec;
     typeFit = meta.typeFit || typeFit;
     const requested = resolveHoldWindow(meta);
-    const snap = () =>
-      page.screenshot({ type: 'jpeg', quality: JPEG_Q, animations: 'allow', scale: 'css' });
-    /** Step CSS time, wait for paint, return Web Animations fingerprint. */
-    const setTime = async (ms) =>
-      page.evaluate(async (t) => {
+    const cdp = await page.context().newCDPSession(page);
+    const snap = async () => {
+      const shot = await cdp.send('Page.captureScreenshot', {
+        format: 'jpeg',
+        quality: JPEG_Q,
+        captureBeyondViewport: false,
+      });
+      return Buffer.from(shot.data, 'base64');
+    };
+    /**
+     * Step CSS time and the WebGL clock, then return the animation fingerprint.
+     * Page.captureScreenshot forces the compositor frame, so a vsync wait here only
+     * adds ~33 ms and does not change the pixels.
+     */
+    const setTime = (ms) =>
+      page.evaluate((t) => {
         for (const a of document.getAnimations()) {
           a.pause();
           a.currentTime = t;
         }
-        // The WebGL atmosphere and JS hooks (count-ups) are time-driven, not CSS — step them
-        // with the plate clock so every frame is deterministic.
         const runtime = window.__plateRuntime || window.__plateField;
         if (typeof runtime?.renderAt === 'function') runtime.renderAt(t);
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        // Progress only: a finished (fill: forwards) or not-yet-started animation reads constant,
-        // so the fingerprint changes exactly when something on screen can change.
         return document
           .getAnimations()
           .map((a) => {
@@ -1703,7 +1712,13 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
           .join('|');
       }, ms);
 
-    holdMeta = await probeHoldSafety(page, setTime, snap, requested);
+    const liveField = await page.evaluate(() => {
+      const field = document.querySelector('.plate-field')?.getAttribute('data-field') || '';
+      return Boolean(field && field !== 'none');
+    });
+    holdMeta = liveField
+      ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'live-field' }
+      : await probeHoldSafety(page, setTime, snap, requested);
     holdFrom = holdMeta.holdFrom;
     holdUntil = holdMeta.holdUntil;
 
@@ -1781,8 +1796,10 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
     raster,
     jpegQ: JPEG_Q,
     htmlHash: contentHash(readFileSync(htmlPath)),
+    cssHash: contentHash(readFileSync(join(TEMPLATES, 'plates.css'), 'utf8')),
     durationSec,
     frames,
+    msPerFrame: frames ? Number(((Date.now() - t0) / frames).toFixed(1)) : 0,
     holdFrom,
     holdUntil,
     hold: holdMeta,
@@ -1832,16 +1849,29 @@ export function readPlateRenderMeta(mp4Path) {
   }
 }
 
-function plateCacheFresh(mp4Path, htmlPath, extraSources) {
+/**
+ * A plate is fresh when the html, the shared plate CSS, the pipeline, the JPEG quality,
+ * and the raster backend match the sidecar. video.config.json mtime is not a key:
+ * an Editor save that only touches edit.* must not redraw every plate.
+ */
+export function plateCacheFresh(mp4Path, htmlPath, { cssHash, raster, jpegQ } = {}) {
   if (!existsSync(mp4Path) || !existsSync(htmlPath)) return false;
   const meta = readPlateRenderMeta(mp4Path);
   if (!meta) return false;
   if (meta.pipeline !== RENDER_PIPELINE) return false;
-  if (meta.qc && meta.qc.ok === false) return false;
-  // Pipeline 6+ requires a QC pass recorded on the sidecar
-  if (RENDER_PIPELINE >= 6 && !meta.qc?.ok) return false;
+  if (!meta.qc?.ok) return false;
   if (meta.htmlHash !== contentHash(readFileSync(htmlPath))) return false;
-  return !isStale(mp4Path, [htmlPath, ...extraSources]);
+  if (cssHash && meta.cssHash !== cssHash) return false;
+  if (raster && meta.raster !== raster) return false;
+  if (jpegQ && meta.jpegQ !== jpegQ) return false;
+  return true;
+}
+
+function expectedRaster() {
+  const args = plateBrowserArgs();
+  if (args.some((a) => a.includes('disable-gpu'))) return 'software raster';
+  if (args.some((a) => a.includes('metal'))) return 'GPU raster (Metal)';
+  return 'GPU raster';
 }
 
 /** Renders plates whose sources changed (or all with force). */
@@ -1854,17 +1884,11 @@ export async function renderPlates(video, { force = false, only } = {}) {
   } catch (err) {
     console.warn(`· live cards skipped: ${err.message || err}`);
   }
-  const sources = [
-    video.configPath,
-    ...video.brand.files,
-    join(TEMPLATES, 'plates.css'),
-    join(KIT, 'lib', 'plates.mjs'),
-    join(KIT, 'lib', 'plateMotion.mjs'),
-    join(KIT, 'lib', 'atmosphere.mjs'),
-    join(KIT, 'lib', 'countUp.mjs'),
-    join(KIT, 'lib', 'typeFit.mjs'),
-    join(KIT, 'lib', 'logoTone.mjs'),
-  ];
+  const cacheOpts = {
+    cssHash: contentHash(readFileSync(join(TEMPLATES, 'plates.css'), 'utf8')),
+    raster: expectedRaster(),
+    jpegQ: JPEG_Q,
+  };
   const labelFor = (key) => {
     if (key === 'open') return plainTitle(video.config.open?.title) || 'Introduction';
     if (key === 'close') return plainTitle(video.config.close?.title) || 'Close';
@@ -1875,18 +1899,18 @@ export async function renderPlates(video, { force = false, only } = {}) {
   const jobs = [];
   const saved = [];
   const want = (key) => !only || only === key || (only === 'interstitials' && key.startsWith('plate:'));
-  const consider = (key, html, mp4, sourcesForPlate) => {
+  const consider = (key, html, mp4) => {
     if (!want(key)) return;
     const row = { key, label: labelFor(key), html, mp4 };
-    if (force || !plateCacheFresh(mp4, html, sourcesForPlate)) jobs.push(row);
+    if (force || !plateCacheFresh(mp4, html, cacheOpts)) jobs.push(row);
     else saved.push(row);
   };
 
-  consider('open', paths.open.html, paths.open.mp4, [...sources, join(TEMPLATES, 'open.html')]);
-  consider('close', paths.close.html, paths.close.mp4, [...sources, join(TEMPLATES, 'close.html')]);
+  consider('open', paths.open.html, paths.open.mp4);
+  consider('close', paths.close.html, paths.close.mp4);
   for (const it of video.config.interstitials || []) {
     const dest = paths.interstitial[it.id];
-    consider(`plate:${it.id}`, dest.html, dest.mp4, [...sources, join(TEMPLATES, `${it.type}.html`)]);
+    consider(`plate:${it.id}`, dest.html, dest.mp4);
   }
 
   if (!jobs.length) {
@@ -1929,7 +1953,7 @@ export async function renderPlates(video, { force = false, only } = {}) {
  * through Metal with GPU rasterization — about 5× faster per frame than SwiftShader, with
  * identical type and layout. WALKTHROUGH_PLATE_GPU=0 forces the software path.
  */
-function plateBrowserArgs() {
+export function plateBrowserArgs() {
   const base = ['--disable-dev-shm-usage'];
   if (process.env.WALKTHROUGH_PLATE_GPU === '0') return [...base, '--disable-gpu'];
   if (process.platform === 'darwin') {

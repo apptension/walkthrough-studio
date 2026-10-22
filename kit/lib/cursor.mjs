@@ -3,6 +3,11 @@
  * one we control: an arrow or an accent dot that follows real mouse events, sized for video, with a
  * press pulse. Between actions it glides along an eased, slightly arced path, then the real mouse
  * lands on the target so hover and press are real UI. Keystroke chips show shortcuts the flow presses.
+ *
+ * Clicks read as clicks: just before a press the arrow morphs into a pointing hand (`arm()`), the
+ * real mousedown plays a push-down on the glyph plus the ripple, and after the action the hand
+ * lingers for a beat before easing back into the arrow (`release()`). `direction.cursor.hand`
+ * switches the morph (default on for the arrow; the dot keeps its pulse).
  */
 import { hexA } from './text.mjs';
 
@@ -12,11 +17,45 @@ export const CURSOR_SIZES = Object.freeze({ s: 1, m: 1.3, l: 1.65 });
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
 
+/**
+ * Timing of the click gesture at a given pace: `armMs` is how long the hand is on screen before
+ * the press (so the morph reads), `holdMs` how long it stays after the action before relaxing.
+ */
+export function clickChoreography(tempo = 1) {
+  const t = Math.max(0.25, Number(tempo) || 1);
+  return { armMs: Math.max(80, Math.round(160 / t)), holdMs: Math.max(140, Math.round(340 / t)) };
+}
+
+/** Fingertip of the hand glyph inside its 28×32 viewBox — it is pulled onto the hotspot. */
+const HAND_TIP = { x: 10.3, y: 0.9 };
+
+/** Pointing-hand glyph, same ink/outline as the arrow so the morph is a shape change, not a restyle. */
+export function handCursorSvg(scale = 1) {
+  const s = scale;
+  const d = [
+    'M8 3.2 A2.3 2.3 0 0 1 12.6 3.2 L12.6 10.4 A2.2 2.2 0 0 1 17 10.4 L17 11.6 A2.2 2.2 0 0 1 21.4 11.6',
+    'L21.4 13 A2.2 2.2 0 0 1 25.8 13 L25.8 21 A8.5 8.5 0 0 1 17.3 29.5 L12 29.5 C9.5 29.5 7.5 28.4 6.1 26.5',
+    'L1.6 20.2 C0.6 18.8 0.9 17 2.1 16.1 C3.3 15.2 5 15.5 6 16.7 L8 19.2 Z',
+  ].join(' ');
+  const mt = (HAND_TIP.y * s).toFixed(1);
+  const ml = (HAND_TIP.x * s).toFixed(1);
+  return (
+    `<svg class="wt-h" width="${28 * s}" height="${32 * s}" viewBox="0 0 28 32" aria-hidden="true" ` +
+    `style="position:absolute;left:0;top:0;margin: -${mt}px 0 0 -${ml}px;display:block;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))">` +
+    `<path d="${d}" fill="#111" stroke="#fff" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>` +
+    `<path d="M12.6 16.5 V21 M17 16.5 V21 M21.4 16.5 V21" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" opacity=".55"/>` +
+    `</svg>`
+  );
+}
+
 /** Page side. Runs in every document (init script), so navigation keeps the cursor. */
-function pageCursor({ style, scale, accent, halo, font, hideIdle }) {
+function pageCursor({ style, scale, accent, halo, font, hideIdle, hand, handSvg, tip }) {
   if (window.__wtCursor) return;
   const install = () => {
     if (document.getElementById('wt-cursor')) return;
+    // This function is serialised into the page: only its arguments exist here.
+    const tipX = ((tip?.x || 0) * scale).toFixed(1);
+    const tipY = ((tip?.y || 0) * scale).toFixed(1);
     const css = document.createElement('style');
     css.id = 'wt-cursor-style';
     css.textContent = `
@@ -24,8 +63,16 @@ function pageCursor({ style, scale, accent, halo, font, hideIdle }) {
         transition: opacity .2s ease; will-change: transform; }
       #wt-cursor.on { opacity:1; }
       #wt-cursor.idle { opacity:0; }
-      #wt-cursor .wt-c { transform-origin: 3px 2px; transition: transform .14s cubic-bezier(.34,1.56,.64,1); }
+      #wt-cursor .wt-c { transform-origin: 3px 2px; transition: transform .16s cubic-bezier(.34,1.56,.64,1), opacity .14s ease; }
       #wt-cursor.down .wt-c { transform: scale(.84); }
+      #wt-cursor .wt-h { transform-origin: ${tipX}px ${tipY}px; opacity:0;
+        transform: scale(.72) translateY(${(6 * scale).toFixed(1)}px);
+        transition: transform .22s cubic-bezier(.34,1.56,.64,1), opacity .16s ease; }
+      #wt-cursor.hand .wt-c { opacity:0; transform: scale(.6); }
+      #wt-cursor.hand .wt-h { opacity:1; transform: none; }
+      #wt-cursor.hand.down .wt-h { transform: translateY(${(3 * scale).toFixed(1)}px) scale(.9); }
+      #wt-cursor.push .wt-c, #wt-cursor.push .wt-h { animation: wt-push .38s cubic-bezier(.2,.8,.2,1); }
+      @keyframes wt-push { 0% { transform:none; } 28% { transform: translateY(${(4 * scale).toFixed(1)}px) scale(.86); } 100% { transform:none; } }
       #wt-cursor .wt-ripple { position:absolute; left:0; top:0; width:44px; height:44px; margin:-22px 0 0 -22px;
         border-radius:50%; border:2px solid ${accent}; opacity:0; transform:scale(.3); }
       #wt-cursor .wt-ripple.go { animation: wt-ripple .55s cubic-bezier(.16,1,.3,1) forwards; }
@@ -47,7 +94,16 @@ function pageCursor({ style, scale, accent, halo, font, hideIdle }) {
       style === 'dot'
         ? `<div class="wt-c" style="width:${18 * s}px;height:${18 * s}px;margin:${-9 * s}px 0 0 ${-9 * s}px;border-radius:50%;background:${accent};box-shadow:0 0 0 ${6 * s}px ${halo},0 6px 18px rgba(0,0,0,.28)"></div><div class="wt-ripple"></div>`
         : `<svg class="wt-c" width="${24 * s}" height="${30 * s}" viewBox="0 0 24 30" style="display:block;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))"><path d="M2.2 1.6 L2.2 23.4 L7.6 18.3 L11.3 27.1 L15.2 25.4 L11.6 16.8 L19 16.8 Z" fill="#111" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/></svg><div class="wt-ripple"></div>`;
+    if (hand && handSvg) el.insertAdjacentHTML('beforeend', handSvg);
     document.documentElement.appendChild(el);
+    /** Replay the push-down keyframes on every press (class removal + reflow restarts them). */
+    const push = () => {
+      el.classList.remove('push');
+      void el.offsetWidth;
+      el.classList.add('push');
+      clearTimeout(push.t);
+      push.t = setTimeout(() => el.classList.remove('push'), 420);
+    };
     let idleTimer;
     const place = (x, y) => {
       el.style.transform = `translate(${x}px, ${y}px)`;
@@ -71,6 +127,7 @@ function pageCursor({ style, scale, accent, halo, font, hideIdle }) {
     addEventListener('mousedown', (e) => {
       place(e.clientX, e.clientY);
       el.classList.add('down');
+      push();
       const ripple = el.querySelector('.wt-ripple');
       ripple.classList.remove('go');
       void ripple.offsetWidth;
@@ -95,6 +152,16 @@ function pageCursor({ style, scale, accent, halo, font, hideIdle }) {
     window.__wtCursor = {
       place,
       glide,
+      /** Arrow ⇄ pointing hand. No-op when the hand glyph is not installed. */
+      hand: (on) => {
+        if (!hand) return false;
+        el.classList.toggle('hand', Boolean(on));
+        if (on) {
+          el.classList.remove('idle');
+          clearTimeout(idleTimer);
+        }
+        return true;
+      },
       show: () => {
         el.classList.remove('idle');
         clearTimeout(idleTimer);
@@ -166,6 +233,8 @@ export async function createCursor({ context, page, brand, wait, viewport, setti
   const glideOn = settings.glide ?? style !== 'classic';
   const hideIdle = settings.hideIdle ?? style !== 'classic';
   const loopOn = settings.loop === true;
+  // The pointing hand morph: on for the arrow unless direction says otherwise; the dot opts in.
+  const handOn = style !== 'classic' && (typeof settings.hand === 'boolean' ? settings.hand : style === 'arrow');
   const home = { x: Math.round(viewport.width * 0.5), y: Math.round(viewport.height * 0.6) };
   const pointer = { ...home };
   if (style !== 'classic') {
@@ -176,7 +245,29 @@ export async function createCursor({ context, page, brand, wait, viewport, setti
       halo: hexA(accent, 0.22),
       font: `'${brand.font.family}'`,
       hideIdle,
+      hand: handOn,
+      handSvg: handOn ? handCursorSvg(scale) : '',
+      tip: HAND_TIP,
     });
+  }
+  const setHand = (on) => page.evaluate((v) => window.__wtCursor?.hand(v), on).catch(() => false);
+  let releaseTimer = null;
+  /** Morph into the hand and give it a beat to read before the real press lands. */
+  async function arm() {
+    if (!handOn) return;
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+    await setHand(true);
+    await wait(clickChoreography(tempo()).armMs);
+  }
+  /** After the action: keep the hand a moment, then relax to the arrow. Never blocks the flow. */
+  function release() {
+    if (!handOn) return;
+    clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(() => {
+      releaseTimer = null;
+      setHand(false);
+    }, clickChoreography(tempo()).holdMs);
   }
   const placeNow = () =>
     style === 'classic'
@@ -211,8 +302,11 @@ export async function createCursor({ context, page, brand, wait, viewport, setti
     glide: glideOn,
     hideIdle,
     loop: loopOn,
+    hand: handOn,
     pointer,
     moveTo,
+    arm,
+    release,
     /** Playwright moved the mouse itself (its own click); keep our record in step. */
     sync: (x, y) => {
       pointer.x = Math.round(x);

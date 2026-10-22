@@ -11,6 +11,7 @@
  *   trigger→ machine source (make, produce, audio, manual, cli, …)
  */
 import {
+  constants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -66,10 +67,15 @@ function writeIndex(video, index) {
   writeFileSync(join(dir, INDEX), JSON.stringify(index, null, 2));
 }
 
+/** APFS clone when the volume supports it; a normal copy otherwise. Snapshots stay, they just stop costing a full write. */
+function cloneCopy(src, dest, opts = {}) {
+  cpSync(src, dest, { ...opts, mode: constants.COPYFILE_FICLONE });
+}
+
 function copyIfExists(src, dest) {
   if (!existsSync(src)) return false;
   mkdirSync(dirname(dest), { recursive: true });
-  cpSync(src, dest, { recursive: true });
+  cloneCopy(src, dest, { recursive: true });
   return true;
 }
 
@@ -199,7 +205,7 @@ export function snapshotVersion(video, opts = {}) {
   mkdirSync(join(dir, 'out'), { recursive: true });
 
   // Delivery + review artifacts
-  cpSync(final, join(dir, 'out', `${video.slug}.mp4`));
+  cloneCopy(final, join(dir, 'out', `${video.slug}.mp4`));
   for (const name of [
     'produce-meta.json',
     'audio-meta.json',
@@ -218,18 +224,18 @@ export function snapshotVersion(video, opts = {}) {
     copyIfExists(join(video.out, name), join(dir, 'out', name));
   }
   if (existsSync(join(video.out, 'validate'))) {
-    cpSync(join(video.out, 'validate'), join(dir, 'out', 'validate'), { recursive: true });
+    cloneCopy(join(video.out, 'validate'), join(dir, 'out', 'validate'), { recursive: true });
   }
   if (existsSync(join(video.out, 'captions'))) {
-    cpSync(join(video.out, 'captions'), join(dir, 'out', 'captions'), { recursive: true });
+    cloneCopy(join(video.out, 'captions'), join(dir, 'out', 'captions'), { recursive: true });
   }
   if (existsSync(join(video.out, 'deliverables'))) {
-    cpSync(join(video.out, 'deliverables'), join(dir, 'out', 'deliverables'), { recursive: true });
+    cloneCopy(join(video.out, 'deliverables'), join(dir, 'out', 'deliverables'), { recursive: true });
   }
   // Plate mp4s (assets for the panel)
   for (const f of readdirSync(video.out)) {
     if (/^(brand-|plate-).*\.mp4$/.test(f)) {
-      cpSync(join(video.out, f), join(dir, 'out', f));
+      cloneCopy(join(video.out, f), join(dir, 'out', f));
     }
   }
 
@@ -327,7 +333,7 @@ export function restoreVersion(video, id, { media = false } = {}) {
   const src = join(dir, 'source');
   for (const name of ['video.config.json', 'narration.mjs', 'flow.mjs']) {
     const from = join(src, name);
-    if (existsSync(from)) cpSync(from, join(video.dir, name));
+    if (existsSync(from)) cloneCopy(from, join(video.dir, name));
   }
   const brandMotionPath = join(src, 'brand-motion.json');
   if (existsSync(brandMotionPath)) {
@@ -348,9 +354,9 @@ export function restoreVersion(video, id, { media = false } = {}) {
       const to = join(video.out, f);
       if (statSync(from).isDirectory()) {
         if (existsSync(to)) rmSync(to, { recursive: true, force: true });
-        cpSync(from, to, { recursive: true });
+        cloneCopy(from, to, { recursive: true });
       } else {
-        cpSync(from, to);
+        cloneCopy(from, to);
       }
     }
   }

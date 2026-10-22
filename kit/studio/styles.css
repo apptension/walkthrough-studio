@@ -7987,6 +7987,9 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
 .ins-btn.primary:hover { background: var(--brand-fill-hot); }
 .ins-btn.ghost { background: transparent; color: var(--ink-dim); margin-top: 10px; }
 .ins-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+/* Side-by-side inspector buttons (Look & reveal: apply to all chapters · follow video). */
+.ins-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ins-actions .ins-btn { flex: 1 1 auto; }
 
 .ins-seg { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
 .ins-seg button {

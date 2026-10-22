@@ -7,10 +7,17 @@
  *   chapter?: { atmosphere, energy, sheen, ghost, blobs, rail, backdrop, backdropOpacity }
  *   caption?: { atmosphere, energy, sheen, seat, maxWidth, bottom, inset, align, backdrop, backdropOpacity }
  *
+ *   chapters?: { [chapterNo]: { chapter?: { atmosphere, backdrop, backdropOpacity },
+ *                               caption?: { atmosphere, backdrop, backdropOpacity } } }
+ *
  * `backdrop` is the solid fill painted *behind* the atmosphere: `auto` keeps each template's own
  * fill (the ink dim / caption gradient, which turns translucent under a WebGL field so the take
  * shows through), `none` is fully transparent, a brand role (ink · surface · gold · amber · teal)
  * or a #hex picks a colour; `backdropOpacity` (0–100) is how solid that colour is.
+ *
+ * `chapters` holds a chapter's own background (atmosphere + backdrop) for its chapter card and the
+ * captions inside it; keys not listed there follow the video-wide slot. Studio's Look & reveal
+ * writes here by default and "Apply to all chapters" promotes a chapter's trio to the video.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,6 +60,45 @@ export const OVERLAY_BACKDROP_CHOICES = Object.freeze([
   { id: 'custom', label: 'Custom…', hint: 'Pick any colour with the swatch' },
 ]);
 const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+/** The look keys a single chapter may own (its background); everything else is video-wide. */
+export const PER_CHAPTER_LOOK_KEYS = Object.freeze(['atmosphere', 'backdrop', 'backdropOpacity']);
+const CARD_SLOTS = Object.freeze(['chapter', 'caption']);
+
+/** Positive chapter number from Studio / CLI input, or null. */
+function chapterKey(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 999 ? String(n) : null;
+}
+
+/** One chapter's own look for one slot, validated; null when nothing survives. */
+function sanitizeChapterSlot(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = {};
+  if (OVERLAY_ATMOSPHERES.includes(raw.atmosphere)) out.atmosphere = raw.atmosphere;
+  const bd = normalizeBackdrop(raw.backdrop);
+  if (bd) out.backdrop = bd;
+  if (raw.backdropOpacity != null && Number.isFinite(Number(raw.backdropOpacity))) {
+    out.backdropOpacity = clampNum(raw.backdropOpacity, 100, 0, 100);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** `overlays.chapters` with every row validated and empty rows dropped; undefined when empty. */
+export function sanitizeChapterLooks(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out = {};
+  for (const [k, row] of Object.entries(raw)) {
+    const key = chapterKey(k);
+    if (!key || !row || typeof row !== 'object') continue;
+    const entry = {};
+    for (const slot of CARD_SLOTS) {
+      const clean = sanitizeChapterSlot(row[slot]);
+      if (clean) entry[slot] = clean;
+    }
+    if (Object.keys(entry).length) out[key] = entry;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 /** Normalise a backdrop value: a known choice or a `#rrggbb` colour; null when invalid. */
 export function normalizeBackdrop(v) {
@@ -228,9 +274,11 @@ function brandTokens(p) {
 
 /**
  * Resolve direction.overlays (+ optional preset) against plate motion inheritance.
- * Returns { preset, chapter, caption, catalog } for Studio + fill.
+ * Returns { preset, chapter, caption, chapters?, catalog } for Studio + fill. With `chapterNo`,
+ * `chapter`/`caption` are that chapter's effective slots (its own background laid over the video
+ * look) and `scope` lists which keys came from the chapter.
  */
-export function resolveOverlays(brand, direction = {}) {
+export function resolveOverlays(brand, direction = {}, { chapterNo } = {}) {
   const raw = direction.overlays && typeof direction.overlays === 'object' ? direction.overlays : {};
   const presetId = OVERLAY_PRESET_IDS.includes(raw.preset) ? raw.preset : 'plateMatch';
   const preset = OVERLAY_PRESETS[presetId];
@@ -278,10 +326,26 @@ export function resolveOverlays(brand, direction = {}) {
   caption.bottom = clampNum(caption.bottom, 40, 16, 120);
   caption.inset = clampNum(caption.inset, 40, 16, 120);
 
+  const chapters = sanitizeChapterLooks(raw.chapters);
+  const key = chapterKey(chapterNo);
+  const scope = { chapter: [], caption: [] };
+  if (key) {
+    const own = chapters?.[key] || {};
+    for (const [slot, dest] of [['chapter', chapter], ['caption', caption]]) {
+      for (const k of PER_CHAPTER_LOOK_KEYS) {
+        if (own[slot]?.[k] === undefined) continue;
+        dest[k] = own[slot][k];
+        scope[slot].push(k);
+      }
+    }
+  }
+
   return {
     preset: presetId,
     chapter,
     caption,
+    ...(chapters ? { chapters } : {}),
+    ...(key ? { chapterNo: Number(key), scope } : {}),
     catalog: {
       presets: OVERLAY_PRESET_IDS.map((id) => ({ id, ...OVERLAY_PRESETS[id] })),
       atmospheres: OVERLAY_ATMOSPHERE_CHOICES,
@@ -299,13 +363,119 @@ function clampNum(v, fallback, lo, hi) {
   return Math.min(hi, Math.max(lo, Math.round(n)));
 }
 
-/** Validate and merge a patch onto direction.overlays (Studio / CLI). */
+/** Slots named by a patch: `slot: 'chapter'|'caption'`, or both when absent. */
+function patchSlots(patch) {
+  if (patch.slot == null) return CARD_SLOTS;
+  if (!CARD_SLOTS.includes(patch.slot)) throw new Error(`overlays slot must be one of ${CARD_SLOTS.join(', ')}`);
+  return [patch.slot];
+}
+
+/** Write `chapters` back without empty rows (undefined removes the key from the saved config). */
+function setChapterLooks(next, chapters) {
+  const clean = sanitizeChapterLooks(chapters);
+  if (clean) next.chapters = clean;
+  else delete next.chapters;
+  return next;
+}
+
+/**
+ * Per-chapter patch: `{ chapterNo, chapter?: {…}, caption?: {…} }` where each slot holds only the
+ * background trio (null returns a key to the video look). Values are validated like the video's.
+ */
+function patchChapterLook(next, patch) {
+  const key = chapterKey(patch.chapterNo);
+  if (!key) throw new Error('overlays.chapterNo must be a chapter number (1-based)');
+  const chapters = { ...(next.chapters || {}) };
+  const row = { ...(chapters[key] || {}) };
+  for (const slot of CARD_SLOTS) {
+    if (!(slot in patch) || patch[slot] == null) continue;
+    if (typeof patch[slot] !== 'object') throw new Error(`overlays.${slot} must be an object`);
+    const dest = { ...(row[slot] || {}) };
+    for (const [k, v] of Object.entries(patch[slot])) {
+      if (!PER_CHAPTER_LOOK_KEYS.includes(k)) {
+        throw new Error(`overlays.${slot}.${k} is a video-wide setting; only ${PER_CHAPTER_LOOK_KEYS.join(', ')} are saved per chapter`);
+      }
+      if (v === null || v === '') {
+        delete dest[k];
+        continue;
+      }
+      if (k === 'atmosphere') {
+        if (!OVERLAY_ATMOSPHERES.includes(v)) throw new Error(`overlays.${slot}.atmosphere must be one of ${OVERLAY_ATMOSPHERES.join(', ')}`);
+        dest.atmosphere = v;
+      } else if (k === 'backdrop') {
+        const b = normalizeBackdrop(v);
+        if (!b) throw new Error(`overlays.${slot}.backdrop must be one of ${OVERLAY_BACKDROPS.join(', ')} or a #rrggbb colour`);
+        dest.backdrop = b;
+      } else dest.backdropOpacity = clampNum(v, 100, 0, 100);
+    }
+    if (Object.keys(dest).length) row[slot] = dest;
+    else delete row[slot];
+  }
+  if (Object.keys(row).length) chapters[key] = row;
+  else delete chapters[key];
+  return setChapterLooks(next, chapters);
+}
+
+/** `{ applyToAll, chapterNo, slot? }`: the chapter's effective background becomes the video's. */
+function applyChapterLookToAll(next, patch) {
+  const key = chapterKey(patch.chapterNo);
+  if (!key) throw new Error('overlays.chapterNo must be a chapter number (1-based)');
+  const slots = patchSlots(patch);
+  const chapters = { ...(next.chapters || {}) };
+  const own = chapters[key] || {};
+  for (const slot of slots) {
+    const dest = { ...next[slot] };
+    for (const k of PER_CHAPTER_LOOK_KEYS) {
+      const v = own[slot]?.[k];
+      if (v === undefined) continue; // the chapter already followed the video for this key
+      // Same normalisation as a video-wide write: defaults are dropped, not stored.
+      if (k === 'backdrop') {
+        if (v === 'auto') delete dest.backdrop;
+        else dest.backdrop = v;
+      } else if (k === 'backdropOpacity') {
+        if (v === 100) delete dest.backdropOpacity;
+        else dest.backdropOpacity = v;
+      } else dest[k] = v;
+    }
+    next[slot] = dest;
+    // Every chapter follows the new video look for this slot's background.
+    for (const [ck, row] of Object.entries(chapters)) {
+      const rest = { ...row };
+      delete rest[slot];
+      if (Object.keys(rest).length) chapters[ck] = rest;
+      else delete chapters[ck];
+    }
+  }
+  return setChapterLooks(next, chapters);
+}
+
+/** `{ reset, chapterNo, slot? }`: the chapter follows the video look again. */
+function resetChapterLook(next, patch) {
+  const key = chapterKey(patch.chapterNo);
+  if (!key) throw new Error('overlays.chapterNo must be a chapter number (1-based)');
+  const chapters = { ...(next.chapters || {}) };
+  const row = { ...(chapters[key] || {}) };
+  for (const slot of patchSlots(patch)) delete row[slot];
+  if (Object.keys(row).length) chapters[key] = row;
+  else delete chapters[key];
+  return setChapterLooks(next, chapters);
+}
+
+/**
+ * Validate and merge a patch onto direction.overlays (Studio / CLI).
+ * Video-wide: `{ preset?, chapter?: {…}, caption?: {…} }`.
+ * One chapter: `{ chapterNo, chapter?: {…}, caption?: {…} }` (background trio only),
+ * `{ chapterNo, slot?, reset: true }` or `{ chapterNo, slot?, applyToAll: true }`.
+ */
 export function patchOverlays(current = {}, patch = {}) {
   const next = {
     ...(current && typeof current === 'object' ? current : {}),
     chapter: { ...(current?.chapter || {}) },
     caption: { ...(current?.caption || {}) },
   };
+  if (patch.applyToAll) return applyChapterLookToAll(next, patch);
+  if (patch.reset && patch.chapterNo != null) return resetChapterLook(next, patch);
+  if (patch.chapterNo != null) return patchChapterLook(next, patch);
   if ('preset' in patch) {
     if (patch.preset == null || patch.preset === '') delete next.preset;
     else if (!OVERLAY_PRESET_IDS.includes(patch.preset)) throw new Error(`overlays.preset must be one of ${OVERLAY_PRESET_IDS.join(', ')}`);
@@ -388,11 +558,12 @@ export function patchOverlays(current = {}, patch = {}) {
  */
 export function renderLiveCardHtml(brand, kind, props = {}) {
   const direction = brand.direction || {};
-  const look = resolveOverlays(brand, direction);
+  const chapterNo = Math.max(1, Number(props.chapterNo) || 1);
+  // The chapter's own background (if saved) overrides the video look for its chapter + captions.
+  const look = resolveOverlays(brand, direction, { chapterNo });
   const slot = kind === 'caption' ? look.caption : look.chapter;
   const p = palette(brand);
   const ms = clampCardHoldMs(props.ms, kind === 'chapter' ? 'chapter' : 'caption');
-  const chapterNo = Math.max(1, Number(props.chapterNo) || 1);
   const chrome = chapterChrome(chapterNo, props);
   const title = String(props.title || '');
   const body = String(props.body || '');
@@ -489,7 +660,14 @@ export function buildLiveCards(video) {
   const markByCall = pairCallsToMarks(calls, loadCardMarks(video));
   const shell = readFileSync(join(TEMPLATES, 'overlay-preview.html'), 'utf8');
   const p = palette(video.brand);
-  const look = resolveOverlays(video.brand, video.brand.direction || video.config?.direction || {});
+  const direction = video.brand.direction || video.config?.direction || {};
+  const look = resolveOverlays(video.brand, direction);
+  const lookFor = new Map();
+  /** Effective look for chapter N (video look + the chapter's own background), memoised. */
+  const chapterLook = (n) => {
+    if (!lookFor.has(n)) lookFor.set(n, resolveOverlays(video.brand, direction, { chapterNo: n }));
+    return lookFor.get(n);
+  };
   const cards = [];
   let chapterNo = 0;
   let chapterTitle = '';
@@ -538,7 +716,9 @@ export function buildLiveCards(video) {
       htmlPath: file,
       htmlUrl: `/media/${video.slug}/overlays/${id.replace(/:/g, '-')}.html`,
       type: kind,
-      look: kind === 'chapter' ? look.chapter : look.caption,
+      look: chapterLook(isChapter ? chapterNo : Math.max(1, chapterNo))[kind],
+      // Which background keys this card takes from its chapter rather than the video.
+      lookScope: chapterLook(isChapter ? chapterNo : Math.max(1, chapterNo)).scope[kind],
     });
   }
 
@@ -554,6 +734,9 @@ export function listLiveCards(video) {
     type: c.kind,
     kind: c.kind,
     flowIndex: c.flowIndex,
+    chapterNo: c.chapterNo,
+    look: c.look,
+    lookScope: c.lookScope,
     markKey: c.markKey,
     holdMs: c.holdMs,
     htmlUrl: `${c.htmlUrl}?t=${Date.now()}`,
