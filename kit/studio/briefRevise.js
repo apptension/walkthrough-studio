@@ -114,6 +114,9 @@ export function maskCredentials(brief, freshness = null) {
   return { ...brief, app };
 }
 
+/** When the author clicks Save and replan with no edits, still re-explore + redraft. */
+export const FORCE_REPLAN_STAGES = Object.freeze(['analyze', 'planner']);
+
 export function revisePlan(before, after) {
   const left = comparable(before);
   const right = comparable(after);
@@ -135,6 +138,16 @@ export function revisePlan(before, after) {
     stages,
     needsRecord: changed.some((key) => ACCESS.has(key)),
   };
+}
+
+/**
+ * Stages to run on Save and replan. Diff-driven when something changed; otherwise a forced
+ * explore + planner pass so the author can re-check the product map and script recraft.
+ */
+export function stagesForReplan(plan, { force = true } = {}) {
+  const fromDiff = [...(plan?.stages || [])];
+  if (fromDiff.length) return fromDiff;
+  return force ? [...FORCE_REPLAN_STAGES] : [];
 }
 
 export function scrubSecrets(text, secrets = []) {

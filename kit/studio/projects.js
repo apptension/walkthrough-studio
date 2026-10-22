@@ -5,7 +5,7 @@
 import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
 import { draftFromDescription } from './shortBrief.js';
-import { hasStoredCredentials, maskCredentials, revisePlan } from './briefRevise.js';
+import { hasStoredCredentials, maskCredentials, revisePlan, stagesForReplan } from './briefRevise.js';
 import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
 import { ask } from './ask.js';
 
@@ -534,12 +534,18 @@ export function initProjects(ctx) {
     }
     if (form.dataset.mode === 'settings' && settingsBrief) {
       const plan = revisePlan(settingsBrief, p);
+      const rerun = stagesForReplan(plan);
       groups.push({
         title: 'This save',
         step: 4,
         rows: [
           ['Changed', plan.changed.map((item) => item.label).join(', ') || 'Nothing'],
-          ['Rerun', plan.stages.join(', ') || 'None'],
+          [
+            'Rerun',
+            plan.stages.length
+              ? rerun.join(', ')
+              : `${rerun.join(', ')} — forced (no edits; re-explore and redraft)`,
+          ],
           ['Footage', plan.needsRecord ? 'Re-record before the next render' : 'Keep the current take'],
         ],
       });
@@ -903,10 +909,17 @@ export function initProjects(ctx) {
         const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: p });
         settingsBrief = maskCredentials(p);
         for (const s of saved.plan?.stages || []) if (!pending.includes(s)) pending.push(s);
-        toast('Brief saved', `${plan.changed.map((item) => item.label).join(', ')}. ${pending.join(', ') || 'No preparation to rerun.'}`, 'ok');
+        // Diff may be empty of stages (e.g. only a note) — still force explore + planner.
+        if (!pending.length) pending = stagesForReplan(plan);
+        toast(
+          'Brief saved',
+          `${plan.changed.map((item) => item.label).join(', ')}. Next: ${pending.join(', ')}.`,
+          'ok'
+        );
       } else if (!pending.length) {
-        toast('No brief changes', 'Nothing to replan');
-        return;
+        // No edits: still re-explore and redraft so the author can verify a recrafted flow.
+        pending = stagesForReplan(plan);
+        toast('Replanning', `No brief edits — running ${pending.join(' → ')} from the current brief.`, 'ok');
       }
       rememberReplan(slug, pending);
       pending = [...replanRun.stages];

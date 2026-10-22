@@ -3,7 +3,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { hasStoredCredentials, maskCredentials, nextBrief, revisePlan, scrubSecrets } from './briefRevise.js';
+import {
+  FORCE_REPLAN_STAGES,
+  hasStoredCredentials,
+  maskCredentials,
+  nextBrief,
+  revisePlan,
+  scrubSecrets,
+  stagesForReplan,
+} from './briefRevise.js';
 import { applyBriefRevision, saveSourceRevision } from '../lib/briefRevise.mjs';
 
 const before = {
@@ -73,6 +81,15 @@ test('a language change replans the script and keeps the current take', () => {
   assert.equal(plan.changed.some((item) => item.label === 'Language'), true);
   assert.equal(nextBrief(before, { ...before, language: 'PL', story: before.story, app: before.app }).language, 'pl');
   assert.throws(() => nextBrief(before, { ...before, language: 'xx', story: before.story }), /Eleven v4/);
+});
+
+test('Save and replan with no edits still forces explore + planner', () => {
+  const untouched = revisePlan(before, { ...before, app: { ...before.app, password: '' } });
+  assert.deepEqual(untouched.stages, []);
+  assert.deepEqual(stagesForReplan(untouched), [...FORCE_REPLAN_STAGES]);
+  assert.deepEqual(stagesForReplan(untouched, { force: false }), []);
+  const story = revisePlan(before, { ...before, audience: 'New admins', app: { ...before.app, password: '' } });
+  assert.deepEqual(stagesForReplan(story), ['planner']);
 });
 
 test('chapter list changes re-explore before the planner rewrites the script', () => {
