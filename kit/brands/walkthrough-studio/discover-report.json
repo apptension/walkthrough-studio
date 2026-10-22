@@ -41,5 +41,6 @@
       "score": 70
     }
   ],
-  "warning": "No logo asset downloaded — wordmark placeholder only. Grab the official SVG/PNG manually."
+  "warning": "No logo asset downloaded — wordmark placeholder only. Grab the official SVG/PNG manually.",
+  "curated": "Palette re-synced to the Studio UI tokens on 2026-10-22 (yellow→green accent on graphite); the 2026-10-18 harvest predates the restyle."
 }

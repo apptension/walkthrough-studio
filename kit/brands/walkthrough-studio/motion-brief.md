@@ -24,14 +24,19 @@ People who need a tool to build walkthroughs of their products based on Cursor /
 
 | Token | Value | Notes |
 | ----- | ----- | ----- |
-| Accent (blue) | #4da3ff | Primary CTAs, focus rings, plate accents |
-| Accent end | #2b7de9 | Gradient end |
-| Ink / surface | #0e0f12 / #15171c | Dark plate backdrop |
-| Text / muted | #f2f4f8 / #7d8698 | Plate type |
+| Accent start (gold) | #fffe25 | Brand yellow — start of the Studio's primary-button gradient |
+| Accent end (amber) | #42f272 | Brand green — gradient end, focus rings, live markers |
+| Counter-light (teal) | #3fe0cf | The lens/zoom teal from the Studio timeline, used sparingly |
+| Ink / surface | #0c0e0c / #151715 | The Studio's graphite-green chrome (`--bg` / `--panel`) |
+| Text / muted | #f4f6f3 / #7f8880 | Plate type (`--ink` / `--muted`) |
+| On accent | #0a0a0a | Black type on the yellow→green chip, as on Studio buttons |
 
-- **Logo:** official mark in `logo.html` / `logo-source.svg` — same Rams isometric capture deck as `kit/studio/logo.svg` (graphite chassis, olive accent). Never invent a substitute or blue play wordmark.
+These mirror `kit/studio/styles.css :root`. When the UI palette changes, re-sync `brand.json → colors` — a stale pack
+(the 2026-10-18 blue harvest) put off-brand blue on every plate.
+
+- **Logo:** official mark in `logo.html` / `logo-source.svg` — same Rams isometric capture deck as `kit/studio/logo.svg` (graphite chassis, olive accent). Never invent a substitute or a wordmark.
 - **Logo on plates:** square mark on dark ink; center horizontally; open plate `openLogoWidth` ~340–380 px (~hero mark), then lift. Because the mark is **square**, `openLiftY` must stay mild (~−90 to −120) — wide-lockup values like −195 / −285 send a square mark off the top of the frame. Prefer `openLogoTop` ~50, `openLiftScale` ~0.52. Close smaller via template corner/lockup.
-- **Live reel:** true UI color — no grade. Focus ring uses accent blue.
+- **Live reel:** true UI color — no grade. Focus ring uses the brand green.
 
 ## Plate palette
 

@@ -31,6 +31,8 @@ export function initProjects(ctx) {
   let agentBrief = null;
   /** Slug whose first script waits in the Ready view for Approve & render. */
   let readySlug = null;
+  /** Project settings replan that stopped or failed: `{ slug, stages }` still to run, so Retry resumes. */
+  let replanRun = null;
 
   const val = (name) => form.elements[name]?.value?.trim() || '';
   const checked = (name) => Boolean(form.elements[name]?.checked);
@@ -115,8 +117,16 @@ export function initProjects(ctx) {
     // On Basics of a new video, Back returns to the one-description form.
     $('btnWizardBack').disabled = step === 0 && settings;
     $('btnWizardBack').lastChild.textContent = step === 0 && !settings ? 'Description' : 'Back';
-    $('btnWizardNext').textContent =
-      step === STEPS - 1 ? (settings ? 'Save and replan' : checked('runDraft') ? 'Create & draft' : 'Create project') : 'Continue';
+    const last = settings
+      ? replanRun?.stages?.length
+        ? 'Save and resume'
+        : 'Save and replan'
+      : created
+        ? 'Retry preparation'
+        : checked('runDraft')
+          ? 'Create & draft'
+          : 'Create project';
+    $('btnWizardNext').textContent = step === STEPS - 1 ? last : 'Continue';
     $('wizardStepMeta').textContent = `Step ${step + 1} of ${STEPS}`;
     $('wizardProgressBar').style.width = `${((step + 1) / STEPS) * 100}%`;
     clearError();
@@ -518,8 +528,9 @@ export function initProjects(ctx) {
     }
   }
 
+  const STOPPED_MESSAGE = 'Stopped. The brief is saved — retry when ready.';
   const ensureNotStopped = () => {
-    if (stopRequested) throw new Error('Stopped. The brief is saved — retry when ready.');
+    if (stopRequested) throw new Error(STOPPED_MESSAGE);
   };
 
   async function create() {
@@ -617,10 +628,9 @@ export function initProjects(ctx) {
         finishCreation();
       }
     } catch (raw) {
-      const err = stopRequested ? new Error('Stopped. The brief is saved — retry when ready.') : raw;
+      const err = stopRequested ? new Error(STOPPED_MESSAGE) : raw;
       creation.fail(err.message);
-      btn.textContent = created ? 'Retry preparation' : 'Try again';
-      $('btnWizardBack').lastChild.textContent = 'Edit brief';
+      $('btnCreationRetry').textContent = created ? 'Retry preparation' : 'Try again';
       if (!dialog.open) {
         toast('New video needs attention', err.message, 'error');
         dialog.showModal();
@@ -692,6 +702,20 @@ export function initProjects(ctx) {
   dialog.addEventListener('close', () => {
     if (readySlug && !creating) finishCreation();
   });
+  /** After a stop or failure: run the same preparation again, resuming where it got to. */
+  $('btnCreationRetry').onclick = () => {
+    if (creating) return;
+    $('wizardError').hidden = true;
+    $('btnWizardNext').classList.add('busy');
+    if (form.dataset.mode === 'settings') saveSettings();
+    else create();
+  };
+  /** Back to the Review step with the brief intact — change it, then Save / Create runs again. */
+  $('btnCreationEdit').onclick = () => {
+    if (creating) return;
+    creation.exit();
+    showStep(STEPS - 1);
+  };
   $('btnCreationStop').onclick = async () => {
     if (!creating) {
       creation.exit();
@@ -755,46 +779,96 @@ export function initProjects(ctx) {
     syncConditional();
   }
 
+  /** Preparation stages a brief save asked for, in pipeline order; shrinks as each one finishes so Retry resumes. */
+  const REPLAN_ORDER = ['discover', 'analyze', 'planner'];
+  const REPLAN_STAGE = {
+    discover: { view: 'brand', detail: 'Re-reading the brand from the site and the app…', body: { step: 'discover' } },
+    analyze: { view: 'analyze', detail: 'Mapping the product again from the new start URL…', body: { step: 'analyze' } },
+    planner: { view: 'draft', detail: 'The agent is rewriting the script from your changes…', body: {} },
+  };
+
   async function saveSettings() {
     const btn = $('btnWizardNext');
+    const slug = form.elements.slug.value;
+    const resume = replanRun?.slug === slug;
+    creating = true;
+    stopRequested = false;
+    $('btnWizardBack').disabled = true;
     try {
-      const plan = revisePlan(settingsBrief, payload());
-      if (!plan.changed.length) {
+      const p = payload();
+      const plan = revisePlan(settingsBrief, p);
+      const pending = resume ? [...replanRun.stages] : [];
+      if (plan.changed.length) {
+        const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: p });
+        settingsBrief = maskCredentials(p);
+        for (const s of saved.plan?.stages || []) if (!pending.includes(s)) pending.push(s);
+        toast('Brief saved', `${plan.changed.map((item) => item.label).join(', ')}. ${pending.join(', ') || 'No preparation to rerun.'}`, 'ok');
+      } else if (!pending.length) {
         toast('No brief changes', 'Nothing to replan');
         return;
       }
-      const slug = form.elements.slug.value;
-      const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: payload() });
-      const stages = saved.plan?.stages || [];
-      toast('Brief saved', `${plan.changed.map((item) => item.label).join(', ')}. ${stages.join(', ') || 'No preparation to rerun.'}`, 'ok');
-      if (stages.includes('discover')) {
-        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: { step: 'discover' } });
-        if (job.job?.id) await follow(job.job.id);
+      replanRun = { slug, stages: pending };
+      if (pending.length) {
+        dialog.classList.add('is-running');
+        creation.start({ resume });
+        for (const stage of REPLAN_ORDER) {
+          if (!pending.includes(stage)) continue;
+          ensureNotStopped();
+          const { view, detail, body } = REPLAN_STAGE[stage];
+          paintCreation(view, detail);
+          const job = await api(`/api/video/${encodeURIComponent(slug)}/draft-project`, { method: 'POST', body });
+          if (job.job?.status === 'needs-agent') throw new Error(job.job.message || 'Agent sign-in is required to redraft');
+          if (job.job?.id) await follow(job.job.id);
+          ensureNotStopped();
+          replanRun.stages = replanRun.stages.filter((s) => s !== stage);
+        }
       }
-      if (stages.includes('analyze')) {
-        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
-        if (job.job?.id) await follow(job.job.id);
-      }
-      if (stages.includes('planner')) {
-        const job = await api(`/api/video/${slug}/draft-project`, { method: 'POST', body: {} });
-        if (job.job?.id && job.job.status !== 'needs-agent') await follow(job.job.id);
-      }
+      replanRun = null;
+      creation.reset();
+      paintAgentStream($('wizardStream'), null);
       if (dialog.open) dialog.close();
       if (form.elements.slug) form.elements.slug.disabled = false;
       $('projectDialogTitle').textContent = 'New video';
       setProjectDialogMode('new');
       await openVideo(slug);
       openScript();
-    } catch (err) {
-      toast('Could not save the brief', err.message, 'err');
+    } catch (raw) {
+      const err = stopRequested ? new Error(STOPPED_MESSAGE) : raw;
+      if (dialog.classList.contains('is-creating')) {
+        creation.fail(err.message);
+        $('btnCreationRetry').textContent = 'Retry preparation';
+        if (!dialog.open) {
+          toast('Replan needs attention', err.message, 'error');
+          dialog.showModal();
+        }
+      } else toast('Could not save the brief', err.message, 'err');
     } finally {
+      creating = false;
+      dialog.classList.remove('is-running');
       btn.classList.remove('busy');
       btn.disabled = false;
+      $('btnWizardBack').disabled = false;
     }
   }
 
   async function openSettings(video) {
     if (!video?.slug) return;
+    if (creating || briefDrafting) {
+      dialog.showModal();
+      return;
+    }
+    if (dialog.classList.contains('is-creating')) {
+      // A stopped preparation is still on screen. For this video it stays: Retry picks it up.
+      if (created?.slug === video.slug || replanRun?.slug === video.slug) {
+        dialog.showModal();
+        return;
+      }
+      created = null;
+      creationStage = null;
+      replanRun = null;
+      creation.reset();
+      paintAgentStream($('wizardStream'), null);
+    }
     try {
       const { brands } = await api('/api/brands');
       $('wizardBrand').innerHTML = brands.length
@@ -840,6 +914,7 @@ export function initProjects(ctx) {
     syncConditional();
     created = null;
     creationStage = null;
+    replanRun = null;
     creation.reset();
     paintAgentStream($('wizardStream'), null);
     dialog.showModal();

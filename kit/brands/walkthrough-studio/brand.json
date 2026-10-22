@@ -6,14 +6,14 @@
     "css": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=block"
   },
   "colors": {
-    "ink": "#0e0f12",
-    "surface": "#15171c",
-    "gold": "#4da3ff",
-    "amber": "#2b7de9",
-    "teal": "#3dd68c",
-    "text": "#f2f4f8",
-    "muted": "#7d8698",
-    "onAccent": "#0e0f12"
+    "ink": "#0c0e0c",
+    "surface": "#151715",
+    "gold": "#fffe25",
+    "amber": "#42f272",
+    "teal": "#3fe0cf",
+    "text": "#f4f6f3",
+    "muted": "#7f8880",
+    "onAccent": "#0a0a0a"
   },
   "logo": "logo.html",
   "motionBrief": "motion-brief.md",
@@ -34,7 +34,8 @@
     "marketing": "http://localhost:4747",
     "app": "http://localhost:4747",
     "logoSvg": "logo-source.svg",
-    "logoNote": "Official mark from kit/studio/logo.svg (Rams isometric capture deck)."
+    "logoNote": "Official mark from kit/studio/logo.svg (Rams isometric capture deck).",
+    "paletteNote": "Tokens mirror kit/studio/styles.css :root (--bg, --panel, --brand-yellow, --brand-green, --etl-lens, --ink, --muted, --on-accent). Re-sync when the UI palette changes."
   },
   "audio": {
     "voice": {

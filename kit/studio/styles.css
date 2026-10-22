@@ -6179,13 +6179,13 @@ html:not(.has-custom-select) .lang-filter { display: block; }
 /* Footer per moment: running → Stop only; ready → Review script first / Approve & render; failed → Edit brief / Retry.
    Selectors are specific enough to beat `.btn`'s own display. */
 [data-creating-only], .sheet-dialog.wizard:not(.is-creating.is-running) [data-creating-only],
-[data-ready-only], .sheet-dialog.wizard:not(.is-creating.is-ready) [data-ready-only] { display: none; }
+[data-ready-only], .sheet-dialog.wizard:not(.is-creating.is-ready) [data-ready-only],
+[data-failed-only], .sheet-dialog.wizard:not(.is-creating.is-failed) [data-failed-only] { display: none; }
 .sheet-dialog.wizard.is-creating.is-running:not(.is-ready) [data-creating-only],
-.sheet-dialog.wizard.is-creating.is-ready [data-ready-only] { display: inline-flex; }
-.sheet-dialog.wizard.is-creating.is-running #btnWizardBack,
-.sheet-dialog.wizard.is-creating.is-running #btnWizardNext,
-.sheet-dialog.wizard.is-creating.is-ready #btnWizardBack,
-.sheet-dialog.wizard.is-creating.is-ready #btnWizardNext,
+.sheet-dialog.wizard.is-creating.is-ready [data-ready-only],
+.sheet-dialog.wizard.is-creating.is-failed:not(.is-running) [data-failed-only] { display: inline-flex; }
+.sheet-dialog.wizard.is-creating #btnWizardBack,
+.sheet-dialog.wizard.is-creating #btnWizardNext,
 .sheet-dialog.wizard.is-creating .wizard-progress,
 .sheet-dialog.wizard.is-creating #wizardStepMeta { display: none; }
 .sheet-dialog.wizard.is-creating .wizard-foot::before { content: ''; flex: 1; }

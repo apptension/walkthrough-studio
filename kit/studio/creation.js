@@ -106,7 +106,7 @@ export function createCreationView({ dialog, escapeHtml }) {
         view.querySelectorAll('[data-stage-time]').forEach((t) => (t.textContent = ''));
       }
       dialog.classList.add('is-creating');
-      dialog.classList.remove('is-ready');
+      dialog.classList.remove('is-ready', 'is-failed');
       view.classList.remove('is-ready');
       const script = $('wizardScript');
       if (script) script.hidden = true;
@@ -245,8 +245,10 @@ export function createCreationView({ dialog, escapeHtml }) {
       tick();
     },
 
+    /** Stopped or failed: the footer offers Retry preparation / Edit brief until the next start() or exit(). */
     fail(message) {
       failed = true;
+      dialog.classList.add('is-failed');
       $('wizardCreationTitle').textContent = 'Preparation needs attention';
       $('wizardCreationDetail').textContent = message;
       $('wizardCreationEta').textContent = 'stopped';
@@ -263,7 +265,7 @@ export function createCreationView({ dialog, escapeHtml }) {
     exit() {
       clearInterval(timer);
       timer = 0;
-      dialog.classList.remove('is-creating', 'is-ready');
+      dialog.classList.remove('is-creating', 'is-ready', 'is-failed');
       view.hidden = true;
     },
 
