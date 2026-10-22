@@ -1,0 +1,193 @@
+{
+  "name": "Apptension",
+  "slug": "apptension",
+  "url": "https://apptension.com",
+  "appUrl": null,
+  "harvestedAt": "2026-10-22T12:01:25.179Z",
+  "pages": [
+    {
+      "url": "https://apptension.com/",
+      "title": "Senior-Only Software Team for AI and SaaS | Apptension",
+      "h1": "Enterprise-grade software. Startup speed. Senior engineers only.",
+      "sub": "360+ projects shipped since 2012. AI and SaaS, production-ready, without the hiring overhead.",
+      "logos": [
+        {
+          "kind": "icon",
+          "href": "https://apptension.com/favicon-32x32.png",
+          "rel": "icon",
+          "sizes": "32x32"
+        },
+        {
+          "kind": "icon",
+          "href": "https://apptension.com/favicon-16x16.png",
+          "rel": "icon",
+          "sizes": "16x16"
+        },
+        {
+          "kind": "icon",
+          "href": "https://apptension.com/apple-touch-icon.png",
+          "rel": "apple-touch-icon",
+          "sizes": "180x180"
+        },
+        {
+          "kind": "icon",
+          "href": "https://apptension.com/android-chrome-192x192.png",
+          "rel": "icon",
+          "sizes": "192x192"
+        },
+        {
+          "kind": "icon",
+          "href": "https://apptension.com/android-chrome-512x512.png",
+          "rel": "icon",
+          "sizes": "512x512"
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f21ae7fa1b69f77b2c0d_logo-viu.svg",
+          "alt": "",
+          "w": 83,
+          "h": 30
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/667451b233a68825d307c0c1_unit9_logo%25201.svg",
+          "alt": "",
+          "w": 1011,
+          "h": 1008
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f21a565555e52db5caf4_logo-less.svg",
+          "alt": "",
+          "w": 110,
+          "h": 20
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f21a08e93349690335b9_logo-hoover.svg",
+          "alt": "",
+          "w": 44,
+          "h": 45
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f25e69034cacc8b7021e_logo-netflix.svg",
+          "alt": "",
+          "w": 96,
+          "h": 26
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f3120a9aab04855ec52f_logo-universal.svg",
+          "alt": "",
+          "w": 230,
+          "h": 122
+        },
+        {
+          "kind": "img",
+          "href": "https://apptension.com/logos/6665f31263f1a376c755a941_logo-uber.svg",
+          "alt": "",
+          "w": 927,
+          "h": 322
+        }
+      ],
+      "colors": {
+        "ctaBg": "rgba(23, 23, 23, 0.05)",
+        "ctaColor": "rgb(64, 64, 64)",
+        "custom": {},
+        "bodyBg": "rgb(249, 250, 251)",
+        "bodyColor": "rgb(17, 24, 39)",
+        "font": "Hellix, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+        "fontCss": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&display=swap",
+        "theme": "#0a0a0a"
+      }
+    }
+  ],
+  "logos": [
+    {
+      "kind": "inline-brand",
+      "href": "https://apptension.com/#inline-brand-0",
+      "alt": "Apptension - Go to homepage",
+      "w": 40,
+      "h": 40,
+      "score": 450,
+      "svg": "(inline svg omitted — see logo-source.svg)"
+    },
+    {
+      "kind": "inline-brand",
+      "href": "https://apptension.com/#inline-brand-1",
+      "alt": "Apptension - Go to homepage",
+      "w": 128,
+      "h": 24,
+      "score": 450,
+      "svg": "(inline svg omitted — see logo-source.svg)"
+    },
+    {
+      "kind": "inline-brand",
+      "href": "https://apptension.com/#inline-brand-4",
+      "alt": "Apptension - Go to homepage",
+      "w": 40,
+      "h": 40,
+      "score": 450,
+      "svg": "(inline svg omitted — see logo-source.svg)"
+    },
+    {
+      "kind": "inline-brand",
+      "href": "https://apptension.com/#inline-brand-5",
+      "alt": "Apptension - Go to homepage",
+      "w": 128,
+      "h": 24,
+      "score": 450,
+      "svg": "(inline svg omitted — see logo-source.svg)"
+    },
+    {
+      "kind": "brand-path",
+      "href": "https://apptension.com/logo/logo-full.svg",
+      "alt": "brand lockup",
+      "score": 310
+    },
+    {
+      "kind": "brand-path",
+      "href": "https://apptension.com/logo/logo-wordmark.svg",
+      "alt": "brand lockup",
+      "score": 310
+    },
+    {
+      "kind": "brand-path",
+      "href": "https://apptension.com/logo/logo-signet.svg",
+      "alt": "brand lockup",
+      "score": 310
+    },
+    {
+      "kind": "brand-path",
+      "href": "https://apptension.com/logo.svg",
+      "alt": "brand lockup",
+      "score": 110
+    },
+    {
+      "kind": "header-img",
+      "href": "https://apptension.com/logos/667451b233a68825d307c0c1_unit9_logo%25201.svg",
+      "alt": "",
+      "score": 25
+    },
+    {
+      "kind": "header-img",
+      "href": "https://apptension.com/logos/667451b2ec0560886e2928d0_The_Mill_logo%25201.svg",
+      "alt": "",
+      "score": 25
+    },
+    {
+      "kind": "header-img",
+      "href": "https://apptension.com/logos/66755690e6d4b52641a0cf30_logo-Home%252BAfrica%2520_Logo.svg",
+      "alt": "",
+      "score": 25
+    },
+    {
+      "kind": "header-img",
+      "href": "https://apptension.com/logos/66755691c93822833229cef2_logo-riyadh-air.svg",
+      "alt": "",
+      "score": 25
+    }
+  ],
+  "curated": "brand.json, logo.html and motion-brief.md were hand-tuned after harvest: official full lockup, site yellow→green accent, Manrope standing in for Hellix."
+}

@@ -69,7 +69,7 @@ const STATUS_LABEL = {
 };
 
 export function initWorkflow(ctx) {
-  const { api, toast, escapeHtml, getState, reload, watchJob, onStageAction, setFaviconMode, onPreviewLiveCard } = ctx;
+  const { api, toast, escapeHtml, getState, reload, watchJob, onStageAction, onFirstRender, setFaviconMode, onPreviewLiveCard } = ctx;
   let script = null;
   let draftJob = null;
 
@@ -1443,6 +1443,18 @@ export function initWorkflow(ctx) {
     toast('Script approved', plan.proof, 'ok');
     finishScriptApproval($('scriptDialog'), plan);
     await reload({ quiet: true });
+    // First approval of a video that was never recorded: offer the first render right here.
+    const v = getState().video;
+    const f = v?.freshness || {};
+    if (onFirstRender && !f.liveAt && !v?.hasDelivery && !f.deliveryAt) {
+      const go = await ask({
+        title: 'Record and render now?',
+        detail: 'Studio records the app following this script, cuts in the plates, adds voice and music, and opens the result in the player.',
+        ok: 'Render',
+        cancel: 'Later',
+      });
+      if (go) onFirstRender();
+    }
   }
 
   /* ---------- cut sheet ---------- */

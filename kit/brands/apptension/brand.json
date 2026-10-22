@@ -1,0 +1,113 @@
+{
+  "name": "Apptension",
+  "platform": "Enterprise-grade software. Startup speed.",
+  "font": {
+    "family": "Manrope",
+    "css": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=block"
+  },
+  "colors": {
+    "ink": "#0a0a0a",
+    "surface": "#141414",
+    "gold": "#fffe25",
+    "amber": "#42f272",
+    "teal": "#6ef0a6",
+    "text": "#fafafa",
+    "muted": "#a3a3a3",
+    "onAccent": "#0a0a0a"
+  },
+  "logo": "logo.html",
+  "motionBrief": "motion-brief.md",
+  "motion": {
+    "energy": "clear",
+    "enterMs": 900,
+    "staggerMs": 120,
+    "pushScale": 1.035,
+    "exitMs": 700,
+    "cardPop": 0.96,
+    "blobDrift": 1,
+    "openLogoWidth": 720,
+    "openLogoTop": 50,
+    "openLiftScale": 0.6,
+    "openLiftY": -215
+  },
+  "placeholder": false,
+  "discovery": {
+    "status": "ready",
+    "harvestedAt": "2026-10-22T12:01:25.179Z",
+    "logoSource": "https://apptension.com/logo/logo-full.svg",
+    "paletteSource": "https://apptension.com",
+    "fontSource": "Hellix (licensed webfont on apptension.com) — Manrope stands in for plates"
+  },
+  "sources": {
+    "marketing": "https://apptension.com",
+    "app": null,
+    "logoSvg": "logo-source.svg",
+    "logoNote": "Official full lockup (signet + wordmark) from apptension.com/logo/logo-full.svg; logo-signet.svg and logo-wordmark.svg exist on the site for other seats."
+  },
+  "audio": {
+    "voice": {
+      "provider": "elevenlabs",
+      "name": "Brian",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_v4",
+      "outputFormat": "mp3_44100_128",
+      "direction": "[confident, calm, senior product narration]",
+      "settings": {
+        "stability": 0.5,
+        "similarity_boost": 0.8,
+        "style": 0.32,
+        "use_speaker_boost": true,
+        "speed": 1.04
+      },
+      "maxFitSpeed": 1.15,
+      "pronunciations": {
+        "Apptension": "app-TEN-shun",
+        "SaaS": "sass"
+      }
+    },
+    "music": {
+      "provider": "elevenlabs",
+      "model": "music_v2_5",
+      "styles": [
+        "modern electronic underscore",
+        "clean synth pulse",
+        "warm analog pads",
+        "soft kick and light percussion",
+        "confident and forward-moving",
+        "100 BPM",
+        "spacious mix",
+        "great production quality",
+        "instrumental"
+      ],
+      "negativeStyles": [
+        "vocals",
+        "lyrics",
+        "heavy drums",
+        "distorted guitar",
+        "harsh",
+        "aggressive drops",
+        "busy melody",
+        "lo-fi",
+        "orchestral"
+      ],
+      "intro": ["bright synth open", "pads swell", "product reveal"],
+      "bed": ["steady pulse", "pads under narration", "understated", "background music under narration"],
+      "outro": ["resolving", "clean final chord", "gentle fade"]
+    },
+    "mix": {
+      "voiceLufs": -16,
+      "plateLufs": -20,
+      "bedLufs": -31,
+      "duck": {
+        "threshold": 0.02,
+        "ratio": 3,
+        "attackMs": 20,
+        "releaseMs": 350
+      },
+      "targetLufs": -14,
+      "truePeakDb": -1,
+      "sampleRate": 48000,
+      "bitrate": "192k"
+    }
+  }
+}

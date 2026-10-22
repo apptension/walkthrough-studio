@@ -68,29 +68,33 @@ installed from a marketplace outside the checkout — `tmp/videos` lands there).
 
 ## Brand packs
 
+Two house packs ship with the kit: `kit/brands/apptension/` (Apptension — the company and its Builder's Toolkit) and
+`kit/brands/walkthrough-studio/` (this product; the default for new videos and the pack the showcase video uses).
+Any other pack you discover stays local (`.gitignore` only allows those two).
+
 `kit/brands/<name>/brand.json`:
 
 ```json
 {
-  "name": "Admiral",
-  "platform": "Marina Intelligence Platform",
+  "name": "Apptension",
+  "platform": "Enterprise-grade software. Startup speed.",
   "font": {
-    "family": "Inter",
-    "css": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=block"
+    "family": "Manrope",
+    "css": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=block"
   },
   "colors": {
-    "ink": "#05080e",
-    "surface": "#111a2c",
-    "gold": "#f6aa1e",
-    "amber": "#f47425",
-    "teal": "#2dd4bf",
-    "text": "#f8fafc",
-    "muted": "#94a3b8",
-    "onAccent": "#1a0f05"
+    "ink": "#0a0a0a",
+    "surface": "#141414",
+    "gold": "#fffe25",
+    "amber": "#42f272",
+    "teal": "#6ef0a6",
+    "text": "#fafafa",
+    "muted": "#a3a3a3",
+    "onAccent": "#0a0a0a"
   },
   "logo": "logo.html",
   "motionBrief": "motion-brief.md",
-  "sources": { "marketing": "https://…", "app": "https://…" }
+  "sources": { "marketing": "https://apptension.com", "app": null }
 }
 ```
 

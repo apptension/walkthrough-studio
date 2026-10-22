@@ -33,6 +33,23 @@ test('new projects use an unrenderable neutral brand until discovery completes',
   assert.throws(() => buildPlates(loadVideo(result.slug)), /Brand pack "acme" is not ready/);
 });
 
+test('a new brand with no marketing site is discovered from the app start URL', () => {
+  const result = createProject({
+    title: 'Local app tour',
+    audience: 'Developers',
+    brand: { mode: 'new', name: 'Local App' },
+    app: { startUrl: 'http://localhost:4747/desk' },
+    story: { mustShow: ['Desk'] },
+  });
+  assert.equal(result.needsDiscovery, true);
+  const brief = JSON.parse(readFileSync(join(root, 'videos', result.slug, 'brief.json'), 'utf8'));
+  assert.equal(brief.brand.url, 'http://localhost:4747/desk');
+  assert.equal(brief.brand.appUrl, 'http://localhost:4747/desk');
+  const brand = JSON.parse(readFileSync(join(root, 'brands', 'local-app', 'brand.json'), 'utf8'));
+  assert.equal(brand.sources.marketing, 'http://localhost:4747/desk');
+  assert.equal(brand.sources.app, 'http://localhost:4747/desk');
+});
+
 test('video language is stored, and the brief wins when the config copy disagrees', () => {
   const result = createProject({
     title: 'Polish tour',

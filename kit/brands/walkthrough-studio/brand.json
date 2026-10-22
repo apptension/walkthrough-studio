@@ -26,9 +26,9 @@
     "cardPop": 0.94,
     "blobDrift": 1.15,
     "openLogoWidth": 360,
-    "openLogoTop": 46,
-    "openLiftScale": 0.55,
-    "openLiftY": -195
+    "openLogoTop": 50,
+    "openLiftScale": 0.52,
+    "openLiftY": -118
   },
   "sources": {
     "marketing": "http://localhost:4747",

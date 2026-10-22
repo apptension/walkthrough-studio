@@ -24,7 +24,7 @@ function captionBodies(dir, env = {}) {
   if (!existsSync(flow)) return new Map();
   const src = readFileSync(flow, 'utf8');
   const re = /\b(?:say|chapter)\(\s*(['"`])((?:\\.|(?!\1).)*)\1\s*,\s*(['"`])((?:\\.|(?!\3).)*)\3/g;
-  // `${env.marina}` / `${config.env.marina}` resolve from video.config.json; any other expression drops the body.
+  // `${env.<key>}` / `${config.env.<key>}` resolve from video.config.json; any other expression drops the body.
   const fill = (s) => {
     let unresolved = false;
     const out = s.replace(/\$\{\s*(?:config\.)?env\.(\w+)\s*\}|\$\{[^}]*\}/g, (m, key) => {
@@ -201,7 +201,7 @@ export function buildManuals() {
   for (const set of sets) {
     const mine = lessons.filter((l) => l.set === set.key);
     if (!mine.length) continue;
-    const brand = loadBrand(set.brand || mine[0].brand || 'admiral');
+    const brand = loadBrand(set.brand || mine[0].brand || 'walkthrough-studio');
     const path = join(dir, `${set.key}.html`);
     writeFileSync(
       path,

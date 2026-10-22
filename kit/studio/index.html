@@ -1320,6 +1320,16 @@
           <label class="wf"><span class="field-label">Start URL <b>*</b></span><input name="shortStartUrl" type="url" placeholder="https://app.example.com" spellcheck="false" /></label>
           <div id="languageSlotShort" class="lang-slot"></div>
           <button type="button" class="btn ghost" data-full-brief>Fill each field instead</button>
+          <section id="shortDraft" class="short-draft" role="status" aria-live="polite" hidden>
+            <header class="short-draft-head">
+              <span class="spinner" aria-hidden="true"></span>
+              <div>
+                <strong id="shortDraftTitle">Reading your description…</strong>
+                <em id="shortDraftLine">The agent finds the product, the audience, the beats to show, and the brand.</em>
+              </div>
+            </header>
+            <div id="shortDraftStream" class="agent-stream agent-stream--wizard is-empty" aria-label="Live output"></div>
+          </section>
         </fieldset>
 
         <fieldset data-step="0">
@@ -1368,7 +1378,7 @@
           <div data-brand="existing"><label class="wf"><span class="field-label">Brand</span><select name="brandId" id="wizardBrand"></select></label></div>
           <div class="wf-row" data-brand="new" hidden>
             <label class="wf"><span class="field-label">Brand name</span><input name="brandName" placeholder="Acme" /></label>
-            <label class="wf"><span class="field-label">Brand website</span><input name="brandUrl" type="url" placeholder="https://acme.com" spellcheck="false" /></label>
+            <label class="wf"><span class="field-label">Brand website <i>optional</i></span><input name="brandUrl" type="url" placeholder="https://acme.com" spellcheck="false" /><small>Discovery opens this site and the app's start URL in a browser to capture logo, colors and type. Leave it empty to read the brand from the app alone.</small></label>
           </div>
         </fieldset>
 
@@ -1459,7 +1469,7 @@
               <li data-create-stage="brand"><span class="cs-dot"></span><div><strong>Brand foundation</strong><em data-stage-note>Capture the official lockup, palette and type</em></div><time data-stage-time></time></li>
               <li data-create-stage="analyze"><span class="cs-dot"></span><div><strong>Product map</strong><em data-stage-note>Controls, routes, and WebGL/canvas interactions</em></div><time data-stage-time></time></li>
               <li data-create-stage="draft"><span class="cs-dot"></span><div><strong>First script</strong><em data-stage-note>The agent writes config, flow, narration and plates</em></div><time data-stage-time></time></li>
-              <li data-create-stage="ready"><span class="cs-dot"></span><div><strong>Ready for review</strong><em data-stage-note>Open the branded script and plates</em></div><time data-stage-time></time></li>
+              <li data-create-stage="ready"><span class="cs-dot"></span><div><strong>Approve &amp; render</strong><em data-stage-note>You approve the script; Studio records, cuts, voices and exports</em></div><time data-stage-time></time></li>
             </ol>
             <aside class="creation-made" aria-label="Created so far">
               <h4>Created so far</h4>
@@ -1471,6 +1481,17 @@
               <ul id="wizardArtifacts" class="creation-artifacts"><li class="is-empty">Files appear here as they are written.</li></ul>
             </aside>
           </div>
+          <section id="wizardScript" class="creation-script" aria-labelledby="wizardScriptTitle" hidden>
+            <header class="creation-script-head">
+              <div>
+                <h4 id="wizardScriptTitle">Your first script</h4>
+                <p id="wizardScriptMeta" class="creation-script-meta"></p>
+              </div>
+              <p class="creation-script-next">Approve it and Studio records the app, cuts in the plates, adds voice and music, and opens the result in the player. Nothing is recorded until you approve.</p>
+            </header>
+            <ol id="wizardScriptScenes" class="creation-script-scenes"></ol>
+            <p id="wizardScriptLint" class="creation-script-lint" hidden></p>
+          </section>
           <div id="wizardStream" class="agent-stream agent-stream--wizard is-empty" aria-label="Live output"></div>
         </section>
       </form>
@@ -1481,9 +1502,9 @@
         <span class="wizard-progress" aria-hidden="true"><span id="wizardProgressBar"></span></span>
         <span class="meta" id="wizardStepMeta">Step 1 of 5</span>
         <button type="button" id="btnWizardNext" class="btn primary">Next</button>
-        <span class="creation-foot-note" data-creating-only>Safe to close — it keeps running and Studio tells you when it is ready.</span>
         <button type="button" id="btnCreationStop" class="btn ghost" data-creating-only>Stop</button>
-        <button type="button" id="btnCreationHide" class="btn" data-creating-only>Keep working in Studio</button>
+        <button type="button" id="btnCreationReview" class="btn ghost" data-ready-only>Review script first</button>
+        <button type="button" id="btnCreationRender" class="btn primary" data-ready-only>Approve &amp; render</button>
       </footer>
     </dialog>
 

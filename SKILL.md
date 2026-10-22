@@ -189,12 +189,11 @@ preview/navigation tools only; they never alter the product UI or the rendered m
 `node cli.mjs manual` builds `tmp/videos/manuals/<set>.html`, one page per manual set, from every video whose config
 has a `manual` block. Set titles and intros live in `videos/manuals.json`. Each page has a player, clickable chapters,
 the close-plate takeaways and the narration transcript. Shared demo data seeds live in `videos/_demo-data/`.
-`node cli.mjs publish` puts the delivered lessons into the webapp's Help Center (profile menu → Help Center,
-route `/help`): MP4s and posters go to `packages/webapp/public/help/videos/<slug>/` (committed, 40–55 MB each,
-shipped to every environment by the normal webapp build and deploy; keep each MP4 under GitHub's 100 MB limit)
-and `packages/webapp/src/routes/helpCenter/helpCenter.content.json` gets the sets, lessons, chapters with their
-captions, takeaways, transcripts and the quick answers from `videos/manuals.json`. Marina users see the `gm` set;
-Admiral staff (the `admin` role) see both. Re-run `publish` after every new take.
+`node cli.mjs publish` copies the delivered lessons into a sibling web app's Help Center when the kit lives inside a
+monorepo (`../../packages/webapp`): MP4s and posters go to `public/help/videos/<slug>/` (40–55 MB each; keep each MP4
+under GitHub's 100 MB limit) and `src/routes/helpCenter/helpCenter.content.json` gets the sets, lessons, chapters with
+their captions, takeaways, transcripts and the quick answers from `videos/manuals.json`. Which sets a signed-in user
+sees is the web app's call. Re-run `publish` after every new take.
 
 Plate render: ~40 s for seven plates on an Apple Silicon Mac (GPU raster through Metal, four plates at a time;
 `WALKTHROUGH_PLATE_GPU=0` forces software, about 8× slower). Unchanged plates are reused, so a make never redraws
@@ -228,7 +227,7 @@ guarantees a run spends nothing.
 8. **Video leads, voice follows.** Narration is fitted to the recorded pacing (≤ 1.15× speed, ≤ 1.2 s spill); a line that does not fit is rewritten shorter or the step is given more time in `flow.mjs` — never the other way round. The recorder paces each step to its cached line (it holds before the next card until the line is spoken), so with narration in the cache a take needs no fits; a ⚠ then means the line itself is wrong. Zero ⚠ in `voice.json` before hand-off.
    8b. **One recording at a time.** The screencast only captures what the browser can paint; several recordings (or heavy jobs) at once starve it and the result stutters. `record` prints `capture health` — distinct fps should be well above 8 and the p95 frame gap under 400 ms; a `⚠` there means re-record on a quiet machine, not re-encode. Do not edit webapp code while a take runs (Vite's reload overlay ends up in the frame).
 9. **Mastered, not loud.** Delivery is −14 LUFS / −1 dBTP, narration −16 LUFS, music ducked under speech. Don't touch gains by ear in a single video; adjust `brand.json → audio.mix` so every video matches.
-10. **Demo tenants look real.** A tenant on screen has its own logo, hero and about photos, colours and copy. The default Admiral brand on a client-facing frame is a bug.
+10. **Demo data looks real.** A workspace, tenant or account on screen has its own name, logo, photos, colours and copy. Placeholder names, lorem ipsum, or the house Walkthrough Studio brand standing in for the client's brand on a client-facing frame is a bug.
 11. **Official logo only.** Plates use the real brand lockup (SVG/PNG from the site or app). Harvest with `discover-brand` when sources are missing. Homemade wordmarks, wrong marks, or mis-scaled lockups are bugs — check open + close frames on the contact sheet.
 12. **Full HD.** Default delivery is 1920×1080 for plates and live capture. Do not ship 1440×900 for client-facing videos.
 13. **Motion brief is memory.** Every brand pack keeps `motion-brief.md` (audience, tone, visual system, motion language, audio, plate palette). Read it before every new video for that brand; update it when the product look or voice changes.

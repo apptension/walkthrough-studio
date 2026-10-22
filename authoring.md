@@ -178,7 +178,7 @@ sequence picker groups branches under the folder title.
 
 | Element              | Limit                                             | Example                                              |
 | -------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-| `open.eyebrow`       | 1–3 words                                         | `Product walkthrough`, `Finance`, `New in Admiral`   |
+| `open.eyebrow`       | 1–3 words                                         | `Product walkthrough`, `Finance`, `New in Studio`   |
 | `open.title`         | 2 lines, ≤ 4 words each; one `*accent*`           | `["Inviting people", "to your *workspace*"]`         |
 | `open.sub`           | 3 short outcomes joined by `·`; first in `*bold*` | `*One invite* · the access they need · in minutes`   |
 | Chapter title        | ≤ 5 words                                         | `Invite a teammate`                                  |
@@ -341,6 +341,15 @@ Patterns that matter:
 
 Debug with `node cli.mjs record <slug> --headed`. On failure the kit writes
 `error.png` and `error.txt` to the output folder.
+
+**Sign-in and consent.** A take runs headless; Studio shows the live page on Program. When the
+start page is a gate only a person can pass — a visible credential form, a `/login`-style URL, a
+cookie-consent wall — the kit opens a visible browser for that step, pauses (up to 10 minutes),
+and says so in the terminal and in Studio. Once the page moves on, the session is saved to
+`auth-session.json`, the window closes, and capture restarts headless with that session. If the
+site does not keep the session (in-memory tokens), the take stays in the visible window instead;
+keep the mouse out of it. A "Log in" link in a nav or a hidden password field is not a gate.
+`record.loginRequired` opens a visible browser only for the first take, before a session exists.
 
 ### Live pace
 

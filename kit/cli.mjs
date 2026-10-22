@@ -20,6 +20,8 @@
  *   node cli.mjs record <slug> [--headed] [--pace calm|steady|brisk|quick|<0.6–2>] [--repair]
  *                                          run flow.mjs → live.mp4 + timeline.json (--pace: this take only;
  *                                          --repair: on capture stall, agent-fix flow.mjs once and re-record)
+ *                                          headless by default; a sign-in or consent page opens a window
+ *                                          for that step only, then capture returns to the background
  *   node cli.mjs produce <slug> [--force]  plates + live → <slug>.mp4 (single encode, chapters)
  *   node cli.mjs bench <slug>              print produce-meta timing, plate ms/frame, bake seconds
  *   node cli.mjs voice <slug> [--force]    narration.mjs → ElevenLabs clips fitted to the take (voice/voice.json)
@@ -301,9 +303,17 @@ async function main() {
       preflight();
       const video = loadVideo(slug);
       const loginRequired = Boolean(video.config?.record?.loginRequired);
-      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      const { contextUsesSession, startsHeaded } = await import('./lib/signInPause.mjs');
+      const headed = startsHeaded({
+        flagHeaded: flag('--headed'),
+        flagHeadless: flag('--headless'),
+        loginRequired,
+        hasSession: contextUsesSession(video),
+      });
       if (headed && loginRequired && !flag('--headed')) {
-        console.log('» record · Sign-in is on, so the browser stays visible.');
+        console.log('» record · Sign-in is on and no session is saved yet, so this first take opens a visible browser.');
+      } else if (loginRequired && !headed) {
+        console.log('» record · Sign-in is on; reusing the saved session in the background. A window opens only if the page asks for you.');
       }
       const live = join(video.out, 'live.mp4');
       const metaPath = join(video.out, 'live-meta.json');
@@ -873,7 +883,13 @@ async function main() {
       const { produce } = await import('./lib/produce.mjs');
       const { validate } = await import('./lib/validate.mjs');
       const loginRequired = Boolean(video.config?.record?.loginRequired);
-      const headed = flag('--headed') || (loginRequired && !flag('--headless'));
+      const { contextUsesSession, startsHeaded } = await import('./lib/signInPause.mjs');
+      const headed = startsHeaded({
+        flagHeaded: flag('--headed'),
+        flagHeadless: flag('--headless'),
+        loginRequired,
+        hasSession: contextUsesSession(video),
+      });
       await recordLive(video, { headed, pace: opt('--pace') });
       await produce(video, { forcePlates: flag('--force') });
       if (existsSync(join(video.dir, 'narration.mjs'))) {

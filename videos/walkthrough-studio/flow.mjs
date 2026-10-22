@@ -55,7 +55,7 @@ export default async function flow(ctx) {
   // —— Overview ——
   await chapter('Meet Studio', 'One desk from brief to a client-ready master', 2400);
 
-  await say('Production stages nothing!', 'Brief, Script, Record, Cut, Deliver — gated in order.', 2000);
+  await say('Five stage gates', 'Brief through Deliver — cheap edits stay early.', 2200);
   const stageBar = page.getByRole('navigation', { name: /production stages/i });
   if (await stageBar.isVisible().catch(() => false)) {
     await frame(stageBar, { holdMs: 200 });
@@ -68,16 +68,14 @@ export default async function flow(ctx) {
     }
   }
 
-  await say('Sequence picker', 'Every video is a sequence you open and drive.', 1600);
   const seq = page.getByLabel(/select sequence/i);
   if (await seq.isVisible().catch(() => false)) {
-    await focus(seq, 800);
+    await focus(seq, 700);
   }
 
-  await say('Program monitor', 'Watch the master, plates, or a saved compare.', 1800);
   const program = page.getByRole('button', { name: /^program$/i });
   if (await program.isVisible().catch(() => false)) {
-    await focus(program, 600);
+    await focus(program, 500);
     await program.click().catch(() => {});
     await wait(400);
   }
@@ -89,7 +87,7 @@ export default async function flow(ctx) {
   // —— Brief / New video ——
   await chapter('Start from a brief', 'Audience, outcome, and what to show — then the agent drafts', 2200);
 
-  await say('Open New video', 'A five-step brief steers every line the agent writes.', 1800);
+  await say('Brief the outcome', 'Who watches and what they can do after.', 2000);
   const newVideo = page.getByRole('button', { name: /new video/i });
   await newVideo.waitFor({ state: 'visible', timeout: 15000 });
   await focus(newVideo, 500);
@@ -98,7 +96,6 @@ export default async function flow(ctx) {
 
   const wizard = page.getByRole('dialog', { name: /new video/i });
   if (await wizard.isVisible().catch(() => false)) {
-    await say('Basics first', 'Who watches and what they can do after.', 1600);
     const titleField = wizard.locator('input[name="title"]');
     await typeFast(titleField, 'Product tour for first-time editors', 24);
     await wait(180);
@@ -119,7 +116,6 @@ export default async function flow(ctx) {
 
     const next = wizard.getByRole('button', { name: /^next$/i });
     if (await next.isVisible().catch(() => false)) {
-      await say('App access', 'Start URL and optional demo login — secrets stay in .env.', 1800);
       await next.click();
       await wait(400);
       const startUrl = wizard.locator('input[name="startUrl"]');
@@ -127,7 +123,7 @@ export default async function flow(ctx) {
       await wait(200);
     }
     if (await next.isVisible().catch(() => false)) {
-      await say('Story beats', 'Each must-show line becomes a chapter, in order.', 1600);
+      await say('Name what to show', 'Must-show lines become chapters, in order.', 1800);
       await next.click();
       await wait(400);
       const mustShow = wizard.locator('textarea[name="mustShow"]');
@@ -145,7 +141,7 @@ export default async function flow(ctx) {
   // —— Script ——
   await chapter('Approve the script', 'Cheap to rewrite now — expensive after a take', 2200);
 
-  await say('Open Script', 'Plates, chapters, captions, and narration in one sheet.', 1800);
+  await say('Pin the script', 'Approve titles, plates, and voice while edits are cheap.', 2200);
   const scriptStage = page.locator('#stageBar .pstage[data-stage="script"]');
   // TODO(verify selector) — accessible name is "Script" plus meta line
   if (await scriptStage.isVisible().catch(() => false)) {
@@ -162,7 +158,6 @@ export default async function flow(ctx) {
 
   const scriptDlg = page.getByRole('dialog', { name: /^script$/i });
   if (await scriptDlg.isVisible().catch(() => false)) {
-    await say('Review every beat', 'Approve only when titles, plates, and VO line up.', 2000);
     const approve = scriptDlg.getByRole('button', { name: /approve script/i });
     if (await approve.isVisible().catch(() => false)) {
       await magnify(approve, { holdMs: 1500, zoom: 1.9, label: 'approve-script' });
@@ -181,14 +176,13 @@ export default async function flow(ctx) {
     await wait(350);
   }
 
-  await say('Render bay', 'Start or queue the jobs that build the master.', 1700);
+  await say('Queue the build', 'Plates, audio, and export from one bay.', 2000);
   const renderBay = page.locator('#leftRender, .render-bay').first();
   if (await renderBay.isVisible().catch(() => false)) {
     await frame(renderBay, { holdMs: 200 });
     await magnify(renderBay, { holdMs: 1300, zoom: 1.5, label: 'render-bay' });
   }
 
-  await say('Queue chips', 'Plates, Audio, Export — add work without leaving the desk.', 1800);
   const queue = page.locator('.queue-add');
   const platesChip = queue.getByRole('button', { name: /^plates$/i });
   const audioChip = queue.getByRole('button', { name: /^audio$/i });
@@ -212,7 +206,7 @@ export default async function flow(ctx) {
   // —— Feedback ——
   await chapter('Direct with feedback', 'Notes become source edits — then you decide', 2200);
 
-  await say('Open Feedback', 'Write what is wrong; the agent applies it.', 1600);
+  await say('Write a director note', 'Name the beat and the fix — Apply edits sources first.', 2200);
   const feedbackTab = page.getByRole('tab', { name: /^feedback$/i });
   if (await feedbackTab.isVisible().catch(() => false)) {
     await feedbackTab.click();
@@ -221,20 +215,17 @@ export default async function flow(ctx) {
 
   const note = page.getByLabel(/director note/i).or(page.locator('#improveNote'));
   if (await note.isVisible().catch(() => false)) {
-    await say('Director note', 'Name the plate or beat — keep the ask concrete.', 1700);
     await focus(note, 500);
     await typeFast(note, 'Open plate: center the Studio mark; keep the lift above the title.', 20);
     await wait(250);
     await magnify(note, { holdMs: 1200, zoom: 1.7, label: 'director-note' });
   }
 
-  await say('Apply with AI', 'Sources change first; you approve before a full render.', 1800);
   const apply = page.getByRole('button', { name: /apply feedback/i });
   if (await apply.isVisible().catch(() => false)) await focus(apply, 900);
 
   const motionTab = page.getByRole('tab', { name: /^motion$/i });
   if (await motionTab.isVisible().catch(() => false)) {
-    await say('Motion templates', 'Calm, Clear, or Punchy — one energy for every plate.', 1800);
     await motionTab.click();
     await wait(400);
     const punchy = page.getByRole('radio', { name: /punchy/i });
@@ -251,7 +242,7 @@ export default async function flow(ctx) {
   // —— Deliver ——
   await chapter('Export the pack', 'Master, captions, chapters, and poster in one folder', 2200);
 
-  await say('Open Deliver', 'Handoff facts appear after Export builds the pack.', 1600);
+  await say('Export the handoff', 'Zip the master with captions and YouTube chapters.', 2000);
   const deliverTab = page.getByRole('tab', { name: /^deliver$/i });
   if (await deliverTab.isVisible().catch(() => false)) {
     await deliverTab.click();
@@ -264,7 +255,6 @@ export default async function flow(ctx) {
     }
   }
 
-  await say('Export handoff', 'Zip the master with captions and YouTube chapters.', 1800);
   const exportBtn = page.getByRole('button', { name: /^export$/i }).first();
   if (await exportBtn.isVisible().catch(() => false)) {
     await magnify(exportBtn, { holdMs: 1500, zoom: 1.9, label: 'export' });

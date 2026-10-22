@@ -30,7 +30,7 @@ People who need a tool to build walkthroughs of their products based on Cursor /
 | Text / muted | #f2f4f8 / #7d8698 | Plate type |
 
 - **Logo:** official mark in `logo.html` / `logo-source.svg` — same Rams isometric capture deck as `kit/studio/logo.svg` (graphite chassis, olive accent). Never invent a substitute or blue play wordmark.
-- **Logo on plates:** square mark on dark ink; center horizontally; open plate `openLogoWidth` ~340–380 px (~hero mark), then lift. Because the mark is **square**, `openLiftY` must stay mild (~−80 to −95) — wide-lockup values like −195 / −285 send a square mark off the top of the frame. Prefer `openLogoTop` ~50, `openLiftScale` ~0.52. Close smaller via template corner/lockup.
+- **Logo on plates:** square mark on dark ink; center horizontally; open plate `openLogoWidth` ~340–380 px (~hero mark), then lift. Because the mark is **square**, `openLiftY` must stay mild (~−90 to −120) — wide-lockup values like −195 / −285 send a square mark off the top of the frame. Prefer `openLogoTop` ~50, `openLiftScale` ~0.52. Close smaller via template corner/lockup.
 - **Live reel:** true UI color — no grade. Focus ring uses accent blue.
 
 ## Plate palette
