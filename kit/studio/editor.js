@@ -286,6 +286,7 @@ export function initEditor(ctx) {
       cards: [],
       order: [],
       omit: [],
+      trims: [],
     };
 
   function overlayLook() {
@@ -1058,6 +1059,7 @@ export function initEditor(ctx) {
         cards: d.cards || [],
         order: d.order || [],
         omit: d.omit || [],
+        trims: d.trims || [],
       })
     );
   };
@@ -4478,6 +4480,21 @@ export function initEditor(ctx) {
           .map((s) => `<button type="button" class="ins-item" data-goto-shot="${escapeHtml(shotKey(s))}">${ICONS.zoom}<span><b>${s.zoom.toFixed(2)}× ${s.source === 'auto' ? '<small>auto</small>' : ''}</b><em>at ${fmtT(Math.max(0, s.start - c.recFrom))} for ${(s.end - s.start).toFixed(1)}s</em></span><i>›</i></button>`)
           .join('')
       : `<p class="ins-note">${cam.zoom === 'off' ? 'Auto zoom is off.' : 'No zooms in this clip.'}</p>`;
+    const trim = (d.trims || []).find((t) => t.id === c.id) || {};
+    const rawLen = Math.max(0.4, (c.recTo - c.recFrom) + (trim.trimStart || 0) + (trim.trimEnd || 0));
+    const maxHead = Math.max(0, r3(rawLen - 0.4 - (trim.trimEnd || 0)));
+    const maxTail = Math.max(0, r3(rawLen - 0.4 - (trim.trimStart || 0)));
+    const trimSection = section(
+      'motion',
+      'Trim',
+      `<div class="var-row${trim.trimStart ? ' is-set' : ''}"><span>Trim head</span><input type="range" min="0" max="${maxHead}" step="0.05" value="${trim.trimStart || 0}" data-live-trim="trimStart" aria-label="Trim the head of this recording clip" /><output>${(trim.trimStart || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimStart" title="Back to 0" ${trim.trimStart ? '' : 'hidden'}>${ICONS.reset}</button></div>
+      <div class="var-row${trim.trimEnd ? ' is-set' : ''}"><span>Trim tail</span><input type="range" min="0" max="${maxTail}" step="0.05" value="${trim.trimEnd || 0}" data-live-trim="trimEnd" aria-label="Trim the tail of this recording clip" /><output>${(trim.trimEnd || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimEnd" title="Back to 0" ${trim.trimEnd ? '' : 'hidden'}>${ICONS.reset}</button></div>
+      <div class="ins-pair">
+        <button type="button" class="ins-btn" data-act="trim-head-playhead" title="Drop everything before the playhead in this clip">Head to playhead</button>
+        <button type="button" class="ins-btn" data-act="trim-tail-playhead" title="Drop everything after the playhead in this clip">Tail from playhead</button>
+      </div>
+      <p class="ins-note subtle">Cuts bad waits or login bleed from this section without re-recording. Render to bake the trim into the cut.</p>`
+    );
     return (
       head(
         ICONS.film,
@@ -4487,6 +4504,7 @@ export function initEditor(ctx) {
         clipRemoveBtn(c)
       ) +
       placeSection(c) +
+      trimSection +
       renderLiveCards(c) +
       section(
         'speed',
@@ -5195,6 +5213,50 @@ export function initEditor(ctx) {
     act('voice-reset', () => s?.key && withVoice(s.key, { nudge: 0, at: null }, 'Back to where the line belongs'));
     act('clip-earlier', () => ed.sel?.type === 'clip' && moveClip(ed.sel.id, -1));
     act('clip-later', () => ed.sel?.type === 'clip' && moveClip(ed.sel.id, 1));
+    const setLiveTrim = (id, patch) => {
+      const clip = ed.seq.find((c) => c.id === id && c.kind === 'live');
+      if (!clip) return Promise.resolve();
+      const cur = { ...(d.trims || []).find((t) => t.id === id) };
+      const next = { id, trimStart: cur.trimStart || 0, trimEnd: cur.trimEnd || 0, ...patch };
+      if (!next.trimStart) delete next.trimStart;
+      if (!next.trimEnd) delete next.trimEnd;
+      const trims = (d.trims || []).filter((t) => t.id !== id);
+      if (next.trimStart || next.trimEnd) trims.push(next);
+      return postDeck({ trims }, { hint: 'Recording clip trimmed' });
+    };
+    on('[data-live-trim]', 'input', (el) => {
+      const out = el.parentElement?.querySelector('output');
+      if (out) out.textContent = `${Number(el.value).toFixed(2)}s`;
+    });
+    on('[data-live-trim]', 'change', (el) => {
+      const key = el.dataset.liveTrim;
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      setLiveTrim(clip.id, { [key]: r3(Number(el.value) || 0) });
+    });
+    on('[data-live-trim-reset]', 'click', (el) => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      setLiveTrim(clip.id, { [el.dataset.liveTrimReset]: 0 });
+    });
+    act('trim-head-playhead', () => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      const cur = (d.trims || []).find((t) => t.id === clip.id) || {};
+      const rawFrom = clip.recFrom - (cur.trimStart || 0);
+      const recT = edToRec(clip, ed.t);
+      const head = r3(Math.max(0, Math.min(recT - rawFrom, (clip.recTo + (cur.trimEnd || 0)) - rawFrom - 0.4)));
+      setLiveTrim(clip.id, { trimStart: head });
+    });
+    act('trim-tail-playhead', () => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      const cur = (d.trims || []).find((t) => t.id === clip.id) || {};
+      const rawTo = clip.recTo + (cur.trimEnd || 0);
+      const recT = edToRec(clip, ed.t);
+      const tail = r3(Math.max(0, Math.min(rawTo - recT, rawTo - (clip.recFrom - (cur.trimStart || 0)) - 0.4)));
+      setLiveTrim(clip.id, { trimEnd: tail });
+    });
     act('music-mute', () => withMusic({ mute: !audioDesk().music.mute }, audioDesk().music.mute ? 'Music back in' : 'Music muted'));
     act('music-compose', () => {
       const prompt = root.querySelector('[data-music-prompt]')?.value ?? '';

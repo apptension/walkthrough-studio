@@ -456,6 +456,12 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     } catch (err) {
       console.log(`· version snapshot skipped: ${err.message}`);
     }
+    try {
+      const { cleanupAfterProduce } = await import('./cleanup.mjs');
+      cleanupAfterProduce(video);
+    } catch (err) {
+      console.log(`· intermediate cleanup skipped: ${err.message}`);
+    }
   }
   return meta;
 }

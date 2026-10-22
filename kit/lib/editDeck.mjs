@@ -10,6 +10,7 @@
  *   edit.transitions  { "<prev>><next>": { style, duration } } per-join overrides (buildEditPlan)
  *   edit.audio        { music, voice, master }    the mix desk (delivery clock; see audio/desk.mjs)
  *   edit.cards        [{ key, t?, dur? }]         chapter/caption mark nudges (recording clock)
+ *   edit.trims        [{ id, trimStart, trimEnd }] head/tail cut on a live section (recording sec)
  *   open.style / close.style / interstitials[].style   { "--gold": "#e9b949", ... } CSS variables
  *                                                       injected after the plate's own :root
  *
@@ -379,6 +380,70 @@ export function normalizeOrder(list) {
   return out;
 }
 
+export const MIN_LIVE_TRIM_KEEP = 0.4;
+
+/** Head/tail trims on live sections, keyed by segment id (recording-clock seconds). */
+export function normalizeTrims(list = []) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(list) ? list : []) {
+    const id = String(raw?.id ?? '').trim();
+    if (!id || id.length > 80 || seen.has(id) || !/^[\w.:@+-]+$/.test(id)) continue;
+    const trimStart = r3(Math.max(0, Number(raw.trimStart) || 0));
+    const trimEnd = r3(Math.max(0, Number(raw.trimEnd) || 0));
+    if (!trimStart && !trimEnd) continue;
+    seen.add(id);
+    out.push({ id, ...(trimStart ? { trimStart } : {}), ...(trimEnd ? { trimEnd } : {}) });
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+/**
+ * Apply edit.trims to live segments. Works on produce plan slices (`start`/`end`) and
+ * editor scenes (`recFrom`/`recTo`). Keeps at least MIN_LIVE_TRIM_KEEP seconds.
+ */
+export function applySegmentTrims(segments, trims) {
+  const byId = new Map(normalizeTrims(trims).map((t) => [t.id, t]));
+  if (!byId.size || !Array.isArray(segments)) return segments;
+  return segments.map((seg) => {
+    if (seg.kind !== 'live') return seg;
+    const t = byId.get(seg.id);
+    if (!t) return seg;
+    const trimStart = t.trimStart || 0;
+    const trimEnd = t.trimEnd || 0;
+    if (seg.recFrom != null && seg.recTo != null) {
+      const span = seg.recTo - seg.recFrom;
+      const keep = Math.max(MIN_LIVE_TRIM_KEEP, span - trimStart - trimEnd);
+      const head = Math.min(trimStart, Math.max(0, span - MIN_LIVE_TRIM_KEEP));
+      const tail = Math.min(trimEnd, Math.max(0, span - head - MIN_LIVE_TRIM_KEEP));
+      const recFrom = r3(seg.recFrom + head);
+      const recTo = r3(seg.recFrom + head + keep);
+      const next = { ...seg, recFrom, recTo, dur: r3(recTo - recFrom), trimStart: head, trimEnd: tail };
+      if (seg.start != null && seg.end != null) {
+        const ratio = span > 0 ? (seg.end - seg.start) / span : 1;
+        next.start = r3(seg.start + head * ratio);
+        next.end = r3(next.start + keep * ratio);
+        next.dur = r3(next.end - next.start);
+      }
+      if (seg.cleanFrom != null && seg.cleanTo != null) {
+        const ratio = span > 0 ? (seg.cleanTo - seg.cleanFrom) / span : 1;
+        next.cleanFrom = r3(seg.cleanFrom + head * ratio);
+        next.cleanTo = r3(next.cleanFrom + keep * ratio);
+      }
+      return next;
+    }
+    if (seg.start == null || seg.end == null) return seg;
+    const span = seg.end - seg.start;
+    const keep = Math.max(MIN_LIVE_TRIM_KEEP, span - trimStart - trimEnd);
+    const head = Math.min(trimStart, Math.max(0, span - MIN_LIVE_TRIM_KEEP));
+    const tail = Math.min(trimEnd, Math.max(0, span - head - MIN_LIVE_TRIM_KEEP));
+    const start = r3(seg.start + head);
+    const end = r3(seg.start + head + keep);
+    return { ...seg, start, end, dur: r3(end - start), trimStart: head, trimEnd: tail };
+  });
+}
+
 /**
  * Permute segments by `order`. Ids the plan no longer has are skipped. A segment the order
  * doesn't mention (a plate added since) keeps its place after the nearest listed predecessor.
@@ -483,6 +548,7 @@ export function normalizeEdit(edit = {}, { liveDur = Infinity, width = 1920, hei
     cards: normalizeCards(src.cards, { liveDur }),
     order: normalizeOrder(src.order),
     omit: normalizeOrder(src.omit),
+    trims: normalizeTrims(src.trims),
   };
 }
 
@@ -498,6 +564,7 @@ export function isEmptyDeck(deck) {
       !deck.cards?.length &&
       !deck.order?.length &&
       !deck.omit?.length &&
+      !deck.trims?.length &&
       isEmptyAudio(deck.audio))
   );
 }
@@ -506,7 +573,7 @@ export function isEmptyDeck(deck) {
 export function patchEdit(current = {}, patch = {}, opts = {}) {
   if (patch.reset) return normalizeEdit({}, opts);
   const merged = { ...(current || {}) };
-  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'order', 'omit']) {
+  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'order', 'omit', 'trims']) {
     if (key in patch) merged[key] = patch[key] ?? (key === 'transitions' ? {} : []);
   }
   return normalizeEdit(merged, opts);
@@ -524,6 +591,7 @@ export function compactEdit(deck) {
   if (deck?.cards?.length) out.cards = deck.cards;
   if (deck?.order?.length) out.order = deck.order;
   if (deck?.omit?.length) out.omit = deck.omit;
+  if (deck?.trims?.length) out.trims = deck.trims;
   const audio = compactAudio(deck?.audio);
   if (audio) out.audio = audio;
   return Object.keys(out).length ? out : undefined;
@@ -667,6 +735,7 @@ export function describeDeck(deck) {
   if (joins) bits.push(`${joins} join override${joins === 1 ? '' : 's'}`);
   if (deck?.order?.length) bits.push('sequence reordered');
   if (deck?.omit?.length) bits.push(`${deck.omit.length} section${deck.omit.length === 1 ? '' : 's'} omitted`);
+  if (deck?.trims?.length) bits.push(`${deck.trims.length} live trim${deck.trims.length === 1 ? '' : 's'}`);
   const audio = describeAudio(deck?.audio);
   if (audio) bits.push(audio);
   return bits.length ? bits.join(' · ') : 'no edits';

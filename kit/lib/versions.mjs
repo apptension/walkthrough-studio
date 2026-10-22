@@ -204,7 +204,8 @@ export function snapshotVersion(video, opts = {}) {
   mkdirSync(join(dir, 'source'), { recursive: true });
   mkdirSync(join(dir, 'out'), { recursive: true });
 
-  // Delivery + review artifacts
+  // Thin archive: playable master + small metas + sources. Plate/silent/deliverable/bake
+  // copies are regenerable and used to flood the disk across History versions.
   cloneCopy(final, join(dir, 'out', `${video.slug}.mp4`));
   for (const name of [
     'produce-meta.json',
@@ -214,28 +215,19 @@ export function snapshotVersion(video, opts = {}) {
     'critic-report.md',
     'critic-report.json',
     'qc-report.json',
-    'deliver-meta.json',
     'poster.jpg',
     'chapters-youtube.txt',
     'chapters.md',
     'review.html',
-    `${video.slug}.silent.mp4`,
   ]) {
     copyIfExists(join(video.out, name), join(dir, 'out', name));
   }
-  if (existsSync(join(video.out, 'validate'))) {
-    cloneCopy(join(video.out, 'validate'), join(dir, 'out', 'validate'), { recursive: true });
-  }
   if (existsSync(join(video.out, 'captions'))) {
-    cloneCopy(join(video.out, 'captions'), join(dir, 'out', 'captions'), { recursive: true });
-  }
-  if (existsSync(join(video.out, 'deliverables'))) {
-    cloneCopy(join(video.out, 'deliverables'), join(dir, 'out', 'deliverables'), { recursive: true });
-  }
-  // Plate mp4s (assets for the panel)
-  for (const f of readdirSync(video.out)) {
-    if (/^(brand-|plate-).*\.mp4$/.test(f)) {
-      cloneCopy(join(video.out, f), join(dir, 'out', f));
+    // Text tracks only — skip heavy contact-sheet media if present under validate.
+    for (const f of readdirSync(join(video.out, 'captions'))) {
+      if (/\.(srt|vtt|json|txt)$/i.test(f)) {
+        copyIfExists(join(video.out, 'captions', f), join(dir, 'out', 'captions', f));
+      }
     }
   }
 
@@ -291,9 +283,10 @@ export function snapshotVersion(video, opts = {}) {
 
   index.versions = [entry, ...index.versions.filter((v) => v.id !== id)];
   index.nextNumber = number + 1;
-  // Keep last 20 versions
-  const drop = index.versions.slice(20);
-  index.versions = index.versions.slice(0, 20);
+  // Keep last 8 playable versions (sources + master). Older ones drop.
+  const KEEP = 8;
+  const drop = index.versions.slice(KEEP);
+  index.versions = index.versions.slice(0, KEEP);
   for (const d of drop) {
     const p = join(versionsDir(video), d.id);
     if (existsSync(p)) rmSync(p, { recursive: true, force: true });

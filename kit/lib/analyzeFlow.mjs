@@ -20,6 +20,8 @@ import {
   craftJourneyFromCoverage,
   scoreMustShowCoverage,
 } from './mustShowCoverage.mjs';
+import { tryCredentialSignIn } from './sessionAuth.mjs';
+import { sessionFile } from './signInPause.mjs';
 
 /* ---------- form fill recipes (Node-side, testable) ---------- */
 
@@ -1259,40 +1261,7 @@ async function tryClickCandidate(page, candidate) {
 }
 
 async function trySignIn(page, video, say) {
-  const email = video.config.env?.email;
-  const password = video.config.env?.password;
-  if (!email || !password) {
-    say('No demo credentials in env — exploring signed-out surface');
-    return { ok: false, reason: 'no-credentials' };
-  }
-  const pwd = page.locator('input[type="password"]').first();
-  if (!(await pwd.isVisible({ timeout: 3500 }).catch(() => false))) {
-    return { ok: false, reason: 'no-login-form' };
-  }
-  say('Signing in with project demo credentials');
-  const emailLoc = page
-    .locator(
-      'input[type="email"], input[name*="email" i], input[autocomplete="username"], input[autocomplete="email"], input[type="text"]'
-    )
-    .first();
-  if (await emailLoc.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await emailLoc.fill(String(email));
-  }
-  await pwd.fill(String(password));
-  const submit = page.getByRole('button', { name: /log\s*in|sign\s*in|continue|submit|zaloguj|anmelden/i }).first();
-  if (await submit.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await submit.click({ timeout: 10000 }).catch(() => pwd.press('Enter'));
-  } else {
-    await pwd.press('Enter');
-  }
-  await page.waitForTimeout(2800);
-  await dismissCookies(page);
-  const stillPwd = await pwd.isVisible({ timeout: 800 }).catch(() => false);
-  if (stillPwd) {
-    say('Sign-in may have failed — continuing with the current page');
-    return { ok: false, reason: 'still-on-login' };
-  }
-  return { ok: true };
+  return tryCredentialSignIn(page, video, say);
 }
 
 function writeAnalysisFiles(video, report, say) {
@@ -1572,6 +1541,11 @@ export async function exploreFlow(
         kind: 'explore',
         text: `Explored ${pages.length} page(s)${signedIn ? ' while signed in' : ''}. Prefer Playwright hints from the matching route hop when writing each chapter.`,
       });
+    }
+
+    if (signedIn) {
+      await context.storageState({ path: sessionFile(video) }).catch(() => {});
+      say(`Saved auth session → ${sessionFile(video)} (record reuses it off camera)`);
     }
 
     writeAnalysisFiles(video, report, say);

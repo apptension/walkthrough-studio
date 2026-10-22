@@ -4,6 +4,7 @@ import {
   applyCardEdits,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentTrims,
   cardMarkKey,
   compactEdit,
   editCameraMarks,
@@ -136,6 +137,20 @@ test('omit drops sections from the cut but never empties it', () => {
   const deck = normalizeEdit({ omit: ['capabilities', 'capabilities', 'nope id'] });
   assert.deepEqual(deck.omit, ['capabilities']);
   assert.deepEqual(compactEdit(deck).omit, ['capabilities']);
+});
+
+test('live trims cut head and tail and keep a minimum duration', () => {
+  const segs = [
+    { kind: 'plate', id: 'open', start: 0, end: 3, dur: 3 },
+    { kind: 'live', id: 'live-0.00', recFrom: 0, recTo: 10, start: 0, end: 10, dur: 10 },
+  ];
+  const trimmed = applySegmentTrims(segs, [{ id: 'live-0.00', trimStart: 2, trimEnd: 1 }]);
+  assert.equal(trimmed[1].recFrom, 2);
+  assert.equal(trimmed[1].recTo, 9);
+  assert.equal(trimmed[1].dur, 7);
+  const deck = normalizeEdit({ trims: [{ id: 'live-0.00', trimStart: 2, trimEnd: 0 }] });
+  assert.deepEqual(deck.trims, [{ id: 'live-0.00', trimStart: 2 }]);
+  assert.deepEqual(compactEdit(deck).trims, [{ id: 'live-0.00', trimStart: 2 }]);
 });
 
 test('patchEdit replaces lists wholesale, reset clears, compactEdit drops empties', () => {

@@ -68,6 +68,7 @@ import {
   applyCardEdits,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentTrims,
   cardMarkKey,
   joinKey,
   liveTimeMap,
@@ -1021,8 +1022,11 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   // edit-plan may already be chapter-split; coalesce contiguous live bricks, then re-split
   // from current marks so Editor sections track timeline card moves.
   const natural = splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map);
-  // The editor's order plays the rendered slices in a new sequence; omit drops sections from the cut.
-  const scenes = applySegmentOmit(applySegmentOrder(natural, deck.order), deck.omit);
+  // The editor's order plays the rendered slices in a new sequence; omit drops sections; trims cut heads/tails.
+  const scenes = applySegmentTrims(
+    applySegmentOmit(applySegmentOrder(natural, deck.order), deck.omit),
+    deck.trims
+  );
   const omitted = natural
     .filter((s) => (deck.omit || []).includes(s.id))
     .map((s) => ({ id: s.id, kind: s.kind, title: s.title, type: s.type || null }));

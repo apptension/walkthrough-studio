@@ -35,6 +35,7 @@ import {
   signInWaitCopy,
   waitFiles,
 } from './signInPause.mjs';
+import { ensureSignedInOffCamera } from './sessionAuth.mjs';
 
 const PRESS_ACTIONS = new Set(['click', 'dblclick', 'check', 'uncheck', 'setChecked', 'tap', 'selectOption']);
 const TYPE_ACTIONS = new Set(['fill', 'pressSequentially']);
@@ -577,17 +578,31 @@ export async function recordLive(
     await page.evaluate((family) => document.fonts.load(`600 20px "${family}"`), brand.font.family);
     await wait(500);
 
-    if (shouldRelaunchHeaded({ headed, needsPerson: await pageState() })) {
+    // Session → saved credentials, all off camera. Password typing must never enter live.mp4.
+    const auth = await ensureSignedInOffCamera(page, context, video, {
+      say: (msg) => console.log(`» sign-in · ${msg}`),
+    });
+    if (auth.needsPerson && shouldRelaunchHeaded({ headed, needsPerson: true })) {
       console.log(
         signInRound
-          ? '» sign-in · The saved session did not carry over to a background browser. Opening a visible one; this take stays visible.'
-          : '» sign-in · This page needs you. Opening a visible browser for the sign-in step only.'
+          ? '» sign-in · Auto sign-in did not clear the gate. Opening a visible browser; this take stays visible.'
+          : '» sign-in · Needs a person (SSO / MFA / no saved password). Opening a visible browser for that step only.'
       );
       await handOff();
       return await recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg, handoff: true, signInRound });
     }
+    if (auth.needsPerson && headed) {
+      console.log('» sign-in · Waiting for you in the visible browser before capture starts…');
+      await pauseIfPerson();
+      await context.storageState({ path: sessionFile(video) }).catch(() => {});
+    } else if (shouldRelaunchHeaded({ headed, needsPerson: await pageState() })) {
+      // Rare: gate appeared after auth check (redirect). Same headed handoff as before.
+      console.log('» sign-in · This page needs you. Opening a visible browser for the sign-in step only.');
+      await handOff();
+      return await recordLive(video, { headed: true, flow, outFile, writeMeta, pace: paceArg, handoff: true, signInRound });
+    }
 
-    // Optional pre-roll (cookie banners, login shells) — runs before capture so it never appears on camera.
+    // Optional pre-roll (cookie banners, extra setup) — still before capture.
     if (typeof beforeCapture === 'function') {
       await beforeCapture({ page, context, env: config.env, brand, wait, config });
     }
