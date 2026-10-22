@@ -181,17 +181,29 @@ function alphaPipeEncoder(outPath, { fps = FPS, copy = true } = {}) {
   const args = alphaPipeArgs(outPath, { fps, copy });
   const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
   let stderr = '';
+  let closed = false;
   ff.stderr.on('data', (d) => (stderr += d));
+  // ffmpeg can exit mid-frame (bad PNG, early close). Without this, write() EPIPE kills Node.
+  ff.stdin.on('error', (e) => {
+    if (!closed) stderr += `\n${e.message}`;
+  });
   const done = new Promise((resolve, reject) => {
-    ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr || `ffmpeg bake exit ${code}`))));
+    ff.on('close', (code) => {
+      closed = true;
+      code === 0 ? resolve() : reject(new Error(stderr || `ffmpeg bake exit ${code}`));
+    });
   });
   return {
     write: (buf) =>
       new Promise((resolve, reject) => {
-        ff.stdin.write(buf, (err) => (err ? reject(err) : resolve()));
+        if (closed || ff.stdin.destroyed) return resolve();
+        ff.stdin.write(buf, (err) => {
+          if (!err || closed || err.code === 'EPIPE') resolve();
+          else reject(err);
+        });
       }),
     end: () => {
-      ff.stdin.end();
+      if (!ff.stdin.destroyed) ff.stdin.end();
       return done;
     },
   };

@@ -2329,7 +2329,7 @@ async function handleApi(req, res, url) {
       if (!startUrl) {
         return json(res, 400, { error: 'No start URL to analyze — set record.startUrl or brand.appUrl / brand.url in the brief' });
       }
-      const args = [];
+      const args = ['--explore'];
       // Prefer the live app URL when the brief names one and config still points at marketing.
       if (brief?.brand?.appUrl && video.config.record?.startUrl !== brief.brand.appUrl) {
         args.push('--url', brief.brand.appUrl);
@@ -2353,6 +2353,8 @@ async function handleApi(req, res, url) {
   if (rest === '/analyze' && req.method === 'POST') {
     const body = await readBody(req).catch(() => ({}));
     const args = [];
+    // Studio analyze always explores (sign-in + crawl + mustShow recraft). Opt out with explore:false.
+    if (body.explore !== false) args.push('--explore');
     if (body.url) args.push('--url', String(body.url));
     if (body.headed) args.push('--headed');
     return json(res, 200, { ok: true, job: jobPayload(startKitJob(video, 'analyze', args)) });

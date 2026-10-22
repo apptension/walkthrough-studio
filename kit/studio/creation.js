@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id);
 
 export const CREATE_ORDER = ['project', 'brand', 'analyze', 'draft', 'ready'];
 /** Typical seconds per stage; used for the progress curve and the "usually" hint, never as a deadline. */
-const EXPECTED = { project: 2, brand: 45, analyze: 35, draft: 200, ready: 2 };
+const EXPECTED = { project: 2, brand: 45, analyze: 120, draft: 200, ready: 2 };
 const WEIGHT = { project: 0.04, brand: 0.26, analyze: 0.12, draft: 0.54, ready: 0.04 };
 const WRITE_TOOLS = /^(write|edit|multi ?edit|str ?replace|delete|notebook ?edit)$/i;
 
@@ -248,9 +248,12 @@ export function createCreationView({ dialog, escapeHtml }) {
     /** Stopped or failed: the footer offers Retry preparation / Edit brief until the next start() or exit(). */
     fail(message) {
       failed = true;
+      // Drop running/ready so the failed-only footer (Edit brief / Retry) can show.
       dialog.classList.add('is-failed');
+      dialog.classList.remove('is-running', 'is-ready');
+      view.classList.remove('is-ready');
       $('wizardCreationTitle').textContent = 'Preparation needs attention';
-      $('wizardCreationDetail').textContent = message;
+      $('wizardCreationDetail').textContent = message || 'Something stopped preparation.';
       $('wizardCreationEta').textContent = 'stopped';
       view.querySelectorAll('[data-create-stage]').forEach((li) => {
         li.classList.toggle('failed', li.dataset.createStage === stage);
@@ -259,6 +262,16 @@ export function createCreationView({ dialog, escapeHtml }) {
       clearInterval(timer);
       timer = 0;
       tick();
+    },
+
+    /** Stages that never reached `.done` — used to rebuild a resume list after a cancel. */
+    unfinished() {
+      const out = [];
+      view.querySelectorAll('[data-create-stage]').forEach((li) => {
+        const id = li.dataset.createStage;
+        if (id && id !== 'project' && id !== 'ready' && !li.classList.contains('done')) out.push(id);
+      });
+      return out;
     },
 
     /** Leave creating mode (back to the form, e.g. to fix the brief after a failure). */

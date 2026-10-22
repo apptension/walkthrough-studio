@@ -5,7 +5,7 @@
 import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
 import { draftFromDescription } from './shortBrief.js';
-import { maskCredentials, revisePlan } from './briefRevise.js';
+import { hasStoredCredentials, maskCredentials, revisePlan } from './briefRevise.js';
 import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
 import { ask } from './ask.js';
 
@@ -334,8 +334,19 @@ export function initProjects(ctx) {
         img.removeAttribute('src');
         return;
       }
+      img.loading = 'eager';
+      img.decoding = 'async';
       img.onload = () => img.classList.add('is-in');
-      img.onerror = () => img.classList.remove('is-in');
+      img.onerror = () => {
+        img.classList.remove('is-in');
+        // First paint often races a cold still render — one retry after the JPEG lands.
+        if (!img.dataset.retried) {
+          img.dataset.retried = '1';
+          setTimeout(() => {
+            img.src = `${src}${src.includes('?') ? '&' : '?'}r=${Date.now()}`;
+          }, 900);
+        }
+      };
       img.src = src;
     });
   }
@@ -346,8 +357,43 @@ export function initProjects(ctx) {
     form.querySelector('[data-brand="new"]').hidden = !isNew;
     $('wizardDiscoverRow').hidden = !isNew;
     form.querySelectorAll('[data-login]').forEach((el) => (el.hidden = !checked('loginRequired')));
+    paintCredentialFields();
     if (step === 3) paintPlateStills();
     if (step === STEPS - 1) showStep(step, { focus: false });
+  }
+
+  /** Settings: never echo saved email/password — show on-file status and replace-only fields. */
+  function paintCredentialFields() {
+    const on = checked('loginRequired');
+    const onFile = Boolean(settingsBrief?.app?.credentialsOnFile) || hasStoredCredentials(settingsBrief);
+    const status = $('wizardCredStatus');
+    const statusText = $('wizardCredStatusText');
+    const email = form.elements.email;
+    const password = form.elements.password;
+    const emailLabel = $('wizardEmailLabel');
+    const passwordLabel = $('wizardPasswordLabel');
+    const noteText = $('wizardCredNoteText');
+    if (status) status.hidden = !(on && onFile);
+    if (statusText && on && onFile) {
+      statusText.textContent = 'Credentials are saved for this project (in kit/.env). Values are not shown here.';
+    }
+    if (email) {
+      email.placeholder = on && onFile ? 'Leave blank to keep the saved email' : 'demo@acme.com';
+      email.autocomplete = 'off';
+      if (onFile && form.dataset.mode === 'settings') email.value = '';
+    }
+    if (password) {
+      password.placeholder = on && onFile ? 'Leave blank to keep the saved password' : '';
+      password.value = '';
+    }
+    if (emailLabel) emailLabel.textContent = on && onFile ? 'New email (optional)' : 'Demo account email';
+    if (passwordLabel) passwordLabel.textContent = on && onFile ? 'New password (optional)' : 'Password';
+    if (noteText) {
+      noteText.innerHTML =
+        on && onFile
+          ? 'Only fill a field to replace it. Blank keeps the saved secret in <code>kit/.env</code>.'
+          : 'Stored only in <code>kit/.env</code> (gitignored); the project references it as <code>$VAR</code>.';
+    }
   }
 
   /** Per-step validation; returns [message, fieldName] or null. */
@@ -399,10 +445,13 @@ export function initProjects(ctx) {
         appUrl: val('appUrl'),
         marketingUrl: val('marketingUrl'),
         loginRequired: checked('loginRequired'),
-        email: checked('loginRequired') ? val('email') : '',
-        password: checked('loginRequired') ? form.elements.password.value : '',
         sourcePath: val('sourcePath'),
         notes: val('notes'),
+        // Only send credentials when the reviewer typed a replacement — blank keeps kit/.env.
+        ...(checked('loginRequired') && val('email') ? { email: val('email') } : {}),
+        ...(checked('loginRequired') && form.elements.password?.value
+          ? { password: form.elements.password.value }
+          : {}),
       },
       story: {
         lengthSec: Number(radio('lengthSec') || 120),
@@ -594,17 +643,20 @@ export function initProjects(ctx) {
       creation.note(`${brandName} lockup, palette and type verified`);
       await openVideo(r.slug);
       if (draft) {
-        paintCreation('analyze', 'Opening the product and mapping how to move through it…');
+        paintCreation('analyze', 'Opening the product, signing in when needed, and exploring routes…');
         try {
           const a = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
-          await follow(a.job.id, () =>
-            creation.stage('analyze', 'Probing controls and WebGL/canvas pointer interactions…')
+          await follow(a.job.id, (job) =>
+            creation.stage(
+              'analyze',
+              job.activity || 'Exploring the product — mapping routes and adapting the journey…'
+            )
           );
           creation.artifact(`f:${r.slug}/flow-analysis.md`, {
             name: `${r.slug}/flow-analysis.md`,
-            note: 'DOM + canvas interaction map',
+            note: 'Explored routes + DOM/canvas map',
           });
-          creation.note('Product map ready for the draft');
+          creation.note('Product map ready — journey crafted to what the crawl reached');
         } catch (err) {
           // Analysis is best-effort — draft can still proceed with TODO(verify selector) guards.
           creation.note(`Product map skipped: ${err.message || err}`);
@@ -639,11 +691,15 @@ export function initProjects(ctx) {
         finishCreation();
       }
     } catch (raw) {
-      const err = stopRequested ? new Error(STOPPED_MESSAGE) : raw;
-      creation.fail(err.message);
+      const msg = stopRequested
+        ? STOPPED_MESSAGE
+        : /^(cancelled|canceled)$/i.test(String(raw?.message || raw || '').trim())
+          ? STOPPED_MESSAGE
+          : raw?.message || String(raw);
+      creation.fail(msg);
       $('btnCreationRetry').textContent = created ? 'Retry preparation' : 'Try again';
       if (!dialog.open) {
-        toast('New video needs attention', err.message, 'error');
+        toast('New video needs attention', msg, 'error');
         dialog.showModal();
       }
     } finally {
@@ -718,8 +774,11 @@ export function initProjects(ctx) {
     if (creating) return;
     $('wizardError').hidden = true;
     $('btnWizardNext').classList.add('busy');
-    if (form.dataset.mode === 'settings') saveSettings();
-    else create();
+    if (form.dataset.mode === 'settings') {
+      const slug = form.elements.slug?.value;
+      if (slug && !replanRun?.stages?.length) rememberReplan(slug, pendingFromCreationView());
+      saveSettings();
+    } else create();
   };
   /** Back to the Review step with the brief intact — change it, then Save / Create runs again. */
   $('btnCreationEdit').onclick = () => {
@@ -728,24 +787,31 @@ export function initProjects(ctx) {
     showStep(STEPS - 1);
   };
   $('btnCreationStop').onclick = async () => {
+    // After a failure the Stop control is hidden; if it is still used, keep the resume list and go edit.
     if (!creating) {
+      if (form.dataset.mode === 'settings' && form.elements.slug?.value && !replanRun?.stages?.length) {
+        rememberReplan(form.elements.slug.value, pendingFromCreationView());
+      }
       creation.exit();
       showStep(STEPS - 1);
       return;
     }
     stopRequested = true;
     $('btnCreationStop').disabled = true;
+    $('btnCreationStop').textContent = 'Stopping…';
     try {
       if (currentJobId) await api(`/api/jobs/${currentJobId}/cancel`, { method: 'POST' });
     } catch {
       /* the job may have just finished */
     } finally {
       $('btnCreationStop').disabled = false;
+      $('btnCreationStop').textContent = 'Stop';
     }
   };
 
-  function fillFromBrief(brief, slug) {
-    const masked = maskCredentials(brief || {});
+  function fillFromBrief(brief, slug, freshness = null) {
+    const masked = maskCredentials(brief || {}, freshness);
+    settingsBrief = masked;
     const set = (name, value) => {
       const el = form.elements[name];
       if (el && value != null) el.value = value;
@@ -770,10 +836,12 @@ export function initProjects(ctx) {
     set('marketingUrl', masked.app?.marketingUrl || '');
     set('sourcePath', masked.app?.sourcePath || '');
     set('notes', masked.app?.notes || '');
-    set('email', masked.app?.email || '');
+    if (form.elements.email) form.elements.email.value = '';
     if (form.elements.password) form.elements.password.value = '';
     const login = form.querySelector('input[name="loginRequired"]');
-    if (login) login.checked = Boolean(masked.app?.loginRequired);
+    if (login) {
+      login.checked = Boolean(masked.app?.loginRequired) || hasStoredCredentials(masked, freshness);
+    }
     set('mustShow', (masked.story?.mustShow || []).join('\n'));
     set('keyMessages', (masked.story?.keyMessages || []).join('\n'));
     set('mustSay', (masked.story?.mustSay || []).join('\n'));
@@ -794,21 +862,43 @@ export function initProjects(ctx) {
   const REPLAN_ORDER = ['discover', 'analyze', 'planner'];
   const REPLAN_STAGE = {
     discover: { view: 'brand', detail: 'Re-reading the brand from the site and the app…', body: { step: 'discover' } },
-    analyze: { view: 'analyze', detail: 'Mapping the product again from the new start URL…', body: { step: 'analyze' } },
+    analyze: {
+      view: 'analyze',
+      detail: 'Exploring the product again — sign-in, routes, then recraft if must-show is unreachable…',
+      body: { step: 'analyze' },
+    },
     planner: { view: 'draft', detail: 'The agent is rewriting the script from your changes…', body: {} },
   };
+  const VIEW_TO_REPLAN = { brand: 'discover', analyze: 'analyze', draft: 'planner' };
+
+  /** Rebuild a resume list from the creation view when replanRun was cleared mid-failure. */
+  function pendingFromCreationView() {
+    const fromView = creation
+      .unfinished()
+      .map((view) => VIEW_TO_REPLAN[view])
+      .filter(Boolean);
+    const ordered = REPLAN_ORDER.filter((s) => fromView.includes(s));
+    return ordered.length ? ordered : ['planner'];
+  }
+
+  function rememberReplan(slug, stages) {
+    const list = [...new Set((stages || []).filter((s) => REPLAN_ORDER.includes(s)))];
+    replanRun = { slug, stages: list.length ? list : ['planner'] };
+    return replanRun;
+  }
 
   async function saveSettings() {
     const btn = $('btnWizardNext');
     const slug = form.elements.slug.value;
-    const resume = replanRun?.slug === slug;
+    const resuming = Boolean(replanRun?.slug === slug && replanRun.stages?.length) || dialog.classList.contains('is-failed');
     creating = true;
     stopRequested = false;
     $('btnWizardBack').disabled = true;
     try {
       const p = payload();
       const plan = revisePlan(settingsBrief, p);
-      const pending = resume ? [...replanRun.stages] : [];
+      let pending = replanRun?.slug === slug ? [...replanRun.stages] : [];
+      if (!pending.length && resuming) pending = pendingFromCreationView();
       if (plan.changed.length) {
         const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: p });
         settingsBrief = maskCredentials(p);
@@ -818,18 +908,27 @@ export function initProjects(ctx) {
         toast('No brief changes', 'Nothing to replan');
         return;
       }
-      replanRun = { slug, stages: pending };
+      rememberReplan(slug, pending);
+      pending = [...replanRun.stages];
       if (pending.length) {
         dialog.classList.add('is-running');
-        creation.start({ resume });
+        creation.start({ resume: resuming });
         for (const stage of REPLAN_ORDER) {
-          if (!pending.includes(stage)) continue;
+          if (!replanRun.stages.includes(stage)) continue;
           ensureNotStopped();
           const { view, detail, body } = REPLAN_STAGE[stage];
           paintCreation(view, detail);
           const job = await api(`/api/video/${encodeURIComponent(slug)}/draft-project`, { method: 'POST', body });
           if (job.job?.status === 'needs-agent') throw new Error(job.job.message || 'Agent sign-in is required to redraft');
-          if (job.job?.id) await follow(job.job.id);
+          if (job.job?.id) {
+            const finished = await follow(job.job.id);
+            if (finished?.status === 'needs-agent') {
+              throw new Error(finished.message || 'Agent sign-in is required to redraft');
+            }
+            if (finished?.status === 'failed' || finished?.status === 'cancelled') {
+              throw new Error(finished.message || finished.activity || 'Preparation stopped');
+            }
+          }
           ensureNotStopped();
           replanRun.stages = replanRun.stages.filter((s) => s !== stage);
         }
@@ -844,15 +943,20 @@ export function initProjects(ctx) {
       await openVideo(slug);
       openScript();
     } catch (raw) {
-      const err = stopRequested ? new Error(STOPPED_MESSAGE) : raw;
-      if (dialog.classList.contains('is-creating')) {
-        creation.fail(err.message);
+      const msg = stopRequested
+        ? STOPPED_MESSAGE
+        : /^(cancelled|canceled)$/i.test(String(raw?.message || raw || '').trim())
+          ? STOPPED_MESSAGE
+          : raw?.message || String(raw);
+      if (dialog.classList.contains('is-creating') || dialog.classList.contains('is-failed')) {
+        if (!replanRun?.stages?.length) rememberReplan(slug, pendingFromCreationView());
+        creation.fail(msg);
         $('btnCreationRetry').textContent = 'Retry preparation';
         if (!dialog.open) {
-          toast('Replan needs attention', err.message, 'error');
+          toast('Replan needs attention', msg, 'error');
           dialog.showModal();
         }
-      } else toast('Could not save the brief', err.message, 'err');
+      } else toast('Could not save the brief', msg, 'err');
     } finally {
       creating = false;
       dialog.classList.remove('is-running');
@@ -888,11 +992,24 @@ export function initProjects(ctx) {
     } catch {
       /* keep the current options */
     }
-    settingsBrief = maskCredentials(video.brief || { title: video.title, audience: video.audience, app: { startUrl: video.freshness?.startUrl || '' } });
     form.dataset.mode = 'settings';
-    fillFromBrief(settingsBrief, video.slug);
     $('projectDialogTitle').textContent = 'Project settings';
     setProjectDialogMode('settings');
+    // Refetch so a just-saved loginRequired / envVars is not missing from a stale desk payload.
+    let brief = video.brief;
+    let freshness = video.freshness;
+    try {
+      const fresh = await api(`/api/video/${encodeURIComponent(video.slug)}`);
+      if (fresh?.brief) brief = fresh.brief;
+      if (fresh?.freshness) freshness = fresh.freshness;
+    } catch {
+      /* use the desk copy */
+    }
+    fillFromBrief(
+      brief || { title: video.title, audience: video.audience, app: { startUrl: freshness?.startUrl || '' } },
+      video.slug,
+      freshness
+    );
     showStep(0);
     dialog.showModal();
   }

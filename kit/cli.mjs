@@ -14,7 +14,7 @@
  *   node cli.mjs branch <slug> [--discover] [--title "…"] [--angle "…"] [--slug kebab]
  *                                          suggest feature deep-dives from an overview, or copy one into a new project
  *   node cli.mjs plates <slug> [--force]   render brand open/close (+ review.html)
- *   node cli.mjs analyze <slug> [--headed] [--url https://…]
+ *   node cli.mjs analyze <slug> [--headed] [--url https://…] [--explore]
  *                                          map DOM controls + WebGL/canvas pointer recipes → flow-analysis.md
  *   node cli.mjs smoke <slug>              10s overlay + capture check on record.startUrl
  *   node cli.mjs record <slug> [--headed] [--pace calm|steady|brisk|quick|<0.6–2>] [--repair]
@@ -283,14 +283,22 @@ async function main() {
     }
     case 'analyze': {
       preflight();
-      if (!slug) throw new Error('Usage: analyze <slug> [--headed] [--url https://…]');
+      if (!slug) throw new Error('Usage: analyze <slug> [--headed] [--url https://…] [--explore]');
       const video = loadVideo(slug);
       const { analyzeFlow } = await import('./lib/analyzeFlow.mjs');
+      const explore = flag('--explore');
       const report = await analyzeFlow(video, {
         headed: flag('--headed'),
         url: opt('--url'),
+        explore,
       });
       console.log(`✓ flow analysis → ${join(video.dir, 'flow-analysis.md')}`);
+      if (report.explore) {
+        console.log(
+          `  explore: ${report.pages?.length || 1} pages · signed-in: ${report.signedIn ? 'yes' : 'no'} · coverage ${report.coverage?.matched || 0}/${report.coverage?.total || 0}` +
+            (report.journey?.adapted ? ' · brief recrafted' : '')
+        );
+      }
       console.log(
         `  ${report.dom.controls.length} controls · ${report.hints.formCount || 0} forms · ${report.hints.fillableFieldCount || 0} fills · ${report.canvases.length} canvases · ${report.hints.interactiveCanvasCount} pointer-reactive`
       );
