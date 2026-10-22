@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="24" y="12" width="48" height="42" rx="6"/>
+     <g class="z-tick"><rect x="31" y="20" width="8" height="8" rx="2"/><path d="M33 24l2 2 4-4"/></g>
+     <g class="z-tick"><rect x="31" y="32" width="8" height="8" rx="2"/><path d="M33 36l2 2 4-4"/></g>
+     <g class="z-tick"><rect x="31" y="44" width="8" height="8" rx="2"/><path d="M33 48l2 2 4-4"/></g>
+     <path d="M44 24h20M44 36h16M44 48h12" opacity=".55"/></svg>

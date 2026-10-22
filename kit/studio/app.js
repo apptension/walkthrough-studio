@@ -9,18 +9,38 @@ import { describeJob } from './progress.js';
 import { initWorkflow } from './workflow.js';
 import { initEditor } from './editor.js';
 import { mountZen, zen } from './zen.js';
+import { icon } from './icons.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { liveTabVisible, needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
 import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
-import { programPreview } from './liveWatch.js';
+import { activityThumbVisible, programPreview } from './liveWatch.js';
 import { marksForProgram, pipelineOverlay, programSourceForStep } from './programBuild.js';
-import { captureSummary, shouldEnqueue } from './queueUx.js';
+import {
+  captureSummary,
+  queueIconId,
+  queueIconSvg,
+  placeQueueMenuRect,
+  queueMenuGroups,
+  shouldEnqueue,
+} from './queueUx.js';
+import {
+  improveGoalForStep,
+  pipelineFixNote,
+  shouldRunStep,
+  statusesForResume,
+  stepRowHtml,
+} from './pipelineUi.js';
+import { programEmptyView } from './programEmpty.js';
 
 const $ = (id) => document.getElementById(id);
 let workflow = null;
 let editor = null;
+/** Bumps cancel in-flight Live tab show/hide animations when capture toggles quickly. */
+let liveTabGen = 0;
+/** Bumps cancel overlapping Program play() handshakes (post-render double-start). */
+let programPlayGen = 0;
 const state = {
   slug: null,
   video: null,
@@ -41,6 +61,8 @@ const state = {
   recordFailureDismissed: null,
   compare: false,
   pipeline: null,
+  /** Last failed make: `{ mode, slug, stepId, label, error, log }` — drives Retry / Fix. */
+  pipelineFailure: null,
   motionApplied: false,
   platesPreviewed: false,
   previewingPlate: null,
@@ -63,6 +85,8 @@ const state = {
   activeSurface: null, // 'render' | 'session'
   workAbort: null, // AbortController for the active watchJob
   stopRequested: false,
+  /** Selected version ids in the History bay (survives list re-renders). */
+  versionSelection: new Set(),
 };
 
 const PLATE_EDIT_CSS = `
@@ -750,12 +774,12 @@ Object.defineProperty(state, 'renderBusy', {
 });
 
 const PIPE_ICONS = {
-  record: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>`,
-  plates: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>`,
-  produce: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M4 6h16v12H4V6zm2 2v8h12V8H6z"/></svg>`,
-  audio: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>`,
-  deliver: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>`,
-  preview: `<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`,
+  record: icon('step-record', { size: 12 }),
+  plates: icon('step-plates', { size: 12 }),
+  produce: icon('step-produce', { size: 12 }),
+  audio: icon('step-audio', { size: 12 }),
+  deliver: icon('step-deliver', { size: 12 }),
+  preview: icon('step-preview', { size: 12 }),
 };
 
 async function api(path, opts = {}) {
@@ -774,6 +798,7 @@ function qsSlug() {
 }
 
 function setSlug(slug) {
+  if (state.slug !== slug) state.versionSelection = new Set();
   state.slug = slug;
   const u = new URL(location.href);
   u.searchParams.set('slug', slug);
@@ -804,10 +829,10 @@ function escapeHtml(s) {
 }
 
 const ICONS = {
-  play: `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`,
-  compare: `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10 3H3v18h7V3zm2 0v18h7V3h-7zM8 7v2H5V7h3zm0 4v2H5v-2h3zm0 4v2H5v-2h3zm11-8v2h-3V7h3zm0 4v2h-3v-2h3zm0 4v2h-3v-2h3z"/></svg>`,
-  restore: `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>`,
-  preview: `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>`,
+  play: icon('play-fill', { size: 14 }),
+  compare: icon('compare', { size: 14 }),
+  restore: icon('restore', { size: 14 }),
+  preview: icon('preview', { size: 14 }),
 };
 
 function iconBtn(act, verId, label) {
@@ -817,33 +842,46 @@ function iconBtn(act, verId, label) {
 function syncLiveTab(view, { recording = false, repairing = false } = {}) {
   const tab = $('modeLive');
   if (!tab) return;
-  const show = liveTabVisible({
-    recording,
-    repairing,
-    badge: view?.badge || '',
-    hasPreview: Boolean(view?.show && view?.url),
-  });
+  const show = liveTabVisible({ recording, repairing });
+  const onAir = recording || view?.badge === 'Live';
+  tab.classList.toggle('is-on-air', show && onAir);
+  tab.classList.toggle('is-repairing', show && !onAir && repairing);
+  const gen = ++liveTabGen;
   if (show) {
     tab.hidden = false;
     tab.setAttribute('aria-hidden', 'false');
-    // Double rAF so max-width:0 → is-in animates instead of popping in.
-    requestAnimationFrame(() => requestAnimationFrame(() => tab.classList.add('is-in')));
-    // Switch onto Live once when capture starts — do not re-enter every preview tick.
-    if (
-      (recording || repairing || view?.badge === 'Live' || view?.badge === 'Repairing') &&
-      state.monitorMode === 'program'
-    ) {
+    // Double rAF so max-width:0 → is-in slides out from under Program.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (gen !== liveTabGen) return;
+        tab.classList.add('is-in');
+      })
+    );
+    // Enter Live once when capture starts — do not re-enter every preview tick.
+    if ((recording || repairing) && state.monitorMode === 'program') {
       setMonitorMode('live', { keepPreview: true });
     }
   } else {
-    tab.classList.remove('is-in');
+    const wasIn = tab.classList.contains('is-in');
+    tab.classList.remove('is-in', 'is-on-air', 'is-repairing');
     tab.setAttribute('aria-hidden', 'true');
-    const hide = () => {
+    const leaveLive = state.monitorMode === 'live';
+    if (leaveLive) setMonitorMode('program', { keepPreview: true });
+    if (!wasIn) {
+      tab.hidden = true;
+      return;
+    }
+    const hide = (ev) => {
+      if (gen !== liveTabGen) return;
+      if (ev && ev.target !== tab) return;
+      if (ev && ev.propertyName && ev.propertyName !== 'max-width' && ev.propertyName !== 'opacity') return;
       if (!tab.classList.contains('is-in')) tab.hidden = true;
     };
-    tab.addEventListener('transitionend', hide, { once: true });
-    setTimeout(hide, 360);
-    if (state.monitorMode === 'live') setMonitorMode('program');
+    tab.addEventListener('transitionend', hide);
+    setTimeout(() => {
+      tab.removeEventListener('transitionend', hide);
+      hide();
+    }, 420);
   }
 }
 
@@ -858,6 +896,7 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
     hasDelivery: Boolean(v?.hasDelivery || v?.deliveryUrl),
   });
   const onLivePane = state.monitorMode === 'live';
+  const thumbOn = activityThumbVisible({ recording, repairing });
   if (view.show && view.url) {
     img.dataset.url = view.url;
     const src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
@@ -866,38 +905,41 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
     if (onLivePane) $('noVideo')?.classList.remove('show');
     const thumb = $('activityLive');
     if (thumb) {
-      thumb.hidden = false;
-      thumb.src = src;
+      if (thumbOn) {
+        thumb.hidden = false;
+        thumb.src = src;
+      } else {
+        thumb.hidden = true;
+        thumb.removeAttribute('src');
+      }
     }
-  } else if (!recording && !view.show) {
+  } else {
     img.hidden = true;
     const thumb = $('activityLive');
-    if (thumb) thumb.hidden = true;
+    if (thumb) {
+      thumb.hidden = true;
+      thumb.removeAttribute('src');
+    }
   }
   const badge = $('liveBadge');
   if (badge) {
-    badge.hidden = !onLivePane || !view.badge;
-    badge.classList.toggle('is-live', view.badge === 'Live');
-    if ($('liveBadgeText')) $('liveBadgeText').textContent = view.badge || '';
+    const showBadge = onLivePane && (recording || repairing) && view.badge;
+    badge.hidden = !showBadge;
+    badge.classList.toggle('is-live', view.badge === 'Live' || recording);
+    badge.classList.toggle('is-repairing', view.badge === 'Repairing' && !recording);
+    if ($('liveBadgeText')) $('liveBadgeText').textContent = view.badge || 'Live';
   }
   if (recording || repairing) {
     const failure = $('recordFailure');
     if (failure) failure.hidden = true;
   }
   syncLiveTab(view, { recording, repairing });
-  if (view.badge && onLivePane) {
+  if ((recording || repairing) && onLivePane) {
     const hint =
-      view.badge === 'Live'
-        ? 'Recording the page now'
-        : view.badge === 'Repairing'
-          ? 'Repairing the flow, then capture starts again'
-          : 'Last frame from the recording';
+      view.badge === 'Repairing' || repairing
+        ? 'Repairing the flow, then capture starts again'
+        : 'Recording the page now';
     setMonitorLabel('Live', hint);
-  }
-  if (!state.jobBusy && view.badge === 'Last frame') {
-    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Last frame is on Live';
-    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'The page the recorder stopped on — Program shows the master.';
-    if ($('renderLiveArt')) $('renderLiveArt').hidden = true;
   }
 }
 
@@ -951,8 +993,14 @@ async function publishProgramStep(step, slug) {
     deliveryUrl: v.deliveryUrl,
   });
   if (!choice.src || !player) return;
+  // Step previews must not leave Live covering Program after capture ends.
+  if (normalizeMonitorMode(state.monitorMode) === 'live') {
+    setMonitorMode('program', { keepPreview: true });
+  }
   player.classList.remove('hidden');
   $('noVideo')?.classList.remove('show');
+  ++programPlayGen; // cancel any in-flight post-render play handshake
+  player.pause?.();
   player.src = `${choice.src}${String(choice.src).includes('?') ? '&' : '?'}t=${Date.now()}`;
   player.onloadedmetadata = () => {
     if (choice.preserveTime && time > 0.05) {
@@ -962,7 +1010,7 @@ async function publishProgramStep(step, slug) {
         /* the new file can be shorter than the previous playhead */
       }
     }
-    if (choice.play) player.play?.().catch(() => {});
+    if (choice.play) startPlayback(player);
   };
 }
 
@@ -1054,26 +1102,42 @@ function activePlayer() {
 /**
  * Start a program video from a click. A play() issued before the file can
  * play, or from the last frame, rejects and the button looks dead.
+ * One generation token so a second loadVideo/play cannot reset and restart mid-start.
  */
-function startPlayback(el) {
+function startPlayback(el, { fromStart = false } = {}) {
   if (!el) return;
   if (!el.currentSrc && !el.getAttribute('src')) {
     toast('Nothing to play', 'Render a sequence first', 'warn');
     return;
   }
+  const gen = ++programPlayGen;
   const atEnd = el.ended || (Number.isFinite(el.duration) && el.duration > 0 && el.currentTime >= el.duration - 0.05);
-  if (atEnd) {
+  if (fromStart || atEnd) {
     try { el.currentTime = 0; } catch { /* metadata not in yet */ }
   }
   const go = () => {
+    if (gen !== programPlayGen) return;
     const pending = el.play();
     pending?.catch?.((err) => {
+      if (gen !== programPlayGen) return;
       if (err?.name === 'AbortError') return;
-      el.addEventListener('canplay', () => el.play().catch(() => {}), { once: true });
+      el.addEventListener(
+        'canplay',
+        () => {
+          if (gen !== programPlayGen) return;
+          el.play().catch(() => {});
+        },
+        { once: true }
+      );
     });
   };
   if (el.readyState >= 2) go();
   else el.addEventListener('canplay', go, { once: true });
+}
+
+/** After a finished render: play once from the top, cancelling any prior pending play. */
+function startProgramPlayback(el) {
+  startPlayback(el, { fromStart: true });
 }
 
 function cueAt(t) {
@@ -1436,38 +1500,38 @@ function renderActionCard(v) {
   const pill = $('renderStatusPill');
   const headline = $('renderHeadline');
   const reason = $('renderReason');
-  if (!pill || !headline || !reason) return;
+  if (!pill || !headline || !reason) {
+    paintNoVideo(action);
+    return;
+  }
 
+  const captureBar = $('captureBar');
   const target = $('recordTarget');
-  if (target && v?.freshness) {
+  if (v?.freshness) {
     const startUrl = v.freshness.startUrl || '';
-    target.hidden = !v.freshness.liveAt && !startUrl;
+    const showCapture = Boolean(v.freshness.liveAt || startUrl);
+    if (captureBar) captureBar.hidden = !showCapture;
+    if (target) target.hidden = false;
     const url = $('recordStartUrl');
     const login = $('recordLoginRequired');
     if (url && document.activeElement !== url) url.value = startUrl;
     if (login && document.activeElement !== login) login.checked = Boolean(v.freshness.loginRequired);
     const summary = $('recordTargetSummary');
     if (summary && document.activeElement !== url) summary.textContent = captureSummary(startUrl, v.freshness.loginRequired);
-    const cleanup = $('cleanupDisclosure');
-    if (cleanup) cleanup.hidden = false;
-    const versions = $('cleanupVersions');
-    if (versions) {
-      const ids = (v.versions || []).map((ver) => ver.id).join(',');
-      if (versions.dataset.ids !== ids) {
-        versions.dataset.ids = ids;
-        versions.innerHTML = (v.versions || [])
-          .map(
-            (ver) =>
-              `<label class="tog"><input type="checkbox" value="${escapeHtml(ver.id)}" /><span>${escapeHtml(ver.displayName || ver.name || ver.id)}</span></label>`
-          )
-          .join('');
-      }
-    }
+  } else if (captureBar) {
+    captureBar.hidden = true;
   }
 
   if (state.renderBusy) {
     pill.className = 'render-pill run';
     pill.textContent = 'Rendering';
+    // Keep pipeline-specific headline/reason from runMakePipeline; only sync Program.
+    paintNoVideo({
+      busy: true,
+      status: 'Rendering',
+      title: headline?.textContent || 'Rendering your sequence',
+      reason: reason?.textContent || undefined,
+    });
     return;
   }
 
@@ -1485,6 +1549,14 @@ function renderActionCard(v) {
       if (lab) lab.textContent = 'Render again';
     }
     if ($('btnActionSecondary')) $('btnActionSecondary').hidden = true;
+    paintNoVideo({
+      ...action,
+      title: 'Nothing to play yet',
+      reason: 'Render a sequence to watch the cut here.',
+      primary: { label: 'Render again', mode: 'quick' },
+      secondary: null,
+      status: 'Up to date',
+    });
     return;
   }
 
@@ -1512,6 +1584,44 @@ function renderActionCard(v) {
       secondary.hidden = true;
     }
   }
+  paintNoVideo(action);
+}
+
+/** Keep the Program empty state in sync with the Render bay CTAs. */
+function paintNoVideo(action = state.action) {
+  const el = $('noVideo');
+  if (!el) return;
+  const view = programEmptyView(action);
+  el.dataset.tone = view.tone || 'ready';
+  el.querySelectorAll('.program-empty-icon[data-icon]').forEach((node) => {
+    node.hidden = node.dataset.icon !== (view.icon || 'empty-play');
+  });
+  if ($('noVideoKicker')) $('noVideoKicker').textContent = view.kicker;
+  if ($('noVideoTitle')) $('noVideoTitle').textContent = view.title;
+  if ($('noVideoReason')) $('noVideoReason').textContent = view.reason;
+
+  const primary = $('btnNoVideoPrimary');
+  if (primary) {
+    if (view.primary) {
+      primary.hidden = false;
+      primary.dataset.mode = view.primary.mode || 'quick';
+      const lab = primary.querySelector('.cta-label');
+      if (lab) lab.textContent = view.primary.label || 'Render';
+    } else {
+      primary.hidden = true;
+    }
+  }
+  const secondary = $('btnNoVideoSecondary');
+  if (secondary) {
+    if (view.secondary) {
+      secondary.hidden = false;
+      secondary.dataset.mode = view.secondary.mode || 'quick';
+      const lab = secondary.querySelector('.cta-label');
+      if (lab) lab.textContent = view.secondary.label || 'Other';
+    } else {
+      secondary.hidden = true;
+    }
+  }
 }
 
 function renderSteps(steps) {
@@ -1526,16 +1636,12 @@ function renderSteps(steps) {
   }
   ol.hidden = false;
   if (idle) idle.hidden = true;
+  const busy = state.jobBusy;
   ol.innerHTML = steps
     .map((s) => {
-      const st = s.status || 'todo';
-      const mark = st === 'done' ? '✓' : st === 'run' ? '…' : st === 'fail' ? '!' : '○';
       const ico = PIPE_ICONS[s.id] || PIPE_ICONS.produce;
-      return `<li class="${st}" data-step-id="${escapeHtml(s.id)}">
-        <span class="pip-ico">${ico}</span>
-        <span class="pip-label">${escapeHtml(s.label)}</span>
-        <span class="pip-mark">${mark}</span>
-      </li>`;
+      const row = stepRowHtml(s, { icon: ico, actions: Boolean(state.pipelineFailure) });
+      return busy ? row.replace(/<button\b/g, '<button disabled') : row;
     })
     .join('');
 }
@@ -1556,21 +1662,139 @@ function updateQueueBadge() {
   updateStopButtons();
 }
 
+function paintQueueMenu() {
+  const menu = $('queueMenu');
+  if (!menu || menu.dataset.ready === '1') return;
+  menu.innerHTML = queueMenuGroups()
+    .map(
+      (group) => `<div class="queue-menu-group" role="group" aria-label="${escapeHtml(group.group)}">
+      <span class="queue-menu-label">${escapeHtml(group.group)}</span>
+      ${group.items
+        .map(
+          (item) => `<button type="button" class="queue-menu-item" role="menuitem" data-enqueue="${escapeHtml(item.id)}">
+          <span class="queue-menu-ico">${queueIconSvg(item.icon)}</span>
+          <span class="queue-menu-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.hint)}</span></span>
+        </button>`
+        )
+        .join('')}
+    </div>`
+    )
+    .join('');
+  menu.dataset.ready = '1';
+}
+
+function mountQueueMenuHost(open) {
+  const menu = $('queueMenu');
+  const wrap = $('queueAddWrap');
+  if (!menu) return;
+  // Portal to body while open: .panel-body will-change creates a fixed containing block,
+  // so viewport coords would otherwise land in the wrong place inside the left rail.
+  if (open) {
+    if (menu.parentElement !== document.body) document.body.appendChild(menu);
+  } else if (wrap && menu.parentElement !== wrap) {
+    wrap.appendChild(menu);
+  }
+}
+
+function placeQueueMenu() {
+  const menu = $('queueMenu');
+  const btn = $('btnQueueAdd');
+  if (!menu || !btn || menu.hidden) return;
+  mountQueueMenuHost(true);
+  const rect = btn.getBoundingClientRect();
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  // Measure natural height after a paint-friendly maxHeight, then lock placement.
+  menu.style.maxHeight = 'none';
+  menu.style.width = '272px';
+  const naturalH = Math.max(menu.scrollHeight || 0, menu.offsetHeight || 0, 240);
+  const place = placeQueueMenuRect(rect, {
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+    menuHeight: naturalH,
+  });
+  menu.dataset.openUp = place.openUp ? '1' : '0';
+  menu.style.width = `${Math.round(place.width)}px`;
+  menu.style.maxHeight = `${Math.round(place.maxHeight)}px`;
+  menu.style.left = `${Math.round(place.left)}px`;
+  menu.style.top = `${Math.round(place.top)}px`;
+}
+
+function setQueueMenuOpen(open) {
+  const menu = $('queueMenu');
+  const btn = $('btnQueueAdd');
+  if (!menu || !btn) return;
+  paintQueueMenu();
+  mountQueueMenuHost(open);
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    placeQueueMenu();
+    const first = menu.querySelector('[data-enqueue]');
+    requestAnimationFrame(() => {
+      placeQueueMenu();
+      first?.focus({ preventScroll: true });
+    });
+  } else {
+    menu.style.top = '';
+    menu.style.bottom = '';
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.width = '';
+    menu.style.maxHeight = '';
+    delete menu.dataset.openUp;
+  }
+}
+
+function enqueueFromMenu(kind) {
+  setQueueMenuOpen(false);
+  if (kind === 'make-quick') {
+    enqueueJob({ kind: 'make', mode: 'quick', label: 'Render sequence' });
+    return;
+  }
+  if (kind === 'make-full') {
+    enqueueJob({ kind: 'make', mode: 'full', label: 'Re-record & render full' });
+    return;
+  }
+  const labels = {
+    plates: 'Render brand plates',
+    audio: 'Add voice & music',
+    deliver: 'Export handoff pack',
+    produce: 'Produce master video',
+    record: 'Record walkthrough',
+  };
+  enqueueJob({
+    kind: 'step',
+    step: kind,
+    force: kind === 'plates',
+    label: labels[kind] || kind,
+  });
+}
+
 function renderQueue() {
   const list = $('jobQueue');
   const empty = $('queueEmpty');
   if (!list) return;
   const now = state.running
-    ? `<li class="is-now"><span class="q-num">Now</span><span class="q-label">${escapeHtml(state.running.label || 'Working')}</span></li>`
+    ? `<li class="is-now">
+        <span class="q-ico">${queueIconSvg(queueIconId(state.running))}</span>
+        <span class="q-body">
+          <span class="q-label">${escapeHtml(state.running.label || 'Working')}</span>
+          <span class="q-meta">Running now</span>
+        </span>
+      </li>`
     : '';
   list.innerHTML =
     now +
     state.queue
       .map(
-        (q, i) => `<li data-qid="${escapeHtml(q.qid)}">
-      <span class="q-num">${i + 1}</span>
-      <span class="q-label">${escapeHtml(q.label)}</span>
-      <button type="button" class="queue-remove" data-remove-qid="${escapeHtml(q.qid)}" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        (q, i) => `<li class="q-wait" data-qid="${escapeHtml(q.qid)}">
+      <span class="q-ico">${queueIconSvg(queueIconId(q))}</span>
+      <span class="q-body">
+        <span class="q-label">${escapeHtml(q.label)}</span>
+        <span class="q-meta">Waiting · ${i + 1}</span>
+      </span>
+      <button type="button" class="queue-remove" data-remove-qid="${escapeHtml(q.qid)}" title="Remove" aria-label="Remove ${escapeHtml(q.label)}">${icon('x', { size: 14 })}</button>
     </li>`
       )
       .join('');
@@ -1634,6 +1858,8 @@ function enqueueJob(item, { silent = false } = {}) {
     plateId: item.plateId,
     motion: item.motion,
     presets: item.presets,
+    fromStep: item.fromStep || null,
+    resumePipeline: item.resumePipeline || null,
   };
   if (!entry.slug) {
     toast('No sequence open', 'Pick a project before queuing work', 'warn');
@@ -1707,16 +1933,23 @@ async function stopAllWork({ reason = 'Stopped', silent = false } = {}) {
   state.jobBusy = false;
   state.activeSurface = null;
   state.pipelineStartedAt = null;
+  // Keep a failed pipeline visible for Retry / Fix; only clear mid-run marks.
+  if (state.pipeline && !state.pipelineFailure) {
+    state.pipeline.forEach((s) => {
+      if (s.status === 'run') s.status = 'todo';
+    });
+    renderSteps(state.pipeline);
+  }
   buttonBusy($('btnExport'), false);
   buttonBusy($('btnMake'), false);
   buttonBusy($('btnImprove'), false);
   buttonBusy($('btnActionPrimary'), false);
   buttonBusy($('btnActionSecondary'), false);
+  buttonBusy($('btnNoVideoPrimary'), false);
+  buttonBusy($('btnNoVideoSecondary'), false);
   setRenderMode(false);
   setStatus('warn', reason);
-  if ($('renderLiveTitle')) $('renderLiveTitle').textContent = reason;
-  if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'Queue cleared';
-  if ($('renderSpinner')) $('renderSpinner').hidden = true;
+  setRenderIdle();
   if ($('sessionTitle')) $('sessionTitle').textContent = reason;
   if ($('sessionMeta')) $('sessionMeta').textContent = 'Ready for new work';
   if ($('sessionSpinner')) $('sessionSpinner').hidden = true;
@@ -1758,7 +1991,7 @@ async function drainQueue() {
     setFaviconMode('draft');
   }
   try {
-    if (next.kind === 'make') await runMakePipeline(next.mode, { signal, slug: next.slug });
+    if (next.kind === 'make') await runMakePipeline(next.mode, { signal, slug: next.slug, fromStep: next.fromStep || null });
     else if (next.kind === 'step') {
       setStatus('run', `${next.label}…`);
       buttonBusy($('btnExport'), next.step === 'deliver');
@@ -2254,6 +2487,39 @@ function setThinkStep(active) {
   };
   apply('#thinkSteps li');
   apply('#sessionPipe li');
+}
+
+function setRenderIdle() {
+  const card = $('renderLiveCard');
+  if (!card) return;
+  card.classList.add('is-idle');
+  if ($('renderSpinner')) $('renderSpinner').hidden = true;
+  if ($('renderLiveElapsed')) $('renderLiveElapsed').hidden = true;
+  if ($('renderLivePhase')) $('renderLivePhase').hidden = true;
+  if ($('renderLiveArt')) $('renderLiveArt').hidden = false;
+  const thumb = $('activityLive');
+  if (thumb) {
+    thumb.hidden = true;
+    thumb.removeAttribute('src');
+  }
+  if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'All quiet on set 🌵';
+  if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'Render above, or queue a single step below.';
+  if ($('renderLiveBar')) $('renderLiveBar').hidden = true;
+  if ($('renderLiveNow')) {
+    $('renderLiveNow').hidden = true;
+    $('renderLiveNow').textContent = '';
+  }
+  if ($('renderStages')) {
+    $('renderStages').hidden = true;
+    $('renderStages').innerHTML = '';
+  }
+  if ($('btnRenderLogToggle')) $('btnRenderLogToggle').hidden = true;
+  if ($('renderLiveLog')) {
+    $('renderLiveLog').hidden = true;
+    $('renderLiveLog').textContent = '';
+  }
+  state.renderLogExpanded = false;
+  paintAgentStream($('renderLiveStream'), null, { variant: 'bay' });
 }
 
 function setSessionIdle() {
@@ -3653,8 +3919,83 @@ function versionDisplayName(ver) {
   return ver.title || ver.label || ver.name || ver.id;
 }
 
+function formatBytes(bytes) {
+  const n = Math.max(0, Number(bytes) || 0);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function versionBytes(ver) {
+  if (Number.isFinite(ver?.bytes)) return ver.bytes;
+  if (Number.isFinite(ver?.sizeMB)) return Math.round(ver.sizeMB * 1024 * 1024);
+  return 0;
+}
+
+function pruneVersionSelection(versions) {
+  const alive = new Set((versions || []).map((ver) => ver.id));
+  for (const id of [...state.versionSelection]) {
+    if (!alive.has(id)) state.versionSelection.delete(id);
+  }
+}
+
+function syncVersionsToolbar(visible = []) {
+  const manage = $('versionsManage');
+  const meta = $('versionsSelectionMeta');
+  const del = $('btnDeleteVersions');
+  const all = $('togSelectAllVersions');
+  if (!manage) return;
+  const hasVideo = Boolean(state.slug);
+  manage.hidden = !hasVideo;
+  const allVersions = state.video?.versions || [];
+  const selected = allVersions.filter((ver) => state.versionSelection.has(ver.id));
+  const visibleSelected = visible.filter((ver) => state.versionSelection.has(ver.id));
+  const totalBytes = selected.reduce((sum, ver) => sum + versionBytes(ver), 0);
+  const n = selected.length;
+  const hiddenSelected = n - visibleSelected.length;
+  manage.classList.toggle('has-selection', n > 0);
+  if (meta) {
+    if (!allVersions.length) meta.textContent = 'Save a version to manage History';
+    else if (!n) meta.textContent = 'Nothing selected';
+    else if (hiddenSelected > 0) {
+      meta.textContent = `${n} selected · ~${formatBytes(totalBytes)} · ${hiddenSelected} hidden`;
+    } else meta.textContent = `${n} selected · ~${formatBytes(totalBytes)}`;
+  }
+  if (del) {
+    del.disabled = n === 0;
+    del.textContent = n ? `Delete (${n})` : 'Delete';
+  }
+  if (all) {
+    const allOn = visible.length > 0 && visibleSelected.length === visible.length;
+    const some = visibleSelected.length > 0 && !allOn;
+    all.checked = allOn;
+    all.indeterminate = some;
+    all.disabled = !visible.length;
+  }
+}
+
+function confirmFilePlan(plan, { title, ok, keepNote }) {
+  const files = plan.files || [];
+  const preview = files.slice(0, 8).map((file) => `· ${file.name} · ${formatBytes(file.bytes)}`);
+  const more = files.length > 8 ? `\n· …and ${files.length - 8} more` : '';
+  const body = [
+    `${files.length} file${files.length === 1 ? '' : 's'} · ${plan.totalLabel || formatBytes(plan.totalBytes)}`,
+    '',
+    ...preview,
+    more.trim(),
+    '',
+    keepNote,
+  ]
+    .filter((line, i, arr) => !(line === '' && arr[i - 1] === ''))
+    .join('\n')
+    .trim();
+  return ask({ title, detail: body, ok, tone: 'warn' });
+}
+
 function renderVersions(v) {
   const versions = v.versions || [];
+  pruneVersionSelection(versions);
   const showCheckpoints = Boolean($('togShowCheckpoints')?.checked);
   const visible = showCheckpoints ? versions : versions.filter((ver) => ver.kind !== 'checkpoint');
   const releases = versions.filter((ver) => ver.kind !== 'checkpoint');
@@ -3680,24 +4021,32 @@ function renderVersions(v) {
     : `<option value="">No versions</option>`;
   $('togCompare').disabled = !versions.length || !v.deliveryUrl;
   if (!versions.length && state.compare) setCompare(false);
+  const compareVal = $('compareSelect')?.value;
+  if (state.compare && compareVal && !versions.some((ver) => ver.id === compareVal)) {
+    setCompare(false);
+  }
 
   const list = $('versions');
   if (!list) return;
   if (!versions.length) {
     list.innerHTML = `<li class="version-empty">${zen('clapper', 'No versions yet 🎬', 'Finish a Render or click <strong>Save version</strong>. Every render also leaves a checkpoint.', { html: true })}</li>`;
+    syncVersionsToolbar([]);
     return;
   }
   if (!visible.length) {
     list.innerHTML = `<li class="version-empty">${zen('clapper', 'Only checkpoints so far 🎬', 'Turn on “Show pipeline checkpoints” or save a named version.')}</li>`;
+    syncVersionsToolbar([]);
     return;
   }
 
   list.innerHTML = visible
     .map((ver) => {
       const isLatestRelease = ver.kind !== 'checkpoint' && ver.id === releases[0]?.id;
+      const selected = state.versionSelection.has(ver.id);
       const when = formatVersionWhen(ver.createdAt);
       const dur = Number.isFinite(ver.durationSec) ? fmtShort(ver.durationSec) : '—';
       const size = ver.sizeMB != null ? `${ver.sizeMB} MB` : '';
+      const metaBits = [when, dur, size].filter(Boolean).join(' · ');
       const qcLabel = { warn: 'QC warnings', fail: 'QC failed', bad: 'QC failed' }[ver.qcStatus];
       const chips = [
         ver.kind === 'checkpoint' ? '<span class="ver-chip muted">Checkpoint</span>' : '',
@@ -3708,12 +4057,15 @@ function renderVersions(v) {
       ]
         .filter(Boolean)
         .join('');
-      return `<li class="version-card ${ver.kind === 'checkpoint' ? 'is-checkpoint' : ''} ${isLatestRelease ? 'is-latest' : ''}" data-ver-id="${escapeHtml(ver.id)}">
+      return `<li class="version-card ${ver.kind === 'checkpoint' ? 'is-checkpoint' : ''} ${isLatestRelease ? 'is-latest' : ''} ${selected ? 'is-selected' : ''}" data-ver-id="${escapeHtml(ver.id)}">
         <div class="version-card-top">
+          <label class="version-pick" title="Select ${escapeHtml(ver.name || ver.id)}">
+            <input type="checkbox" data-ver-select="${escapeHtml(ver.id)}" ${selected ? 'checked' : ''} aria-label="Select ${escapeHtml(ver.name || ver.id)}" />
+          </label>
           <span class="version-badge" title="Version number">${escapeHtml(ver.name || `v${ver.number || '?'}`)}</span>
           <div class="version-card-titles">
             <strong class="version-card-title">${escapeHtml(ver.title || ver.label || 'Snapshot')}</strong>
-            <span class="version-card-meta" title="${escapeHtml(size)}">${escapeHtml([when, dur].filter(Boolean).join(' · '))}</span>
+            <span class="version-card-meta" title="${escapeHtml(size)}">${escapeHtml(metaBits)}</span>
           </div>
         </div>
         ${chips ? `<div class="version-chips">${chips}</div>` : ''}
@@ -3726,6 +4078,7 @@ function renderVersions(v) {
       </li>`;
     })
     .join('');
+  syncVersionsToolbar(visible);
 }
 
 function renderCritic(v) {
@@ -4216,8 +4569,12 @@ async function loadVideo(slug, { play = false } = {}) {
     }
     paintLivePreview(v, { recording: false });
     if (v.deliveryUrl && capturedTour({ hasLive: Boolean(v.freshness?.liveAt), recordFailed: Boolean(v.recordFailure) })) {
+      if (play && normalizeMonitorMode(state.monitorMode) !== 'program' && state.monitorMode !== 'compare') {
+        setMonitorMode('program', { keepPreview: true });
+      }
       if (state.monitorMode === 'program' || state.monitorMode === 'compare') {
         state.previewingPlate = null;
+        player.pause?.();
         player.src = v.deliveryUrl + `?t=${Date.now()}`;
       }
       player.poster = v.posterUrl || '';
@@ -4232,12 +4589,13 @@ async function loadVideo(slug, { play = false } = {}) {
         track.src = v.captions.vttUrl + `?t=${Date.now()}`;
         player.appendChild(track);
       }
-      if (play) player.play?.().catch(() => {});
+      if (play) startProgramPlayback(player);
     } else {
       player.removeAttribute('src');
       player.load?.();
       player.classList.add('hidden');
       $('noVideo').classList.add('show');
+      paintNoVideo(state.action || decideAction(v));
     }
 
     renderPoster(v);
@@ -4766,6 +5124,7 @@ function elapsedSec(job) {
 function hideActivityDock() {
   document.body.classList.remove('has-activity');
   clearInterval(state.elapsedTimer);
+  if (!state.jobBusy && !state.renderBusy) setRenderIdle();
   if (!state.proposalOpen) setSessionIdle();
 }
 
@@ -4855,7 +5214,101 @@ function requestMake(mode) {
   enqueueJob({ kind: 'make', mode: resolved, label });
 }
 
-async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
+function jobLogText(job) {
+  const log = job?.log;
+  if (!log?.length) return $('renderLiveLog')?.textContent || '';
+  return log.map((l) => (typeof l === 'string' ? l : l.line || '')).filter(Boolean).join('\n');
+}
+
+function rememberPipelineFailure({ mode, slug, stepId, label, error, log }) {
+  state.pipelineFailure = {
+    mode: mode || 'quick',
+    slug: slug || state.slug,
+    stepId,
+    label: label || stepId,
+    error: String(error || ''),
+    log: log || '',
+  };
+  renderSteps(state.pipeline);
+}
+
+function clearPipelineFailure() {
+  if (!state.pipelineFailure) return;
+  state.pipelineFailure = null;
+  if (state.pipeline) renderSteps(state.pipeline);
+}
+
+function retryPipelineFrom(stepId) {
+  const fail = state.pipelineFailure;
+  if (!fail || state.jobBusy) {
+    toast(state.jobBusy ? 'Busy' : 'Nothing to retry', state.jobBusy ? 'Wait for the current job' : 'Run a render first', 'warn');
+    return;
+  }
+  const from = stepId || fail.stepId;
+  const label = fail.label || from;
+  enqueueJob({
+    kind: 'make',
+    mode: fail.mode || 'quick',
+    fromStep: from,
+    slug: fail.slug || state.slug,
+    label: `Retry · ${label}`,
+  });
+}
+
+function fixPipelineStep(stepId) {
+  const fail = state.pipelineFailure;
+  if (!fail) {
+    toast('Nothing to fix', 'No failed pipeline step', 'warn');
+    return;
+  }
+  const from = stepId || fail.stepId;
+  const note = pipelineFixNote({ ...fail, stepId: from });
+  const noteEl = $('improveNote');
+  if (noteEl) {
+    noteEl.value = note;
+    noteEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const goal = improveGoalForStep(from);
+  document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
+  enqueueJob({
+    kind: 'improve',
+    goal,
+    note,
+    slug: fail.slug || state.slug,
+    label: `Fix · ${fail.label || from}`,
+    resumePipeline: {
+      mode: fail.mode || 'quick',
+      fromStep: from,
+      slug: fail.slug || state.slug,
+      label: fail.label || from,
+    },
+  });
+  toast('Fixing with AI', `${fail.label || from} · then continue the pipeline`);
+}
+
+async function continuePipelineAfterFix(resume) {
+  if (!resume?.fromStep) return;
+  try {
+    const slug = resume.slug || state.slug;
+    if (slug) await api(`/api/video/${encodeURIComponent(slug)}/draft/approve`, { method: 'POST', body: {} }).catch(() => {});
+  } catch {
+    /* draft may already be clean */
+  }
+  hideProposal();
+  resetThinkSteps();
+  state.editingPlateId = null;
+  showLeftTab('render');
+  enqueueJob({
+    kind: 'make',
+    mode: resume.mode || 'quick',
+    fromStep: resume.fromStep,
+    slug: resume.slug || state.slug,
+    label: `Continue · ${resume.label || resume.fromStep}`,
+  });
+  toast('Fixed', `Continuing from ${resume.label || resume.fromStep}`);
+}
+
+async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null } = {}) {
   const target = boundSlug || state.slug;
   const v = state.video?.slug === target ? state.video : target ? await api(`/api/video/${encodeURIComponent(target)}`).catch(() => null) : null;
   if (!v && !target) return;
@@ -4863,6 +5316,7 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
   const record = resolved === 'full';
   const platesOnly = resolved === 'plates';
   const sig = signal || state.workAbort?.signal;
+  const resuming = Boolean(fromStep);
 
   const steps = platesOnly
     ? [
@@ -4877,7 +5331,8 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
         { id: 'deliver', label: 'Export handoff pack' },
         { id: 'preview', label: 'Show in player' },
       ];
-  state.pipeline = steps.map((s) => ({ ...s, status: 'todo' }));
+  state.pipeline = resuming ? statusesForResume(steps, fromStep) : steps.map((s) => ({ ...s, status: 'todo' }));
+  clearPipelineFailure();
   state.pipelineStartedAt = Date.now();
   setRenderMode(true, record ? 'record' : 'render');
   showLeftTab('render');
@@ -4885,30 +5340,45 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
   const pill = $('renderStatusPill');
   if (pill) {
     pill.className = 'render-pill run';
-    pill.textContent = 'Rendering';
+    pill.textContent = resuming ? 'Resuming' : 'Rendering';
   }
   if ($('renderHeadline')) {
     $('renderHeadline').textContent = platesOnly
       ? 'Re-rendering brand plates'
-      : record
-        ? 'Rendering with re-record'
-        : 'Rendering sequence';
+      : resuming
+        ? `Continuing from ${steps.find((s) => s.id === fromStep)?.label || fromStep}`
+        : record
+          ? 'Rendering with re-record'
+          : 'Rendering sequence';
   }
   if ($('renderReason')) {
     $('renderReason').textContent = platesOnly
       ? 'Motion-safe hold probe + frame QC run on every plate. Failed QC aborts the job.'
-      : 'Live log and pipeline update here. Program refreshes when the last step finishes.';
+      : resuming
+        ? 'Earlier steps stay done. Retry runs from the failed step through the rest of the pipeline.'
+        : 'Live log and pipeline update here. Program refreshes when the last step finishes.';
   }
+  paintNoVideo({
+    busy: true,
+    status: 'Rendering',
+    title: $('renderHeadline')?.textContent || 'Rendering your sequence',
+    reason: $('renderReason')?.textContent || undefined,
+  });
   if ($('renderElapsed')) {
     $('renderElapsed').hidden = false;
     $('renderElapsed').textContent = '00:00:00';
   }
   renderSteps(state.pipeline);
-  setStatus('run', 'Rendering…');
+  setStatus('run', resuming ? 'Resuming…' : 'Rendering…');
   buttonBusy($('btnMake'), true);
   buttonBusy($('btnActionPrimary'), true);
   buttonBusy($('btnActionSecondary'), true);
+  buttonBusy($('btnNoVideoPrimary'), true);
+  buttonBusy($('btnNoVideoSecondary'), true);
   updateStopButtons();
+
+  const stepIds = steps.map((s) => s.id);
+  let failedStepId = null;
 
   try {
     const produceFollows = steps.some((step) => step.id === 'produce');
@@ -4918,65 +5388,108 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
       // Plates do not read the take. On a re-record they run beside capture; on a
       // quick render, produce draws them beside the card bake.
       if (s.id === 'plates' && (records || produceFollows)) continue;
+      if (!shouldRunStep(s.id, stepIds, fromStep)) continue;
       if (sig?.aborted || state.stopRequested) throw new Error('cancelled');
       setStep(s.id, 'run');
       paintProgramBuild(pipelineOverlay({ running: true, label: s.label }));
       setFaviconMode(s.id === 'record' ? 'record' : s.id === 'deliver' ? 'export' : 'render');
-      if (s.id === 'record') {
-        setStep('plates', 'run');
-        const platesJob = runJobPromise('plates', false, { signal: sig, slug: target, quiet: true });
-        const settled = await Promise.allSettled([
-          runJobPromise('record', false, { signal: sig, slug: target }),
-          platesJob,
-        ]);
-        const failed = settled.find((row) => row.status === 'rejected');
-        if (failed) throw failed.reason;
-        setStep('plates', 'done');
-        await publishProgramStep('plates', target).catch(() => {});
-      } else {
-        if (s.id === 'produce' && !records) setStep('plates', 'run');
-        // Plates are content-hash cached; forcing here would redraw every plate twice per make.
-        await runJobPromise(s.id, false, { signal: sig, slug: target });
-        if (s.id === 'produce' && !records) {
+      try {
+        if (s.id === 'record') {
+          setStep('plates', 'run');
+          const forcePlates = resuming;
+          const settled = await Promise.allSettled([
+            runJobPromise('record', false, { signal: sig, slug: target }),
+            runJobPromise('plates', forcePlates, { signal: sig, slug: target, quiet: true }),
+          ]);
+          if (settled[0].status === 'rejected') {
+            failedStepId = 'record';
+            // Plates may still have finished beside a failed capture.
+            setStep('plates', settled[1].status === 'fulfilled' ? 'done' : 'todo');
+            throw settled[0].reason;
+          }
+          if (settled[1].status === 'rejected') {
+            failedStepId = 'plates';
+            setStep('record', 'done');
+            await publishProgramStep('record', target).catch(() => {});
+            throw settled[1].reason;
+          }
           setStep('plates', 'done');
           await publishProgramStep('plates', target).catch(() => {});
+        } else {
+          if (s.id === 'produce' && !records) setStep('plates', 'run');
+          // Plates are content-hash cached; forcing on a fresh make would redraw twice.
+          // On resume after a fail, force plates so a half-written encode is not reused.
+          const force = resuming && s.id === 'plates';
+          await runJobPromise(s.id, force, { signal: sig, slug: target });
+          if (s.id === 'produce' && !records) {
+            setStep('plates', 'done');
+            await publishProgramStep('plates', target).catch(() => {});
+          }
         }
+      } catch (err) {
+        if (!failedStepId) failedStepId = s.id;
+        throw err;
       }
       setStep(s.id, 'done');
       await publishProgramStep(s.id, target).catch(() => {});
       paintProgramBuild(pipelineOverlay({ running: false }));
     }
+    if (!shouldRunStep('preview', stepIds, fromStep) && resuming) {
+      /* preview already done on a mid-pipeline resume that somehow included it */
+    }
     setStep('preview', 'run');
-    if (target === state.slug) await loadVideo(state.slug, { play: true });
-    setStep('preview', 'done');
     try {
       await api(`/api/video/${encodeURIComponent(target)}/versions/snapshot`, {
         method: 'POST',
         body: {
-          title: record ? 'Re-recorded sequence' : 'Rendered sequence',
+          title: record ? 'Re-recorded sequence' : resuming ? 'Resumed sequence' : 'Rendered sequence',
           trigger: record ? 'make-full' : 'make',
           kind: 'release',
-          note: 'studio make video',
+          note: resuming ? `studio resume from ${fromStep}` : 'studio make video',
         },
       });
     } catch {
       /* ignore */
     }
-    await loadVideo(state.slug, { play: true });
+    // One Program handoff + one play — never loadVideo(play) twice (that resets and restarts).
+    if (target === state.slug) {
+      state.previewingPlate = null;
+      if (normalizeMonitorMode(state.monitorMode) !== 'program') {
+        setMonitorMode('program', { keepPreview: true });
+      }
+      await loadVideo(state.slug, { play: true });
+    }
+    setStep('preview', 'done');
+    clearPipelineFailure();
     setStatus('ok', 'Ready — Program updated');
     setFaviconMode('ok');
-    toast('Render complete', 'Program monitor updated');
+    toast(resuming ? 'Pipeline continued' : 'Render complete', 'Program monitor updated');
     hideActivityDock();
-    if ($('renderLiveTitle')) $('renderLiveTitle').textContent = 'Complete';
-    if ($('renderLiveMeta')) $('renderLiveMeta').textContent = 'Pipeline finished';
-    if ($('renderSpinner')) $('renderSpinner').hidden = true;
   } catch (err) {
-    const running = state.pipeline?.find((s) => s.status === 'run');
-    if (running) setStep(running.id, 'fail');
+    if (isCancelError(err) || state.stopRequested) {
+      const running = state.pipeline?.filter((s) => s.status === 'run') || [];
+      running.forEach((s) => setStep(s.id, 'todo'));
+      throw err;
+    }
+    const running = state.pipeline?.filter((s) => s.status === 'run') || [];
+    const failId = failedStepId || running[0]?.id;
+    for (const s of running) {
+      setStep(s.id, s.id === failId ? 'fail' : 'todo');
+    }
+    if (failId && state.pipeline?.find((s) => s.id === failId)?.status !== 'fail') setStep(failId, 'fail');
+    const failed = state.pipeline?.find((s) => s.id === failId);
+    rememberPipelineFailure({
+      mode: resolved,
+      slug: target,
+      stepId: failId || 'produce',
+      label: failed?.label || 'Render',
+      error: err.message,
+      log: jobLogText(state.job),
+    });
     paintProgramBuild(
       pipelineOverlay({
         failed: true,
-        label: running?.label || 'Render',
+        label: failed?.label || 'Render',
         error: err.message,
         screenshot: state.video?.recordFailure ? `/media/${encodeURIComponent(target)}/error.png` : '',
         log: 'activity',
@@ -4990,7 +5503,10 @@ async function runMakePipeline(mode, { signal, slug: boundSlug } = {}) {
     buttonBusy($('btnMake'), false);
     buttonBusy($('btnActionPrimary'), false);
     buttonBusy($('btnActionSecondary'), false);
+    buttonBusy($('btnNoVideoPrimary'), false);
+    buttonBusy($('btnNoVideoSecondary'), false);
     state.pipelineStartedAt = null;
+    renderSteps(state.pipeline);
   }
 }
 
@@ -5138,14 +5654,24 @@ async function runImproveJob(item, { signal } = {}) {
     }
 
     const labels = changes.labels?.length ? changes.labels : [focusLabel === 'full' ? 'Coordinated video pass' : focusLabel];
+    setThinkStep('approve');
+    state.motionApplied = domains.has('motion') || domains.has('brand');
+    state.platesPreviewed = Boolean(plate);
+
+    // Pipeline Fix: apply the draft and resume from the failed step without a second click.
+    // Bound to the job's slug so switching projects mid-fix still continues the right sequence.
+    if (item.resumePipeline?.fromStep) {
+      await continuePipelineAfterFix(item.resumePipeline);
+      return;
+    }
+
     if (!stillHere) {
-      setThinkStep('approve');
       toast('Done on another sequence', `${target} · switch back to review`, 'ok');
       return;
     }
     const scriptReview = ['script', 'voice', 'timing', 'journey'].some((domain) => domains.has(domain));
     const directionReview = !scriptReview && ['brand', 'motion'].some((domain) => domains.has(domain)) && !plate;
-    setThinkStep('approve');
+
     showProposal({
       title:
         labels.length > 1
@@ -5178,8 +5704,6 @@ async function runImproveJob(item, { signal } = {}) {
       ],
     });
     $('btnApprovePlate').hidden = !(targetId && plate);
-    state.motionApplied = domains.has('motion') || domains.has('brand');
-    state.platesPreviewed = Boolean(plate);
     updateMotionApprove();
     setStatus('warn', 'Preview ready — approve to render');
     toast('Changes ready to review', labels.join(' · '));
@@ -5556,30 +6080,119 @@ function wire() {
   $('btnActionPrimary').onclick = () => requestMake($('btnActionPrimary').dataset.mode);
   $('recordStartUrl')?.addEventListener('change', () => saveRecordTarget());
   $('recordLoginRequired')?.addEventListener('change', () => saveRecordTarget());
-  $('btnCleanup')?.addEventListener('click', async () => {
+  const visibleVersionIds = () =>
+    [...document.querySelectorAll('#versions [data-ver-select]')].map((el) => el.dataset.verSelect);
+
+  const setVersionSelected = (id, on) => {
+    if (on) state.versionSelection.add(id);
+    else state.versionSelection.delete(id);
+    const card = document.querySelector(`#versions .version-card[data-ver-id="${CSS.escape(id)}"]`);
+    const input = card?.querySelector('[data-ver-select]');
+    if (card) card.classList.toggle('is-selected', on);
+    if (input) input.checked = on;
+    const visible = (state.video?.versions || []).filter((ver) => visibleVersionIds().includes(ver.id));
+    syncVersionsToolbar(visible);
+  };
+
+  $('versions')?.addEventListener('change', (e) => {
+    const input = e.target.closest('[data-ver-select]');
+    if (!input) return;
+    setVersionSelected(input.dataset.verSelect, input.checked);
+  });
+
+  $('togSelectAllVersions')?.addEventListener('change', () => {
+    const on = Boolean($('togSelectAllVersions').checked);
+    for (const id of visibleVersionIds()) setVersionSelected(id, on);
+  });
+
+  $('btnDeleteVersions')?.addEventListener('click', async () => {
     if (!state.slug) return;
+    const ids = [...state.versionSelection];
+    if (!ids.length) return;
     try {
-      const selectedVersions = [...document.querySelectorAll('#cleanupVersions input:checked')].map((el) => el.value);
-      const plan = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: false, selectedVersions } });
-      if (!plan.files?.length) {
-        toast('Nothing to clean', 'The master and live recording stay');
+      const plan = await api(`/api/video/${state.slug}/versions/delete`, {
+        method: 'POST',
+        body: { confirm: false, ids },
+      });
+      if (!plan.versions?.length) {
+        toast('Nothing to delete', plan.missing?.length ? 'Those versions are already gone' : 'Select versions first');
+        pruneVersionSelection(state.video?.versions || []);
+        renderVersions(state.video || { versions: [] });
         return;
       }
-      const lines = plan.files.map((file) => `${file.name} · ${file.bytes} bytes`).join('\n');
+      const lines = plan.versions.map(
+        (ver) => `· ${ver.name} · ${ver.title}${ver.kind === 'checkpoint' ? ' · checkpoint' : ''} · ${ver.sizeLabel || formatBytes(ver.bytes)}`
+      );
       const ok = await ask({
-        title: 'Delete intermediate files',
-        detail: `${lines}\n\n${plan.totalBytes} bytes. The current master and live.mp4 stay.`,
-        ok: 'Delete',
+        title: plan.versions.length === 1 ? 'Delete this version?' : `Delete ${plan.versions.length} versions?`,
+        detail: [
+          `${plan.versions.length} version${plan.versions.length === 1 ? '' : 's'} · ${plan.totalLabel || formatBytes(plan.totalBytes)}`,
+          '',
+          ...lines,
+          '',
+          'Removed from History permanently. The current master and live.mp4 stay.',
+        ].join('\n'),
+        ok: plan.versions.length === 1 ? 'Delete version' : `Delete ${plan.versions.length}`,
         tone: 'warn',
       });
       if (!ok) return;
-      const done = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: true, selectedVersions } });
-      toast('Intermediates deleted', `${done.files.length} file(s), ${done.totalBytes} bytes`);
+      const done = await api(`/api/video/${state.slug}/versions/delete`, {
+        method: 'POST',
+        body: { confirm: true, ids: plan.versions.map((ver) => ver.id) },
+      });
+      for (const ver of done.versions || []) state.versionSelection.delete(ver.id);
+      if (done.summary) {
+        state.video = { ...(state.video || {}), ...done.summary, versions: done.summary.versions || state.video?.versions };
+      }
+      await loadVideo(state.slug);
+      toast(
+        done.versions?.length === 1 ? 'Version deleted' : `${done.versions?.length || 0} versions deleted`,
+        done.totalLabel || formatBytes(done.totalBytes)
+      );
+    } catch (err) {
+      toast('Delete failed', err.message, 'err');
+    }
+  });
+
+  $('btnCleanIntermediates')?.addEventListener('click', async () => {
+    if (!state.slug) return;
+    try {
+      const plan = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: false } });
+      if (!plan.files?.length) {
+        toast('Nothing to clean', 'No plates, slices, or premaster audio on disk');
+        return;
+      }
+      const ok = await confirmFilePlan(plan, {
+        title: 'Clean intermediate files?',
+        ok: 'Delete files',
+        keepNote: 'These regenerate on the next render. The current master, live.mp4, and History stay.',
+      });
+      if (!ok) return;
+      const done = await api(`/api/video/${state.slug}/cleanup`, { method: 'POST', body: { confirm: true } });
+      toast(
+        'Intermediates deleted',
+        `${done.files.length} file${done.files.length === 1 ? '' : 's'} · ${done.totalLabel || formatBytes(done.totalBytes)}`
+      );
     } catch (err) {
       toast('Cleanup failed', err.message, 'err');
     }
   });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);
+  $('btnNoVideoPrimary')?.addEventListener('click', () => requestMake($('btnNoVideoPrimary').dataset.mode));
+  $('btnNoVideoSecondary')?.addEventListener('click', () => requestMake($('btnNoVideoSecondary').dataset.mode));
+  $('actionSteps')?.addEventListener('click', (e) => {
+    const retry = e.target.closest('[data-pipe-retry]');
+    if (retry) {
+      e.preventDefault();
+      retryPipelineFrom(retry.dataset.pipeRetry);
+      return;
+    }
+    const fix = e.target.closest('[data-pipe-fix]');
+    if (fix) {
+      e.preventDefault();
+      fixPipelineStep(fix.dataset.pipeFix);
+    }
+  });
   $('recordFailureFix')?.addEventListener('click', () => {
     const note = recordFailureNote(state.video?.recordFailure);
     const noteEl = $('improveNote');
@@ -5626,49 +6239,42 @@ function wire() {
     e.preventDefault();
     saveRecordTarget();
   });
+  paintQueueMenu();
   $('btnQueueAdd')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const menu = $('queueMenu');
     if (!menu) return;
-    menu.hidden = !menu.hidden;
-    $('btnQueueAdd').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    setQueueMenuOpen(menu.hidden);
+  });
+  $('queueMenu')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-enqueue]');
+    if (!btn) return;
+    e.preventDefault();
+    enqueueFromMenu(btn.dataset.enqueue);
   });
   document.addEventListener('click', (e) => {
     const menu = $('queueMenu');
     if (!menu || menu.hidden) return;
-    if (e.target.closest('#queueMenu') || e.target.closest('#btnQueueAdd')) return;
-    menu.hidden = true;
-    $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
+    if (e.target.closest('#queueMenu') || e.target.closest('#btnQueueAdd') || e.target.closest('.queue-add-wrap')) return;
+    setQueueMenuOpen(false);
   });
-  document.querySelectorAll('[data-enqueue]').forEach((btn) => {
-    btn.onclick = () => {
-      const menu = $('queueMenu');
-      if (menu) menu.hidden = true;
-      $('btnQueueAdd')?.setAttribute('aria-expanded', 'false');
-      const kind = btn.dataset.enqueue;
-      if (kind === 'make-quick') {
-        enqueueJob({ kind: 'make', mode: 'quick', label: 'Render sequence' });
-        return;
-      }
-      if (kind === 'make-full') {
-        enqueueJob({ kind: 'make', mode: 'full', label: 'Re-record & render full' });
-        return;
-      }
-      const labels = {
-        plates: 'Render brand plates',
-        audio: 'Add voice & music',
-        deliver: 'Export handoff pack',
-        produce: 'Produce master video',
-        record: 'Record walkthrough',
-      };
-      enqueueJob({
-        kind: 'step',
-        step: kind,
-        force: kind === 'plates',
-        label: labels[kind] || kind,
-      });
-    };
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const menu = $('queueMenu');
+    if (!menu || menu.hidden) return;
+    setQueueMenuOpen(false);
+    $('btnQueueAdd')?.focus({ preventScroll: true });
   });
+  window.addEventListener('resize', () => {
+    if (!$('queueMenu')?.hidden) placeQueueMenu();
+  });
+  $('leftRender')?.addEventListener(
+    'scroll',
+    () => {
+      if (!$('queueMenu')?.hidden) placeQueueMenu();
+    },
+    { passive: true }
+  );
   $('btnClearQueue')?.addEventListener('click', () => {
     state.queue = [];
     renderQueue();
@@ -6097,6 +6703,7 @@ function wire() {
     };
   }
   setSessionIdle();
+  setRenderIdle();
   showLeftTab('render');
   renderQueue();
 
@@ -6136,6 +6743,12 @@ function wire() {
     if ((e.metaKey || e.ctrlKey) && e.key === 's' && state.monitorMode === 'plate') {
       e.preventDefault();
       savePlateCopyEdits();
+      return;
+    }
+    if (e.key === 'Escape' && state.versionSelection.size && !$('leftVersions')?.hidden) {
+      e.preventDefault();
+      state.versionSelection.clear();
+      if (state.video) renderVersions(state.video);
       return;
     }
     if (e.code === 'Space') {
@@ -6337,7 +6950,13 @@ function initStages() {
     openScript: workflow.openScript,
     startRender: () => requestMake('full'),
   });
-  $('btnProjectSettings')?.addEventListener('click', () => projects.openSettings(state.video));
+  const openProjectSettings = () => projects.openSettings(state.video);
+  $('btnProjectSettings')?.addEventListener('click', openProjectSettings);
+  $('btnCaptureSettings')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openProjectSettings();
+  });
 }
 
 function agentTip(auth, id) {

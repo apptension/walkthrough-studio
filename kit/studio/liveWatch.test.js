@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { programPreview } from './liveWatch.js';
+import { activityThumbVisible, programPreview } from './liveWatch.js';
+import { liveTabVisible } from './monitorMode.js';
 
 test('during record, Program shows the page and not an empty stage', () => {
   const view = programPreview({
@@ -14,9 +15,10 @@ test('during record, Program shows the page and not an empty stage', () => {
   assert.equal(view.badge, 'Live');
   assert.equal(view.empty, false);
   assert.match(view.url, /live-preview\.jpg/);
+  assert.equal(liveTabVisible({ recording: true }), true);
 });
 
-test('a record that stops on a login page keeps that frame', () => {
+test('a record that stops keeps the last frame URL but hides the Live tab', () => {
   const during = programPreview({
     recording: true,
     previewUrl: '/media/demo/live-preview.jpg',
@@ -31,9 +33,10 @@ test('a record that stops on a login page keeps that frame', () => {
   assert.equal(after.badge, 'Last frame');
   assert.equal(after.url, during.url);
   assert.equal(after.empty, false);
+  assert.equal(liveTabVisible({ recording: false }), false);
 });
 
-test('a finished master still offers the last frame on the Live tab', () => {
+test('a finished master keeps a last-frame URL without offering the Live tab', () => {
   const view = programPreview({
     recording: false,
     previewUrl: '/media/demo/live-preview.jpg',
@@ -43,6 +46,7 @@ test('a finished master still offers the last frame on the Live tab', () => {
   assert.equal(view.show, true);
   assert.equal(view.badge, 'Last frame');
   assert.match(view.url, /live-preview\.jpg/);
+  assert.equal(liveTabVisible({ recording: false, repairing: false }), false);
 });
 
 test('repair keeps the last frame visible and labels it as repairing', () => {
@@ -53,11 +57,21 @@ test('repair keeps the last frame visible and labels it as repairing', () => {
   });
   assert.equal(view.show, true);
   assert.equal(view.badge, 'Repairing');
+  assert.equal(liveTabVisible({ repairing: true }), true);
 });
 
-test('the live frame element is on Program', () => {
+test('the live frame element is on the stage and the Live tab has an on-air dot', () => {
   const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
   const stage = html.indexOf('id="stage"');
   const frame = html.indexOf('id="livePreview"');
   assert.ok(stage > 0 && frame > stage);
+  assert.match(html, /id="modeLive"[^>]*>[\s\S]*?class="live-dot"/);
+  assert.match(html, /id="liveBadge"/);
+});
+
+test('Activity bay thumb is only on during capture or repair', () => {
+  assert.equal(activityThumbVisible({ recording: true }), true);
+  assert.equal(activityThumbVisible({ repairing: true }), true);
+  assert.equal(activityThumbVisible({ recording: false, repairing: false }), false);
+  assert.equal(activityThumbVisible({}), false);
 });

@@ -862,9 +862,10 @@ try {
   );
   check((await page.locator('#wizardCreation [data-create-stage]').count()) === 5, 'creation readiness stages');
   check(
-    (await page.locator('.feedback-capabilities span').count()) === 5 &&
+    (await page.locator('.feedback-capabilities, .smart-scope-note').count()) === 0 &&
+      (await page.locator('#rightFeedback [data-help*="Smart scope"]').count()) === 1 &&
       (await page.locator('#btnImprove').textContent()).includes('smart scope'),
-    'feedback offers whole-video smart scope'
+    'feedback smart scope lives in help, not capability chips'
   );
   check(
     (await page.locator('[data-improve="script"], [data-improve="voice"], [data-improve="plates"], [data-improve="motion"]').count()) === 4,

@@ -8,11 +8,23 @@ test('normalizeMonitorMode maps editor aliases and accepts live', () => {
   assert.equal(normalizeMonitorMode('nope'), 'program');
 });
 
-test('liveTabVisible while recording, repairing, or showing a last frame', () => {
+test('liveTabVisible only while recording or repairing', () => {
   assert.equal(liveTabVisible({ recording: true }), true);
   assert.equal(liveTabVisible({ repairing: true }), true);
-  assert.equal(liveTabVisible({ badge: 'Live' }), true);
-  assert.equal(liveTabVisible({ badge: 'Last frame' }), true);
-  assert.equal(liveTabVisible({ hasPreview: true }), true);
-  assert.equal(liveTabVisible({ badge: '' }), false);
+  assert.equal(liveTabVisible({ recording: true, repairing: false }), true);
+  assert.equal(liveTabVisible({}), false);
+  assert.equal(liveTabVisible({ recording: false, repairing: false }), false);
+});
+
+test('liveTabVisible ignores last-frame / badge leftovers', () => {
+  assert.equal(
+    liveTabVisible({
+      recording: false,
+      repairing: false,
+      badge: 'Last frame',
+      hasPreview: true,
+    }),
+    false
+  );
+  assert.equal(liveTabVisible({ badge: 'Live', hasPreview: true }), false);
 });

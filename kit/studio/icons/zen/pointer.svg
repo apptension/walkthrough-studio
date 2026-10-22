@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="22" width="48" height="20" rx="5"/>
+     <path d="M26 22v20M36 22v20M46 22v20" opacity=".45"/>
+     <g class="z-pointer"><path d="M56 30l16 7-7 2-2 7z" fill="currentColor" fill-opacity=".18"/></g></svg>

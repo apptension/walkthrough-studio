@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="30" y="26" width="36" height="26" rx="8"/>
+     <path d="M39 39h7M50 39h7"/>
+     <path d="M48 26v-6"/><circle cx="48" cy="17" r="2.2"/>
+     <path d="M40 52v4M56 52v4"/>
+     <g class="z-zz" fill="currentColor" stroke="none" font-family="Plus Jakarta Sans, system-ui, sans-serif" font-weight="800">
+       <text x="68" y="30" font-size="8">z</text>
+       <text x="74" y="22" font-size="10">z</text>
+       <text x="82" y="13" font-size="12">z</text>
+     </g></svg>

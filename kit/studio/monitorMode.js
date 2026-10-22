@@ -12,21 +12,12 @@ export function normalizeMonitorMode(mode) {
   return 'program';
 }
 
-/** Whether the Live tab should be offered (recording, repairing, or a page-capture frame). */
-export function liveTabVisible({
-  recording = false,
-  repairing = false,
-  badge = '',
-  hasPreview = false,
-} = {}) {
-  return Boolean(
-    recording ||
-      repairing ||
-      hasPreview ||
-      badge === 'Live' ||
-      badge === 'Repairing' ||
-      badge === 'Last frame'
-  );
+/**
+ * Live tab is only for an active capture (recording or flow repair).
+ * Last-frame previews stay off the tab strip — they slide out under Program when capture ends.
+ */
+export function liveTabVisible({ recording = false, repairing = false } = {}) {
+  return Boolean(recording || repairing);
 }
 
 /** True when the video element is already pointed at the delivery master (ignore ?t=). */
