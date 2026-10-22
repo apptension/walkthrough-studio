@@ -55,7 +55,7 @@ export default async function flow(ctx) {
   // —— Overview ——
   await chapter('Meet Studio', 'One desk from brief to a client-ready master', 2400);
 
-  await say('Production stages', 'Brief, Script, Record, Cut, Deliver — gated in order.', 2000);
+  await say('Production stages nothing!', 'Brief, Script, Record, Cut, Deliver — gated in order.', 2000);
   const stageBar = page.getByRole('navigation', { name: /production stages/i });
   if (await stageBar.isVisible().catch(() => false)) {
     await frame(stageBar, { holdMs: 200 });

@@ -347,24 +347,27 @@
                       <ul class="stage-aim-tip__actions"></ul>
                     </div>
                   </div>
-                  <div id="liveLensBox" class="live-lens-box" hidden>
-                    <div class="frame-editor" data-frame-editor="lens">
-                      <label class="frame-editor-hit">Strength
-                        <input type="range" data-frame-lens-zoom min="1.2" max="2.4" step="0.05" aria-label="Magnifier strength" />
-                      </label>
-                      <label class="frame-editor-hit">Size
-                        <input type="range" data-frame-lens-size min="24" max="540" step="2" aria-label="Magnifier size" />
-                      </label>
-                      <button type="button" class="frame-editor-hit" data-frame-remove="lens">Remove</button>
-                    </div>
-                    <div class="stage-aim-tip" data-tone="lens" aria-live="polite">
-                      <div class="stage-aim-tip__head">
-                        <span class="stage-aim-tip__kind"></span>
-                        <span class="stage-aim-tip__meta"></span>
-                      </div>
-                      <ul class="stage-aim-tip__actions"></ul>
-                    </div>
+                  <div id="liveLensBox" class="live-lens-box" hidden aria-hidden="true"></div>
+                </div>
+              </div>
+              <div id="liveLensHud" class="lens-stage-hud" hidden aria-label="Magnifier controls">
+                <div class="lens-stage-hud__card" role="group">
+                  <header class="lens-stage-hud__head">
+                    <span class="lens-stage-hud__title" data-lens-hud-title>Magnifier</span>
+                    <output class="lens-stage-hud__meta" data-lens-hud-meta for="liveLensHudZoom">1.2×</output>
+                    <button type="button" class="lens-stage-hud__rm" data-frame-remove="lens" aria-label="Remove magnifier">×</button>
+                  </header>
+                  <div class="lens-stage-hud__body" data-lens-hud-controls>
+                    <label class="lens-stage-hud__row">
+                      <span>Strength</span>
+                      <input id="liveLensHudZoom" type="range" data-frame-lens-zoom min="1.2" max="2.4" step="0.05" aria-label="Magnifier strength" />
+                    </label>
+                    <label class="lens-stage-hud__row">
+                      <span>Size</span>
+                      <input type="range" data-frame-lens-size min="24" max="540" step="2" aria-label="Magnifier size" />
+                    </label>
                   </div>
+                  <p class="lens-stage-hud__hint" data-lens-hud-hint>Drag the ring to aim</p>
                 </div>
               </div>
               <div id="edHud" class="ed-hud" aria-live="polite"></div>

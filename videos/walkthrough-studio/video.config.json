@@ -174,21 +174,78 @@
     "overlays": {
       "chapter": {
         "ghost": false,
-        "atmosphere": "bend",
+        "atmosphere": "particles",
         "blobs": true,
         "rail": false,
         "sheen": true,
         "energy": "clear",
-        "backdrop": "#050505"
+        "backdrop": "#245b24"
       },
-      "caption": {},
-      "preset": "editorial"
+      "caption": {
+        "atmosphere": "aurora",
+        "backdrop": "#000000"
+      },
+      "preset": "editorial",
+      "chapters": {
+        "1": {
+          "chapter": {
+            "atmosphere": "constellation",
+            "backdrop": "#000000"
+          },
+          "caption": {
+            "atmosphere": "aurora"
+          }
+        },
+        "2": {
+          "chapter": {
+            "atmosphere": "traces",
+            "backdrop": "#000000"
+          },
+          "caption": {
+            "atmosphere": "smoke"
+          }
+        },
+        "3": {
+          "chapter": {
+            "atmosphere": "signal",
+            "backdrop": "#000000"
+          }
+        },
+        "4": {
+          "chapter": {
+            "atmosphere": "isometric",
+            "backdrop": "#050505"
+          },
+          "caption": {
+            "atmosphere": "mesh"
+          }
+        },
+        "5": {
+          "chapter": {
+            "atmosphere": "warpstripes",
+            "backdrop": "#000000"
+          }
+        },
+        "6": {
+          "chapter": {
+            "atmosphere": "shaft",
+            "backdrop": "#000000"
+          }
+        }
+      }
     }
   },
   "transitions": {
     "style": "wipe"
   },
   "edit": {
+    "speed": [
+      {
+        "from": 58.911,
+        "to": 86.604,
+        "rate": 4
+      }
+    ],
     "zooms": [
       {
         "id": "z24",
@@ -217,11 +274,64 @@
         "to": 58.645
       }
     ],
+    "lenses": [
+      {
+        "id": "m138",
+        "t": 13.828,
+        "dur": 1.279,
+        "x": 226,
+        "y": 57,
+        "w": 81,
+        "h": 184,
+        "zoom": 1.9,
+        "label": "stages"
+      },
+      {
+        "id": "m891",
+        "t": 89.148,
+        "dur": 1.039,
+        "x": 234,
+        "y": 954,
+        "w": 243,
+        "h": 1029,
+        "label": "render-bay"
+      },
+      {
+        "id": "m925",
+        "t": 91.312,
+        "dur": 1.649,
+        "x": 224,
+        "y": 65,
+        "w": 190,
+        "h": 48,
+        "zoom": 1.7
+      },
+      {
+        "id": "m961",
+        "t": 96.114,
+        "dur": 1.119,
+        "x": 1406,
+        "y": 22,
+        "w": 82,
+        "h": 15,
+        "label": "render"
+      }
+    ],
+    "lensOff": [
+      13.828,
+      89.148,
+      97.981
+    ],
     "cards": [
       {
         "key": "chapter:5.420:Meet Studio",
         "t": 6.336,
         "dur": 4.986
+      },
+      {
+        "key": "chapter:25.247:Start from a brief",
+        "t": 25.634,
+        "dur": 5.723
       }
     ],
     "audio": {

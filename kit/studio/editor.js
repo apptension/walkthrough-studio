@@ -445,12 +445,13 @@ export function initEditor(ctx) {
           row('Seat', `<select class="ins-select" data-overlay="seat">${opt(seats, slot.seat || 'bottom-center', seatLabels)}</select>`) +
           row('Text', `<select class="ins-select" data-overlay="align">${opt(aligns, slot.align || 'left', { left: 'Left', center: 'Center' })}</select>`);
     const keyLabels = { atmosphere: 'background', backdrop: 'backdrop', backdropOpacity: 'opacity' };
+    const slotWord = kindLabel.replace(/s$/, '');
     const scopeRow = chapterNo
       ? row(
-          'Save for',
+          'Applies to',
           `<div class="ins-seg" data-look-scope-seg>${[
-            ['chapter', `Chapter ${chapterNo}`, `Background and backdrop changes below apply to chapter ${chapterNo} only (its chapter card and the captions inside it)`],
-            ['video', 'All chapters', `Background and backdrop changes below apply to every chapter that has no look of its own`],
+            ['chapter', `Chapter ${chapterNo}`, `Background and backdrop apply to chapter ${chapterNo} only — its chapter card and captions`],
+            ['video', 'Video default', `Set the video-wide background and backdrop; chapters with a custom look keep it`],
           ]
             .map(
               ([v, label, title]) =>
@@ -459,23 +460,42 @@ export function initEditor(ctx) {
             .join('')}</div>`
         )
       : '';
-    const ownNote = chapterNo
-      ? ownKeys.length
-        ? `<p class="ins-note"><b>Chapter ${chapterNo}</b> has its own ${kindLabel.replace(/s$/, '')} ${ownKeys.map((k) => keyLabels[k] || k).join(' · ')}.</p>` +
-          `<div class="ins-actions">` +
-          `<button type="button" class="ins-btn" data-act="look-apply-all" title="Make chapter ${chapterNo}’s ${kindLabel.replace(/s$/, '')} background the video’s — every chapter follows it">${ICONS.sparkle || ''}<span>Apply to all chapters</span></button>` +
-          `<button type="button" class="ins-btn" data-act="look-follow-video" title="Drop chapter ${chapterNo}’s own background and follow the video look again"><span>Follow video</span></button>` +
+    const lookScopeBanner = (() => {
+      if (!chapterNo) return '';
+      const ownList = ownKeys.map((k) => keyLabels[k] || k).join(' · ');
+      if (ownKeys.length) {
+        return (
+          `<div class="ins-look-scope is-custom" role="status" aria-live="polite">` +
+          `<div class="ins-look-scope__head"><span class="ins-look-scope__badge">Ch. ${chapterNo}</span><strong>Custom ${escapeHtml(slotWord)} look</strong></div>` +
+          `<p class="ins-look-scope__lede">Overrides the video: <b>${escapeHtml(ownList)}</b></p>` +
+          `<div class="ins-look-scope__actions">` +
+          `<button type="button" class="ins-btn" data-act="look-apply-all" title="Promote chapter ${chapterNo}’s look to the video — every chapter follows it">${ICONS.sparkle || ''}<span>Apply to all</span></button>` +
+          `<button type="button" class="ins-btn ghost" data-act="look-follow-video" title="Drop chapter ${chapterNo}’s overrides and follow the video look again"><span>Follow video</span></button>` +
+          `</div></div>`
+        );
+      }
+      if (scope === 'video') {
+        return (
+          `<div class="ins-look-scope is-video" role="status" aria-live="polite">` +
+          `<div class="ins-look-scope__head"><span class="ins-look-scope__badge">Video</span><strong>Default for all chapters</strong></div>` +
+          `<p class="ins-look-scope__lede">Background and backdrop set the shared look. Chapters you styled on their own stay as they are.</p>` +
           `</div>`
-        : perChapter
-          ? `<p class="ins-note subtle">Chapter ${chapterNo} follows the video look. Changing Background or Backdrop here saves it for this chapter only; switch to <b>All chapters</b> to change the video.</p>`
-          : ''
-      : '';
+        );
+      }
+      return (
+        `<div class="ins-look-scope is-chapter" role="status" aria-live="polite">` +
+        `<div class="ins-look-scope__head"><span class="ins-look-scope__badge">Ch. ${chapterNo}</span><strong>Follows the video look</strong></div>` +
+        `<p class="ins-look-scope__lede">Tweaks below save for this chapter only.</p>` +
+        `<button type="button" class="ins-link ins-look-scope__switch" data-look-scope="video">Edit video-wide look</button>` +
+        `</div>`
+      );
+    })();
     return (
       row('Preset', `<select class="ins-select" data-overlay-preset>${opt(presets, look.preset || 'plateMatch')}</select>`) +
       scopeRow +
+      lookScopeBanner +
       row('Background', `<select class="ins-select" data-overlay="atmosphere">${opt(atmospheres, slot.atmosphere || 'waves', atmLabels)}</select>`) +
       backdropRows +
-      ownNote +
       row('Entrance', `<select class="ins-select" data-overlay="energy">${opt(energies, slot.energy || 'clear', energyLabels)}</select>`) +
       toggles +
       `<p class="ins-note subtle">Preset, entrance and ornaments apply to all ${kindLabel} (same as Direction → Live cards). Timing above is this card only. Double-click the block to edit copy.</p>`
@@ -1852,8 +1872,124 @@ export function initEditor(ctx) {
   const lensTarget = (l) => ({ x: l.rect.x + l.rect.w / 2, y: l.rect.y + l.rect.h / 2, w: l.rect.w, h: l.rect.h, zoom: l.source === 'edit' ? deckLens(l)?.zoom : undefined });
   const deckLens = (l) => deckEdit().lenses.find((x) => x.id === l.id) || null;
 
+  /** Gap between the magnifier ring and the HUD card (screen px). */
+  const LENS_HUD_GAP = 14;
+
+  /** Shortest distance from the circle edge to the HUD rect; positive = clear. */
+  function lensHudClearance(hx, hy, hudW, hudH, ccx, ccy, r, gap) {
+    const l = hx - hudW / 2;
+    const t = hy - hudH / 2;
+    const ri = hx + hudW / 2;
+    const b = hy + hudH / 2;
+    const nx = clamp(ccx, l, ri);
+    const ny = clamp(ccy, t, b);
+    return Math.hypot(ccx - nx, ccy - ny) - (r + gap);
+  }
+
+  /**
+   * Park the HUD just outside the on-screen magnifier circle, biased toward the stage
+   * centre so it reads naturally in corners and never sits on top of the glass.
+   */
+  function placeLensHud() {
+    const hud = $('liveLensHud');
+    const box = $('liveLensBox');
+    const plate = $('playerPlate');
+    if (!hud || !box || !plate || box.hidden) return;
+
+    const card = hud.querySelector('.lens-stage-hud__card');
+    if (!card) return;
+
+    const bRect = box.getBoundingClientRect();
+    const pRect = plate.getBoundingClientRect();
+    const hudW = card.offsetWidth || 188;
+    const hudH = card.offsetHeight || 80;
+
+    const ccx = bRect.left + bRect.width / 2;
+    const ccy = bRect.top + bRect.height / 2;
+    const r = Math.min(bRect.width, bRect.height) / 2;
+    const gap = LENS_HUD_GAP;
+    const margin = 8;
+
+    const plateCx = pRect.left + pRect.width / 2;
+    const plateCy = pRect.top + pRect.height / 2;
+
+    const dirs = [];
+    let dx = plateCx - ccx;
+    let dy = plateCy - ccy;
+    const dlen = Math.hypot(dx, dy);
+    if (dlen < 6) dirs.push({ dx: 0, dy: 1, weight: 4 });
+    else {
+      dirs.push({ dx: dx / dlen, dy: dy / dlen, weight: 5 });
+      dirs.push({ dx: -dx / dlen, dy: -dy / dlen, weight: 1 });
+    }
+    for (const [ux, uy] of [
+      [0, 1],
+      [0, -1],
+      [1, 0],
+      [-1, 0],
+      [0.707, 0.707],
+      [-0.707, 0.707],
+      [0.707, -0.707],
+      [-0.707, -0.707],
+    ]) {
+      dirs.push({ dx: ux, dy: uy, weight: 0 });
+    }
+
+    const clampHud = (hx, hy) => {
+      const halfW = hudW / 2;
+      const halfH = hudH / 2;
+      return {
+        x: clamp(hx, pRect.left + margin + halfW, pRect.right - margin - halfW),
+        y: clamp(hy, pRect.top + margin + halfH, pRect.bottom - margin - halfH),
+      };
+    };
+
+    let best = null;
+    for (const { dx: ux, dy: uy, weight } of dirs) {
+      const proj = (hudW / 2) * Math.abs(ux) + (hudH / 2) * Math.abs(uy);
+      const dist = r + gap + proj;
+      const raw = { x: ccx + ux * dist, y: ccy + uy * dist };
+      const { x, y } = clampHud(raw.x, raw.y);
+      const clear = lensHudClearance(x, y, hudW, hudH, ccx, ccy, r, gap);
+      const overflow =
+        (x - hudW / 2 < pRect.left + margin ? 1 : 0) +
+        (x + hudW / 2 > pRect.right - margin ? 1 : 0) +
+        (y - hudH / 2 < pRect.top + margin ? 1 : 0) +
+        (y + hudH / 2 > pRect.bottom - margin ? 1 : 0);
+      const score = (clear < 0 ? clear * 12 : clear) - overflow * 80 + weight;
+      if (!best || score > best.score) best = { x, y, score };
+    }
+
+    if (!best) return;
+    hud.style.left = `${best.x - pRect.left}px`;
+    hud.style.top = `${best.y - pRect.top}px`;
+    hud.style.transform = 'translate(-50%, -50%)';
+  }
+
+  function paintLensHud(lens, zNow, sizeNow) {
+    const hud = $('liveLensHud');
+    if (!hud) return;
+    const title = hud.querySelector('[data-lens-hud-title]');
+    const meta = hud.querySelector('[data-lens-hud-meta]');
+    const controls = hud.querySelector('[data-lens-hud-controls]');
+    const hint = hud.querySelector('[data-lens-hud-hint]');
+    const recorded = lens.source === 'auto';
+    if (title) title.textContent = recorded ? 'Recorded magnifier' : 'Magnifier';
+    if (meta) {
+      meta.textContent = recorded ? '' : `${Number(zNow).toFixed(1)}×`;
+      meta.hidden = recorded;
+    }
+    if (controls) controls.hidden = recorded;
+    if (hint) {
+      hint.textContent = recorded ? 'Drag to take over and aim' : 'Drag the ring to aim';
+      hint.hidden = false;
+    }
+    hud.classList.toggle('is-recorded', recorded);
+  }
+
   function paintLensBox() {
     const box = $('liveLensBox');
+    const hud = $('liveLensHud');
     if (!box) return;
     const lens = selectedLens();
     const c = curClip();
@@ -1868,6 +2004,7 @@ export function initEditor(ctx) {
     });
     if (!editor.visible) {
       box.hidden = true;
+      if (hud) hud.hidden = true;
       return;
     }
     const W = live().width || 1920;
@@ -1880,8 +2017,8 @@ export function initEditor(ctx) {
     box.hidden = false;
     box.dataset.hit = String(FRAME_EDITOR_HIT);
     const own = lens.source === 'edit' ? deckLens(lens) : null;
-    const strength = box.querySelector('[data-frame-lens-zoom]');
-    const size = box.querySelector('[data-frame-lens-size]');
+    const strength = hud?.querySelector('[data-frame-lens-zoom]');
+    const size = hud?.querySelector('[data-frame-lens-size]');
     const zNow = ed.lensAim?.zoom ?? own?.zoom ?? lens.zoom;
     const sizeNow = Math.max(ed.lensAim?.w ?? own?.w ?? lens.rect?.w ?? 80, ed.lensAim?.h ?? own?.h ?? lens.rect?.h ?? 80);
     if (strength && document.activeElement !== strength) strength.value = String(Number(zNow).toFixed(2));
@@ -1891,29 +2028,16 @@ export function initEditor(ctx) {
     box.style.width = `${(shape.diameter / W) * 100}%`;
     box.style.height = `${(shape.diameter / H) * 100}%`;
     box.classList.toggle('is-auto', lens.source === 'auto');
-    const midX = (ox + shape.diameter / 2) / W;
-    const midY = (oy + shape.diameter / 2) / H;
-    box.classList.toggle('label-up', midY > 0.62);
-    box.classList.toggle('label-left', midX > 0.62);
-    box.classList.toggle('label-right', midX < 0.38);
-    paintAimTip(box, lens.source === 'auto'
-      ? {
-          kind: 'Recorded magnifier',
-          meta: '',
-          actions: [{ key: 'Drag', label: 'take over & aim' }],
-        }
-      : {
-          kind: 'Magnifier',
-          meta: shape.zoom ? `${Number(shape.zoom).toFixed(1)}×` : '',
-          actions: [
-            { key: 'Drag', label: 'aim' },
-            { key: 'Inspector', label: 'size & strength' },
-          ],
-        });
+    if (hud) {
+      hud.hidden = false;
+      paintLensHud(lens, zNow, sizeNow);
+      placeLensHud();
+    }
   }
 
   function wireLensBox() {
     const box = $('liveLensBox');
+    const hud = $('liveLensHud');
     const vp = $('liveViewport');
     if (!box || !vp) return;
     let drag = null;
@@ -1921,6 +2045,7 @@ export function initEditor(ctx) {
       const lens = selectedLens();
       if (!lens || lens.source === 'off') return;
       drag = { x: e.clientX, y: e.clientY, start: lensTarget(lens), lens, moved: false };
+      hud?.classList.add('is-dragging');
       box.setPointerCapture(e.pointerId);
       e.preventDefault();
       e.stopPropagation();
@@ -1943,6 +2068,7 @@ export function initEditor(ctx) {
       if (!drag) return;
       const { lens, moved } = drag;
       drag = null;
+      hud?.classList.remove('is-dragging');
       const aim = ed.lensAim;
       ed.lensAim = null;
       if (!moved || !aim) return renderFrame();
@@ -1952,7 +2078,7 @@ export function initEditor(ctx) {
     };
     box.addEventListener('pointerup', finish);
     box.addEventListener('pointercancel', finish);
-    box.querySelector('.frame-editor')?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    hud?.addEventListener('pointerdown', (e) => e.stopPropagation());
     const saveLensPatch = (patch) => {
       const current = selectedLens();
       if (!current || current.source === 'off') return;
@@ -1960,10 +2086,16 @@ export function initEditor(ctx) {
       const d = deckEdit();
       return postDeck({ lenses: d.lenses.map((l) => (l.id === current.id ? { ...l, ...patch } : l)) }, { hint: 'Magnifier saved' });
     };
-    box.querySelector('[data-frame-lens-zoom]')?.addEventListener('change', (e) => {
+    const zoomEl = hud?.querySelector('[data-frame-lens-zoom]');
+    const sizeEl = hud?.querySelector('[data-frame-lens-size]');
+    const metaEl = hud?.querySelector('[data-lens-hud-meta]');
+    zoomEl?.addEventListener('input', (e) => {
+      if (metaEl && !metaEl.hidden) metaEl.textContent = `${Number(e.target.value).toFixed(1)}×`;
+    });
+    zoomEl?.addEventListener('change', (e) => {
       saveLensPatch({ zoom: Number(e.target.value) });
     });
-    box.querySelector('[data-frame-lens-size]')?.addEventListener('change', (e) => {
+    sizeEl?.addEventListener('change', (e) => {
       const size = Math.round(Number(e.target.value));
       const current = selectedLens();
       const own = current?.source === 'edit' ? deckLens(current) : null;
@@ -1972,7 +2104,7 @@ export function initEditor(ctx) {
       const max = Math.max(w0, h0, 1);
       saveLensPatch({ w: Math.max(16, Math.round((w0 * size) / max)), h: Math.max(12, Math.round((h0 * size) / max)) });
     });
-    box.querySelector('[data-frame-remove="lens"]')?.addEventListener('click', () => {
+    hud?.querySelector('[data-frame-remove="lens"]')?.addEventListener('click', () => {
       document.querySelector('#inspectorRoot [data-act="remove"]')?.click();
     });
   }

@@ -7,7 +7,6 @@ export default {
   },
   lines: {
     'Meet Studio': 'This is the desk — sequence, stages, and Program in one place.',
-    'Production stages': 'Five gates keep cheap edits early and recording late.',
     'Sequence picker': 'Open any video as a sequence, then drive it from here.',
     'Program monitor': 'Watch the master, preview plate HTML, or compare a saved version.',
     'Start from a brief': 'Start with who watches and what they can do after — then draft.',
@@ -31,5 +30,6 @@ export default {
     'Open Deliver': 'Deliver shows pack facts once Export has built the folder.',
     'Export handoff': 'Export packs the master with captions, chapters, and a poster.',
     'Ready to ship': 'Approve the cut, then hand the pack to the client.',
+    'Production stages nothing!': 'Five gates keep cheap edits early and recording late.',
   },
 };
