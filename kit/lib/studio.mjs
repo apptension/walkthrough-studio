@@ -42,7 +42,7 @@ import { recordFailureView } from './recordFailure.mjs';
 import { nextBrief, revisePlan } from '../studio/briefRevise.js';
 import { applyBriefRevision, saveSourceRevision, storeCredential } from './briefRevise.mjs';
 import { waitFiles } from './signInPause.mjs';
-import { applyCleanup, planCleanup } from './cleanup.mjs';
+import { applyCleanup, formatBytes, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
 import {
@@ -135,7 +135,14 @@ import { resolveVideoLanguage } from './languages.mjs';
 import { createDevHub, injectDevClient } from './devServer.mjs';
 import { brandReadiness, listBrands, listVideos, loadVideo, OUT_ROOT } from './project.mjs';
 import { suggestPlates, applyPlateSuggestions } from './suggestPlates.mjs';
-import { listVersions, restoreVersion, snapshotVersion, versionMediaPath } from './versions.mjs';
+import {
+  deleteVersions,
+  listVersions,
+  planDeleteVersions,
+  restoreVersion,
+  snapshotVersion,
+  versionMediaPath,
+} from './versions.mjs';
 
 const STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio');
 
@@ -1538,13 +1545,14 @@ async function handleApi(req, res, url) {
 
   if (rest === '/cleanup' && req.method === 'POST') {
     const body = await readBody(req);
-    const plan = planCleanup(video.out, { slug: video.slug, selectedVersions: body.selectedVersions || [] });
+    const plan = planCleanup(video.out, { slug: video.slug });
     if (body.confirm) applyCleanup(plan);
     return json(res, 200, {
       ok: true,
       deleted: Boolean(body.confirm),
       files: plan.files.map((file) => ({ name: file.name, bytes: file.bytes })),
       totalBytes: plan.totalBytes,
+      totalLabel: plan.totalLabel,
     });
   }
 
@@ -2099,6 +2107,29 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, version: entry });
   }
 
+  if (rest === '/versions/delete' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+    const plan = planDeleteVersions(video, ids);
+    if (body.confirm) deleteVersions(video, ids);
+    return json(res, 200, {
+      ok: true,
+      deleted: Boolean(body.confirm),
+      versions: plan.versions.map((ver) => ({
+        id: ver.id,
+        name: ver.name,
+        title: ver.title,
+        kind: ver.kind,
+        bytes: ver.bytes,
+        sizeLabel: formatBytes(ver.bytes),
+      })),
+      missing: plan.missing,
+      totalBytes: plan.totalBytes,
+      totalLabel: formatBytes(plan.totalBytes),
+      summary: body.confirm ? videoSummary(slug) : undefined,
+    });
+  }
+
   const restoreMatch = rest.match(/^\/versions\/([^/]+)\/(restore|regenerate)$/);
   if (restoreMatch && req.method === 'POST') {
     const id = restoreMatch[1];
@@ -2519,7 +2550,7 @@ function serveStatic(req, res, url, { dev = false } = {}) {
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
   const raw = readFileSync(file);
   const payload = dev && /\.html?$/i.test(file) ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
-  const fresh = dev || /\.(html|js|css|mjs)$/i.test(file);
+  const fresh = dev || /\.(html|js|css|mjs|svg)$/i.test(file);
   res.writeHead(200, {
     'Content-Type': mime,
     'Content-Length': payload.length,

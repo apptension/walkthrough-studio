@@ -5,14 +5,14 @@
  */
 import { paintAgentStream } from './agentStream.js';
 import { ask } from './ask.js';
+import { icon } from './icons.js';
 import { SCENARIO_EDITABLE_NOTE, defaultSectionCollapsed } from './scriptSections.js';
 import { finishScriptApproval, planScriptApproval, scriptApproveLabel } from './scriptApproval.js';
 
 const $ = (id) => document.getElementById(id);
 
 /** Centered dismiss glyph — text × sits off-optical-center in square buttons. */
-const ICON_X =
-  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const ICON_X = icon('x', { size: 14 });
 
 const KIND_LABEL = { open: 'Open', plate: 'Plate', chapter: 'Chapter', step: 'Caption', close: 'Close' };
 /** Mirrors kit/lib/plateTypes.mjs — used only until the script payload (which carries the catalog) loads. */
@@ -434,7 +434,7 @@ export function initWorkflow(ctx) {
           ${
             draggable
               ? `<button type="button" class="ss-drag" data-drag-handle title="Drag to reorder" aria-label="Drag to reorder ${escapeHtml(role)}">
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="5" cy="4" r="1.35" fill="currentColor"/><circle cx="11" cy="4" r="1.35" fill="currentColor"/><circle cx="5" cy="8" r="1.35" fill="currentColor"/><circle cx="11" cy="8" r="1.35" fill="currentColor"/><circle cx="5" cy="12" r="1.35" fill="currentColor"/><circle cx="11" cy="12" r="1.35" fill="currentColor"/></svg>
+                  ${icon('grip', { size: 14 })}
                 </button>`
               : ''
           }
@@ -486,7 +486,7 @@ export function initWorkflow(ctx) {
         </span>
         ${count ? `<b class="script-section-count">${count}</b>` : '<span class="script-section-count is-empty" aria-hidden="true"></span>'}
         <span class="script-section-chevron" aria-hidden="true">
-          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          ${icon('chevron', { size: 14 })}
         </span>
       </button>
     </li>`;

@@ -38,7 +38,7 @@
         <select id="slugSelect" aria-label="Select sequence"></select>
       </label>
       <button type="button" id="btnNewVideo" class="btn compact icon-text" title="Create a new video from a brief">
-        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" stroke="none" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         New video
       </button>
       <button type="button" id="btnProjectSettings" class="btn compact icon-text" title="Edit the brief and replan" hidden>
@@ -57,16 +57,16 @@
 
       <div class="chrome-actions">
         <button type="button" id="btnMake" class="btn primary icon-text" title="Render / rebuild delivery">
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" stroke="none" d="M8 5v14l11-7z"/></svg>
           <span id="btnMakeLabel">Render</span>
           <span id="queueBadge" class="queue-badge" hidden>0</span>
         </button>
         <button type="button" id="btnExport" class="btn icon-text" title="Export handoff package">
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" stroke="none" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
           Export
         </button>
         <button type="button" id="btnSnapshot" class="btn icon-text" title="Save a named version">
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" stroke="none" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           Save version
         </button>
         <button type="button" id="btnCommand" class="btn command-trigger" title="Open command menu (⌘K)" aria-label="Open command menu">
@@ -77,17 +77,11 @@
         <div id="agentChrome" class="chrome-agent-host" role="group" aria-label="Agent runner">
           <button type="button" class="agent-logo-btn" data-agent="cursor" aria-pressed="false" aria-label="Cursor agent">
             <span class="agent-pulse" aria-hidden="true"></span>
-            <!-- Monochrome Cursor mark (Simple Icons, CC0) -->
-            <svg class="agent-logo" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-              <path fill="currentColor" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/>
-            </svg>
+            <span data-icon="agent-cursor" data-size="15" data-icon-class="agent-logo"></span>
           </button>
           <button type="button" class="agent-logo-btn" data-agent="claude" aria-pressed="false" aria-label="Claude Code">
             <span class="agent-pulse" aria-hidden="true"></span>
-            <!-- Monochrome Claude mark (Simple Icons, CC0) -->
-            <svg class="agent-logo" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-              <path fill="currentColor" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/>
-            </svg>
+            <span data-icon="agent-claude" data-size="15" data-icon-class="agent-logo"></span>
           </button>
           <div id="agentTip" class="agent-tip" role="tooltip" hidden></div>
         </div>
@@ -130,26 +124,34 @@
             <h2 id="renderHeadline" class="render-headline">Select a sequence</h2>
             <p id="renderReason" class="render-reason">Choose a video, then render or queue jobs from here.</p>
             <p id="voiceHoldWarn" class="voice-hold-warn" hidden></p>
+            <div id="captureBar" class="capture-bar" hidden>
+              <details id="recordTarget" class="capture-line">
+                <summary title="Edit start URL">
+                  <span class="capture-kicker">Opens</span>
+                  <span id="recordTargetSummary">No start URL yet</span>
+                  <span class="capture-chevron" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </span>
+                </summary>
+                <form id="recordTargetForm" class="record-target">
+                  <label class="wf"><span class="field-label">Start URL</span><input id="recordStartUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></label>
+                  <label class="tog"><input type="checkbox" id="recordLoginRequired" /><span>Sign-in required</span></label>
+                  <p id="recordTargetStatus" class="capture-status" hidden></p>
+                </form>
+              </details>
+              <button type="button" id="btnCaptureSettings" class="capture-cog" title="Project settings" aria-label="Project settings">
+                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
             <div class="render-start-actions">
               <button type="button" id="btnActionPrimary" class="render-cta primary">
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" stroke="none" d="M8 5v14l11-7z"/></svg>
                 <span class="cta-label">Render</span>
               </button>
               <button type="button" id="btnActionSecondary" class="render-cta" hidden>
                 <span class="cta-label">Other</span>
               </button>
             </div>
-            <details id="recordTarget" class="capture-line" hidden>
-              <summary>
-                <span class="capture-kicker">Opens</span>
-                <span id="recordTargetSummary">No start URL yet</span>
-              </summary>
-              <form id="recordTargetForm" class="record-target">
-                <label class="wf"><span class="field-label">Start URL</span><input id="recordStartUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></label>
-                <label class="tog"><input type="checkbox" id="recordLoginRequired" /><span>Sign-in required</span></label>
-                <p id="recordTargetStatus" class="capture-status" hidden></p>
-              </form>
-            </details>
             <div id="plateQcBanner" class="plate-qc-banner" hidden></div>
           </div>
 
@@ -189,40 +191,44 @@
             </div>
           </div>
 
-          <div class="render-section" id="queueSection">
+          <div class="render-section queue-section" id="queueSection">
             <div class="render-section-label">
-              <span data-ico="queue" data-help="Steps waiting behind the current job. Add Plates, Audio, or Export. Render stays the button above so it is not listed twice.">Queue</span>
+              <span data-ico="queue" data-help="Jobs waiting behind the current one. Add a full render or a single step — Plates, Audio, Export, and more.">Queue</span>
               <div class="render-section-actions">
-                <button type="button" id="btnQueueAdd" class="btn tiny" aria-expanded="false" aria-controls="queueMenu">Add step</button>
+                <div class="queue-add-wrap" id="queueAddWrap">
+                  <button type="button" id="btnQueueAdd" class="queue-add-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="queueMenu" title="Add a step to the queue">
+                    <svg viewBox="0 0 24 24" class="queue-add-plus" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    <span class="queue-add-label">Add</span>
+                    <svg viewBox="0 0 24 24" class="queue-add-caret" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div id="queueMenu" class="queue-menu" hidden role="menu" aria-label="Add a job to the queue"></div>
+                </div>
                 <button type="button" id="btnStopWork" class="btn tiny danger" hidden title="Stop running job and clear queue">Stop all</button>
                 <button type="button" id="btnClearQueue" class="btn tiny" hidden title="Clear waiting steps. The running job keeps going.">Clear</button>
               </div>
             </div>
-            <div id="queueMenu" class="queue-menu" hidden>
-              <button type="button" data-enqueue="plates">Plates</button>
-              <button type="button" data-enqueue="audio">Audio</button>
-              <button type="button" data-enqueue="deliver">Export</button>
-            </div>
             <ol id="jobQueue" class="queue-list"></ol>
-            <p id="queueEmpty" class="queue-empty">Nothing waiting. Render runs from the button above.</p>
+            <div id="queueEmpty" class="queue-empty">
+              <span class="queue-empty-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M16 14l4 3-4 3v-6z"/></svg>
+              </span>
+              <div class="queue-empty-copy">
+                <strong>Nothing waiting</strong>
+                <p>Add a step, or use <em>Render</em> above for the full pass.</p>
+              </div>
+            </div>
           </div>
-          <details id="cleanupDisclosure" class="capture-line capture-quiet" hidden>
-            <summary>Clean up capture files</summary>
-            <p class="capture-status">Removes intermediate files. The live recording and the delivery master stay.</p>
-            <div id="cleanupVersions" class="cleanup-versions"></div>
-            <button type="button" id="btnCleanup" class="btn">Clean intermediates</button>
-          </details>
         </div>
 
         <div id="leftVersions" class="panel-body versions-bay" hidden>
           <div class="versions-head panel-head">
-            <span class="panel-head-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></span>
+            <span class="panel-head-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></span>
             <div class="versions-head-text">
               <h2 class="versions-title">History</h2>
               <p class="versions-sub" id="versionCount">No versions yet</p>
             </div>
             <button type="button" id="btnSnapshotSide" class="btn tiny icon-text" title="Save a named version">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" stroke="none" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
               Save version
             </button>
           </div>
@@ -231,6 +237,19 @@
             <span>Show pipeline checkpoints</span>
             <span class="help-anchor" data-help="Every render saves a checkpoint automatically. Named versions are the ones you saved or approved; checkpoints are hidden unless you need to roll back further."></span>
           </label>
+          <div id="versionsManage" class="versions-manage" hidden>
+            <div class="versions-manage-row">
+              <label class="tog compact versions-select-all">
+                <input type="checkbox" id="togSelectAllVersions" />
+                <span>Select all</span>
+              </label>
+              <span id="versionsSelectionMeta" class="versions-selection-meta">Nothing selected</span>
+            </div>
+            <div class="versions-manage-actions">
+              <button type="button" id="btnDeleteVersions" class="btn tiny versions-delete" disabled title="Delete selected versions from History">Delete</button>
+              <button type="button" id="btnCleanIntermediates" class="btn tiny ghost" title="Remove regenerable plates, slices, and premaster audio">Clean intermediates</button>
+            </div>
+          </div>
           <ul id="versions" class="version-list"></ul>
         </div>
 
@@ -260,7 +279,7 @@
         <div class="monitor-head">
           <div class="monitor-modes" role="tablist" aria-label="Monitor mode">
             <button type="button" class="mode-tab active" data-mode="program" id="modeProgram" title="Watch the rendered video">Program</button>
-            <button type="button" class="mode-tab mode-tab-live" data-mode="live" id="modeLive" title="Watch the live page capture" hidden>Live</button>
+            <button type="button" class="mode-tab mode-tab-live" data-mode="live" id="modeLive" title="Watch the live page capture" hidden aria-hidden="true"><i class="live-dot" aria-hidden="true"></i><span>Live</span></button>
             <button type="button" class="mode-tab" data-mode="plate" id="modePlate" title="Edit the cut: play it, change speed, zooms, transitions, plate text and colours">Editor</button>
           </div>
           <div class="monitor-context">
@@ -294,7 +313,7 @@
               <div class="record-failure-actions">
                 <button type="button" id="recordFailureFix" class="btn primary compact">Fix with AI</button>
                 <button type="button" id="recordFailureDismiss" class="record-failure-dismiss" title="Dismiss" aria-label="Dismiss recording failure">
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
                 </button>
               </div>
             </figure>
@@ -400,23 +419,39 @@
             </div>
             <div id="captionOverlay" class="caption-overlay" aria-live="polite"></div>
             <div id="chapterToast" class="chapter-toast" aria-live="polite"></div>
-            <div id="noVideo" class="empty">
-              <strong>No sequence rendered</strong>
-              <p>Press <em>Render</em> to record, produce, and mix.</p>
+            <div id="noVideo" class="empty program-empty" data-tone="ready">
+              <div class="program-empty-glow" aria-hidden="true"></div>
+              <div class="program-empty-card">
+                <div class="program-empty-icon" data-icon="empty-play" data-width="64" data-height="64" aria-hidden="true"></div>
+                <div class="program-empty-icon" data-icon="empty-stale" data-width="64" data-height="64" aria-hidden="true" hidden></div>
+                <div class="program-empty-icon" data-icon="empty-capture" data-width="64" data-height="64" aria-hidden="true" hidden></div>
+                <p class="program-empty-kicker" id="noVideoKicker">Program</p>
+                <strong id="noVideoTitle">Nothing to play yet</strong>
+                <p id="noVideoReason">Render a sequence to watch the cut here.</p>
+                <div class="program-empty-actions">
+                  <button type="button" id="btnNoVideoPrimary" class="render-cta primary">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" stroke="none" d="M8 5v14l11-7z"/></svg>
+                    <span class="cta-label">Render</span>
+                  </button>
+                  <button type="button" id="btnNoVideoSecondary" class="render-cta" hidden>
+                    <span class="cta-label">Other</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="transport">
           <button type="button" id="btnSkipBack" class="btn icon" aria-label="Back 5 seconds" title="J −5s">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 18V6l-8.5 6 8.5 6zm.5-6 8.5 6V6l-8.5 6z"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11 18V6l-8.5 6 8.5 6zm.5-6 8.5 6V6l-8.5 6z"/></svg>
           </button>
           <button type="button" id="btnPlay" class="play-btn" title="Space" aria-label="Play">
-            <svg class="ico-play" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-            <svg class="ico-pause" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+            <svg viewBox="0 0 24 24" class="ico-play" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M8 5v14l11-7z"/></svg>
+            <svg viewBox="0 0 24 24" class="ico-pause" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
           </button>
           <button type="button" id="btnSkipFwd" class="btn icon" aria-label="Forward 5 seconds" title="L +5s">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
           </button>
           <span class="transport-spacer"></span>
           <select id="rateSelect" aria-label="Speed" class="rate">
@@ -427,25 +462,25 @@
             <option value="2">2×</option>
           </select>
           <button type="button" id="btnMute" class="btn icon" aria-label="Mute" title="Mute">
-            <svg class="ico-vol" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-            <svg class="ico-mute" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" hidden><path fill="currentColor" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v4h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+            <svg viewBox="0 0 24 24" class="ico-vol" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M3 10v4h4l5 5V5L7 10H3zm13.5 2c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg viewBox="0 0 24 24" class="ico-mute" width="16" height="16" aria-hidden="true" hidden><path fill="currentColor" stroke="none" d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v4h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
           </button>
           <button type="button" id="btnFs" class="btn icon" aria-label="Fullscreen" title="Fullscreen">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
           </button>
         </div>
 
         <div class="ed-transport" id="edTransport">
-          <button type="button" id="edToStart" class="ed-btn" title="Back to the start (Home)" aria-label="Back to the start"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 5v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 6v12l-9-6z" fill="currentColor"/></svg></button>
+          <button type="button" id="edToStart" class="ed-btn" title="Back to the start (Home)" aria-label="Back to the start"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 6v12l-9-6z" fill="currentColor" stroke="none"/></svg></button>
           <button type="button" id="edPlay" class="ed-play" title="Play / pause (Space)" aria-label="Play"></button>
           <button type="button" id="edReplay" class="ed-btn" title="Replay this clip (R)" aria-label="Replay this clip"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="m10.5 9 4.5 3-4.5 3z" fill="currentColor" stroke="none"/></svg></button>
           <span id="edClipChip" class="ed-clip-chip"></span>
           <span class="transport-spacer"></span>
-          <button type="button" id="edEditText" class="ed-btn labeled" hidden title="Edit the words on this plate" aria-pressed="false"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg><span>Edit text</span></button>
+          <button type="button" id="edEditText" class="ed-btn labeled" hidden title="Edit the words on this plate" aria-pressed="false"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg><span>Edit text</span></button>
           <button type="button" id="edLoop" class="ed-btn labeled" title="Loop the clip under the playhead (L)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg><span>Loop</span></button>
           <button type="button" id="edFx" class="ed-btn labeled is-on" title="Preview zooms and transitions while you watch"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Effects</span></button>
           <button type="button" id="edSound" class="ed-btn labeled is-on" title="Play narration and music with the cut"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 7a7 7 0 0 1 0 10"/></svg><span>Sound</span></button>
-          <button type="button" id="edFullscreen" class="ed-btn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          <button type="button" id="edFullscreen" class="ed-btn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         </div>
 
         <div id="sceneBar" class="scene-bar">
@@ -458,15 +493,15 @@
           </div>
           <div class="scene-actions">
             <button type="button" id="btnEditScene" class="btn primary compact icon-text" disabled title="Open plate editor — click text to change copy">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" stroke="none" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
               <span id="btnEditSceneLabel">Edit plate</span>
             </button>
             <button type="button" id="btnAskAiScene" class="btn compact icon-text" disabled title="Write feedback for this plate, then Apply AI">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7zm-2 18h4v2h-4v-2z"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" stroke="none" d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7zm-2 18h4v2h-4v-2z"/></svg>
               Ask AI
             </button>
             <button type="button" id="btnMotionScene" class="btn compact icon-text" disabled title="Open Motion templates (does not run AI yet)">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" stroke="none" d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z"/></svg>
               Motion
             </button>
           </div>
@@ -521,17 +556,9 @@
           <div id="rightFeedback" class="panel-body">
             <p class="panel-lede">Direct the whole video in plain language. The agent chooses the smallest safe scope, coordinates related sources, and waits for your approval before rendering.</p>
             <label class="field">
-              <span data-ico="note" data-help="Broad notes can coordinate story, narration, video-local brand direction, pacing, plates, voice and mix. Name an exact plate, scene or line only when you want a surgical edit.">Director note</span>
+              <span data-ico="note" data-help="Smart scope picks the smallest safe change. A broad note can coordinate story &amp; script, brand direction, timing, plates, and voice &amp; mix together. Name an exact plate, scene, or line only when you want a surgical edit.">Director note</span>
               <textarea id="improveNote" rows="4" placeholder="e.g. Tighten the story, make the pacing calmer, and give the voice more warmth — keep the captured brand intact"></textarea>
             </label>
-            <div class="feedback-capabilities" aria-label="Smart scope capabilities">
-              <span>Story &amp; script</span>
-              <span>Brand direction</span>
-              <span>Timing</span>
-              <span>Plates</span>
-              <span>Voice &amp; mix</span>
-            </div>
-            <p class="smart-scope-note"><strong>Smart scope</strong> · broad note = coordinated pass · exact plate or line = surgical edit</p>
             <button type="button" id="btnImprove" class="btn primary block" data-improve="full">Apply with smart scope</button>
             <div class="field scope-field">
               <span data-ico="target" data-help="Force a domain only when you know the change must not touch related parts. The main action usually gives a more coherent result.">Or force one domain</span>
@@ -554,7 +581,7 @@
 
           <div id="rightMotion" class="panel-body" hidden>
             <div class="direction-head panel-head">
-              <span class="panel-head-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 21 10c0-3.9-4-7-9-7z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="11" cy="7.5" r="1.2"/><circle cx="16" cy="8" r="1.2"/></svg></span>
+              <span class="panel-head-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 21 10c0-3.9-4-7-9-7z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="16" cy="8" r="1"/></svg></span>
               <div>
                 <span class="direction-kicker">Visual direction</span>
                 <p class="panel-lede">Set once per video · suggestions come from the brand pack</p>
@@ -593,15 +620,15 @@
               </div>
               <div class="focus-options" id="focusGrid" role="radiogroup" aria-label="Feature focus treatment">
                 <button type="button" class="focus-option active" data-focus="guided" role="radio" aria-checked="true">
-                  <span class="focus-glyph guided" aria-hidden="true"><i></i><b></b></span>
+                  <span class="focus-glyph guided" aria-hidden="true" data-icon="focus-guided" data-width="44" data-height="34"></span>
                   <span><strong>Guided lens</strong><em>Follows the pointer across related features</em></span>
                 </button>
                 <button type="button" class="focus-option" data-focus="spotlight" role="radio">
-                  <span class="focus-glyph spotlight" aria-hidden="true"><i></i></span>
+                  <span class="focus-glyph spotlight" aria-hidden="true" data-icon="focus-spotlight" data-width="44" data-height="34"></span>
                   <span><strong>Spotlight</strong><em>Magnifies key proof without pointer travel</em></span>
                 </button>
                 <button type="button" class="focus-option" data-focus="ring" role="radio">
-                  <span class="focus-glyph ring" aria-hidden="true"><i></i></span>
+                  <span class="focus-glyph ring" aria-hidden="true" data-icon="focus-ring" data-width="44" data-height="34"></span>
                   <span><strong>Focus ring</strong><em>Minimal for dense or motion-heavy UI</em></span>
                 </button>
               </div>
@@ -1004,7 +1031,7 @@
     <footer class="timeline-shell" aria-label="Timeline">
       <div class="tl-toolbar">
         <button type="button" class="tl-label" id="tlLabel" aria-expanded="true" aria-controls="timeline" title="Collapse or expand the timeline">
-          <svg class="etl-toggle-chevron" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          <svg viewBox="0 0 24 24" class="etl-toggle-chevron" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           <span>Timeline</span>
         </button>
         <span id="tlLockHint" class="tl-lock-hint" hidden>Editor · scrub locked · click a plate or live clip to switch · Program to scrub</span>
@@ -1013,23 +1040,23 @@
       <div id="edTimeline" class="etl" aria-label="Editor timeline">
         <div class="etl-bar">
           <button type="button" id="etlToggle" class="etl-toggle" aria-expanded="true" title="Collapse or expand the timeline" aria-label="Collapse or expand the timeline">
-            <svg class="etl-toggle-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            <svg viewBox="0 0 24 24" class="etl-toggle-chevron" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             <span>Timeline</span>
           </button>
           <span class="etl-sep" aria-hidden="true"></span>
           <div class="etl-tools" role="toolbar" aria-label="Edit tools">
-            <button type="button" id="etlAddSpeed" class="etl-tool speed"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>Speed</button>
-            <button type="button" id="etlAddZoom" class="etl-tool zoom"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M11 8.5v5M8.5 11h5"/></svg>Zoom</button>
-            <button type="button" id="etlAddLens" class="etl-tool lens"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/><path d="M7.4 9.2a3.4 3.4 0 0 1 2.4-2.3"/></svg>Magnify</button>
-            <button type="button" id="etlAddVoice" class="etl-tool voice" title="Add a voice line at the playhead"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg>Voice</button>
-            <button type="button" id="etlMix" class="etl-tool mix"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Mix</button>
+            <button type="button" id="etlAddSpeed" class="etl-tool speed"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>Speed</button>
+            <button type="button" id="etlAddZoom" class="etl-tool zoom"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M11 8.5v5M8.5 11h5"/></svg>Zoom</button>
+            <button type="button" id="etlAddLens" class="etl-tool lens"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/><path d="M7.4 9.2a3.4 3.4 0 0 1 2.4-2.3"/></svg>Magnify</button>
+            <button type="button" id="etlAddVoice" class="etl-tool voice" title="Add a voice line at the playhead"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>Voice</button>
+            <button type="button" id="etlMix" class="etl-tool mix"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Mix</button>
             <span class="etl-sep" aria-hidden="true"></span>
             <button type="button" id="etlUndo" class="etl-icon" title="Undo (⌘Z)" aria-label="Undo" disabled><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
             <button type="button" id="etlRedo" class="etl-icon" title="Redo (⇧⌘Z)" aria-label="Redo" disabled><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
           </div>
           <div id="etlContext" class="etl-context"></div>
           <div class="etl-scale">
-            <button type="button" id="etlFit" class="etl-icon" title="Fit the whole cut" aria-label="Fit the whole cut"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+            <button type="button" id="etlFit" class="etl-icon" title="Fit the whole cut" aria-label="Fit the whole cut"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
             <input type="range" id="etlScale" min="0" max="4.5" step="0.05" value="0" aria-label="Timeline zoom" title="Timeline zoom (⌘ + scroll)" />
             <span id="etlDur" class="etl-dur">0:00.0</span>
           </div>
@@ -1039,13 +1066,13 @@
             <div class="etl-scroll-row">
               <div class="etl-heads" aria-hidden="true">
                 <div class="etl-head ruler"></div>
-                <div class="etl-head clips" title="Clips"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16"/></svg></div>
-                <div class="etl-head chapters" id="etlHeadChapters" title="Chapters"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M8 9h6M8 13h4"/></svg></div>
-                <div class="etl-head captions" id="etlHeadCaptions" title="Captions"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h4M13 12h4M7 15h6"/></svg></div>
-                <div class="etl-head speed" title="Speed"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/></svg></div>
-                <div class="etl-head zoom" title="Zoom"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3"/></svg></div>
-                <div class="etl-head voice" title="Voice"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3"/></svg></div>
-                <div class="etl-head music" title="Music"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="2.4"/><circle cx="17" cy="16" r="2.4"/></svg></div>
+                <div class="etl-head clips" title="Clips"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></div>
+                <div class="etl-head chapters" id="etlHeadChapters" title="Chapters"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M8 9h6M8 13h4"/></svg></div>
+                <div class="etl-head captions" id="etlHeadCaptions" title="Captions"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h4M13 12h4M7 15h6"/></svg></div>
+                <div class="etl-head speed" title="Speed"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg></div>
+                <div class="etl-head zoom" title="Zoom"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M11 8.5v5M8.5 11h5"/></svg></div>
+                <div class="etl-head voice" title="Voice"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg></div>
+                <div class="etl-head music" title="Music"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="2.4"/><circle cx="17" cy="16" r="2.4"/></svg></div>
               </div>
               <div id="etlCanvas" class="etl-canvas">
                 <div id="etlRuler" class="etl-ruler"></div>
@@ -1068,7 +1095,7 @@
         <div class="tl-ruler" id="timelineRuler" aria-hidden="true"></div>
         <div class="tl-lanes-wrap">
           <div class="tl-lanes">
-            <div class="tl-lane-label clips" title="Clips"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16"/></svg><span class="sr-only">Clips</span></div>
+            <div class="tl-lane-label clips" title="Clips"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg><span class="sr-only">Clips</span></div>
             <div class="tl-lane-body">
               <div id="timelineTrack" class="tl-track">
                 <div id="timelineRegions" class="tl-regions"></div>
@@ -1077,9 +1104,9 @@
                 <div id="timelineMarks" class="tl-marks"></div>
               </div>
             </div>
-            <div class="tl-lane-label chapters" title="Chapters"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M8 9h6M8 13h4"/></svg><span class="sr-only">Chapters</span></div>
+            <div class="tl-lane-label chapters" title="Chapters"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M8 9h6M8 13h4"/></svg><span class="sr-only">Chapters</span></div>
             <div class="tl-lane-body tl-chapters" id="timelineChapters"></div>
-            <div class="tl-lane-label captions" title="Captions"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h4M13 12h4M7 15h6"/></svg><span class="sr-only">Captions</span></div>
+            <div class="tl-lane-label captions" title="Captions"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h4M13 12h4M7 15h6"/></svg><span class="sr-only">Captions</span></div>
             <div class="tl-lane-body tl-cues" id="timelineCues"></div>
           </div>
           <!-- Full-height scrubber over every Program lane (clips + chapters + captions). -->
@@ -1115,63 +1142,181 @@
       <p id="commandEmpty" class="command-empty" hidden>No matching command</p>
     </dialog>
 
-    <dialog id="helpDialog" class="sheet-dialog help" aria-labelledby="helpDialogTitle">
+    <dialog id="helpDialog" class="sheet-dialog help" aria-labelledby="helpDialogTitle" aria-describedby="helpDialogSub">
       <form method="dialog" class="sheet-form">
         <header class="sheet-head">
           <span class="sheet-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 3.9"/><path d="M12 17h.01"/></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 3.9"/><path d="M12 17h.01"/></svg>
           </span>
           <div class="sheet-titles">
             <h2 id="helpDialogTitle">Studio guide</h2>
-            <p class="sheet-sub">From a brief to an approved, delivered video. Hover any <span class="help-inline" aria-hidden="true">i</span> for detail.</p>
+            <p id="helpDialogSub" class="sheet-sub">Brief → script → direction → record → cut → deliver. Jump a section, or open a stage.</p>
           </div>
-          <button type="submit" class="sheet-close" aria-label="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <button type="submit" class="sheet-close" aria-label="Close guide" title="Close (Esc)">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         </header>
-        <div class="sheet-body">
-          <h3 class="sheet-section first">How a video gets made</h3>
-          <ol class="guide-flow">
-            <li><strong>Brief</strong><span>Who it’s for and what they should learn.</span></li>
-            <li><strong>Script</strong><span>Approve what’s said and shown. Cheapest stage to change.</span></li>
-            <li><strong>Direction</strong><span>Colors, logo, feature focus, auto zoom, frame, cursor and transitions.</span></li>
-            <li><strong>Record</strong><span>The app is captured live, following the script.</span></li>
-            <li><strong>Cut</strong><span>Watch the render, give feedback, approve.</span></li>
-            <li><strong>Deliver</strong><span>Export MP4, captions, chapters, poster, plus square, vertical and GIF cuts.</span></li>
-          </ol>
-          <p class="guide-note">The stage bar under the header shows where this video is. The highlighted stage is the next one to act on; click any stage to open it.</p>
+        <nav class="guide-nav" id="guideNav" aria-label="Guide sections">
+          <button type="button" class="guide-nav-btn is-active" data-guide-jump="guideHow" aria-current="true">How it works</button>
+          <button type="button" class="guide-nav-btn" data-guide-jump="guideDesk">The desk</button>
+          <button type="button" class="guide-nav-btn" data-guide-jump="guideWords">Words</button>
+          <button type="button" class="guide-nav-btn" data-guide-jump="guideKeys">Shortcuts</button>
+        </nav>
+        <div class="sheet-body guide-body" id="guideBody">
+          <section id="guideHow" class="guide-block" aria-labelledby="guideHowTitle">
+            <h3 id="guideHowTitle" class="sheet-section first">How a video gets made</h3>
+            <ol class="guide-flow">
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="brief">
+                  <strong>Brief</strong>
+                  <span>Who it’s for and what they should walk away knowing.</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="script">
+                  <strong>Script</strong>
+                  <span>Approve what’s said and shown — cheapest place to change course.</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="direction">
+                  <strong>Direction</strong>
+                  <span>Palette, logo, focus lens, zoom, frame, cursor and transitions.</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="record">
+                  <strong>Record</strong>
+                  <span>Playwright captures the live app, following the script.</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="cut">
+                  <strong>Cut</strong>
+                  <span>Watch the render, leave feedback, then approve the take.</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="guide-stage" data-guide-stage="deliver">
+                  <strong>Deliver</strong>
+                  <span>Export the master, captions, chapters, poster, and social cuts.</span>
+                </button>
+              </li>
+            </ol>
+            <p class="guide-callout" role="note">
+              <span class="guide-callout-ico" aria-hidden="true">→</span>
+              <span>The stage bar under the header tracks this video. The highlighted stage is next; any stage opens its sheet or panel.</span>
+            </p>
+          </section>
 
-          <h3 class="sheet-section">Where things are</h3>
-          <dl class="guide-map">
-            <div><dt>Left · Render</dt><dd>What needs doing, and the button that does it. Live progress and the step queue.</dd></div>
-            <div><dt>Left · Versions</dt><dd>Saved and approved cuts. Play, compare or restore any of them.</dd></div>
-            <div><dt>Centre · Program</dt><dd>The rendered video. <em>Editor</em> plays the whole cut with one timeline: clips, transition markers, a speed row and a zoom row. Click anything to edit it in the Inspector; drag across the speed or zoom row to pick a stretch.</dd></div>
-            <div><dt>Right · Feedback</dt><dd>Tell the agent what to change; review its preview, then approve or discard.</dd></div>
-            <div><dt>Right · Motion, Review, Deliver</dt><dd>Plate motion and transitions, quality checks and chapters, the handoff pack.</dd></div>
-          </dl>
+          <section id="guideDesk" class="guide-block" aria-labelledby="guideDeskTitle">
+            <h3 id="guideDeskTitle" class="sheet-section">The desk</h3>
+            <div class="guide-desk" aria-hidden="true">
+              <div class="guide-desk-col">
+                <span class="guide-desk-label">Left</span>
+                <ul>
+                  <li>Render</li>
+                  <li>Versions</li>
+                  <li>Media</li>
+                </ul>
+              </div>
+              <div class="guide-desk-col guide-desk-centre">
+                <span class="guide-desk-label">Centre</span>
+                <ul>
+                  <li>Program</li>
+                  <li>Editor</li>
+                </ul>
+              </div>
+              <div class="guide-desk-col">
+                <span class="guide-desk-label">Right</span>
+                <ul>
+                  <li>Feedback</li>
+                  <li>Inspector</li>
+                  <li>Direction</li>
+                  <li>Review</li>
+                  <li>Deliver</li>
+                </ul>
+              </div>
+            </div>
+            <dl class="guide-map">
+              <div>
+                <dt>Left · Render</dt>
+                <dd>What needs doing, the primary action, live progress and the step queue.</dd>
+              </div>
+              <div>
+                <dt>Left · Versions</dt>
+                <dd>Saved and approved cuts. Play, compare or restore any of them.</dd>
+              </div>
+              <div>
+                <dt>Left · Media</dt>
+                <dd>Poster still and plate / card previews for the handoff pack.</dd>
+              </div>
+              <div>
+                <dt>Centre · Program</dt>
+                <dd>The rendered master. Open <em>Editor</em> for one timeline — clips, joins, speed and zoom. Click a strip to edit it in Inspector.</dd>
+              </div>
+              <div>
+                <dt>Right · Feedback</dt>
+                <dd>Plain-language director notes. The agent picks the smallest safe scope; you approve before it writes.</dd>
+              </div>
+              <div>
+                <dt>Right · Inspector</dt>
+                <dd>Edit the selected clip, join, voice line or plate field from the Editor.</dd>
+              </div>
+              <div>
+                <dt>Right · Direction</dt>
+                <dd>Visual language for this video: focus, zoom, frame, cursor, atmosphere, transitions.</dd>
+              </div>
+              <div>
+                <dt>Right · Review &amp; Deliver</dt>
+                <dd>Story review, quality checks, chapters, then the handoff zip and social formats.</dd>
+              </div>
+            </dl>
+            <p class="guide-tip">
+              <span class="help-inline" aria-hidden="true">i</span>
+              <span>Hover any <span class="help-inline" aria-hidden="true">i</span> next to a control for a short explanation. Click to pin it; <kbd>Esc</kbd> dismisses.</span>
+            </p>
+          </section>
 
-          <h3 class="sheet-section">Words you’ll see</h3>
-          <dl class="guide-terms">
-            <div><dt>Plate</dt><dd>A designed brand scene: the opener, title cards, the close.</dd></div>
-            <div><dt>Chapter</dt><dd>A section of the live tour. Becomes a YouTube chapter.</dd></div>
-            <div><dt>Out of date</dt><dd>Sources changed since the last render; Render to see them.</dd></div>
-            <div><dt>Checkpoint</dt><dd>An automatic save from each render, hidden in Versions by default.</dd></div>
-            <div><dt>Handoff pack</dt><dd>Everything the client receives, as one zip.</dd></div>
-          </dl>
+          <section id="guideWords" class="guide-block" aria-labelledby="guideWordsTitle">
+            <h3 id="guideWordsTitle" class="sheet-section">Words you’ll see</h3>
+            <dl class="guide-terms">
+              <div><dt>Plate</dt><dd>A designed brand scene — opener, title cards, close.</dd></div>
+              <div><dt>Chapter</dt><dd>A section of the live tour. Becomes a YouTube chapter.</dd></div>
+              <div><dt>Out of date</dt><dd>Sources changed since the last render. Press Render to catch up.</dd></div>
+              <div><dt>Checkpoint</dt><dd>Automatic save from each render. Hidden in Versions unless you need it.</dd></div>
+              <div><dt>Handoff pack</dt><dd>Everything the client receives, as one zip.</dd></div>
+              <div><dt>Smart scope</dt><dd>The agent chooses the smallest safe change from a director note.</dd></div>
+            </dl>
+          </section>
 
-          <h3 class="sheet-section">Shortcuts</h3>
-          <dl class="keys">
-            <div><dt><kbd>⌘</kbd><kbd>K</kbd></dt><dd>Search commands and jump anywhere</dd></div>
-            <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
-            <div><dt><kbd>R</kbd></dt><dd>Editor: replay the clip under the playhead</dd></div>
-            <div><dt><kbd>S</kbd> <kbd>Z</kbd> <kbd>M</kbd></dt><dd>Editor: speed up a stretch / zoom in / magnify a detail at the playhead</dd></div>
-            <div><dt><kbd>⌘</kbd><kbd>Z</kbd></dt><dd>Editor: undo (<kbd>⇧</kbd> to redo)</dd></div>
-            <div><dt><kbd>⌘</kbd><kbd>S</kbd></dt><dd>Save plate copy edits</dd></div>
-            <div><dt><kbd>J</kbd><kbd>L</kbd></dt><dd>Back / forward 5 seconds</dd></div>
-            <div><dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Back / forward 2 seconds</dd></div>
-            <div><dt><kbd>C</kbd></dt><dd>Toggle captions</dd></div>
-            <div><dt><kbd>?</kbd></dt><dd>This guide</dd></div>
-          </dl>
+          <section id="guideKeys" class="guide-block" aria-labelledby="guideKeysTitle">
+            <h3 id="guideKeysTitle" class="sheet-section">Shortcuts</h3>
+            <p class="guide-keys-lede">Ignored while typing in a field or when another dialog is open.</p>
+
+            <h4 class="guide-keys-group">Everywhere</h4>
+            <dl class="keys">
+              <div><dt><kbd data-mod>⌘</kbd><kbd>K</kbd></dt><dd>Search commands and jump anywhere</dd></div>
+              <div><dt><kbd>?</kbd></dt><dd>Open this guide</dd></div>
+              <div><dt><kbd>Esc</kbd></dt><dd>Close a dialog, tip or selection</dd></div>
+            </dl>
+
+            <h4 class="guide-keys-group">Program</h4>
+            <dl class="keys">
+              <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
+              <div><dt><kbd>J</kbd><kbd>L</kbd></dt><dd>Back / forward 5 seconds</dd></div>
+              <div><dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Back / forward 2 seconds</dd></div>
+              <div><dt><kbd>C</kbd></dt><dd>Toggle captions</dd></div>
+              <div><dt><kbd data-mod>⌘</kbd><kbd>S</kbd></dt><dd>Save plate copy edits</dd></div>
+            </dl>
+
+            <h4 class="guide-keys-group">Editor</h4>
+            <dl class="keys">
+              <div><dt><kbd>R</kbd></dt><dd>Replay the clip under the playhead</dd></div>
+              <div><dt><kbd>S</kbd><kbd>Z</kbd><kbd>M</kbd></dt><dd>Speed / zoom / magnify at the playhead</dd></div>
+              <div><dt><kbd data-mod>⌘</kbd><kbd>Z</kbd></dt><dd>Undo · <kbd>⇧</kbd><kbd data-mod>⌘</kbd><kbd>Z</kbd> redo</dd></div>
+            </dl>
+          </section>
         </div>
       </form>
     </dialog>
@@ -1179,7 +1324,7 @@
     <dialog id="scriptDialog" class="sheet-dialog wide script-sheet" aria-labelledby="scriptDialogTitle">
       <header class="sheet-head script-head">
         <span class="sheet-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 15 2 2 4-4"/></svg>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 15 2 2 4-4"/></svg>
         </span>
         <div class="sheet-titles">
           <div class="sheet-title-row">
@@ -1192,7 +1337,7 @@
         <div class="sheet-tools">
           <label class="tog"><input type="checkbox" id="scriptOnlyIssues" /><span>Issues only</span></label>
           <button type="button" class="sheet-close" data-close aria-label="Close">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
         </div>
       </header>
@@ -1267,7 +1412,7 @@
     <dialog id="cutDialog" class="sheet-dialog narrow" aria-labelledby="cutDialogTitle">
       <header class="sheet-head">
         <span class="sheet-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
         </span>
         <div class="sheet-titles">
           <div class="sheet-title-row">
@@ -1277,7 +1422,7 @@
           <p class="sheet-sub">Approving saves this exact file as a release version.</p>
         </div>
         <button type="button" class="sheet-close" data-close aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
       </header>
       <div class="sheet-body">
@@ -1301,15 +1446,15 @@
     <dialog id="projectDialog" class="sheet-dialog wizard" aria-labelledby="projectDialogTitle">
       <header class="sheet-head">
         <span class="sheet-icon project-dialog-icon" aria-hidden="true">
-          <svg data-project-icon="add" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          <svg data-project-icon="cog" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" stroke="none" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <svg viewBox="0 0 24 24" data-project-icon="cog" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </span>
         <div class="sheet-titles">
           <h2 id="projectDialogTitle">New video</h2>
           <p id="projectDialogSub" class="sheet-sub">The agent drafts the script from this brief. Nothing is recorded until you approve it.</p>
         </div>
         <button type="button" class="sheet-close" data-close aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
       </header>
       <ol class="wizard-steps" id="wizardSteps" aria-label="Brief steps">
@@ -1406,7 +1551,7 @@
               <label class="wf"><span class="field-label">Demo account email</span><input name="email" type="email" autocomplete="off" spellcheck="false" /></label>
               <label class="wf"><span class="field-label">Password</span><input name="password" type="password" autocomplete="new-password" /></label>
             </div>
-            <p class="wf-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Stored only in <code>kit/.env</code> (gitignored); the project references it as <code>$VAR</code>.</p>
+            <p class="wf-note"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Stored only in <code>kit/.env</code> (gitignored); the project references it as <code>$VAR</code>.</p>
           </div>
           <label class="wf"><span class="field-label">App source in this workspace</span><input name="sourcePath" placeholder="packages/webapp" spellcheck="false" /><small>Lets the agent read real labels and routes for reliable selectors.</small></label>
           <label class="wf"><span class="field-label">Access notes</span><textarea name="notes" rows="2" placeholder="Cookie banner on first load; seed org “Demo Agency”; avoid the billing page"></textarea></label>
@@ -1505,7 +1650,7 @@
       </form>
       <footer class="sheet-foot wizard-foot">
         <button type="button" id="btnWizardBack" class="btn ghost" disabled>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Back
         </button>
         <span class="wizard-progress" aria-hidden="true"><span id="wizardProgressBar"></span></span>
         <span class="meta" id="wizardStepMeta">Step 1 of 5</span>
@@ -1521,14 +1666,14 @@
     <dialog id="branchDialog" class="sheet-dialog narrow branch-sheet" aria-labelledby="branchDialogTitle">
       <header class="sheet-head">
         <span class="sheet-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.5 10.5 15M15.8 7.5 13.5 15"/></svg>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.5 10.5 15M15.8 7.5 13.5 15"/></svg>
         </span>
         <div class="sheet-titles">
           <h2 id="branchDialogTitle">Branch</h2>
           <p class="sheet-sub">Spin focused feature videos from <strong id="branchSource">this overview</strong>. Same product, narrower story.</p>
         </div>
         <button type="button" class="sheet-close" data-close aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
       </header>
       <div class="sheet-body branch-body">

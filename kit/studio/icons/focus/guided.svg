@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 34" fill="none"><rect class="fg-ui" x="2" y="4" width="40" height="26" rx="3.5"/>
+                      <rect class="fg-chip" x="6" y="8.5" width="7.5" height="4.5" rx="1"/>
+                      <rect class="fg-chip" x="15.5" y="8.5" width="9" height="4.5" rx="1"/>
+                      <rect class="fg-chip" x="6" y="16" width="12" height="8" rx="1.4"/>
+                      <path class="fg-path" d="M12 11c5.5-1.2 11 2.2 17.5 8"/>
+                      <circle class="fg-lens" cx="30.5" cy="20.5" r="7.6"/>
+                      <circle class="fg-lens-glass" cx="30.5" cy="20.5" r="4.8"/>
+                      <path class="fg-cursor" d="M19.4 14.2 20.7 19.2l1.5-1.25 1.85 2.75 1.25-.85-1.85-2.7 2.05-.4z"/></svg>

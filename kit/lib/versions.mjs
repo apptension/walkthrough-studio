@@ -373,3 +373,72 @@ export function versionMediaPath(video, id, file = null) {
   if (!file) return join(dir, 'out', `${video.slug}.mp4`);
   return join(dir, 'out', basename(file));
 }
+
+function dirBytes(dir) {
+  let total = 0;
+  let entries = [];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) total += dirBytes(path);
+    else if (entry.isFile()) {
+      try {
+        total += statSync(path).size;
+      } catch {
+        /* gone between list and stat */
+      }
+    }
+  }
+  return total;
+}
+
+/** Plan removing version folders + index entries. Unknown ids are listed as missing. */
+export function planDeleteVersions(video, ids = []) {
+  const wanted = [...new Set((ids || []).map(String).filter(Boolean))];
+  const all = listVersions(video);
+  const byId = new Map(all.map((ver) => [ver.id, ver]));
+  const versions = [];
+  const missing = [];
+  for (const id of wanted) {
+    const ver = byId.get(id);
+    if (!ver) {
+      missing.push(id);
+      continue;
+    }
+    const dir = join(versionsDir(video), id);
+    const bytes = existsSync(dir) ? dirBytes(dir) : 0;
+    versions.push({
+      id: ver.id,
+      name: ver.name || id,
+      title: ver.title || ver.label || 'Snapshot',
+      kind: ver.kind || 'release',
+      bytes,
+    });
+  }
+  const totalBytes = versions.reduce((sum, ver) => sum + ver.bytes, 0);
+  return { versions, missing, totalBytes };
+}
+
+/** Delete selected versions from the vault (folders + index). Returns the applied plan. */
+export function deleteVersions(video, ids = []) {
+  const plan = planDeleteVersions(video, ids);
+  if (!plan.versions.length) return plan;
+  const remove = new Set(plan.versions.map((ver) => ver.id));
+  for (const id of remove) {
+    const path = join(versionsDir(video), id);
+    if (existsSync(path)) rmSync(path, { recursive: true, force: true });
+  }
+  const index = readIndex(video);
+  const ensured = ensureNumbered(index);
+  ensured.versions = ensured.versions.filter((ver) => !remove.has(ver.id));
+  writeIndex(video, {
+    slug: video.slug,
+    nextNumber: ensured.nextNumber,
+    versions: ensured.versions,
+  });
+  return plan;
+}

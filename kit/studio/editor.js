@@ -40,68 +40,10 @@ import {
   resolveLiveCardFromPlates,
 } from './liveCardStage.js';
 import { ZEN_ART } from './zen.js';
+import { ICONS, T_GLYPH, icon } from './icons.js';
 import { placeVoice, voiceSlots } from './voicePlace.js';
 
-const SVG = (d, extra = '') =>
-  `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"${extra}>${d}</svg>`;
-
-export const ICONS = {
-  film: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
-  plate: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/>'),
-  open: SVG('<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>'),
-  close: SVG('<path d="M4 6h16M4 12h10M4 18h7"/><path d="m17 15 2 2 4-4"/>'),
-  speed: SVG('<path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 16 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/>'),
-  zoom: SVG('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M11 8.5v5M8.5 11h5"/>'),
-  transition: SVG('<rect x="3" y="6" width="11" height="11" rx="1.5"/><rect x="10" y="9" width="11" height="11" rx="1.5"/>'),
-  palette: SVG('<path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2v-1a2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 9 9 0 0 0-9-9z"/><circle cx="7.5" cy="12" r="1.2" fill="currentColor"/><circle cx="10" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor"/>'),
-  motion: SVG('<path d="M3 12c3-6 6-6 9 0s6 6 9 0"/>'),
-  depth: SVG('<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/>'),
-  lockup: SVG('<rect x="4" y="5" width="16" height="10" rx="2"/><path d="M8 19h8"/>'),
-  cursor: SVG('<path d="M5 3 19 11l-6 2-3 6L5 3z"/>'),
-  text: SVG('<path d="M4 7V5h16v2M9 19h6M12 5v14"/>'),
-  reset: SVG('<path d="M4 10a8 8 0 1 1 2 6"/><path d="M4 4v6h6"/>'),
-  trash: SVG('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
-  plus: SVG('<path d="M12 5v14M5 12h14"/>'),
-  play: SVG('<path d="M7 5v14l11-7z" fill="currentColor" stroke="none"/>'),
-  pause: SVG('<path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" stroke="none"/>'),
-  replay: SVG('<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="m10.5 9 4.5 3-4.5 3z" fill="currentColor" stroke="none"/>'),
-  toStart: SVG('<path d="M6 5v14"/><path d="M18 6v12l-9-6z" fill="currentColor" stroke="none"/>'),
-  loop: SVG('<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>'),
-  eye: SVG('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
-  undo: SVG('<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>'),
-  redo: SVG('<path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>'),
-  render: SVG('<path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z"/>'),
-  keep: SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m8 12 3 3 5-6"/>'),
-  noZoom: SVG('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3M8.5 11h5"/><path d="M4 4l16 16"/>'),
-  check: SVG('<path d="m5 12 5 5 9-10"/>'),
-  warn: SVG('<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>'),
-  x: SVG('<path d="M6 6l12 12M18 6 6 18"/>'),
-  fit: SVG('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
-  fullscreen: SVG('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
-  target: SVG('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
-  slow: SVG('<path d="M4 15a8 8 0 1 1 16 0"/><path d="M12 15 8 9"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/>'),
-  sparkle: SVG('<path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>'),
-  mic: SVG('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/>'),
-  upload: SVG('<path d="M12 16V5"/><path d="m8 9 4-4 4 4"/><path d="M5 19h14"/>'),
-  stop: SVG('<rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/>'),
-  music: SVG('<path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
-  lens: SVG('<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/><path d="M7.4 9.2a3.4 3.4 0 0 1 2.4-2.3"/>'),
-  lensOff: SVG('<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/><path d="M4 4l16 16"/>'),
-};
-// Transition glyphs keep the shape of the move so the grid reads without labels.
-const T_GLYPH = {
-  directed: SVG('<path d="m4 20 10-10"/><path d="m15 3 1.2 2.8L19 7l-2.8 1.2L15 11l-1.2-2.8L11 7l2.8-1.2z"/>'),
-  dissolve: SVG('<rect x="3" y="5" width="12" height="12" rx="2"/><rect x="9" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".35"/>'),
-  wipe: SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7z" fill="currentColor" fill-opacity=".4" stroke="none"/><path d="M12 5v14"/>'),
-  push: SVG('<rect x="2" y="6" width="9" height="12" rx="1.5"/><rect x="13" y="6" width="9" height="12" rx="1.5" fill="currentColor" fill-opacity=".4"/>'),
-  zoom: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="8" y="8.5" width="8" height="7" rx="1" fill="currentColor" fill-opacity=".4"/>'),
-  iris: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5" fill="currentColor" fill-opacity=".4"/>'),
-  blur: SVG('<path d="M4 8c2-2 4 2 6 0s4-2 6 0 4 2 4 2M4 13c2-2 4 2 6 0s4-2 6 0 4 2 4 2M4 18c2-2 4 2 6 0s4-2 6 0"/>'),
-  dip: SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 12h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="currentColor" stroke="none"/>'),
-  radial: SVG('<circle cx="12" cy="12" r="8"/><path d="M12 12V4a8 8 0 0 1 8 8z" fill="currentColor" fill-opacity=".4"/>'),
-  slice: SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9.7h18M3 14.3h18"/><path d="M3 9.7h11v4.6H3z" fill="currentColor" fill-opacity=".4" stroke="none"/>'),
-  diagonal: SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 5h18L3 19z" fill="currentColor" fill-opacity=".35" stroke="none"/>'),
-};
+export { ICONS };
 
 const PLATE_ICON = { open: 'open', close: 'close' };
 const SPEED_PRESETS = [0.5, 0.75, 1.25, 1.5, 2, 3, 4];
@@ -2912,9 +2854,7 @@ export function initEditor(ctx) {
           : onCard
             ? `Edit the ${kindLabel} copy · drag this tip if it covers text`
             : 'Click text on the plate to edit';
-      const grip = `<button type="button" class="ed-tb-grip" data-tb-grip title="Drag to move" aria-label="Drag tip">${SVG(
-        '<circle cx="9" cy="6" r="1.2" fill="currentColor"/><circle cx="15" cy="6" r="1.2" fill="currentColor"/><circle cx="9" cy="12" r="1.2" fill="currentColor"/><circle cx="15" cy="12" r="1.2" fill="currentColor"/><circle cx="9" cy="18" r="1.2" fill="currentColor"/><circle cx="15" cy="18" r="1.2" fill="currentColor"/>'
-      )}</button>`;
+      const grip = `<button type="button" class="ed-tb-grip" data-tb-grip title="Drag to move" aria-label="Drag tip">${icon('grip')}</button>`;
       const close =
         coach && !editing && !dirty
           ? `<button type="button" class="ed-tb-close" data-text="dismiss" title="Hide tip" aria-label="Hide tip">${ICONS.x}</button>`
