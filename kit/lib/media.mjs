@@ -1,4 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { assertX264Args, BT709_PARAMS, BT709_TAGS, lossyX264, QUALITY } from './encode.mjs';
+// Not `./motion.mjs`: that module sits mid-cycle with camera.mjs/direction.mjs/project.mjs, and
+// media.mjs is meant to stay a dependency-free leaf. The tail below reads the source's own rate.
 
 export const run = (bin, args, label) => {
   if (label) console.log('·', label);
@@ -129,4 +133,62 @@ export function assertPlayable(file, { expectedSec, toleranceSec = 1.5, label = 
     }
   }
   return sec;
+}
+
+/**
+ * Freeze the last frame of `source` and hold it for `padSec` more seconds, overwriting `source`
+ * in place. Real narration can run past the hold `extendCloseForVoice` estimated at plan time
+ * (the word-count heuristic is only ever an estimate) — the picture should catch up to it rather
+ * than the mux leaving a container longer than its last video frame, which plays back as a freeze
+ * or black once the picture runs out.
+ *
+ * Only the small new tail is re-encoded; the existing master is concatenated in as a stream copy,
+ * so this stays inside the single-lossy-generation floor (see encode.mjs).
+ *
+ * @param {string} source path to the silent master (video-only, no audio stream)
+ * @param {number} padSec seconds to add
+ * @param {{label?: string}} [opts]
+ */
+export function extendPictureTail(source, padSec, { label = 'master' } = {}) {
+  const pad = Number(padSec);
+  if (!(pad > 0)) return;
+  // Match the source's own rate (e.g. "30/1") rather than importing a shared FPS constant —
+  // this file stays a dependency-free leaf that encode-adjacent modules can import from.
+  const fps = run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'csv=p=0', source]).trim() || '30/1';
+  const base = source.replace(/\.mp4$/, '');
+  const still = `${base}.tail-frame.png`;
+  const tail = `${base}.tail-hold.mp4`;
+  const list = `${base}.tail-concat.txt`;
+  const joined = `${base}.tail-joined.mp4`;
+  try {
+    run(
+      'ffmpeg',
+      ['-hide_banner', '-loglevel', 'error', '-y', '-sseof', '-0.1', '-i', source, '-frames:v', '1', still],
+      `${label}: grabbing the last frame`
+    );
+    const tailArgs = [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-loop', '1', '-framerate', fps, '-t', pad.toFixed(3), '-i', still,
+      '-vf', `format=yuv420p,${BT709_PARAMS}`,
+      ...lossyX264(QUALITY.delivery),
+      '-profile:v', 'high', '-level', '4.2', '-pix_fmt', 'yuv420p',
+      '-g', '60', '-keyint_min', '30', '-bf', '2',
+      ...BT709_TAGS,
+      '-r', fps,
+      tail,
+    ];
+    assertX264Args('delivery', tailArgs);
+    run('ffmpeg', tailArgs, `${label}: holding the last frame for ${pad.toFixed(1)}s`);
+    writeFileSync(list, `file '${source}'\nfile '${tail}'\n`);
+    run(
+      'ffmpeg',
+      ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', joined],
+      `${label}: joining the held tail`
+    );
+    renameSync(joined, source);
+  } finally {
+    for (const f of [still, tail, list, joined]) {
+      if (existsSync(f)) unlinkSync(f);
+    }
+  }
 }

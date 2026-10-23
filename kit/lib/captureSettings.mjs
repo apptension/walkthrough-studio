@@ -1,5 +1,6 @@
 import { CAPTURE_PRESETS, DEFAULT_CAPTURE, captureProfile, configPatch, describeCapture, suggestCaptures, validateCapture } from './capturePresets.mjs';
 import { OUTPUT_FRAMES, outputFrame } from './format.mjs';
+import { sessionLayout } from './guidedTour.mjs';
 import { videoSpace } from './stage.mjs';
 
 /** `?screen=1512x982&avail=1512x944&dpr=2` from the reviewer's browser → a screen for suggestions. */
@@ -17,6 +18,16 @@ export function parseScreen(params) {
 
 const clampDpr = (d) => Math.max(1, Math.min(3, Math.round(d || 2)));
 const outputFor = (p) => (p.height > p.width ? 'portrait' : 'landscape');
+
+/**
+ * The scale a guided (self-recording) session's window would show at on this screen, the
+ * Recorder panel included — the same math `runGuidedTour`'s `fitWindows` uses at launch, so a
+ * pre-flight warning and the real session always agree.
+ */
+function guidedScale(capture, screen) {
+  if (!screen?.availWidth || !screen?.availHeight) return 1;
+  return sessionLayout({ width: capture.width, height: capture.height }, { sw: screen.availWidth, sh: screen.availHeight }).scale;
+}
 
 /** Ranked sizes for a picker; "My screen" takes the reviewer's density. */
 export function captureOptions({ screen = null, brief = {}, mode = 'agent', output = 'landscape' } = {}) {
@@ -37,8 +48,12 @@ export function captureOptions({ screen = null, brief = {}, mode = 'agent', outp
 export function captureSettings(video, { screen = null, brief = {}, mode = 'agent' } = {}) {
   const current = captureProfile(video.config);
   const output = outputFrame(video.config);
-  const options = captureOptions({ screen, brief, mode, output: output.format });
+  const options = captureOptions({ screen, brief, mode, output: output.format }).map((o) => ({
+    ...o,
+    fits: screen ? guidedScale(o, screen) >= 0.999 : true,
+  }));
   const top = options[0] || CAPTURE_PRESETS[DEFAULT_CAPTURE];
+  const scale = screen ? guidedScale(current, screen) : 1;
   return {
     current: { ...current, description: describeCapture(current) },
     output: { format: output.format, width: output.width, height: output.height, label: output.label },
@@ -48,6 +63,10 @@ export function captureSettings(video, { screen = null, brief = {}, mode = 'agen
     outputs: Object.values(OUTPUT_FRAMES).map((f) => ({ format: f.format, width: f.width, height: f.height, label: f.label })),
     screen,
     mode,
+    // Whether a *guided* (self-recording) session at the current size would need to shrink to
+    // fit this screen — the Recorder panel beside the recording window included. Only meaningful
+    // when `screen` is known; null otherwise so callers don't warn on a guess.
+    guidedFit: screen ? { scale, fits: scale >= 0.999 } : null,
   };
 }
 

@@ -10,6 +10,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BT709_PARAMS, BT709_SCALE_OPTS } from './encode.mjs';
 import { run } from './media.mjs';
+import { blurWindows, blurredGraph, mergeWindows } from './motionBlur.mjs';
 import { clampZoomCenter } from '../studio/zoomAim.js';
 import { CURVE_IDS, DEFAULT_CURVE, DEFAULT_MOTION, MOTION_IDS, curveOf, motionScale, unitExpr } from '../studio/easing.js';
 
@@ -126,58 +127,168 @@ export function planZooms(timeline = [], { width, height, level = 'off', duratio
   return { shots, skipped: zoom ? targets.length - usable.length : 0, targets: targets.length, manual: manual.length };
 }
 
-/** The video's curve over `dur` seconds from `from`, as an ffmpeg expression in `t`. */
-const ease = (curve, from, dur) => curveOf(curve).expr(unitExpr('t', from, dur));
+/** The video's curve over `dur` seconds from `from`, as an ffmpeg expression in `clock`. */
+const ease = (curve, from, dur, clock = 't') => curveOf(curve).expr(unitExpr(clock, from, dur));
 
-function zoomExpr(shots, timing) {
+function zoomExpr(shots, timing, clock = 't') {
   const { in: IN, out: OUT, curve } = timing;
   const terms = shots.map((s) => {
-    const inE = ease(curve, s.start, IN);
-    const outE = ease(curve, s.end - OUT, OUT);
-    return `${(s.zoom - 1).toFixed(4)}*${inE}*(1-${outE})*between(t,${f3(s.start)},${f3(s.end)})`;
+    const inE = ease(curve, s.start, IN, clock);
+    const outE = ease(curve, s.end - OUT, OUT, clock);
+    return `${(s.zoom - 1).toFixed(4)}*${inE}*(1-${outE})*between(${clock},${f3(s.start)},${f3(s.end)})`;
   });
   return `(1+${terms.join('+')})`;
 }
 
-function centerExpr(shots, key, timing) {
-  const { pan: PAN, curve } = timing;
+/** Keyframes of one centre coordinate: hold at each target, ease to the next over `pan` seconds. */
+function centerPoints(shots, key, timing) {
   const points = [];
   for (const s of shots) {
     const pts = s.points;
     points.push({ t: s.start, v: pts[0][key] });
     for (let i = 1; i < pts.length; i++) {
-      points.push({ t: Math.max(pts[i - 1].t, pts[i].t - PAN), v: pts[i - 1][key] });
+      points.push({ t: Math.max(pts[i - 1].t, pts[i].t - timing.pan), v: pts[i - 1][key] });
       points.push({ t: pts[i].t, v: pts[i][key] });
     }
     points.push({ t: s.end, v: pts.at(-1)[key] });
   }
+  return points;
+}
+
+function centerExpr(shots, key, timing, clock = 't') {
+  const points = centerPoints(shots, key, timing);
   let out = String(points.at(-1).v);
   for (let i = points.length - 2; i >= 0; i--) {
     const a = points[i];
     const b = points[i + 1];
-    const value = a.v === b.v ? String(a.v) : `${a.v}+(${b.v - a.v})*${ease(curve, a.t, b.t - a.t)}`;
-    out = `if(lt(t,${f3(b.t)}),${value},${out})`;
+    const value = a.v === b.v ? String(a.v) : `${a.v}+(${b.v - a.v})*${ease(timing.curve, a.t, b.t - a.t, clock)}`;
+    out = `if(lt(${clock},${f3(b.t)}),${value},${out})`;
   }
   return out;
 }
 
+/** The same camera path as the filter expressions, in JS: { z, cx, cy } at `t` (centre null = frame centre). */
+export function cameraAt(shots, t, { width, height, timing = ZOOM_TIMING } = {}) {
+  const { in: IN, out: OUT, curve } = timing;
+  const fn = curveOf(curve).fn;
+  let z = 1;
+  for (const s of shots) {
+    if (t < s.start || t > s.end) continue;
+    z += (s.zoom - 1) * fn((t - s.start) / IN) * (1 - fn((t - (s.end - OUT)) / OUT));
+  }
+  const at = (key) => {
+    const points = centerPoints(shots, key, timing);
+    for (let i = 0; i + 1 < points.length; i++) {
+      const [a, b] = [points[i], points[i + 1]];
+      if (t < b.t) return a.v === b.v ? a.v : a.v + (b.v - a.v) * fn((t - a.t) / Math.max(0.001, b.t - a.t));
+    }
+    return points.at(-1).v;
+  };
+  return shots.length ? { z, cx: at('cx'), cy: at('cy') } : { z, cx: width / 2, cy: height / 2 };
+}
+
 /**
- * Per-frame push-in. Scale first (lanczos, continuous zoom), then crop at output resolution, so a
- * pan never steps by whole source pixels. No colour conversion happens here.
+ * Magnify by `Z` about (cx, cy): scale first (lanczos, continuous zoom), then crop at output
+ * resolution, so a move never steps by whole source pixels. No colour conversion happens here.
  */
-export function zoomFilter(shots, { width, height, timing = ZOOM_TIMING }) {
-  if (!shots?.length) return null;
-  const Z = zoomExpr(shots, timing);
-  const cx = centerExpr(shots, 'cx', timing);
-  const cy = centerExpr(shots, 'cy', timing);
+export function pushFilter({ Z, cx, cy, width, height }) {
   const sw = `trunc(${width}*${Z}/2)*2`;
   const sh = `trunc(${height}*${Z}/2)*2`;
   const keep = 'in_color_matrix=bt709:out_color_matrix=bt709:in_range=tv:out_range=tv';
   return (
     `scale=w='${sw}':h='${sh}':eval=frame:flags=lanczos+accurate_rnd+full_chroma_int:${keep},` +
     `crop=${width}:${height}:x='clip((${cx})*${Z}-${width / 2},0,${sw}-${width})':` +
-    `y='clip((${cy})*${Z}-${height / 2},0,${sh}-${height})':exact=1`
+    `y='clip((${cy})*${Z}-${height / 2},0,${sh}-${height})':exact=1,` +
+    // Even-rounded scale sizes are not exactly proportional; the crop is square pixels again.
+    'setsar=1'
   );
+}
+
+/** Per-frame push-in following the planned shots. `clock` is the stream-time expression. */
+export function zoomFilter(shots, { width, height, timing = ZOOM_TIMING, clock = 't' }) {
+  if (!shots?.length) return null;
+  return pushFilter({
+    Z: zoomExpr(shots, timing, clock),
+    cx: centerExpr(shots, 'cx', timing, clock),
+    cy: centerExpr(shots, 'cy', timing, clock),
+    width,
+    height,
+  });
+}
+
+/**
+ * Graph statements for the planned shots on `src`, with shutter blur wherever a push-in, pan or
+ * pull-back moves fast enough to judder. Returns null when there is nothing to zoom.
+ */
+export function zoomGraph(shots, { src, out, width, height, fps, totalFrames, timing = ZOOM_TIMING, blur = true }) {
+  if (!shots?.length) return null;
+  const windows = blur
+    ? mergeWindows(
+        shots.flatMap((s) =>
+          blurWindows((t) => cameraAt(shots, t, { width, height, timing }), { from: s.start, to: s.end, fps, width, height, totalFrames })
+        )
+      )
+    : [];
+  const active = shots.map((s) => [Math.max(0, Math.floor(s.start * fps) - 1), Math.min(totalFrames, Math.ceil(s.end * fps) + 1)]);
+  const lines = blurredGraph({
+    src,
+    out,
+    totalFrames,
+    fps,
+    windows,
+    active: mergeWindows(active),
+    transform: (clock) => zoomFilter(shots, { width, height, timing, clock }),
+  });
+  return { lines, windows };
+}
+
+/**
+ * Cross zoom: the outgoing shot accelerates into a push-in while the incoming one lands from a
+ * slight magnification, both under the dissolve and both shutter-blurred. Peak magnification stays
+ * low so lanczos keeps the picture clean (ffmpeg's `zoomin` magnifies to a single pixel, nearest).
+ */
+export const CROSS_ZOOM = Object.freeze({ out: 0.3, in: 0.16 });
+
+/** Magnification of a segment `dur` seconds long that leaves on a cross zoom of `tail` s and/or arrives on one of `head` s. */
+export function crossZoomAt(t, { dur, head = 0, tail = 0 }) {
+  let z = 1;
+  if (head > 0 && t < head) z += CROSS_ZOOM.in * (1 - curveOf('glide').fn(t / head));
+  if (tail > 0 && t > dur - tail) z += CROSS_ZOOM.out * ((t - (dur - tail)) / tail) ** 2;
+  return z;
+}
+
+function crossZoomExpr({ dur, head = 0, tail = 0, clock }) {
+  const terms = [];
+  if (head > 0) terms.push(`${CROSS_ZOOM.in}*(1-${curveOf('glide').expr(unitExpr(clock, 0, head))})`);
+  if (tail > 0) terms.push(`${CROSS_ZOOM.out}*pow(${unitExpr(clock, dur - tail, tail)},2)`);
+  return `(1+${terms.join('+')})`;
+}
+
+/** Graph statements putting the cross-zoom moves on one segment stream (local clock from 0). */
+export function crossZoomGraph({ src, out, dur, head = 0, tail = 0, width, height, fps }) {
+  const totalFrames = Math.round(dur * fps);
+  const geo = { dur, head, tail };
+  const camera = (t) => ({ z: crossZoomAt(t, geo), cx: width / 2, cy: height / 2 });
+  const active = [];
+  if (head > 0) active.push([0, Math.min(totalFrames, Math.ceil(head * fps) + 1)]);
+  if (tail > 0) active.push([Math.max(0, Math.floor((dur - tail) * fps) - 1), totalFrames]);
+  const windows = active.flatMap(([a, b]) => blurWindows(camera, { from: a / fps, to: b / fps, fps, width, height, totalFrames }));
+  return blurredGraph({
+    src,
+    out,
+    totalFrames,
+    fps,
+    windows,
+    active: mergeWindows(active),
+    transform: (clock) =>
+      pushFilter({
+        Z: crossZoomExpr({ ...geo, clock }),
+        cx: width / 2,
+        cy: height / 2,
+        width,
+        height,
+      }),
+  });
 }
 
 /** Window geometry for the inset frame. */

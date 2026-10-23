@@ -7,6 +7,8 @@
 const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
 const PREF = (slug) => `wt.takeChoice.${slug}`;
+const GO_SVG = `<svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
+const PLAY_SVG = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5.5 3.8v12.4L16 10 5.5 3.8Z" fill="currentColor" /></svg>`;
 
 export function rememberedTakeChoice(slug) {
   try {
@@ -44,18 +46,22 @@ export function createTakeChoice(host, { api, escapeHtml }) {
     const replayable = Boolean(tour?.steps);
     const remembered = rememberedTakeChoice(slug);
     const preferred = !take ? 'bot' : !replayable ? 'own' : remembered || 'own';
-    const option = (id, title, body, extra = '') => `
-      <button type="button" class="take-opt${preferred === id ? ' is-preferred' : ''}" data-take-choice="${id}" ${extra}>
-        <span class="take-opt-ico take-opt-ico--${id}" aria-hidden="true"></span>
-        <span class="take-opt-copy"><strong>${title}</strong><em>${body}</em></span>
-        ${id === 'own' ? '<span class="take-opt-tag">Your take</span>' : ''}
+    const option = (id, title, body, tag, extra = '') => `
+      <button type="button" class="take-opt take-opt--${id}${preferred === id ? ' is-preferred' : ''}" data-take-choice="${id}" ${extra}>
+        <span class="take-opt-head">
+          <span class="take-opt-ico" aria-hidden="true">${id === 'own' ? '<i></i>' : PLAY_SVG}</span>
+          ${tag ? `<span class="take-opt-tag">${tag}</span>` : '<span></span>'}
+        </span>
+        <strong>${title}</strong>
+        <em>${body}</em>
+        <span class="take-opt-go" aria-hidden="true">Continue${GO_SVG}</span>
       </button>`;
     host.innerHTML = `
       <div class="take-choice-head">
         <strong>${take ? 'Your recording is ready' : 'Your steps are saved'}</strong>
         <em>${
           take
-            ? 'How should this video use it? You can switch later by recording again.'
+            ? 'Pick how this video uses it. You can switch later by recording again.'
             : 'No recording was kept (it was under a second or stopped early). The bot can record your steps.'
         }</em>
       </div>
@@ -79,13 +85,29 @@ export function createTakeChoice(host, { api, escapeHtml }) {
       <div class="take-choice-options" role="group" aria-label="Which take to use">
         ${
           take
-            ? option('own', 'Use my recording', 'Keep it exactly as you showed it — pauses are already cut. The agent writes the narration around your chapters. Fastest.')
+            ? option(
+                'own',
+                'Use my recording',
+                'Keep it exactly as you showed it. Pauses are already cut; narration follows your chapters.',
+                'Your take'
+              )
             : ''
         }
         ${
           replayable
-            ? option('bot', 'Let the bot re-record', 'The agent tidies your steps into a script and a bot records them at a steady pace with a smooth pointer. Adds a few minutes.')
-            : option('bot', 'Let the bot re-record', 'Not available — no clicks or typing were captured, so there are no steps to replay. Record again and click through the product to use the bot.', 'disabled aria-disabled="true"')
+            ? option(
+                'bot',
+                'Let the bot re-record',
+                'Tidies your steps into a script, then records at a steady pace with a smooth pointer.',
+                preferred === 'bot' ? 'Suggested' : ''
+              )
+            : option(
+                'bot',
+                'Let the bot re-record',
+                'Not available — no clicks or typing were captured. Record again and walk the product to unlock this.',
+                '',
+                'disabled aria-disabled="true"'
+              )
         }
       </div>
       <button type="button" class="take-again" data-take-choice="again">Record again</button>`;

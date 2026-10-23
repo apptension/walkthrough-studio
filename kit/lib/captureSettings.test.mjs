@@ -79,3 +79,28 @@ test('a vertical video suggests a phone', () => {
   assert.equal(s.options[0].group, 'phone');
   assert.match(s.options[0].reason, /vertical/);
 });
+
+test('guidedFit flags a recording size that would shrink on this screen, Recorder panel included', () => {
+  // 1920x1080 desktop capture on a 1512x982 laptop screen cannot sit at scale 1 next to the panel.
+  const screen = parseScreen(new URLSearchParams('screen=1512x982&avail=1512x944&dpr=2'));
+  const cramped = captureSettings({ config: {}, brand: {} }, { screen });
+  assert.equal(cramped.current.id, 'desktop-fhd');
+  assert.equal(cramped.guidedFit.fits, false);
+  assert.ok(cramped.guidedFit.scale < 1, `scale ${cramped.guidedFit.scale}`);
+  // A phone preset is small enough to sit at native scale next to the panel.
+  const roomy = cramped.options.find((o) => o.id === 'iphone-15');
+  assert.equal(roomy.fits, true);
+});
+
+test('guidedFit is null without a known screen, and true for every option', () => {
+  const s = captureSettings({ config: {}, brand: {} }, {});
+  assert.equal(s.guidedFit, null);
+  assert.ok(s.options.every((o) => o.fits === true));
+});
+
+test('guidedFit considers the current size comfortable when it already fits', () => {
+  const screen = parseScreen(new URLSearchParams('screen=3840x2160&avail=3800x2100&dpr=2'));
+  const s = captureSettings({ config: {}, brand: {} }, { screen });
+  assert.equal(s.guidedFit.fits, true);
+  assert.equal(s.guidedFit.scale, 1);
+});

@@ -10,6 +10,7 @@ import { hasStoredCredentials, maskCredentials, revisePlan, stagesForReplan } fr
 import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
 import { screenQuery, sizeLine } from './captureSize.js';
 import { ask } from './ask.js';
+import { confirmGuidedFits } from './guidedFit.js';
 
 const $ = (id) => document.getElementById(id);
 const STEPS = 5;
@@ -731,6 +732,7 @@ export function initProjects(ctx) {
         creation.renameStage('analyze', 'Your guided tour', 'You click through the product; every interaction is captured, idle time is not');
         const prior = resuming && !creation.unfinished().includes('analyze') ? await api(`/api/video/${r.slug}/guide`).catch(() => null) : null;
         if (!prior?.tour?.steps) {
+          if (!(await confirmGuidedFits(api, r.slug))) throw new Error('cancelled');
           paintCreation('analyze', 'A browser and a Recorder window are opening — press Start recording, show the tour, then Finish recording.');
           const a = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
           guideCard.show(r.slug);
@@ -1060,6 +1062,7 @@ export function initProjects(ctx) {
             if (guided) creation.renameStage('analyze', 'Your guided tour', 'Show the journey again in the browser window');
             else creation.renameStage('analyze');
           }
+          if (guided && !(await confirmGuidedFits(api, slug))) throw new Error('cancelled');
           paintCreation(view, guided ? 'A browser and a Recorder window are opening — press Start recording, show the tour again, then Finish recording.' : detail);
           const job = await api(`/api/video/${encodeURIComponent(slug)}/draft-project`, { method: 'POST', body });
           if (job.job?.status === 'needs-agent') throw new Error(job.job.message || 'Agent sign-in is required to redraft');

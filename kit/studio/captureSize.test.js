@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { customBody, pickerOptions, screenQuery, shapeHint, sizeLine, stageBox, stageText, takeNote } from './captureSize.js';
+import { customBody, guidedFitWarning, pickerOptions, screenQuery, shapeHint, sizeLine, stageBox, stageText, takeNote } from './captureSize.js';
 
 const desktop = { id: 'desktop-fhd', label: 'Desktop · 1920×1080', group: 'desktop', width: 1920, height: 1080, dpr: 2, mobile: false, touch: false };
 const phone = { id: 'iphone-15', label: 'iPhone · 390×844', group: 'phone', width: 390, height: 844, dpr: 3, mobile: true, touch: true };
@@ -61,6 +61,37 @@ test('shapeHint suggests vertical for tall recordings and back for wide ones', (
   assert.equal(shapeHint({ current: phone, output: land }).output, 'portrait');
   assert.equal(shapeHint({ current: desktop, output: { format: 'portrait' } }).output, 'landscape');
   assert.equal(shapeHint({ current: desktop, output: land }), null);
+});
+
+test('guidedFitWarning is null when the screen is unknown or the size already fits', () => {
+  assert.equal(guidedFitWarning({ guidedFit: null, current: desktop, options: [desktop] }), null);
+  assert.equal(guidedFitWarning({ guidedFit: { scale: 1, fits: true }, current: desktop, options: [desktop] }), null);
+});
+
+test('guidedFitWarning suggests up to 3 fitting sizes, smallest first, and excludes the current one', () => {
+  const laptop = { ...phone, id: 'laptop-13', label: 'Laptop · 1366×768', group: 'laptop', width: 1366, height: 768, fits: true };
+  const tablet = { id: 'ipad', label: 'iPad · 834×1194', group: 'tablet', width: 834, height: 1194, dpr: 2, fits: true };
+  const tooBig = { ...desktop, id: 'desktop-4k', width: 3840, height: 2160, fits: false };
+  const settings = {
+    guidedFit: { scale: 0.72, fits: false },
+    current: { ...desktop, fits: false },
+    options: [tooBig, laptop, { ...phone, fits: true }, tablet, { ...desktop, fits: false }],
+  };
+  const warn = guidedFitWarning(settings);
+  assert.equal(warn.scale, 0.72);
+  assert.deepEqual(warn.current, settings.current);
+  // smallest-area-first, the too-big and non-fitting duplicate-of-current options excluded
+  assert.deepEqual(warn.suggestions.map((o) => o.id), ['iphone-15', 'ipad', 'laptop-13']);
+});
+
+test('guidedFitWarning never suggests the exact current size even if it happens to be marked fit', () => {
+  const settings = {
+    guidedFit: { scale: 0.9, fits: false },
+    current: desktop,
+    options: [{ ...desktop, fits: true }, { ...phone, fits: true }],
+  };
+  const warn = guidedFitWarning(settings);
+  assert.deepEqual(warn.suggestions.map((o) => o.id), ['iphone-15']);
 });
 
 test('customBody validates like the server', () => {
