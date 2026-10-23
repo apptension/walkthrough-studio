@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertVideoCopied } from '../encode.mjs';
-import { assertPlayable } from '../media.mjs';
+import { assertPlayable, extendPictureTail } from '../media.mjs';
 import { duration, finalPath, run } from '../produce.mjs';
 import { snapshotVersion } from '../versions.mjs';
 import { compactAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice } from './desk.mjs';
@@ -18,6 +18,7 @@ import { deliveryMuxFlags, mixEndSec } from '../../studio/voiceHold.js';
 
 const RAMP = 1.0; // seconds for the music to move between plate level and bed level
 const EDIT_XFADE = 2.0; // crossfade for a music edit that fits the track to a new take
+const MAX_AUTO_HOLD_SEC = 6; // beyond this, a frozen tail would hide a real scripting problem
 
 /** How many extra plays of a bed are needed to cover `totalSec` (0 when the bed is long enough). */
 export function musicLoopRepeats(musicDurSec, totalSec) {
@@ -108,12 +109,36 @@ export function mixAudio(video, { out } = {}) {
   const produceMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
   const { segments } = produceMeta;
   // The video stream is copied, so a broken picture would pass straight through.
-  const total = assertPlayable(source, { label: 'delivery master' });
+  let total = assertPlayable(source, { label: 'delivery master' });
   const duckWindows = liveWindowsFromMeta(produceMeta, video);
 
   const voicePath = join(video.out, 'voice', 'voice.json');
   const voice = existsSync(voicePath) ? JSON.parse(readFileSync(voicePath, 'utf8')) : null;
   const clips = resolveVoice(voice?.clips || [], desk.voice).filter((c) => existsSync(c.file));
+
+  // Real narration can run past the hold `extendCloseForVoice` estimated at plan time — a
+  // word-count heuristic, not the actual ElevenLabs read. Catch the picture up to it here
+  // rather than let the mux choose between cutting the last word or leaving the container
+  // longer than its last video frame (both break playback). A drift this large past the
+  // plan is a scripting problem, not timing noise, so it still fails loudly instead of
+  // silently freezing the master for several seconds.
+  if (clips.length) {
+    const voiceEnd = mixEndSec(total, clips);
+    const overrun = voiceEnd - total;
+    if (overrun > MAX_AUTO_HOLD_SEC) {
+      throw new Error(
+        `narration runs ${overrun.toFixed(1)}s past the picture — too long to freeze automatically. ` +
+          'Shorten the line(s) noted "long by" in the voice warnings, or re-run produce so the hold matches the read.'
+      );
+    }
+    if (overrun > 0.05) {
+      const pad = overrun + 0.15;
+      console.log(`· narration runs ${overrun.toFixed(1)}s past the picture — freezing the last frame to cover it`);
+      extendPictureTail(source, pad, { label: 'delivery master' });
+      total = assertPlayable(source, { label: 'delivery master (extended)' });
+    }
+  }
+
   const musicMp3 = join(video.out, 'music', 'music.mp3');
   const hasMusic = existsSync(musicMp3);
   if (!clips.length && !(hasMusic && !desk.music.mute)) throw new Error('Nothing to mix: run voice and/or music first');

@@ -24,7 +24,7 @@ test('clicks close together share one shot that pans between them', () => {
   const halfW = 1920 / (2 * 1.3);
   assert.ok(shots[0].points[0].cx >= Math.round(halfW), 'center is clamped so the crop stays inside the frame');
   const vf = zoomFilter(shots, size);
-  assert.match(vf, /^scale=.*eval=frame.*,crop=1920:1080:.*exact=1$/);
+  assert.match(vf, /^scale=.*eval=frame.*,crop=1920:1080:.*exact=1,setsar=1$/);
   assert.match(vf, /out_color_matrix=bt709/);
 });
 

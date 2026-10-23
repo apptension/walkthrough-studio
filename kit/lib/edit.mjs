@@ -54,7 +54,8 @@ export const TRANSITION_STYLES = Object.freeze({
   dissolve: { label: 'Dissolve', xfade: 'fade', hint: 'Soft continuity between every scene' },
   wipe: { label: 'Brand wipe', xfade: 'smoothleft', hint: 'A polished directional reveal' },
   push: { label: 'Push', xfade: 'slideleft', hint: 'The next scene moves the story forward' },
-  zoom: { label: 'Focus zoom', xfade: 'zoomin', hint: 'Pulls attention into the next scene' },
+  // Rendered by the camera (lanczos cross zoom with shutter blur) under a dissolve — see camera.crossZoomGraph.
+  zoom: { label: 'Focus zoom', xfade: 'fade', motion: 'crosszoom', hint: 'Pulls attention into the next scene' },
   iris: { label: 'Iris', xfade: 'circleopen', hint: 'A cinematic circular reveal' },
   blur: { label: 'Blur', xfade: 'hblur', hint: 'Defocuses one idea before resolving the next' },
   dip: { label: 'Dip to black', xfade: 'fadeblack', hint: 'A deliberate chapter break' },
@@ -69,10 +70,16 @@ const snap = (s) => Math.round(s * FPS) / FPS;
  * xfade arguments for a style's transition. A plain `fade` mixes linearly, which reads as a
  * sudden start and a lingering ghost at the end; the dissolve instead follows a smootherstep so
  * it eases in and out of the mix — the same curve the Studio stage previews. `P` runs 1 → 0.
+ *
+ * No st()/ld() registers: xfade evaluates one expression on every slice thread at once and the
+ * registers are shared, so a pixel could read another row's half-computed weight. Weights far
+ * outside 0–1 turned small dark differences into white speckle across the dissolve.
  */
+const SMOOTHERSTEP_1_MINUS_P = '(1-P)*(1-P)*(1-P)*((1-P)*((1-P)*6-15)+10)';
+
 export function xfadeArgs(xfade) {
   if (xfade === 'fade') {
-    return "transition=custom:expr='st(0,1-P);st(0,ld(0)*ld(0)*ld(0)*(ld(0)*(ld(0)*6-15)+10));A*(1-ld(0))+B*ld(0)'";
+    return `transition=custom:expr='A+(B-A)*${SMOOTHERSTEP_1_MINUS_P}'`;
   }
   return `transition=${xfade}`;
 }
@@ -400,6 +407,7 @@ export function buildEditPlan(video) {
     seg.transitionIn = {
       type,
       xfade: TRANSITION_STYLES[type].xfade,
+      ...(TRANSITION_STYLES[type].motion && !hard ? { motion: TRANSITION_STYLES[type].motion } : {}),
       dur,
       ...(card ? { card: true } : {}),
       ...(pinned ? { pinned: true } : {}),

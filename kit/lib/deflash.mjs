@@ -117,7 +117,9 @@ export function deflashGraph(gaps, frames, inLabel, outLabel) {
   for (const g of [...usable].reverse()) {
     const t0 = (g.first - 1) / FPS;
     const len = (g.last - g.first + 2) / FPS;
-    k = `if(between(T,${t0.toFixed(4)},${(t0 + len).toFixed(4)}),st(1,(T-${t0.toFixed(4)})/${len.toFixed(4)});ld(1)*ld(1)*(3-2*ld(1)),${k})`;
+    // Inline, no st()/ld(): registers in a per-pixel expression are shared across slice threads.
+    const u = `((T-${t0.toFixed(4)})/${len.toFixed(4)})`;
+    k = `if(between(T,${t0.toFixed(4)},${(t0 + len).toFixed(4)}),${u}*${u}*(3-2*${u}),${k})`;
   }
   const enable = usable.map((g) => `between(t,${(g.first / FPS - 0.001).toFixed(4)},${((g.last + 0.5) / FPS).toFixed(4)})`).join('+');
   parts.push(`[dfA${n}][dfB${n}]blend=all_expr='A*(1-(${k}))+B*(${k})':enable='${enable}'${outLabel}`);

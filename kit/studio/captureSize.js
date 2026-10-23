@@ -107,6 +107,20 @@ export function shapeHint(settings) {
   return null;
 }
 
+/**
+ * A pre-flight warning before a guided (self-recording) session: the current recording size
+ * would shrink to fit this screen, plus up to 3 sizes that fit at full scale, smaller-first. null
+ * when there is nothing to warn about (no screen known, or the current size already fits).
+ */
+export function guidedFitWarning(settings) {
+  if (!settings?.guidedFit || settings.guidedFit.fits) return null;
+  const current = settings.current || {};
+  const fits = (settings.options || [])
+    .filter((o) => o.fits && (o.width !== current.width || o.height !== current.height))
+    .sort((a, b) => a.width * a.height - b.width * b.height);
+  return { scale: settings.guidedFit.scale, current, suggestions: fits.slice(0, 3) };
+}
+
 /** Custom size form → POST body, or an error message. Mirrors the server's limits. */
 export function customBody({ width, height, dpr = 2, mobile = false, touch = false } = {}) {
   const w = Number(width);

@@ -1332,6 +1332,13 @@ export async function runGuidedTour(
       const m = await p.evaluate(() => ({ sw: screen.availWidth, sh: screen.availHeight, cw: outerWidth - innerWidth, ch: outerHeight - innerHeight }));
       const layout = sessionLayout(recordViewport, m);
       fit.scale = layout.scale;
+      // Studio asks before this point whenever possible; this is the backstop for CLI/API
+      // launches that skip that pre-flight check.
+      if (layout.scale < 0.999) {
+        say(
+          `heads up: ${recordViewport.width}×${recordViewport.height} is larger than this screen — the recording window will show at ${Math.round(layout.scale * 100)}%. A smaller recording size (Studio → Direction → Recording size) is easier to drive.`
+        );
+      }
       const cdp = await context.newCDPSession(p);
       const { windowId } = await cdp.send('Browser.getWindowForTarget');
       await cdp.send('Browser.setWindowBounds', { windowId, bounds: layout.app });

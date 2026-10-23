@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflashGraph, flashesFor } from './deflash.mjs';
-import { frameAssets, frameGraph, planZooms, zoomFilter, zoomTiming } from './camera.mjs';
+import { crossZoomGraph, frameAssets, frameGraph, planZooms, zoomGraph, zoomTiming } from './camera.mjs';
 import { buildEditPlan, resolveEdit, xfadeArgs } from './edit.mjs';
 import { compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
 import { lensGeometry, lensPlaceChain, lensTiming } from './lens.mjs';
@@ -95,9 +95,9 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   const cameraTimeline = toReel([...withEditLenses(timeline, deck), ...editCameraMarks(deck)], reel.k).sort((a, b) => a.t - b.t);
   const timing = zoomTiming(camera);
   const zoomPlan = planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveSec, timing });
-  const zoom = zoomFilter(zoomPlan.shots, { width, height, timing });
+  const zoom = zoomGraph(zoomPlan.shots, { src: lv, out: '[lzcam]', width, height, fps: FPS, totalFrames: Math.round(liveSec * FPS), timing });
   if (zoom) {
-    filter.push(`${lv}${zoom},format=yuv420p,${BT709_PARAMS}[lzoom]`);
+    filter.push(...zoom.lines, `[lzcam]format=yuv420p,${BT709_PARAMS}[lzoom]`);
     lv = '[lzoom]';
   }
 
@@ -187,6 +187,7 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
     corners: inset ? camera.corners : undefined,
     shadow: inset ? camera.shadow : undefined,
     zoomShots: zoomPlan.shots.length,
+    motionBlurSec: zoom ? Number((zoom.windows.reduce((n, [a, b]) => n + b - a, 0) / FPS).toFixed(2)) : 0,
     manualZooms: zoomPlan.manual || 0,
     pointerTargets: zoomPlan.targets,
     skippedUnderOverlays: zoomPlan.skipped,
@@ -380,9 +381,18 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   // length so frame-grid rounding never drifts the offsets.
   const norm = `fps=${FPS},${toBt709(width, height)}`;
   const n = plan.segments.length;
-  const filter = plan.segments.map((s, i) => {
+  const filter = plan.segments.flatMap((s, i) => {
     const hold = s.padOut > 0 ? `,tpad=stop_mode=clone:stop_duration=${(s.padOut + 0.1).toFixed(4)}` : '';
-    return `[${i}:v]setpts=PTS-STARTPTS,${norm}${hold},trim=duration=${s.dur.toFixed(4)},setpts=PTS-STARTPTS,settb=AVTB[v${i}]`;
+    const head = s.transitionIn?.motion === 'crosszoom' ? s.transitionIn.dur : 0;
+    const next = plan.segments[i + 1]?.transitionIn;
+    const tail = next?.motion === 'crosszoom' ? next.dur : 0;
+    const base = `[${i}:v]setpts=PTS-STARTPTS,${norm}${hold},trim=duration=${s.dur.toFixed(4)},setpts=PTS-STARTPTS`;
+    if (!head && !tail) return [`${base},settb=AVTB[v${i}]`];
+    return [
+      `${base}[c${i}]`,
+      ...crossZoomGraph({ src: `[c${i}]`, out: `[cz${i}]`, dur: s.dur, head, tail, width, height, fps: FPS }),
+      `[cz${i}]settb=AVTB[v${i}]`,
+    ];
   });
   let acc = '[v0]';
   for (let i = 1; i < n; i++) {

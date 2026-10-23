@@ -425,8 +425,17 @@ Transition style comes from `brand.motion.transitions`, overridden by `video.con
 (`{ "style": "directed" | "dissolve" | "wipe" | "push" | "zoom" | "iris" | "blur" | "dip" | "radial" | "slice" |
 "diagonal", "duration": 0.2–1.2 }`; Studio → Direction). `directed` is the default and chooses by edit intent:
 open→live zooms, live→proof plate wipes, plate→live dissolves, and the close dips. A chosen single motif maps to
-ffmpeg `fade`, `smoothleft`, `slideleft`, `zoomin`, `circleopen`, `hblur`, `fadeblack`, `radial`, `hlslice`, or
-`diagtl`. Joins onto a chapter card remain a dissolve unless the selected join is a dip.
+ffmpeg `fade`, `smoothleft`, `slideleft`, `circleopen`, `hblur`, `fadeblack`, `radial`, `hlslice`, or
+`diagtl`. Joins onto a chapter card remain a dissolve unless the selected join is a dip. `zoom` is not ffmpeg's
+`zoomin` (which magnifies to a single pixel with nearest sampling): it is a cross zoom drawn by the camera
+(`camera.crossZoomGraph`) — the outgoing shot accelerates into a 1.3× lanczos push-in, the incoming one lands from
+1.16×, both under the smootherstep dissolve and both motion-blurred.
+
+**Motion blur (`lib/motionBlur.mjs`).** Camera moves — auto-zoom push-ins, pans and pull-backs in the clean pass, and
+the cross zoom in delivery — get a 180° shutter. Each frame averages the camera transform evaluated at 4–32 instants
+across the open half of the frame (all from the same source frame, so UI content never ghosts), with the sample count
+chosen from the window's peak speed so samples sit ≤1.25 px apart. Only frames whose fastest edge travels ≥3 px are
+rendered this way; holds and everything outside a move are untouched, bit for bit.
 
 The final time of a live mark comes from `liveToDelivery` in the edit plan (segment `at` + offset into the slice).
 

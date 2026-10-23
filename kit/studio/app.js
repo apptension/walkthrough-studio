@@ -9,6 +9,7 @@ import { describeJob } from './progress.js';
 import { initWorkflow } from './workflow.js';
 import { initEditor } from './editor.js';
 import { customBody, pickerOptions, screenQuery, shapeHint, stageBox, stageText, takeNote } from './captureSize.js';
+import { confirmGuidedFits } from './guidedFit.js';
 import { mountZen, zen } from './zen.js';
 import { icon } from './icons.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
@@ -5735,6 +5736,7 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
       );
       try {
         if (s.id === 'guide') {
+          if (!(await confirmGuidedFits(api, target))) throw new Error('cancelled');
           bayGuide.show(target);
           try {
             await runJobPromise('guide', false, { signal: sig, slug: target });
