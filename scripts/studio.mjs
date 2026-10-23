@@ -14,6 +14,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdout as output } from 'node:process';
+import { VERSION } from '../kit/lib/version.mjs';
 import { launchStudio } from './studioSession.mjs';
 import { box, createTheme, formatCheckRow, frameWidth, visibleWidth, wrapAnsi } from './studioDisplay.mjs';
 
@@ -88,7 +89,7 @@ function banner() {
   write(
     box(
       [
-        `${c.bold}${c.accent}Walkthrough Studio${c.reset}${dev ? `   ${c.accent}dev${c.reset}` : ''}`,
+        `${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}${VERSION}${c.reset}${dev ? `   ${c.accent}dev${c.reset}` : ''}`,
         `${c.soft}${subtitle}${c.reset}${project}`,
       ],
       { width: frameWidth(output.columns), theme: c }
@@ -430,7 +431,7 @@ async function main() {
   // Help
   if (args.includes('-h') || args.includes('--help')) {
     write(`
-${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}one-command setup + launch${c.reset}
+${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}${VERSION}${c.reset}  ${c.soft}one-command setup + launch${c.reset}
 
   ${c.bold}./studio${c.reset}                      check, install if needed, open Studio
   ${c.bold}./studio${c.reset} <slug>               open a project

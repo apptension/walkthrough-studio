@@ -7491,6 +7491,16 @@ function wireAgentSwitch() {
   });
 }
 
+/** Tab title, brand tooltip, and the Studio guide name the build people are running. */
+function showBuildVersion(version) {
+  if (!version || document.documentElement.dataset.version) return;
+  document.documentElement.dataset.version = version;
+  document.title = `Walkthrough Studio · ${version}`;
+  document.querySelector('.chrome-brand')?.setAttribute('title', `Walkthrough Studio ${version}`);
+  const sub = $('helpDialogSub');
+  if (sub) sub.textContent = `${version} · ${sub.textContent}`;
+}
+
 async function boot() {
   try {
     initFavicon();
@@ -7503,6 +7513,7 @@ async function boot() {
     });
     setBootStatus('Starting…');
     const health = await api('/api/health');
+    showBuildVersion(health.version);
     renderAgentChrome(health.agentAuth || {});
     wireAgentSwitch();
 

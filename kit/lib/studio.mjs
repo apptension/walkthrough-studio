@@ -5,6 +5,7 @@
  *   node cli.mjs studio [slug] [--port 4747]
  */
 import { createServer } from 'node:http';
+import { VERSION } from './version.mjs';
 
 process.env.WALKTHROUGH_STUDIO = '1';
 import {
@@ -1354,6 +1355,7 @@ async function handleApi(req, res, url) {
     const agent = agentAuthStatus();
     return json(res, 200, {
       ok: true,
+      version: VERSION,
       agent: agent.ready || agent.available,
       agentAuth: agent,
       outRoot: OUT_ROOT,
