@@ -1,0 +1,12 @@
+/*
+ * The desk's look is the legacy stylesheet, verbatim (`studio.css`, synced by
+ * `scripts/sync-legacy.mjs`). Components render the legacy markup against it,
+ * so nothing here restyles anything — this file only adapts the page shell.
+ */
+@import './studio.css';
+
+/* React mounts into #root; the legacy layout expects the chrome, stage bar and
+   workspace to be direct flex children of <body>. */
+#root {
+  display: contents;
+}
