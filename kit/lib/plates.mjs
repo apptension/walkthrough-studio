@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { DELIVERY, outputFrame } from './format.mjs';
 import { FPS } from './motion.mjs';
 import { motionCssVars, resolveMotion, withMotion } from './plateMotion.mjs';
+import { revealMarkup } from './titleReveal.mjs';
 import { TEMPLATES, brandReadiness } from './project.mjs';
 import { logoTileTone } from './logoTone.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
@@ -39,7 +40,7 @@ function titleEditFields(title, { asLines = false, reveal = 'rise' } = {}) {
   }
   const raw = Array.isArray(title) ? title.join(' ') : String(title ?? '');
   return {
-    TITLE: reveal === 'cascade' ? cascadeChars(raw).html : emphasize(raw),
+    TITLE: revealMarkup(reveal) === 'chars' ? cascadeChars(raw).html : emphasize(raw),
     TITLE_KIND: 'text',
     TITLE_RAW: escAttr(raw),
   };
@@ -185,13 +186,23 @@ function interstitialBrandVars(common, brand, it) {
   };
 }
 
-const titleLines = (lines, start, step) =>
-  (Array.isArray(lines) ? lines : [lines])
-    .map(
-      (line, i) =>
-        `<span class="mask"><span class="rise" style="--t: ${(start + i * step).toFixed(2)}s">${emphasize(line)}</span></span>`
-    )
+const titleLines = (lines, start, step, reveal = 'rise') => {
+  const kind = revealMarkup(reveal);
+  let charIndex = 0;
+  return (Array.isArray(lines) ? lines : [lines])
+    .map((line, i) => {
+      const t = (start + i * step).toFixed(2);
+      if (kind === 'chars') {
+        const chars = cascadeChars(line, { from: charIndex });
+        charIndex = chars.next;
+        return `<span class="title-cascade" style="--t: ${t}s">${chars.html}</span>`;
+      }
+      if (kind === 'wipe') return `<span class="line-wipe" style="--t: ${t}s">${emphasize(line)}</span>`;
+      if (kind === 'plain') return `<span class="title-line">${emphasize(line)}</span>`;
+      return `<span class="mask"><span class="rise" style="--t: ${t}s">${emphasize(line)}</span></span>`;
+    })
     .join('\n        ');
+};
 
 /** Split a title line into words while keeping `*emphasis*` tokens intact. */
 function splitWordsPreservingEmphasis(line) {
@@ -223,6 +234,7 @@ function splitWordsPreservingEmphasis(line) {
  */
 function openTitleLines(lines, { reveal = 'rise', start = 3.42, lineStep = 0.16, wordStep = 0.05 } = {}) {
   const list = (Array.isArray(lines) ? lines : [lines]).filter((l) => l != null && String(l).length);
+  const kind = revealMarkup(reveal);
   const n = list.length;
   let charIndex = 0;
   return list
@@ -231,13 +243,15 @@ function openTitleLines(lines, { reveal = 'rise', start = 3.42, lineStep = 0.16,
       const exitOrder = n - 1 - i;
       const xe = (0.1 + exitOrder * 0.08).toFixed(2);
       let inner;
-      if (reveal === 'cascade') {
+      if (kind === 'chars') {
         // Characters stagger across the whole title; each line starts a beat later.
         const chars = cascadeChars(line, { from: charIndex });
         charIndex = chars.next;
         inner = `<span class="title-cascade" style="--t: ${lineStart.toFixed(2)}s">${chars.html}</span>`;
-      } else if (reveal === 'wipe') {
+      } else if (kind === 'wipe') {
         inner = `<span class="line-wipe" style="--t: ${lineStart.toFixed(2)}s">${emphasize(line)}</span>`;
+      } else if (kind === 'plain') {
+        inner = emphasize(line);
       } else {
         const words = splitWordsPreservingEmphasis(line);
         inner = words
@@ -758,19 +772,23 @@ function orbitItems(items, brand) {
 
 /** Statement title lines: per-word masked rises (cascade → per character, wipe → per line). */
 function statementLines(list, { reveal = 'rise', start = 0.42, lineStep = 0.2, wordStep = 0.055 } = {}) {
+  const kind = revealMarkup(reveal);
   let charIndex = 0;
   let end = start;
   const html = list
     .map((line, i) => {
       const t = start + i * lineStep;
       let inner;
-      if (reveal === 'cascade') {
+      if (kind === 'chars') {
         const chars = cascadeChars(line, { from: charIndex });
         charIndex = chars.next;
         inner = `<span class="title-cascade" style="--t: ${t.toFixed(2)}s">${chars.html}</span>`;
         end = Math.max(end, t + charIndex * 0.026 + 0.72);
-      } else if (reveal === 'wipe') {
+      } else if (kind === 'wipe') {
         inner = `<span class="line-wipe" style="--t: ${t.toFixed(2)}s">${emphasize(line)}</span>`;
+        end = Math.max(end, t + 1.05);
+      } else if (kind === 'plain') {
+        inner = emphasize(line);
         end = Math.max(end, t + 1.05);
       } else {
         const words = splitWordsPreservingEmphasis(line);
@@ -1364,12 +1382,12 @@ export function buildPlates(video) {
   const closeTitle = close.title || [];
   const platform = close.tagline ?? brand.platform ?? '';
   // Per-plate motion (energy / pushScale / timing) — same overlay path as interstitials.
-  const { motion: _closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close);
+  const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close);
   writePlateHtml(
     paths.close.html,
     fill(readFileSync(join(TEMPLATES, 'close.html'), 'utf8'), {
       ...closeCommon,
-      TITLE: titleLines(closeTitle, 0.4, 0.14),
+      TITLE: titleLines(closeTitle, 0.4, 0.14, closeMotion.titleReveal),
       TITLE_LINES: Array.isArray(closeTitle) ? closeTitle.length : 2,
       ...titleEditFields(closeTitle, { asLines: true }),
       STEPS: stepsHtml(steps),

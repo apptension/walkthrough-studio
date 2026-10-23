@@ -5334,6 +5334,11 @@ export function initEditor(ctx) {
     if (!doc) return;
     for (const [name, value] of Object.entries(vars || {})) applyVar(name, value);
     if (titleReveal) doc.querySelectorAll('.title[data-reveal]').forEach((t) => (t.dataset.reveal = titleReveal));
+    try {
+      doc.defaultView?.__plateRuntime?.syncTitles?.();
+    } catch {
+      /* same-origin plates only */
+    }
   }
 
   /** Paint CSS look tokens onto the live frame (Direction panel and Look share this). */
@@ -5347,7 +5352,14 @@ export function initEditor(ctx) {
   }
 
   /** Does moving a title from `from` to `to` need new markup? Cascade builds letters; open and close build lines. */
-  const revealNeedsMarkup = (id, from, to) => from !== to && (id === 'open' || id === 'close' || from === 'cascade' || to === 'cascade');
+  // Mirrors revealMarkup / revealNeedsMarkup in kit/lib/titleReveal.mjs.
+  const revealMarkupKind = (id) => (id === 'cascade' ? 'chars' : id === 'wipe' ? 'wipe' : !id || id === 'rise' ? 'words' : 'plain');
+  const revealNeedsMarkup = (id, from, to) => {
+    if (from === to) return false;
+    const shaped = id === 'open' || id === 'close' || plateInfo(id)?.type === 'statement';
+    if (!shaped) return revealMarkupKind(from) === 'chars' || revealMarkupKind(to) === 'chars';
+    return revealMarkupKind(from) !== revealMarkupKind(to);
+  };
 
   /** Resolved look of a patch laid on the plate's current overrides — what the frame should show right now. */
   function guessLook(info, patch) {

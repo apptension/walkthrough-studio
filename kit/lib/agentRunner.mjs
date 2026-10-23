@@ -6,10 +6,12 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createStream, ingestAgentEvent, streamLine, streamPayload, tail } from './agentStream.mjs';
 import { formatStallNote, readStallReport } from './captureStall.mjs';
+import { releaseLocksForPid } from './outputLock.mjs';
+import { hasChildExited, killTree, terminate } from './processKill.mjs';
 import { readOverlayReport } from './overlayRetry.mjs';
 import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
 import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
@@ -18,7 +20,7 @@ import { promptLanguageLine } from './languages.mjs';
 import { captureProfile, describeCapture } from './capturePresets.mjs';
 import { outputFrame } from './format.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
-import { KIT, OUT_ROOT, SKILL, brandReadiness, listBrands, upsertDotEnv } from './project.mjs';
+import { KIT, OUT_ROOT, SKILL, brandReadiness, listBrands, loadVideo, upsertDotEnv } from './project.mjs';
 import { readBrowseMap, stopBrowseSession } from './browseSession.mjs';
 import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
@@ -430,7 +432,7 @@ Keep assets real; no invented quotes/logos.`,
 - motion: energy calm|clear|punchy, enterMs, staggerMs, pushScale
 - For open/Introduction logo layout: openLogoWidth (px), openLogoTop (%), openLiftScale, openLiftY (%)
 - WebGL atmosphere behind every plate (brand colours drive it): atmosphere none|schedule|aurora|mesh|particles|grid|waves, atmosphereOpacity (0–1), atmosphereSpeed (0.3–2)
-- Effects: titleReveal rise|cascade|wipe, depth flat|soft|deep (3D card landing), sheen true|false (highlight sweep). Per-plate overrides go in interstitials[].motion with the same keys.
+- Effects: titleReveal rise|cascade|wipe|focus|veil|ink|slit|iris|embers (ink, slit, iris and embers are WebGL masks), depth flat|soft|deep (3D card landing), sheen true|false (highlight sweep). Per-plate overrides go in interstitials[].motion with the same keys.
 Read ${brief}. Do not invent logos. Studio rebuilds plate HTML for live preview after you finish.${
       plateId ? ` Director is currently reviewing plate "${plateId}" — keep motion coherent with that plate.` : ''
     }`,
@@ -511,6 +513,28 @@ ${BEAT_GUIDE}
 3. ${config} — interstitials[].before must name a chapter label that exists in ${timeline}: move or drop plates whose chapter is gone. Leave plate copy, brand and direction alone unless a plate no longer fits the story.
 Never edit ${flow}, ${timeline}, ${liveMeta} or any video file: the take is final.`,
     critic: `Read ${critic} (or run critic findings). Apply high-confidence narration and plate improvements to ${narration} and ${config} for "${video.slug}". Do not re-record. Follow the product-walkthrough-video skill hard rules.`,
+    'critic-review': `You are the story critic for the walkthrough "${video.slug}". Watch what this video actually does and write an honest, specific review of how to make it land better. You REVIEW — you never edit the video's sources.
+
+Read ${skillPath}/SKILL.md (the hard rules and the "Critic once" step) and ${skillPath}/authoring.md, then:
+- ${briefPath} (audience, outcome, must-say, avoid) and ${config} (title, audience, purpose, open, interstitials, close, direction)
+- ${narration} (every spoken line) and ${flow} (what the camera does, chapter()/say() beats, in order)
+- ${timeline} and ${liveMeta} if present (when each beat lands and how long it holds; pace)
+- ${join(video.out, 'qc-report.json')} if present (dead air, WPM, drift)
+- ${join(video.out, 'critic-report.json')} — the automatic rule pass that just ran. Treat it as a seed: confirm, sharpen or drop its findings; do not just copy them.
+- The frame stills under ${join(video.out, 'critic-frames')} and ${join(video.out, 'validate', 'contact-sheet.jpg')} if present: open them to see what is on screen when each line is spoken. You may sample more stills from ${join(video.out, 'live.mp4')} or ${join(video.out, `${video.slug}.mp4`)} with ffmpeg into ${join(video.out, 'critic-frames')}.
+
+Review as four viewers: the skeptic (muted, first 20 s — is the pain and the payoff obvious?), the implementer (can I repeat the click path; does the voice lead the pointer?), the buyer (is there real proof before the close?), the onboarder (is there a map; is the pace calm?). Judge the story spine, the hook, narration vs what is on screen, pacing and dead air, plate choice and placement, the close and its one CTA.
+
+Write two files and nothing else:
+1. ${join(video.out, 'critic-agent.json')} — strict JSON:
+{"summary": "2–4 sentences: what works, the biggest problem, the one change that matters most",
+ "score": 0-100,
+ "strengths": ["…"],
+ "findings": [{"severity": "high"|"medium"|"low", "persona": "skeptic"|"implementer"|"buyer"|"onboarder", "target": "narration:<key>" | "<plateId>.<field>" | "flow:<chapter title>" | "pacing" | "story", "issue": "what is wrong, in the viewer's words", "suggestion": "the concrete fix — a rewritten line, a plate change, a cut", "evidence": "what you saw or heard: timestamp, frame, line", "at": <seconds or null>}]}
+   5–12 findings, highest impact first. Every finding names a real target and a concrete fix. No generic advice.
+2. ${join(video.out, 'critic-agent.md')} — the same review as a readable report for a human director.
+
+Never edit ${config}, ${narration}, ${flow}, ${briefPath}, brand files or any media. Do not record, render or run kit steps.`,
     'capture-repair': `CAPTURE STALLED for "${video.slug}". The recorder aborted because the flow stopped making progress. Your job is a surgical fix so the next record can pass — then stop (Studio will re-record once).
 
 Read first:
@@ -550,7 +574,7 @@ ${singlePlate}
 Studio will inspect exactly which sources changed, present the relevant review surface, and wait for human approval before rendering.`,
   };
 
-  const storyGoals = new Set(['explore', 'draft', 'branch', 'script', 'narration', 'plates', 'critic', 'full', 'guided-script', 'take-recraft', 'own-take']);
+  const storyGoals = new Set(['explore', 'draft', 'branch', 'script', 'narration', 'plates', 'critic', 'critic-review', 'full', 'guided-script', 'take-recraft', 'own-take']);
   const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video))) : '';
   const device = DEVICE_GOALS.has(goal) ? deviceLine(video.config) : '';
   return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, device, spine, extra].filter(Boolean).join('\n\n').trim();
@@ -832,6 +856,43 @@ export function startImprove(video, goal, opts = {}) {
   return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve' });
 }
 
+const CRITIC_REVIEW_TIMEOUT_MS = Number(process.env.WALKTHROUGH_CRITIC_TIMEOUT_MS) || 10 * 60 * 1000;
+
+/**
+ * The critic agent watches the cut (sources, timeline, frame stills, the rule pass) and writes
+ * critic-agent.json/.md. `onReport(review)` merges it into critic-report.json on a clean exit.
+ */
+export function startCriticReview(video, { note = '', onReport = null } = {}) {
+  const prompt = buildPrompt(video, 'critic-review', note);
+  const job = newJob({ kind: 'improve', goal: 'critic-review', slug: video.slug, prompt });
+  const outDir = join(video.out, 'studio-jobs');
+  const reportPath = join(video.out, 'critic-agent.json');
+  const startedAt = Date.now();
+  return launchAgent(job, {
+    prompt,
+    outDir,
+    // Shell lets the critic sample extra frames with ffmpeg; the prompt forbids source edits.
+    force: true,
+    retryLabel: 'Run critic',
+    timeoutMs: CRITIC_REVIEW_TIMEOUT_MS,
+    onDone: () => {
+      if (!existsSync(reportPath) || statSync(reportPath).mtimeMs < startedAt - 1000) {
+        return 'The critic finished without writing critic-agent.json.';
+      }
+      let review;
+      try {
+        review = JSON.parse(readFileSync(reportPath, 'utf8'));
+      } catch (err) {
+        return `critic-agent.json is not valid JSON: ${err.message}`;
+      }
+      if (!Array.isArray(review?.findings)) return 'critic-agent.json has no findings list.';
+      onReport?.(review);
+      job.critic = { findings: review.findings.length, score: review.score ?? null };
+      return '';
+    },
+  });
+}
+
 /** Exploring is interactive (many look → decide → move rounds), so it gets a long leash. */
 const EXPLORE_TIMEOUT_MS = Number(process.env.WALKTHROUGH_EXPLORE_TIMEOUT_MS) || 20 * 60 * 1000;
 
@@ -913,6 +974,8 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
     cwd: workspace,
     env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    // See runCliStep: group-leader so a cancel reaches everything this agent spawns too.
+    detached: true,
   });
   job.child = child;
   job.pid = child.pid;
@@ -1260,6 +1323,10 @@ function runCliStep(job, step, slug, extraArgs = []) {
       cwd: join(SKILL, 'kit'),
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Its own process-group leader, so cancelJob's killTree(-pid) reaches this
+      // process *and* anything it spawns (Playwright's Chromium, ffmpeg), not just
+      // this one node process.
+      detached: true,
     });
     job.child = child;
     job.pid = child.pid;
@@ -1444,6 +1511,8 @@ export function startKitJob(video, step, extraArgs = []) {
     cwd: join(SKILL, 'kit'),
     env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    // See runCliStep: group-leader so a cancel reaches everything this spawns too.
+    detached: true,
   });
   job.child = child;
   job.pid = child.pid;
@@ -1472,6 +1541,18 @@ function finalizeCancelled(job, outDir = null) {
   job.activity = 'Stopped';
   job.finishedAt = job.finishedAt || new Date().toISOString();
   append(job, '■ stopped by user', { activity: 'Stopped', kind: 'system' });
+  // Drop this job's output locks now that it's actually settled into "cancelled" — a
+  // killed process never runs the `finally { lock.release() }` cli.mjs normally relies
+  // on, so without this a lock can outlive the process it was guarding. By the time a
+  // job reaches here every caller has either confirmed the child closed or never
+  // spawned one, so the pid really is done with these files.
+  if (job.slug) {
+    try {
+      releaseLocksForPid(loadVideo(job.slug), job.pid || 0);
+    } catch {
+      /* video may be gone, or this job kind never took output locks */
+    }
+  }
   if (outDir) {
     try {
       writeFileSync(join(outDir, `${job.id}.json`), JSON.stringify(jobView({ ...job, log: job.log.slice(-80) }), null, 2));
@@ -1491,29 +1572,32 @@ export function cancelJob(id) {
   job.phase = 'cancelling';
   append(job, 'Stopping…', { activity: 'Stopping…', kind: 'system' });
   const child = job.child;
-  if (child && !child.killed) {
-    try {
-      child.kill('SIGTERM');
-    } catch {
-      /* ignore */
-    }
-    setTimeout(() => {
-      try {
-        if (!child.killed) child.kill('SIGKILL');
-      } catch {
-        /* ignore */
-      }
-    }, 1600);
-  } else if (job.pid) {
-    try {
-      process.kill(job.pid, 'SIGTERM');
-    } catch {
-      /* ignore */
-    }
+  const pid = child?.pid || job.pid;
+  if (pid) {
+    // Spawn sites run `detached: true`, so `pid` is also the process-group id — one
+    // signal reaches the wrapper CLI process *and* whatever it spawned (Playwright's
+    // Chromium, ffmpeg), not just the direct child.
+    //
+    // `hasExited` checks real process state, not `child.killed` (which only reports
+    // that a signal was *sent*, not that anything actually died — see processKill.mjs).
+    const hasExited = child ? () => hasChildExited(child) : () => !isPidAlive(pid);
+    terminate({
+      hasExited,
+      kill: (signal) => killTree(pid, signal),
+    });
   } else {
     finalizeCancelled(job);
   }
   return job;
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Stop every running/queued job (agent + kit). */

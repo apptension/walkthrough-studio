@@ -139,3 +139,16 @@ function release(video, resource, token) {
   if (held && held.pid !== token.pid) return;
   rmSync(file, { force: true });
 }
+
+/**
+ * Drop every lock this video holds for `pid`, without waiting for a future run to
+ * notice the holder is dead. Cancelling a job kills its process, but a killed process
+ * never runs the `finally { lock.release() }` that would normally clear this — the
+ * stale-pid reclaim in `take()` covers the *next* run, this covers "stop" itself so
+ * `heldOutputLocks()` reflects the cancellation immediately.
+ */
+export function releaseLocksForPid(video, pid) {
+  for (const held of heldOutputLocks(video)) {
+    if (held.pid === pid) rmSync(lockPath(video, held.resource), { force: true });
+  }
+}

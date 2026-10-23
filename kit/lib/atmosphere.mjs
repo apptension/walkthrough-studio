@@ -21,6 +21,7 @@ import { parseCssHex } from './text.mjs';
 import { ATMOSPHERE_IDS, resolveMotion } from './plateMotion.mjs';
 import { countUpRuntimeSource } from './countUp.mjs';
 import { typeFitRuntimeSource } from './typeFit.mjs';
+import { titleRevealRuntimeSource } from './titleReveal.mjs';
 import { GLSL_PREAMBLE } from './atmosphereGlsl.mjs';
 import { DELIVERY } from './format.mjs';
 import { labShaderSource, PROMOTED_FIELDS } from './atmosphereLab.mjs';
@@ -449,6 +450,9 @@ ${countUpRuntimeSource()}
 </script>
 <script>
 ${typeFitRuntimeSource()}
+</script>
+<script>
+${titleRevealRuntimeSource()}
 </script>`
       : ''
   }`;

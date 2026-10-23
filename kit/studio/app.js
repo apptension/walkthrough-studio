@@ -3084,12 +3084,19 @@ const blockNode = (n) =>
   n?.nodeType === 1 && (n.tagName === 'DIV' || n.tagName === 'P' || n.ownerDocument.defaultView.getComputedStyle(n).display === 'block');
 
 /** Remember the template markup once, before the canonical edit markup replaces it. */
+function fieldMarkup(el) {
+  if (!el.querySelector('.title-mask, .title-glow')) return el.innerHTML;
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('.title-mask, .title-glow').forEach((n) => n.remove());
+  return clone.innerHTML;
+}
+
 function learnField(el) {
   if (el.dataset.editArmed === '1') return;
   const doc = el.ownerDocument;
   if (!plateOriginalMarkup.has(doc)) plateOriginalMarkup.set(doc, new Map());
   const originals = plateOriginalMarkup.get(doc);
-  if (!originals.has(el.dataset.edit)) originals.set(el.dataset.edit, el.innerHTML);
+  if (!originals.has(el.dataset.edit)) originals.set(el.dataset.edit, fieldMarkup(el));
 }
 
 /**
@@ -4391,7 +4398,7 @@ async function loadPlateAccent(plateId) {
   if (!pop) return;
   const opts = state.video?.motionOptions || {};
   accentOptions($('accentAtmosphere'), opts.atmospheres || [], opts.atmosphereLabels || {});
-  accentOptions($('accentReveal'), opts.titleReveals || []);
+  accentOptions($('accentReveal'), opts.titleReveals || [], opts.titleRevealLabels || {});
   accentOptions($('accentDepth'), opts.depths || []);
   accentOptions($('accentEnergy'), opts.energies || []);
   let motion = {};
@@ -4845,6 +4852,28 @@ function setAtmosphere(id) {
   if (sliders) sliders.classList.toggle('hidden', id === 'none');
 }
 
+/** Fill the title-reveal select from the engine catalogue. Short name, full label in the title. */
+function renderTitleReveals(active) {
+  const sel = $('titleReveal');
+  if (!sel) return;
+  const ids = state.video?.motionOptions?.titleReveals;
+  const labels = state.video?.motionOptions?.titleRevealLabels || {};
+  if (ids?.length) {
+    const current = active || sel.value;
+    sel.innerHTML = ids
+      .map((id) => {
+        const full = labels[id] || id;
+        const dot = full.indexOf(' · ');
+        const name = dot === -1 ? full : full.slice(0, dot);
+        return `<option value="${escapeHtml(id)}" title="${escapeHtml(full)}">${escapeHtml(name)}</option>`;
+      })
+      .join('');
+    if (current) sel.value = current;
+  } else if (active) {
+    sel.value = active;
+  }
+}
+
 /** Mirror the resolved effects layer (atmosphere, title reveal, depth, sheen) into the controls. */
 function renderEffects(motion) {
   if (!motion) return;
@@ -4860,7 +4889,7 @@ function renderEffects(motion) {
     sp.value = String(motion.atmosphereSpeed);
     $('atmosphereSpeedOut').textContent = `${Number(motion.atmosphereSpeed).toFixed(1)}×`;
   }
-  if ($('titleReveal') && motion.titleReveal) $('titleReveal').value = motion.titleReveal;
+  renderTitleReveals(motion.titleReveal);
   if ($('cardDepth') && motion.depth) $('cardDepth').value = motion.depth;
   if ($('sheenToggle')) $('sheenToggle').checked = motion.sheen !== false;
 }

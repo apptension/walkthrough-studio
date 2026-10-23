@@ -86,6 +86,11 @@ export const PURPOSES = {
 
 export const PURPOSE_IDS = Object.keys(PURPOSES);
 
+/** Write `purpose` onto a config without letting key order revive the old value. */
+export function withPurpose(config, purpose) {
+  return { ...config, purpose };
+}
+
 export const PRINCIPLES = [
   'Open on the viewer, not the company: their job, its cost, or the outcome they came for. Never "Hi, I’m…", "Welcome to…", or "X is a platform that…".',
   'Outcome before mechanism: show the finished result early, then how to get there.',

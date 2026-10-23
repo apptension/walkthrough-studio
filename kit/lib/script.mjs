@@ -4,8 +4,10 @@
  * separate copy that can drift. Review state (script + cut approvals) lives next to the sources
  * in videos/<slug>/review.json and is invalidated automatically when the sources change.
  */
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { shortHoldWarning } from '../studio/voiceHold.js';
@@ -99,6 +101,35 @@ function formatFlowCall(fn, title, body, holdMs) {
   return `${fn}(${args.join(', ')})`;
 }
 
+/**
+ * Where the statement containing the call at `at` begins.
+ *
+ * `await say(...)` has a single space between the keyword and the call. Walking back over
+ * that space lands *on* the space, so a lookbehind of `await ` (keyword plus the space)
+ * never matches — the space is the cursor, not part of the lookbehind. Removals then
+ * deleted `say(...);\n` and left `await`, which glued onto the next line (`await   const`,
+ * `await   await`). Match the keyword itself, then expand to the indent when the call
+ * owns the whole line.
+ */
+function statementStart(source, at) {
+  let i = at;
+  while (i > 0 && /[ \t]/.test(source[i - 1])) i--;
+  const keyword = 'await';
+  const keywordAt = i - keyword.length;
+  if (
+    keywordAt >= 0 &&
+    source.slice(keywordAt, i) === keyword &&
+    (keywordAt === 0 || !/[\w$]/.test(source[keywordAt - 1]))
+  ) {
+    i = keywordAt;
+  } else {
+    i = at;
+  }
+  const lineStart = source.lastIndexOf('\n', i - 1) + 1;
+  if (/^[ \t]*$/.test(source.slice(lineStart, i))) return lineStart;
+  return i;
+}
+
 /** Replace title/body/hold on the call at `index`. Returns the new source. */
 export function replaceFlowCallAt(source, index, patch = {}) {
   const matches = flowCallMatches(source);
@@ -142,22 +173,42 @@ export function moveFlowCallTo(source, fromIndex, toIndex) {
   });
 }
 
+/**
+ * Replace flow.mjs only when the new source parses. Script edits splice that file in
+ * place; a bad splice used to be written anyway, and record then died with
+ * "Unexpected token 'const'" instead of the edit being rejected.
+ */
+export function commitFlowSource(flowPath, source) {
+  const dir = mkdtempSync(join(tmpdir(), 'flow-syntax-'));
+  const file = join(dir, 'flow.mjs');
+  try {
+    writeFileSync(file, source);
+    const check = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+    if (check.status !== 0) {
+      const detail =
+        (check.stderr || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => line.startsWith('SyntaxError')) || 'invalid syntax';
+      throw new Error(`That edit would break flow.mjs (${detail}). Nothing was saved.`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  writeFileSync(flowPath, source);
+}
+
 /** Remove the await-call statement at `index`. */
 export function removeFlowCallAt(source, index) {
   const matches = flowCallMatches(source);
   const m = matches[index];
   if (!m) throw new Error(`No chapter/say call at index ${index}`);
-  let start = m.start;
+  const start = statementStart(source, m.start);
   let end = m.end;
-  let i = start;
-  while (i > 0 && /[ \t]/.test(source[i - 1])) i--;
-  if (source.slice(Math.max(0, i - 6), i) === 'await ') start = i - 6;
   if (source[end] === ';') end++;
   let j = end;
   while (j < source.length && /[ \t]/.test(source[j])) j++;
   if (source[j] === '\n') end = j + 1;
-  const lineStart = source.lastIndexOf('\n', start - 1) + 1;
-  if (/^[ \t]*$/.test(source.slice(lineStart, start))) start = lineStart;
   return source.slice(0, start) + source.slice(end);
 }
 
@@ -184,13 +235,8 @@ export function insertFlowCallAfter(source, afterIndex, { kind = 'chapter', titl
   if (afterIndex < 0) {
     const first = matches[0];
     const lineStart = source.lastIndexOf('\n', first.start - 1) + 1;
-    let s = first.start;
-    let i = s;
-    while (i > 0 && /[ \t]/.test(source[i - 1])) i--;
-    if (source.slice(Math.max(0, i - 6), i) === 'await ') s = i - 6;
-    if (/^[ \t]*$/.test(source.slice(lineStart, s))) s = lineStart;
     indent = (source.slice(lineStart).match(/^([ \t]*)/) || [, '  '])[1];
-    insertAt = s;
+    insertAt = statementStart(source, first.start);
     return `${source.slice(0, insertAt)}${indent}${call}\n${source.slice(insertAt)}`;
   }
   const anchor = matches[Math.min(afterIndex, matches.length - 1)];
@@ -1184,7 +1230,7 @@ async function applyScriptStructureUnlocked(video, body = {}) {
         body: body.body,
         holdMs: body.holdMs,
       });
-      writeFileSync(flowPath, source);
+      commitFlowSource(flowPath, source);
       const nextTitle = body.title != null ? String(body.title).trim() : prev.title;
       if (nextTitle !== prev.title) {
         await renameNarrationKey(video, prev.title, nextTitle);
@@ -1205,7 +1251,7 @@ async function applyScriptStructureUnlocked(video, body = {}) {
         body: body.body,
         holdMs: body.holdMs,
       });
-      writeFileSync(flowPath, source);
+      commitFlowSource(flowPath, source);
       const title =
         String(body.title || '').trim() || (kind === 'chapter' ? 'New chapter' : 'New caption');
       const n = await loadNarration(video);
@@ -1233,7 +1279,7 @@ async function applyScriptStructureUnlocked(video, body = {}) {
         }
       }
       source = removeFlowCallAt(source, index);
-      writeFileSync(flowPath, source);
+      commitFlowSource(flowPath, source);
       const n = await loadNarration(video);
       if (n.lines[prev.title] !== undefined) {
         const next = { ...n, plates: { ...n.plates }, lines: { ...n.lines } };
@@ -1249,7 +1295,7 @@ async function applyScriptStructureUnlocked(video, body = {}) {
       if (!Number.isInteger(index)) throw new Error('Missing call index');
       if (delta !== -1 && delta !== 1) throw new Error('delta must be -1 or 1');
       source = moveFlowCall(source, index, delta);
-      writeFileSync(flowPath, source);
+      commitFlowSource(flowPath, source);
       return { op, wrote: 'flow.mjs', index, delta };
     }
 
@@ -1259,7 +1305,7 @@ async function applyScriptStructureUnlocked(video, body = {}) {
       if (!Number.isInteger(index)) throw new Error('Missing call index');
       if (!Number.isInteger(toIndex)) throw new Error('Missing toIndex');
       source = moveFlowCallTo(source, index, toIndex);
-      writeFileSync(flowPath, source);
+      commitFlowSource(flowPath, source);
       return { op, wrote: 'flow.mjs', index, toIndex };
     }
   }

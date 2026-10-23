@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PURPOSES, PURPOSE_IDS, critiqueStory, resolvePurpose, storyBrief } from './narrative.mjs';
+import { PURPOSES, PURPOSE_IDS, critiqueStory, resolvePurpose, storyBrief, withPurpose } from './narrative.mjs';
+
+test('withPurpose always wins even when purpose already sits after audience in the file', () => {
+  // The old Studio POST rebuilt the object key-by-key and set purpose when it saw
+  // audience — then overwrote it again when it copied the existing purpose entry.
+  const current = { title: 'Demo', audience: 'New users', purpose: 'onboarding', product: 'Acme' };
+  assert.equal(withPurpose(current, 'launch').purpose, 'launch');
+  assert.equal(withPurpose(current, 'launch').audience, 'New users');
+});
 
 test('every purpose has a framework and ends on a payoff or ask beat', () => {
   for (const id of PURPOSE_IDS) {
