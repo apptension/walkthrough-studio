@@ -108,3 +108,40 @@ test('placeholder packs cannot be selected as an existing brand', () => {
     /not ready/
   );
 });
+
+test('the wizard recording size and video shape land in the config and brief', async () => {
+  const { captureProfile } = await import('./capturePresets.mjs');
+  const { outputFrame } = await import('./format.mjs');
+  const result = createProject({
+    title: 'Phone tour',
+    audience: 'Field staff',
+    brand: { mode: 'new', name: 'Phoney', url: 'https://example.com' },
+    app: { startUrl: 'https://example.com' },
+    capture: { mode: 'agent', size: { preset: 'iphone-15' } },
+    output: { format: 'portrait' },
+    story: { mustShow: ['Home'] },
+  });
+  const cfg = JSON.parse(readFileSync(join(root, 'videos', result.slug, 'video.config.json'), 'utf8'));
+  assert.equal(captureProfile(cfg).id, 'iphone-15');
+  assert.equal(captureProfile(cfg).mobile, true);
+  assert.equal(outputFrame(cfg).format, 'portrait');
+  assert.equal(cfg.record.startUrl, 'https://example.com');
+  const brief = JSON.parse(readFileSync(join(root, 'videos', result.slug, 'brief.json'), 'utf8'));
+  assert.equal(brief.capture.size, 'iphone-15');
+});
+
+test('a bad recording size is refused before any project files are written', async () => {
+  const { existsSync } = await import('node:fs');
+  assert.throws(
+    () =>
+      createProject({
+        title: 'Odd size',
+        brand: { mode: 'new', name: 'Odd', url: 'https://example.com' },
+        app: { startUrl: 'https://example.com' },
+        capture: { size: { preset: 'custom', width: 1001, height: 700 } },
+        story: { mustShow: ['Home'] },
+      }),
+    /even/,
+  );
+  assert.equal(existsSync(join(root, 'videos', 'odd-size')), false);
+});

@@ -31,12 +31,16 @@ import {
   setAgentPreference,
   startBriefDraft,
   startDiscoverBrand,
+  startExplore,
   startImprove,
   startKitJob,
 } from './agentRunner.mjs';
 import { loadNarrationLines, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
 import { ZOOM_LEVELS, insetGeometry, planZooms, zoomTiming } from './camera.mjs';
+import { takeSpace, videoSpace } from './stage.mjs';
+import { applyCaptureSettings, captureOptions, captureSettings, parseScreen } from './captureSettings.mjs';
+import { outputFrame } from './format.mjs';
 import { lensGeometry, lensTiming } from './lens.mjs';
 import { CURVES, MOTION_SPEEDS } from '../studio/easing.js';
 
@@ -66,8 +70,10 @@ import {
   resolveLenses,
   withEditLenses,
   applyCardEdits,
+  applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentTrims,
   cardMarkKey,
   joinKey,
   liveTimeMap,
@@ -137,6 +143,8 @@ import {
   writeBranchIdeas,
 } from './branch.mjs';
 import { createProject, draftNote } from './newProject.mjs';
+import { readGuidedTake, takeFiles } from './guideTake.mjs';
+import { readGuideStatus, readGuidedTour, requestGuideControl, requestGuideFinish } from './guidedTour.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
 import { createDevHub, injectDevClient } from './devServer.mjs';
 import { brandReadiness, listBrands, listVideos, loadVideo, OUT_ROOT } from './project.mjs';
@@ -228,6 +236,61 @@ function safeUnder(root, rel) {
   return full;
 }
 
+/**
+ * Product exploration for new projects and replans: the explore agent walks the live app and
+ * decides the journey. Without a signed-in agent, fall back to the link crawl (map only).
+ */
+function startProductExplore(video, brief, { guided = captureModeOf(brief) === 'guided' } = {}) {
+  // Prefer the live app URL when the brief names one and config still points at marketing.
+  const appUrl = brief?.brand?.appUrl && video.config.record?.startUrl !== brief.brand.appUrl ? brief.brand.appUrl : null;
+  if (guided) return startKitJob(video, 'guide', appUrl ? ['--url', appUrl] : []);
+  const agent = agentAuthStatus();
+  if (agent.available && agent.authenticated) return startExplore(video, { note: draftNote(brief), url: appUrl });
+  const args = ['--explore'];
+  if (appUrl) args.push('--url', appUrl);
+  return startKitJob(video, 'analyze', args);
+}
+
+function captureModeOf(brief) {
+  return brief?.capture?.mode === 'guided' ? 'guided' : 'agent';
+}
+
+/** The reviewer's recording from the last guided session, as the take choice card shows it. */
+function guidedTakeSummary(video, tour) {
+  const take = readGuidedTake(video);
+  if (!take || (tour?.finishedAt && take.tourFinishedAt !== tour.finishedAt)) return null;
+  const f = takeFiles(video);
+  const v = Math.round(mtimeMs(f.take));
+  const live = readJsonSafe(join(video.out, 'live-meta.json'));
+  const chapters = (take.timeline || []).filter((m) => m.kind === 'chapter').map((m) => ({ title: m.label, t: m.t }));
+  return {
+    seconds: take.seconds,
+    cuts: (take.cuts || []).length,
+    cutSec: Number((take.cuts || []).reduce((a, c) => a + c.dur, 0).toFixed(1)),
+    chapters,
+    recordedAt: take.recordedAt || null,
+    url: `/media/${encodeURIComponent(video.slug)}/guide/take.mp4?v=${v}`,
+    poster: existsSync(f.poster) ? `/media/${encodeURIComponent(video.slug)}/guide/take-poster.jpg?v=${v}` : null,
+    // Already the video's take (adopted after this recording was made).
+    inUse: live?.source === 'reviewer' && live?.createdAt === take.recordedAt,
+  };
+}
+
+function guidedTourSummary(video) {
+  const tour = readGuidedTour(video);
+  const status = readGuideStatus(video);
+  if (!tour && !status) return null;
+  return {
+    steps: tour?.stats?.steps || 0,
+    marks: tour?.stats?.marks || 0,
+    activeSec: tour?.stats?.activeSec || 0,
+    idleSec: tour?.stats?.idleSec || 0,
+    finishedAt: tour?.finishedAt || null,
+    take: guidedTakeSummary(video, tour),
+    status,
+  };
+}
+
 function readJsonSafe(path) {
   if (!existsSync(path)) return null;
   try {
@@ -272,9 +335,11 @@ function freshnessInfo(video) {
   const flowNewer = Boolean(liveAt && flowAt && flowAt > liveAt + 1500);
   const urlChanged = Boolean(recordedUrl && startUrl && recordedUrl !== startUrl);
   const loginChanged = recordedLogin != null && recordedLogin !== loginRequired;
+  const sizeChanged = Boolean(liveAt) && !videoSpace(video).takeMatches;
   const needsRecord = recordNeedsRerecord({
     hasLive: Boolean(liveAt),
     flowNewer,
+    sizeChanged,
     recordedUrl,
     startUrl,
     recordedLogin,
@@ -286,7 +351,7 @@ function freshnessInfo(video) {
 
   let reason = 'Delivery matches current sources';
   if (!deliveryAt) reason = 'No delivery master yet — run produce';
-  else if (needsRecord) reason = recordRerecordReason({ flowNewer, urlChanged, loginChanged });
+  else if (needsRecord) reason = recordRerecordReason({ flowNewer, urlChanged, loginChanged, sizeChanged });
   else if (plateHealth.bad) {
     reason = `Plate render QC: ${plateHealth.issues.slice(0, 2).join('; ')} — re-render plates`;
   } else if (staleSources) reason = `${newest?.key || 'sources'} newer than delivery — rebuild to preview`;
@@ -391,6 +456,9 @@ function videoSummary(slug) {
     transitions: resolveTransitions(video),
     review: reviewSummary(video),
     hasFlow: existsSync(join(video.dir, 'flow.mjs')),
+    captureMode: captureModeOf(readJsonSafe(join(video.dir, 'brief.json'))),
+    output: outputFrame(video.config),
+    guidedTour: guidedTourSummary(video),
     brief: readJsonSafe(join(video.dir, 'brief.json')),
     lineage: lineageSummary(video),
     interstitials: (video.config.interstitials || []).map((i) => ({
@@ -995,9 +1063,9 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   const LIVE = join(video.out, 'live.mp4');
   const hasLive = existsSync(LIVE);
   const liveDur = hasLive ? mediaDuration(LIVE) : 0;
-  const viewport = video.config.record?.viewport || {};
-  const width = viewport.width || 1920;
-  const height = viewport.height || 1080;
+  const space = takeSpace(video);
+  const width = space.cssW;
+  const height = space.cssH;
   const deck = resolveEdit(video, { liveDur: hasLive ? liveDur : Infinity });
   const timeline = loadRawTimeline(video);
   const camera = video.brand.direction?.camera || { zoom: 'off', frame: 'full', background: 'brand' };
@@ -1021,8 +1089,12 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   // edit-plan may already be chapter-split; coalesce contiguous live bricks, then re-split
   // from current marks so Editor sections track timeline card moves.
   const natural = splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map);
-  // The editor's order plays the rendered slices in a new sequence; omit drops sections from the cut.
-  const scenes = applySegmentOmit(applySegmentOrder(natural, deck.order), deck.omit);
+  // The editor's order plays the rendered slices in a new sequence; omit drops sections; trims cut heads/tails.
+  const scenes = applySegmentCuts(
+    applySegmentTrims(applySegmentOmit(applySegmentOrder(natural, deck.order), deck.omit), deck.trims),
+    deck.cuts,
+    map
+  );
   const omitted = natural
     .filter((s) => (deck.omit || []).includes(s.id))
     .map((s) => ({ id: s.id, kind: s.kind, title: s.title, type: s.type || null }));
@@ -1034,9 +1106,9 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       prev: { id: prev.id, kind: prev.kind, title: prev.title },
       next: { id: s.id, kind: s.kind, title: s.title },
       at: s.start,
-      type: s.transitionIn?.type || null,
-      dur: s.transitionIn?.dur || null,
-      card: Boolean(s.transitionIn?.card),
+      type: s.hardCut ? null : s.transitionIn?.type || null,
+      dur: s.hardCut ? 0 : s.transitionIn?.dur || null,
+      card: s.hardCut ? false : Boolean(s.transitionIn?.card),
       pinned: deck.transitions[key] || null,
     };
   });
@@ -1197,6 +1269,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
     stale: JSON.stringify(pictureOf(compactEdit(deck) || null)) !== JSON.stringify(pictureOf(rendered)) || freshnessInfo(video).stale,
     audioStale: audio.stale,
     rendered: Boolean(meta),
+    space: videoSpace(video),
     live: {
       exists: hasLive,
       url: hasLive ? `/media/${slug}/live.mp4?t=${Math.round(statSync(LIVE).mtimeMs)}` : null,
@@ -1324,6 +1397,10 @@ async function handleApi(req, res, url) {
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
+  }
+
+  if (path === '/api/capture/options' && req.method === 'GET') {
+    return json(res, 200, { options: captureOptions({ screen: parseScreen(url.searchParams), mode: url.searchParams.get('mode') === 'guided' ? 'guided' : 'agent' }) });
   }
 
   if (path === '/api/brands' && req.method === 'GET') {
@@ -1584,6 +1661,34 @@ async function handleApi(req, res, url) {
     delete direction.approvedAt;
     writeFileSync(pathCfg, JSON.stringify({ ...current, transitions, direction }, null, 2) + '\n');
     return json(res, 200, { ok: true, transitions: resolveTransitions(loadVideo(video.slug)) });
+  }
+
+  if (rest === '/capture' && req.method === 'GET') {
+    const brief = readJsonSafe(join(video.dir, 'brief.json')) || {};
+    return json(res, 200, captureSettings(video, { screen: parseScreen(url.searchParams), brief, mode: captureModeOf(brief) }));
+  }
+
+  if (rest === '/capture' && req.method === 'POST') {
+    const body = await readBody(req);
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    let next;
+    try {
+      next = applyCaptureSettings(current, body);
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+    writeFileSync(pathCfg, JSON.stringify(next, null, 2) + '\n');
+    const refreshed = loadVideo(video.slug);
+    const brief = readJsonSafe(join(video.dir, 'brief.json')) || {};
+    const outputChanged = outputFrame(current).format !== outputFrame(next).format;
+    const rebuilt = outputChanged ? rebuildPlateHtml(video.slug) : null;
+    return json(res, 200, {
+      ok: true,
+      ...captureSettings(refreshed, { screen: body.screen || null, brief, mode: captureModeOf(brief) }),
+      freshness: freshnessInfo(refreshed),
+      ...(rebuilt ? { plates: rebuilt.plates, overlays: rebuilt.overlays } : {}),
+    });
   }
 
   if (rest === '/direction' && req.method === 'PUT') {
@@ -2005,13 +2110,13 @@ async function handleApi(req, res, url) {
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
     const LIVE = join(video.out, 'live.mp4');
-    const viewport = current.record?.viewport || {};
+    const space = takeSpace(video, current);
     let next;
     try {
       next = patchEdit(current.edit || {}, body, {
         liveDur: existsSync(LIVE) ? mediaDuration(LIVE) : Infinity,
-        width: viewport.width || 1920,
-        height: viewport.height || 1080,
+        width: space.cssW,
+        height: space.cssH,
         styles: TRANSITION_STYLES,
       });
     } catch (err) {
@@ -2262,9 +2367,12 @@ async function handleApi(req, res, url) {
       'qc',
       'deliver',
       'export',
+      'guide',
+      'adopt-take',
     ]);
     if (!allowed.has(step)) return json(res, 400, { error: 'invalid step' });
     const args = [];
+    if (step === 'guide' && body.url) args.push('--url', String(body.url));
     if (step === 'export') {
       const { EXPORT_PRESETS } = await import('./exports.mjs');
       const presets = (Array.isArray(body.presets) ? body.presets : []).filter((id) => EXPORT_PRESETS[id]);
@@ -2329,12 +2437,7 @@ async function handleApi(req, res, url) {
       if (!startUrl) {
         return json(res, 400, { error: 'No start URL to analyze — set record.startUrl or brand.appUrl / brand.url in the brief' });
       }
-      const args = ['--explore'];
-      // Prefer the live app URL when the brief names one and config still points at marketing.
-      if (brief?.brand?.appUrl && video.config.record?.startUrl !== brief.brand.appUrl) {
-        args.push('--url', brief.brand.appUrl);
-      }
-      return json(res, 200, { ok: true, job: jobPayload(startKitJob(video, 'analyze', args)) });
+      return json(res, 200, { ok: true, job: jobPayload(startProductExplore(video, brief)) });
     }
     const readiness = brandReadiness(video.config.brand);
     if (!readiness.ready) {
@@ -2350,10 +2453,46 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, job: jobPayload(job) });
   }
 
+  if (rest === '/guide' && req.method === 'GET') {
+    return json(res, 200, { captureMode: captureModeOf(readJsonSafe(join(video.dir, 'brief.json'))), tour: guidedTourSummary(video) });
+  }
+
+  if (rest === '/guide/finish' && req.method === 'POST') {
+    requestGuideFinish(video);
+    return json(res, 200, { ok: true });
+  }
+
+  if (rest === '/guide/control' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    try {
+      requestGuideControl(video, String(body.action || ''), { title: body.title });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+    return json(res, 200, { ok: true });
+  }
+
+  if (rest === '/capture-mode' && req.method === 'PUT') {
+    const body = await readBody(req).catch(() => ({}));
+    const mode = body.mode === 'guided' ? 'guided' : body.mode === 'agent' ? 'agent' : null;
+    if (!mode) return json(res, 400, { error: 'mode must be agent or guided' });
+    const path = join(video.dir, 'brief.json');
+    const brief = readJsonSafe(path) || {};
+    brief.capture = { ...(brief.capture || {}), mode };
+    writeFileSync(path, JSON.stringify(brief, null, 2) + '\n');
+    return json(res, 200, { ok: true, captureMode: mode });
+  }
+
   if (rest === '/analyze' && req.method === 'POST') {
     const body = await readBody(req).catch(() => ({}));
+    const brief = readJsonSafe(join(video.dir, 'brief.json'));
+    if (body.guided || (body.guided !== false && captureModeOf(brief) === 'guided' && body.explore !== false && !body.headed)) {
+      return json(res, 200, { ok: true, job: jobPayload(startKitJob(video, 'guide', body.url ? ['--url', String(body.url)] : [])) });
+    }
+    if (body.explore !== false && !body.url && !body.headed) {
+      return json(res, 200, { ok: true, job: jobPayload(startProductExplore(video, brief, { guided: false })) });
+    }
     const args = [];
-    // Studio analyze always explores (sign-in + crawl + mustShow recraft). Opt out with explore:false.
     if (body.explore !== false) args.push('--explore');
     if (body.url) args.push('--url', String(body.url));
     if (body.headed) args.push('--headed');

@@ -19,7 +19,7 @@ import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, statSync, 
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildEditPlan } from '../edit.mjs';
-import { platePaths } from '../plates.mjs';
+import { ensurePlates, platePaths } from '../plates.mjs';
 import { duration, run } from '../produce.mjs';
 import { livePath } from '../record.mjs';
 import { resolveVideoLanguage } from '../languages.mjs';
@@ -233,6 +233,7 @@ export async function buildVoice(video, { force = false } = {}) {
   const LIVE = livePath(video);
   const timelinePath = join(video.out, 'timeline.json');
   if (!existsSync(LIVE) || !existsSync(timelinePath)) throw new Error(`Record first: node cli.mjs record ${video.slug}`);
+  await ensurePlates(video);
   const plates = platePaths(video);
   if (!existsSync(plates.open.mp4) || !existsSync(plates.close.mp4)) throw new Error(`Render plates first: node cli.mjs plates ${video.slug}`);
 

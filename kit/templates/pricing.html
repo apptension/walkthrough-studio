@@ -114,6 +114,22 @@
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 13%, transparent), transparent 66%);
         opacity: 0; animation: fadeIn 1.2s 1.0s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .head { text-align: left; }
+      html[data-frame='portrait'] .plans,
+      html[data-frame='portrait'] .plans[data-n] { max-width: none; grid-template-columns: 1fr; gap: 20px; }
+      html[data-frame='portrait'] .pr-card {
+        min-height: 0; padding: 26px 28px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-items: start;
+      }
+      html[data-frame='portrait'] .pr-card > :not(.pr-lines):not(.pr-badge) { grid-column: 1; }
+      html[data-frame='portrait'] .pr-lines { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; padding-top: 0; padding-left: 22px; border-top: 0; border-left: 1px solid color-mix(in srgb, var(--muted) 16%, transparent); gap: 10px; }
+      html[data-frame='portrait'] .featured .pr-lines { border-left-color: color-mix(in srgb, var(--gold) 26%, transparent); }
+      html[data-frame='portrait'] .pr-card.featured { margin: 10px 0 0; padding-top: 34px; padding-bottom: 26px; }
+      html[data-frame='portrait'] .pr-badge { left: 28px; transform: none; }
+      html[data-frame='portrait'] .pr-value { font-size: 60px; }
+      html[data-frame='portrait'] .pr-price { margin-top: 12px; }
+      html[data-frame='portrait'] .pr-line { font-size: 18px; }
+      html[data-frame='portrait'] .bloom { width: 1000px; height: 1300px; margin: -650px 0 0 -500px; top: 55%; }
     </style>
   </head>
   <body data-duration="6.4">

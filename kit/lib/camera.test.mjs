@@ -152,3 +152,20 @@ test('format exports hold the variant quality floor and copy the audio', () => {
   assert.equal(teaser.start, 6.8);
   assert.equal(teaser.dur, 10);
 });
+
+test('exports follow the master shape: a vertical master scales to 9:16 and sits as a window on 1:1', async () => {
+  const { variantPlan } = await import('./exports.mjs');
+  const tall = { width: 1080, height: 1920 };
+  assert.deepEqual(variantPlan('vertical', tall), { kind: 'scale', width: 1080, height: 1920 });
+  assert.deepEqual(variantPlan('lite', tall), { kind: 'scale', width: 720, height: 1280 });
+  assert.equal(variantPlan('gif', tall).height, 960);
+  assert.equal(variantPlan('square', tall).kind, 'social');
+  const onSquare = socialGeometry({ width: 1080, height: 1080 }, tall);
+  assert.ok(onSquare.h > onSquare.w);
+  assert.ok(onSquare.h <= 1000);
+  const wide = { width: 1920, height: 1080 };
+  assert.equal(variantPlan('vertical', wide).kind, 'social');
+  assert.deepEqual(variantPlan('lite', wide), { kind: 'scale', width: 1280, height: 720 });
+  const { args } = variantArgs({ slug: 'demo', out: '/tmp/wt-demo', config: { output: { format: 'portrait' } } }, 'vertical', '/tmp/wt-demo/none.mp4');
+  assert.ok(args.join(' ').includes('scale=1080:1920'));
+});

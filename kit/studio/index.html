@@ -160,6 +160,31 @@
                 <span class="cta-label">Other</span>
               </button>
             </div>
+            <div id="recordChoice" class="record-choice" role="group" aria-labelledby="recordChoiceLabel" hidden>
+              <span id="recordChoiceLabel" class="record-choice-label" data-help="Agent-driven recording replays the current script with the bot. Record it yourself opens a browser and a Recorder window: press Start recording, show the journey (clicks, typing, drags, scrolls), then Finish recording. Then choose — keep your own recording, or let the bot re-record your steps at a steady pace. Narration is fitted to whichever take you keep.">Re-record</span>
+              <button type="button" class="record-choice-btn rc-opt--agent" data-record-choice="full">
+                <span class="rc-head">
+                  <span class="rc-ico" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none"><path d="M5.5 3.8v12.4L16 10 5.5 3.8Z" fill="currentColor" /><path d="M15.6 2.6l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" opacity=".7" /></svg>
+                  </span>
+                  <span class="rc-tag">Suggested</span>
+                </span>
+                <strong>Agent records</strong>
+                <em>The bot replays the current script</em>
+                <span class="rc-go" aria-hidden="true">Start<svg viewBox="0 0 12 12" fill="none"><path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+              </button>
+              <button type="button" class="record-choice-btn rc-opt--self" data-record-choice="guided">
+                <span class="rc-head">
+                  <span class="rc-ico" aria-hidden="true"><i></i></span>
+                  <span class="rc-tag">Suggested</span>
+                </span>
+                <strong>Record yourself</strong>
+                <em>Keep your take or hand it to the bot</em>
+                <span class="rc-go" aria-hidden="true">Start<svg viewBox="0 0 12 12" fill="none"><path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+              </button>
+            </div>
+            <section id="bayGuide" class="guide-card guide-card--bay" aria-live="polite" hidden></section>
+            <section id="bayTake" class="take-choice" aria-label="Choose your take" hidden></section>
             <div id="plateQcBanner" class="plate-qc-banner" hidden></div>
           </div>
 
@@ -308,6 +333,10 @@
           <div class="stage" id="stage">
               <img id="livePreview" class="live-preview" alt="Live recording" hidden />
               <div id="liveBadge" class="live-badge" hidden><i></i><span id="liveBadgeText">Live</span></div>
+              <div id="liveWarmup" class="live-warmup" hidden aria-hidden="true">
+                <div class="live-warmup-sweep"></div>
+                <div class="live-warmup-card"><i class="live-warmup-spin"></i><span>Warming up…</span></div>
+              </div>
               <div id="signInWait" class="sign-in-wait" hidden>
                 <strong id="signInWaitTitle"></strong>
                 <p id="signInWaitNext"></p>
@@ -352,13 +381,11 @@
                 <div class="fhd-canvas" id="fhdCanvas">
                   <iframe
                     id="plateFrame"
-                    title="Plate HTML preview · 1920×1080"
-                    width="1920"
-                    height="1080"
+                    title="Plate HTML preview"
                     sandbox="allow-same-origin allow-scripts"
                   ></iframe>
                 </div>
-                <span class="fhd-badge" aria-hidden="true">1920×1080</span>
+                <span class="fhd-badge" aria-hidden="true"></span>
               </div>
               <div id="plateEmpty" class="compare-empty" hidden>
                 <strong>No plate HTML yet</strong>
@@ -684,6 +711,35 @@
               <p class="meta pace-note" id="paceNote" hidden></p>
             </section>
 
+            <section class="direction-section" id="sizeSection">
+              <div class="direction-section-head">
+                <div><strong data-ico="formats">Recording size</strong><span>The browser size and device the product is recorded at — viewers see this layout. Pick a phone to record the mobile view.</span></div>
+                <span class="meta" id="sizeMeta" data-help="The size sets the layout (CSS px); density sets sharpness. A take keeps the size it was recorded at, so changing it asks for a new take. Guided tours open at this size too."></span>
+              </div>
+              <div class="size-options" id="sizeOptions" role="radiogroup" aria-label="Recording size"></div>
+              <form class="size-custom" id="sizeCustom" hidden>
+                <label>Width <input type="number" id="sizeW" min="320" max="3840" step="2" required /></label>
+                <span aria-hidden="true">×</span>
+                <label>Height <input type="number" id="sizeH" min="320" max="3840" step="2" required /></label>
+                <label>Density
+                  <select id="sizeDpr"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option></select>
+                </label>
+                <label class="size-check"><input type="checkbox" id="sizeMobile" /> Mobile layout + touch</label>
+                <button type="submit" class="btn tiny" id="sizeApply">Use this size</button>
+                <p class="meta size-error" id="sizeError" hidden></p>
+              </form>
+              <div class="size-shape">
+                <div class="size-shape-pick">
+                  <span class="meta">Video shape</span>
+                  <div class="seg" id="shapeSeg" role="radiogroup" aria-label="Video shape"></div>
+                </div>
+                <div class="size-preview" id="sizePreview" aria-hidden="true"><i></i></div>
+              </div>
+              <p class="meta size-hint" id="sizeHint"></p>
+              <p class="meta size-note" id="sizeShapeHint" hidden><span></span> <button type="button" class="btn tiny" id="sizeShapeApply"></button></p>
+              <p class="meta size-note" id="sizeNote" data-tone="warn" hidden></p>
+            </section>
+
             <section class="direction-section" id="cameraSection">
               <div class="direction-section-head">
                 <div><strong data-ico="camera">Camera &amp; cursor</strong><span>Start with a look, then tune it. Render settings are non-destructive.</span></div>
@@ -871,7 +927,7 @@
               </div>
               <div class="effects-row" style="margin-top:8px">
                 <label class="effects-select"><span>Chapter backdrop</span>
-                  <select id="overlayChapterBackdrop" aria-label="Chapter backdrop colour behind the atmosphere" data-help="Solid fill behind the chapter atmosphere. Auto keeps the template's ink sheet; None lets the take show through. Fine-tune colour and opacity per card in the Editor's Look & reveal.">
+                  <select id="overlayChapterBackdrop" aria-label="Chapter backdrop colour behind the atmosphere" data-help="Solid fill behind the chapter atmosphere. Auto picks black or white from the brand so the card stays opaque. None lets the take show through. Fine-tune colour and opacity per card in the Editor's Look & reveal.">
                     <option value="auto">Auto</option>
                     <option value="none">None</option>
                   </select>
@@ -1111,6 +1167,9 @@
             <button type="button" id="etlAddLens" class="etl-tool lens"><svg viewBox="0 0 24 24" data-sprite="ui-lens" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7.5"/>
   <circle cx="11" cy="11" r="3.75"/>
   <path d="m20.5 20.5-4.2-4.2"/></svg>Magnify</button>
+            <button type="button" id="etlAddCut" class="etl-tool cut" title="Cut a stretch out of the recording"><svg viewBox="0 0 24 24" data-sprite="ui-cut" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.35"/>
+  <circle cx="6" cy="17.5" r="2.35"/>
+  <path d="m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5"/></svg>Cut</button>
             <button type="button" id="etlAddVoice" class="etl-tool voice" title="Add a voice line at the playhead"><svg viewBox="0 0 24 24" data-sprite="ui-mic" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/>
   <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M8.5 21h7"/></svg>Voice</button>
             <button type="button" id="etlMix" class="etl-tool mix"><svg viewBox="0 0 24 24" data-sprite="ui-music" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5.5l11-2.5v12.5"/>
@@ -1148,6 +1207,9 @@
                 <div class="etl-head zoom" title="Zoom"><svg viewBox="0 0 24 24" data-sprite="ui-zoom" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="7"/>
   <path d="m20.5 20.5-5-5"/>
   <path d="M10.5 7.5v6M7.5 10.5h6"/></svg></div>
+                <div class="etl-head cut" title="Cut"><svg viewBox="0 0 24 24" data-sprite="ui-cut" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.35"/>
+  <circle cx="6" cy="17.5" r="2.35"/>
+  <path d="m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5"/></svg></div>
                 <div class="etl-head voice" title="Voice"><svg viewBox="0 0 24 24" data-sprite="ui-mic" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/>
   <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M8.5 21h7"/></svg></div>
                 <div class="etl-head music" title="Music"><svg viewBox="0 0 24 24" data-sprite="ui-music-sm" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5.5l11-2.5v12.5"/>
@@ -1161,6 +1223,7 @@
                 <div id="etlCaptions" class="etl-track fxrow cards captions" data-empty=""></div>
                 <div id="etlSpeed" class="etl-track fxrow speed"></div>
                 <div id="etlZoom" class="etl-track fxrow zoom"></div>
+                <div id="etlCuts" class="etl-track fxrow cut"></div>
                 <div id="etlVoice" class="etl-track fxrow voice"></div>
                 <div id="etlMusic" class="etl-track fxrow music"></div>
                 <div id="etlSel" class="etl-sel" hidden></div>
@@ -1401,7 +1464,7 @@
             <h4 class="guide-keys-group">Editor</h4>
             <dl class="keys">
               <div><dt><kbd>R</kbd></dt><dd>Replay the clip under the playhead</dd></div>
-              <div><dt><kbd>S</kbd><kbd>Z</kbd><kbd>M</kbd></dt><dd>Speed / zoom / magnify at the playhead</dd></div>
+              <div><dt><kbd>S</kbd><kbd>Z</kbd><kbd>M</kbd><kbd>C</kbd></dt><dd>Speed / zoom / magnify / cut at the playhead</dd></div>
               <div><dt><kbd data-mod>⌘</kbd><kbd>Z</kbd></dt><dd>Undo · <kbd>⇧</kbd><kbd data-mod>⌘</kbd><kbd>Z</kbd> redo</dd></div>
             </dl>
           </section>
@@ -1655,11 +1718,21 @@
           </div>
           <label class="wf"><span class="field-label">App source in this workspace</span><input name="sourcePath" placeholder="packages/webapp" spellcheck="false" /><small>Lets the agent read real labels and routes for reliable selectors.</small></label>
           <label class="wf"><span class="field-label">Access notes</span><textarea name="notes" rows="2" placeholder="Cookie banner on first load; seed org “Demo Agency”; avoid the billing page"></textarea></label>
+          <div class="wf-row wf-capture-size">
+            <label class="wf"><span class="field-label" data-help="The browser size and device the product is recorded at — the layout viewers see. Pick a phone to record the mobile view. Change it later under Direction → Recording size.">Recording size</span><select name="capturePreset" id="wizardCapture"></select><small id="wizardCaptureHint">Suggested from your screen and brief.</small></label>
+            <label class="wf"><span class="field-label">Video shape</span><select name="outputFormat" id="wizardShape"><option value="landscape">Landscape 16:9</option><option value="portrait">Vertical 9:16</option></select></label>
+          </div>
         </fieldset>
 
         <fieldset data-step="2" hidden>
-          <div class="wz-head"><h3>What should viewers see?</h3><p>Each line becomes a chapter, in this order.</p></div>
-          <label class="wf"><span class="field-label">What to show, in order <b>*</b> <i>one per line</i></span><textarea name="mustShow" rows="6" required placeholder="Dashboard — the work that matters today&#10;Invite — add a teammate&#10;Settings — who can change what"></textarea></label>
+          <div class="wz-head"><h3>What should viewers see?</h3><p>Each line becomes a chapter, in this order. Lead with the screen that proves the promise.</p></div>
+          <div class="wf"><span class="field-label" id="captureModeLabel" data-help="Agent explores: the explore agent walks the live product and decides the journey. I'll show it: a browser opens for you — click, type, drag and scroll through the tour, mark moments on the bar at the bottom, then Finish. Every interaction is captured without the idle time between them; the planner optimises your walk and a bot records it cleanly.">Who finds the journey</span>
+            <div class="choice-grid" role="radiogroup" aria-labelledby="captureModeLabel">
+              <label class="choice"><input type="radio" name="captureMode" value="agent" checked /><span class="choice-mark"></span><strong>Agent explores</strong><em>It walks the live product and picks the route</em></label>
+              <label class="choice"><input type="radio" name="captureMode" value="guided" /><span class="choice-mark"></span><strong>I'll show it</strong><em>A browser opens — you record the tour, then keep it or let a bot redo it</em></label>
+            </div>
+          </div>
+          <label class="wf"><span class="field-label">What to show, in order <b data-must-show-required>*</b> <i>one per line</i></span><textarea name="mustShow" rows="7" required spellcheck="false" placeholder="Team capacity — see who is free this week · how: click “People” in the left sidebar → hover a capacity bar&#10;Plan a project — book people in two clicks · how: click “Projects” in the left sidebar → drag across the timeline&#10;Share the view — keep clients in the loop · how: click “Share” in the top bar"></textarea><small><b>Title</b> — why it matters · <b>how:</b> what to click and where. Title and why are enough: the explore agent walks the live product, decides the order and writes the clicks before the script.</small></label>
           <label class="wf"><span class="field-label">Key messages <i>one per line</i></span><textarea name="keyMessages" rows="3" placeholder="One invite covers the access they need"></textarea></label>
           <div class="wf-row">
             <label class="wf"><span class="field-label">Must say</span><textarea name="mustSay" rows="2" placeholder="Product names, claims legal approved"></textarea></label>
@@ -1745,6 +1818,7 @@
             <ol id="wizardScriptScenes" class="creation-script-scenes"></ol>
             <p id="wizardScriptLint" class="creation-script-lint" hidden></p>
           </section>
+          <section id="wizardGuide" class="guide-card" aria-live="polite" hidden></section>
           <div id="wizardStream" class="agent-stream agent-stream--wizard is-empty" aria-label="Live output"></div>
         </section>
       </form>

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en"{{FRAME_ATTR}}>
   <head>
     <meta charset="utf-8" />
     <title>{{LABEL}}</title>
@@ -8,8 +8,8 @@
       html,
       body {
         margin: 0;
-        width: 1920px;
-        height: 1080px;
+        width: {{FRAME_W}}px;
+        height: {{FRAME_H}}px;
         overflow: hidden;
         /* Transparent so Studio can composite captions over the recording.
            Chrome paints an opaque canvas (white or #121212) whenever this root's color-scheme
@@ -22,8 +22,8 @@
       }
       .preview-stage {
         position: relative;
-        width: 1920px;
-        height: 1080px;
+        width: {{FRAME_W}}px;
+        height: {{FRAME_H}}px;
         background: transparent;
       }
       /* Program picker / still preview: give chapters a brand field behind the card. */

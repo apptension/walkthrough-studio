@@ -129,6 +129,18 @@
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 14%, transparent), transparent 68%);
         opacity: 0; animation: fadeIn 1.15s 0.15s ease-out both, fadeOut 0.7s 4.95s var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .head { text-align: left; }
+      html[data-frame='portrait'] .cards,
+      html[data-frame='portrait'] .cards[data-n] { max-width: none; grid-template-columns: 1fr; gap: 16px; }
+      html[data-frame='portrait'] .cards[data-n] .card {
+        grid-column: auto; min-height: 0; padding: 24px 28px;
+        display: grid; grid-template-columns: 64px 1fr; column-gap: 22px; align-items: center; text-align: left;
+      }
+      html[data-frame='portrait'] .icon { margin: 0; grid-row: span 2; width: 64px; height: 64px; border-radius: 18px; }
+      html[data-frame='portrait'] .note { margin-top: 6px; max-width: none; text-wrap: pretty; }
+      html[data-frame='portrait'] .corner-logo { align-self: flex-start; }
+      html[data-frame='portrait'] .bloom { left: 50%; top: 55%; width: 1000px; height: 1300px; margin: -650px 0 0 -500px; }
     </style>
   </head>
   <body data-duration="6.0">

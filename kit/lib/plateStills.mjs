@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { DELIVERY } from './format.mjs';
 import { brandReadiness, loadBrand, OUT_ROOT, TEMPLATES } from './project.mjs';
 import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
 import { scaffoldPlate } from './script.mjs';
@@ -34,7 +35,7 @@ const MARKS = [
 ].map(([letter, fill]) => ({ asset: mark(letter, fill), label: letter, bg: 'dark' }));
 
 /** Sample copy so a still reads as the finished plate, not an empty scaffold. */
-function previewPlate(type) {
+export function previewPlate(type) {
   const plate = scaffoldPlate(type, { before: 'Preview' });
   plate.id = type;
   if (type === 'stats') {
@@ -150,7 +151,7 @@ async function renderBrand(brandName, dir) {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: DELIVERY.width, height: DELIVERY.height }, deviceScaleFactor: 1 });
     // Prefer types the wizard shows first so the first viewport fills quickly.
     const order = [
       'features',

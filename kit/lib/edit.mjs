@@ -17,11 +17,14 @@ import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { duration } from './media.mjs';
 import { FPS } from './motion.mjs';
 import { platePaths } from './plates.mjs';
+import { takeSpace } from './stage.mjs';
 import { extendCloseForVoice, narrationSeconds, outroFromNarrationSource } from '../studio/voiceHold.js';
 import {
   applyCardEdits,
+  applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentTrims,
   joinKey,
   liveTimeMap,
   normalizeEdit,
@@ -105,11 +108,12 @@ export { loadRawTimeline };
 
 /** The editor deck (video.config → edit), validated against this recording. */
 export function resolveEdit(video, { liveDur = Infinity } = {}) {
-  const viewport = video.config?.record?.viewport || {};
+  // Edit zooms and lenses live in the take's CSS px, like the recorded marks.
+  const space = takeSpace(video);
   return normalizeEdit(video.config?.edit, {
     liveDur,
-    width: viewport.width || 1920,
-    height: viewport.height || 1080,
+    width: space.cssW,
+    height: space.cssH,
     styles: TRANSITION_STYLES,
   });
 }
@@ -334,14 +338,36 @@ export function buildEditPlan(video) {
       seg.start = snap(seg.start);
       seg.end = snap(seg.end);
       seg.dur = snap(seg.end - seg.start);
-      seg.id = `live-${seg.start.toFixed(2)}`;
+      // Id from recording clock so Editor omit/trim keys survive speed ramps.
+      const recStart = liveMap.fromClean ? liveMap.fromClean(seg.start) : seg.start;
+      seg.id = `live-${Number(recStart).toFixed(2)}`;
     }
   }
 
   // The editor's sequence (edit.order) plays these same slices in a different order.
   // Overlapping joins. An outgoing plate transitions only once its exits are clear: when its clean
   // tail is shorter than the transition, its last frame is held (padOut, applied as tpad in produce).
-  const segments = applySegmentOmit(applySegmentOrder(raw, deck.order), deck.omit).map((seg) => ({
+  // edit.trims are recording-clock seconds; plan slices are on the cleaned reel.
+  const trimsClean = (deck.trims || []).map((t) => {
+    const seg = raw.find((s) => s.id === t.id && s.kind === 'live');
+    if (!seg) return t;
+    const recFrom = liveMap.fromClean(seg.start);
+    const recTo = liveMap.fromClean(seg.end);
+    const head = Number(t.trimStart) || 0;
+    const tail = Number(t.trimEnd) || 0;
+    const cleanHead = snap(Math.max(0, liveMap.toClean(recFrom + head) - seg.start));
+    const cleanTail = snap(Math.max(0, seg.end - liveMap.toClean(Math.max(recFrom, recTo - tail))));
+    return {
+      id: t.id,
+      ...(cleanHead ? { trimStart: cleanHead } : {}),
+      ...(cleanTail ? { trimEnd: cleanTail } : {}),
+    };
+  });
+  const segments = applySegmentCuts(
+    applySegmentTrims(applySegmentOmit(applySegmentOrder(raw, deck.order), deck.omit), trimsClean),
+    deck.cuts,
+    liveMap
+  ).map((seg) => ({
     ...seg,
     baseDur: seg.dur,
     padOut: 0,
@@ -356,10 +382,12 @@ export function buildEditPlan(video) {
     const card = Boolean(seg.opensOnCard);
     // The editor can pin one join (edit.transitions["prev>next"]); otherwise the video's style decides.
     const key = joinKey(prev, seg);
-    const pinned = deck.transitions[key] || null;
+    const pinned = seg.hardCut ? null : deck.transitions[key] || null;
     const style = pinned?.style || transitions.style;
     const wantDur = pinned?.duration != null ? snap(pinned.duration) : transitions.duration;
-    const dur = snap(Math.max(1 / FPS, Math.min(wantDur, cap)));
+    // A cut inside the recording is a straight join — one frame, not the scene transition.
+    const hard = Boolean(seg.hardCut) && prev.kind === 'live';
+    const dur = hard ? snap(1 / FPS) : snap(Math.max(1 / FPS, Math.min(wantDur, cap)));
     if (prev.kind === 'plate' && prev.clearAt != null) {
       prev.padOut = snap(Math.max(0, prev.clearAt + dur - prev.baseDur));
       prev.dur = snap(prev.baseDur + prev.padOut);

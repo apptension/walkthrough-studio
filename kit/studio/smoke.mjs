@@ -58,7 +58,8 @@ try {
 
   // Script sheet
   await page.click('#stageBar .pstage[data-stage="script"]');
-  await page.waitForSelector('#scriptScenes .script-scene');
+  // Opening starts collapsed, so the first scene can be hidden — wait for the list, not for it.
+  await page.waitForSelector('#scriptScenes .script-scene', { state: 'attached' });
   const scenes = await page.locator('#scriptScenes .script-scene').count();
   check(scenes > 3, `script sheet · ${scenes} scenes`);
   check((await page.locator('#scriptTotals').textContent())?.includes('chapters'), 'script totals');
@@ -67,6 +68,9 @@ try {
   check(await page.locator('#scriptJump:not([hidden])').count(), 'script jump nav visible');
   const sectionBtns = await page.locator('#scriptScenes [data-section-toggle]').count();
   check(sectionBtns >= 2, `script section toggles · ${sectionBtns}`);
+  // Every section starts folded: open Opening (the intro line below) and Story first.
+  await page.click('#scriptScenes [data-section-toggle="opening"]');
+  await page.click('#scriptScenes [data-section-toggle="story"]');
   const beforeCollapse = await page.locator('#scriptScenes .script-scene:not([hidden])').count();
   await page.click('#scriptScenes [data-section-toggle="story"]');
   const afterCollapse = await page.locator('#scriptScenes .script-scene:not([hidden])').count();
@@ -123,7 +127,10 @@ try {
   await page.click('.tools-panel .ptab[data-right="motion"]');
   const active = await page.locator('#transitionGrid [data-transition].active').getAttribute('data-transition');
   check(active === summary.transitions?.style, `transition control · ${active}`);
-  const palette = await page.locator('#paletteGrid [data-palette].active').getAttribute('data-palette');
+  // A custom scale (hand-set colours) has no preset card to mark.
+  const custom = summary.direction?.scale === 'custom';
+  const palette = custom ? 'custom' : await page.locator('#paletteGrid [data-palette].active').getAttribute('data-palette');
+  if (custom) check((await page.locator('#paletteGrid [data-palette].active').count()) === 0, 'direction scale · custom, no preset marked');
   const focus = await page.locator('#focusGrid [data-focus].active').getAttribute('data-focus');
   check(palette === summary.direction?.scale, `direction scale · ${palette}`);
   check(focus === summary.direction?.focus, `direction focus · ${focus}`);
@@ -570,9 +577,13 @@ try {
     await page.click('#edPlay');
     check((await page.locator('#inspectorRoot .ins-sec').count()) >= 2, 'live inspector sections (speed, zoom)');
     check(
-      !(await page.locator('#etlAddSpeed').isDisabled()) && !(await page.locator('#etlAddZoom').isDisabled()) && !(await page.locator('#etlAddLens').isDisabled()),
-      'speed, zoom and magnify tools on a recording clip'
+      !(await page.locator('#etlAddSpeed').isDisabled()) &&
+        !(await page.locator('#etlAddZoom').isDisabled()) &&
+        !(await page.locator('#etlAddLens').isDisabled()) &&
+        !(await page.locator('#etlAddCut').isDisabled()),
+      'speed, zoom, magnify and cut tools on a recording clip'
     );
+    check((await page.locator('#etlCuts').count()) === 1, 'cut row on the timeline');
     check(Array.isArray(deck.lenses) && Array.isArray(deck.deck.lenses) && Array.isArray(deck.deck.lensOff), 'deck carries magnifiers');
     const lensPills = await page.locator('#etlZoom .fx.lens').count();
     check(lensPills === deck.lenses.length + (deck.recordedLenses || []).filter((l) => l.off).length, `magnifiers on the zoom row · ${lensPills}`);

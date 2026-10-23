@@ -10,6 +10,8 @@
  *   edit.transitions  { "<prev>><next>": { style, duration } } per-join overrides (buildEditPlan)
  *   edit.audio        { music, voice, master }    the mix desk (delivery clock; see audio/desk.mjs)
  *   edit.cards        [{ key, t?, dur? }]         chapter/caption mark nudges (recording clock)
+ *   edit.trims        [{ id, trimStart, trimEnd }] head/tail cut on a live section (recording sec)
+ *   edit.cuts         [{ from, to }]              stretches removed from the recording (recording sec)
  *   open.style / close.style / interstitials[].style   { "--gold": "#e9b949", ... } CSS variables
  *                                                       injected after the plate's own :root
  *
@@ -17,6 +19,10 @@
  * same frames the Studio shows while scrubbing. `liveTimeMap` converts to the cleaned reel.
  */
 import { compactAudio, describeAudio, isEmptyAudio, normalizeAudio } from './audio/desk.mjs';
+import { CAPTURE_PRESETS, DEFAULT_CAPTURE } from './capturePresets.mjs';
+
+/** Size the deck validates against when the caller has no take yet. */
+const CAPTURE = CAPTURE_PRESETS[DEFAULT_CAPTURE];
 
 export const SPEED_RANGE = Object.freeze([0.25, 4]);
 export const ZOOM_RANGE = Object.freeze([1.1, 2.2]);
@@ -268,7 +274,7 @@ function normalizeRamps(list = [], { liveDur = Infinity } = {}) {
   return out;
 }
 
-function normalizeZooms(list = [], { liveDur = Infinity, width = 1920, height = 1080 } = {}) {
+function normalizeZooms(list = [], { liveDur = Infinity, width = CAPTURE.width, height = CAPTURE.height } = {}) {
   const out = [];
   const seen = new Set();
   for (const raw of Array.isArray(list) ? list : []) {
@@ -288,7 +294,7 @@ function normalizeZooms(list = [], { liveDur = Infinity, width = 1920, height = 
   return out;
 }
 
-function normalizeLenses(list = [], { liveDur = Infinity, width = 1920, height = 1080 } = {}) {
+function normalizeLenses(list = [], { liveDur = Infinity, width = CAPTURE.width, height = CAPTURE.height } = {}) {
   const out = [];
   const seen = new Set();
   for (const raw of Array.isArray(list) ? list : []) {
@@ -377,6 +383,180 @@ export function normalizeOrder(list) {
     if (out.length >= 80) break;
   }
   return out;
+}
+
+export const MIN_LIVE_TRIM_KEEP = 0.4;
+/** A cut shorter than this is ignored. A leftover sliver shorter than this is absorbed into the cut. */
+export const MIN_CUT_SEC = 0.2;
+export const MIN_CUT_KEEP = 0.35;
+
+/**
+ * Recording-clock ranges to remove. Overlaps merge. Times are seconds in live.mp4.
+ * @param {{ from?: number, to?: number }[]} [list]
+ */
+export function normalizeCuts(list = [], { liveDur = Infinity } = {}) {
+  const raw = [];
+  const cap = Number.isFinite(liveDur) ? liveDur : Infinity;
+  for (const item of Array.isArray(list) ? list : []) {
+    let from = Number(item?.from);
+    let to = Number(item?.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
+    if (to < from) [from, to] = [to, from];
+    from = Math.max(0, from);
+    to = Math.min(cap, to);
+    if (to - from < MIN_CUT_SEC - 1e-6) continue;
+    raw.push({ from: r3(from), to: r3(to) });
+  }
+  raw.sort((a, b) => a.from - b.from || a.to - b.to);
+  const out = [];
+  for (const cut of raw) {
+    const prev = out[out.length - 1];
+    if (prev && cut.from <= prev.to + 0.02) prev.to = r3(Math.max(prev.to, cut.to));
+    else out.push({ ...cut });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+/** Subtract cut ranges from [from, to]. Slivers under MIN_CUT_KEEP are absorbed into the cut. */
+function subtractCuts(from, to, cuts) {
+  let spans = [[from, to]];
+  for (const cut of cuts) {
+    const next = [];
+    for (const [a, b] of spans) {
+      const lo = Math.max(a, cut.from);
+      const hi = Math.min(b, cut.to);
+      if (hi - lo < 0.01) {
+        next.push([a, b]);
+        continue;
+      }
+      if (lo - a >= MIN_CUT_KEEP) next.push([a, r3(lo)]);
+      if (b - hi >= MIN_CUT_KEEP) next.push([r3(hi), b]);
+    }
+    spans = next;
+  }
+  return spans;
+}
+
+/**
+ * Punch `cuts` out of live segments (editor scenes with recFrom/recTo, or produce slices
+ * with start/end on the cleaned clock). A cut in the middle becomes two slices joined by a
+ * hard cut (`hardCut`); a cut that covers a slice drops it. Never returns an empty list.
+ * @param {object[]|null|undefined} segments
+ * @param {{ from: number, to: number }[]} cuts
+ * @param {{ fromClean?: (n: number) => number, toClean?: (n: number) => number }|null} [map]
+ */
+export function applySegmentCuts(segments, cuts, map = null) {
+  const list = normalizeCuts(cuts);
+  if (!list.length || !Array.isArray(segments) || !segments.length) return segments;
+  const toRec = (t) => (map?.fromClean ? map.fromClean(t) : t);
+  const toClean = (t) => (map?.toClean ? map.toClean(t) : t);
+  const out = [];
+  for (const seg of segments) {
+    if (seg.kind !== 'live') {
+      out.push(seg);
+      continue;
+    }
+    const recFrom = seg.recFrom != null ? Number(seg.recFrom) : toRec(Number(seg.start));
+    const recTo = seg.recTo != null ? Number(seg.recTo) : toRec(Number(seg.end));
+    if (!Number.isFinite(recFrom) || !Number.isFinite(recTo) || recTo - recFrom < 0.05) {
+      out.push(seg);
+      continue;
+    }
+    const kept = subtractCuts(recFrom, recTo, list);
+    if (!kept.length) continue;
+    const same = kept.length === 1 && Math.abs(kept[0][0] - recFrom) < 0.001 && Math.abs(kept[0][1] - recTo) < 0.001;
+    if (same) {
+      out.push(seg);
+      continue;
+    }
+    kept.forEach(([a, b], i) => {
+      const start = r3(toClean(a));
+      const end = r3(toClean(b));
+      const piece = {
+        ...seg,
+        id: `live-${a.toFixed(2)}`,
+        recFrom: r3(a),
+        recTo: r3(b),
+        start,
+        end,
+        cleanFrom: start,
+        cleanTo: end,
+        dur: r3(Math.max(0.05, end - start)),
+      };
+      if (i > 0) {
+        piece.hardCut = true;
+        delete piece.transitionIn;
+        delete piece.opensOnCard;
+      } else if (a > recFrom + 0.05) {
+        delete piece.opensOnCard;
+      }
+      out.push(piece);
+    });
+  }
+  return out.length ? out : segments;
+}
+
+/** Head/tail trims on live sections, keyed by segment id (recording-clock seconds). */
+export function normalizeTrims(list = []) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(list) ? list : []) {
+    const id = String(raw?.id ?? '').trim();
+    if (!id || id.length > 80 || seen.has(id) || !/^[\w.:@+-]+$/.test(id)) continue;
+    const trimStart = r3(Math.max(0, Number(raw.trimStart) || 0));
+    const trimEnd = r3(Math.max(0, Number(raw.trimEnd) || 0));
+    if (!trimStart && !trimEnd) continue;
+    seen.add(id);
+    out.push({ id, ...(trimStart ? { trimStart } : {}), ...(trimEnd ? { trimEnd } : {}) });
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+/**
+ * Apply edit.trims to live segments. Works on produce plan slices (`start`/`end`) and
+ * editor scenes (`recFrom`/`recTo`). Keeps at least MIN_LIVE_TRIM_KEEP seconds.
+ */
+export function applySegmentTrims(segments, trims) {
+  const byId = new Map(normalizeTrims(trims).map((t) => [t.id, t]));
+  if (!byId.size || !Array.isArray(segments)) return segments;
+  return segments.map((seg) => {
+    if (seg.kind !== 'live') return seg;
+    const t = byId.get(seg.id);
+    if (!t) return seg;
+    const trimStart = t.trimStart || 0;
+    const trimEnd = t.trimEnd || 0;
+    if (seg.recFrom != null && seg.recTo != null) {
+      const span = seg.recTo - seg.recFrom;
+      const keep = Math.max(MIN_LIVE_TRIM_KEEP, span - trimStart - trimEnd);
+      const head = Math.min(trimStart, Math.max(0, span - MIN_LIVE_TRIM_KEEP));
+      const tail = Math.min(trimEnd, Math.max(0, span - head - MIN_LIVE_TRIM_KEEP));
+      const recFrom = r3(seg.recFrom + head);
+      const recTo = r3(seg.recFrom + head + keep);
+      const next = { ...seg, recFrom, recTo, dur: r3(recTo - recFrom), trimStart: head, trimEnd: tail };
+      if (seg.start != null && seg.end != null) {
+        const ratio = span > 0 ? (seg.end - seg.start) / span : 1;
+        next.start = r3(seg.start + head * ratio);
+        next.end = r3(next.start + keep * ratio);
+        next.dur = r3(next.end - next.start);
+      }
+      if (seg.cleanFrom != null && seg.cleanTo != null) {
+        const ratio = span > 0 ? (seg.cleanTo - seg.cleanFrom) / span : 1;
+        next.cleanFrom = r3(seg.cleanFrom + head * ratio);
+        next.cleanTo = r3(next.cleanFrom + keep * ratio);
+      }
+      return next;
+    }
+    if (seg.start == null || seg.end == null) return seg;
+    const span = seg.end - seg.start;
+    const keep = Math.max(MIN_LIVE_TRIM_KEEP, span - trimStart - trimEnd);
+    const head = Math.min(trimStart, Math.max(0, span - MIN_LIVE_TRIM_KEEP));
+    const tail = Math.min(trimEnd, Math.max(0, span - head - MIN_LIVE_TRIM_KEEP));
+    const start = r3(seg.start + head);
+    const end = r3(seg.start + head + keep);
+    return { ...seg, start, end, dur: r3(end - start), trimStart: head, trimEnd: tail };
+  });
 }
 
 /**
@@ -470,7 +650,7 @@ export function normalizeCards(list, { liveDur = Infinity } = {}) {
   return out;
 }
 
-export function normalizeEdit(edit = {}, { liveDur = Infinity, width = 1920, height = 1080, styles = null } = {}) {
+export function normalizeEdit(edit = {}, { liveDur = Infinity, width = CAPTURE.width, height = CAPTURE.height, styles = null } = {}) {
   const src = edit && typeof edit === 'object' ? edit : {};
   return {
     speed: normalizeRamps(src.speed, { liveDur }),
@@ -483,6 +663,8 @@ export function normalizeEdit(edit = {}, { liveDur = Infinity, width = 1920, hei
     cards: normalizeCards(src.cards, { liveDur }),
     order: normalizeOrder(src.order),
     omit: normalizeOrder(src.omit),
+    trims: normalizeTrims(src.trims),
+    cuts: normalizeCuts(src.cuts, { liveDur }),
   };
 }
 
@@ -498,6 +680,8 @@ export function isEmptyDeck(deck) {
       !deck.cards?.length &&
       !deck.order?.length &&
       !deck.omit?.length &&
+      !deck.trims?.length &&
+      !deck.cuts?.length &&
       isEmptyAudio(deck.audio))
   );
 }
@@ -506,7 +690,7 @@ export function isEmptyDeck(deck) {
 export function patchEdit(current = {}, patch = {}, opts = {}) {
   if (patch.reset) return normalizeEdit({}, opts);
   const merged = { ...(current || {}) };
-  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'order', 'omit']) {
+  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'order', 'omit', 'trims', 'cuts']) {
     if (key in patch) merged[key] = patch[key] ?? (key === 'transitions' ? {} : []);
   }
   return normalizeEdit(merged, opts);
@@ -524,6 +708,8 @@ export function compactEdit(deck) {
   if (deck?.cards?.length) out.cards = deck.cards;
   if (deck?.order?.length) out.order = deck.order;
   if (deck?.omit?.length) out.omit = deck.omit;
+  if (deck?.trims?.length) out.trims = deck.trims;
+  if (deck?.cuts?.length) out.cuts = deck.cuts;
   const audio = compactAudio(deck?.audio);
   if (audio) out.audio = audio;
   return Object.keys(out).length ? out : undefined;
@@ -667,6 +853,11 @@ export function describeDeck(deck) {
   if (joins) bits.push(`${joins} join override${joins === 1 ? '' : 's'}`);
   if (deck?.order?.length) bits.push('sequence reordered');
   if (deck?.omit?.length) bits.push(`${deck.omit.length} section${deck.omit.length === 1 ? '' : 's'} omitted`);
+  if (deck?.trims?.length) bits.push(`${deck.trims.length} live trim${deck.trims.length === 1 ? '' : 's'}`);
+  if (deck?.cuts?.length) {
+    const sec = deck.cuts.reduce((sum, cut) => sum + (cut.to - cut.from), 0);
+    bits.push(`${deck.cuts.length} cut${deck.cuts.length === 1 ? '' : 's'} · ${sec.toFixed(1)}s removed`);
+  }
   const audio = describeAudio(deck?.audio);
   if (audio) bits.push(audio);
   return bits.length ? bits.join(' · ') : 'no edits';

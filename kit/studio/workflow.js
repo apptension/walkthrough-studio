@@ -837,7 +837,8 @@ export function initWorkflow(ctx) {
             [
               getState().video?.story && `Story: ${getState().video.story.label} — ${getState().video.story.framework}`,
               brief.outcome && `Outcome: ${brief.outcome}`,
-              brief.story?.mustShow?.length && `Show: ${brief.story.mustShow.join(' → ')}`,
+              brief.story?.mustShow?.length &&
+                `Show: ${brief.story.mustShow.map((beat) => String(beat).split(/\s+[·•|]?\s*how:|\s+[—–]\s+/i)[0].trim()).join(' → ')}`,
             ]
               .filter(Boolean)
               .join(' · ') || 'Pinned with the project.'

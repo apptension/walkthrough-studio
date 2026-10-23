@@ -7,13 +7,14 @@
  * True UI color (no grade), BT.709 tagged, chapters from the edit plan.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflashGraph, flashesFor } from './deflash.mjs';
 import { frameAssets, frameGraph, planZooms, zoomFilter, zoomTiming } from './camera.mjs';
 import { buildEditPlan, resolveEdit, xfadeArgs } from './edit.mjs';
 import { compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
-import { lensGeometry, lensGraph, lensTiming } from './lens.mjs';
+import { lensGeometry, lensPlaceChain, lensTiming } from './lens.mjs';
+import { prepareLensBakes } from './lensBake.mjs';
 import {
   assertX264Args,
   BT709_PARAMS,
@@ -25,11 +26,13 @@ import {
   qualityMeta,
   toBt709,
 } from './encode.mjs';
-import { duration, ffmpegProgress, mmss, run } from './media.mjs';
+import { assertPlayable, duration, ffmpegProgress, mmss, run } from './media.mjs';
 import { FPS } from './motion.mjs';
 import { renderPlates } from './plates.mjs';
 import { livePath } from './record.mjs';
 import { cardBakeOverlayGraph, prepareLiveCardBakes } from './liveCardBake.mjs';
+import { outputFrame } from './format.mjs';
+import { toReel, videoSpace } from './stage.mjs';
 
 export { duration, run };
 
@@ -42,33 +45,41 @@ export function finalPath(video) {
 }
 
 /** Bump when the clean-up graph or its encode settings change, so a cached live-clean rebuilds. */
-const CLEAN_PIPELINE = 7;
+const CLEAN_PIPELINE = 8;
+
+/** The take's spaces: reel (as recorded), output (the master) and the stage that places one in the other. */
+export function liveSpaces(video, camera = video.brand?.direction?.camera || {}) {
+  const space = videoSpace(video, video.config, camera);
+  return { reel: { cssW: space.cssW, cssH: space.cssH, reelW: space.reelW, reelH: space.reelH, k: space.k }, output: outputFrame(video.config), stage: space.stage };
+}
 
 /**
- * Prepare the full live reel once (live-card bake + deflash + lenses). Cached against the take and the graph:
- * a plate or narration edit re-runs produce without touching the recording.
+ * Prepare the full live reel once (deflash + zooms + lenses in reel px, stage placement, then
+ * live-card bake in output px). Cached against the take and the graph: a plate or narration edit
+ * re-runs produce without touching the recording.
  */
-export async function prepareLive(video, LIVE, { width, height, cardBake: givenBake } = {}) {
+export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   const timelinePath = join(video.out, 'timeline.json');
   const timeline = existsSync(timelinePath) ? JSON.parse(readFileSync(timelinePath, 'utf8')) : [];
+  const camera = video.brand.direction?.camera || { zoom: 'off', frame: 'full', background: 'brand' };
+  const { reel, output, stage } = liveSpaces(video, camera);
+  const space = videoSpace(video, video.config, camera);
+  if (space.takeMatches && space.upscale > 1.1) {
+    console.log(`» live · The take was captured for a smaller frame (${reel.reelW}×${reel.reelH} shown at ${stage.w}×${stage.h}) — re-record for full sharpness.`);
+  }
+  if (space.take && !space.takeMatches) {
+    console.log(
+      `» live · ⚠ The take was recorded at ${space.take.width}×${space.take.height}; the video is now set to ${space.capture.width}×${space.capture.height}. Building from the old take — re-record to use the new size.`,
+    );
+  }
+  const width = reel.reelW;
+  const height = reel.reelH;
   const clean = join(video.out, 'live-clean.mp4');
   const stampPath = join(video.out, 'live-clean.json');
   const cardBake = givenBake || (await prepareLiveCardBakes(video, LIVE));
-  const bakeGraph =
-    cardBake.mode === 'clean' && cardBake.plans.length
-      ? cardBakeOverlayGraph(cardBake.plans, cardBake.files, {
-          srcLabel: '[lraw]',
-          outLabel: '[lbake]',
-          startInputIndex: 1,
-        })
-      : { inputs: [], filter: [], outLabel: '[lraw]', inputCount: 0 };
-  const cardInputs = bakeGraph.inputs || [];
-  const inBase = 1 + (bakeGraph.inputCount || 0);
-
   const norm = `fps=${FPS},${toBt709(width, height)}`;
   const filter = [`[0:v]${norm}[lraw]`];
-  if (bakeGraph.inputCount) filter.push(...bakeGraph.filter);
-  let lv = bakeGraph.inputCount ? bakeGraph.outLabel : '[lraw]';
+  let lv = '[lraw]';
 
   const flashes = flashesFor(LIVE, join(video.out, 'flashes.json'));
   const deflash = deflashGraph(flashes.gaps, flashes.frames, lv, '[ldf]');
@@ -78,10 +89,10 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
   }
 
   const liveSec = duration(LIVE);
-  const camera = video.brand.direction?.camera || { zoom: 'off', frame: 'full', background: 'brand' };
   // The editor deck: manual zooms / zoom-free windows join the recorded marks; speed ramps apply last.
+  // Marks are stored in capture CSS px; the graph works in reel px.
   const deck = resolveEdit(video, { liveDur: liveSec });
-  const cameraTimeline = [...withEditLenses(timeline, deck), ...editCameraMarks(deck)].sort((a, b) => a.t - b.t);
+  const cameraTimeline = toReel([...withEditLenses(timeline, deck), ...editCameraMarks(deck)], reel.k).sort((a, b) => a.t - b.t);
   const timing = zoomTiming(camera);
   const zoomPlan = planZooms(cameraTimeline, { width, height, level: camera.zoom, duration: liveSec, timing });
   const zoom = zoomFilter(zoomPlan.shots, { width, height, timing });
@@ -91,12 +102,19 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
   }
 
   const lensInputs = [];
-  const magnifies = resolveLenses(timeline, deck);
+  const magnifies = toReel(resolveLenses(timeline, deck), reel.k);
+  // The glass is rendered once per mark and cached, so the clean pass only has to overlay it.
+  const lensBake = await prepareLensBakes(
+    video,
+    LIVE,
+    magnifies.map((m) => ({ mark: m, geo: lensGeometry(m, { width, height }) })),
+    { rimHex: video.brand.colors.gold, timing: lensTiming(camera) }
+  );
   magnifies.forEach((m, i) => {
     const geo = lensGeometry(m, { width, height });
-    const idx = inBase + i;
-    lensInputs.push('-ss', m.t.toFixed(3), '-t', m.dur.toFixed(3), '-i', LIVE);
-    filter.push(lensGraph(idx, i, m, geo, video.brand.colors.gold, lensTiming(camera)));
+    const idx = 1 + i;
+    lensInputs.push('-i', lensBake.files[i]);
+    filter.push(`[${idx}:v]format=rgba,${lensPlaceChain(m)}[lens${i}]`);
     filter.push(
       `${lv}[lens${i}]overlay=x='${geo.ox}':y='${geo.oy}':eval=frame:eof_action=pass:format=auto,` +
         `format=yuv420p,${BT709_PARAMS}[lz${i}]`
@@ -109,30 +127,65 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
   const speed = speedFilter(liveMap, FPS);
   const framed = speed ? '[vf]' : '[v]';
   const frameInputs = [];
-  if (camera.frame === 'inset') {
+  const placed = stage.mode === 'fill' ? null : stage;
+  // Cards are designed for a full delivered frame. A stage of that same shape carries them on the
+  // screen (they shrink with an inset window); a phone or other-shaped stage gets them over the
+  // whole output, where they stay legible.
+  const cardsOnReel = Math.abs(stage.w / stage.h - output.width / output.height) < 0.01 * (output.width / output.height);
+  const bakeAt = (src, startInputIndex) =>
+    cardBake.mode === 'clean' && cardBake.plans.length
+      ? cardBakeOverlayGraph(cardBake.plans, cardBake.files, { srcLabel: src, outLabel: '[lbake]', startInputIndex })
+      : { inputs: [], filter: [], outLabel: src, inputCount: 0 };
+  let bakeGraph = { inputs: [], filter: [], outLabel: lv, inputCount: 0 };
+  let atOutput = width === output.width && height === output.height;
+  if (cardsOnReel) {
+    if (!atOutput && cardBake.plans?.length) {
+      filter.push(`${lv}${toBt709(output.width, output.height)}[lup]`);
+      lv = '[lup]';
+      atOutput = true;
+    }
+    bakeGraph = bakeAt(lv, 1 + magnifies.length);
+    if (bakeGraph.inputCount) filter.push(...bakeGraph.filter);
+    lv = bakeGraph.outLabel;
+  }
+  const staged = '[lstage]';
+  if (placed) {
     const assets = frameAssets(video, {
-      width,
-      height,
+      width: output.width,
+      height: output.height,
       background: camera.background,
       padding: camera.padding,
       corners: camera.corners,
       shadow: camera.shadow,
+      geo: { x: placed.x, y: placed.y, w: placed.w, h: placed.h, radius: placed.radius },
     });
-    const bgIdx = inBase + magnifies.length;
+    const bgIdx = 1 + magnifies.length + (bakeGraph.inputCount || 0);
     const loop = ['-loop', '1', '-framerate', String(FPS), '-t', liveSec.toFixed(3), '-i'];
     frameInputs.push(...loop, assets.bg, ...loop, assets.mask);
-    filter.push(frameGraph({ src: lv, out: framed, bgIdx, maskIdx: bgIdx + 1, geo: assets.geo, width, height }));
+    filter.push(frameGraph({ src: lv, out: staged, bgIdx, maskIdx: bgIdx + 1, geo: assets.geo, width: output.width, height: output.height }));
+  } else if (!atOutput) {
+    filter.push(`${lv}${toBt709(output.width, output.height)}${staged}`);
   } else {
-    filter.push(`${lv}format=yuv420p,${BT709_PARAMS}${framed}`);
+    filter.push(`${lv}format=yuv420p,${BT709_PARAMS}${staged}`);
   }
+  lv = staged;
+  if (!cardsOnReel) {
+    bakeGraph = bakeAt(lv, 1 + magnifies.length + (frameInputs.length ? 2 : 0));
+    if (bakeGraph.inputCount) filter.push(...bakeGraph.filter);
+    lv = bakeGraph.outLabel;
+  }
+  const cardInputs = bakeGraph.inputs || [];
+  filter.push(`${lv}format=yuv420p,${BT709_PARAMS}${framed}`);
   if (speed) filter.push(`${framed}${speed}[v]`);
+  const inset = camera.frame === 'inset' || Boolean(placed);
   const cameraMeta = {
     zoom: camera.zoom,
     frame: camera.frame,
-    background: camera.frame === 'inset' ? camera.background : undefined,
-    padding: camera.frame === 'inset' ? camera.padding : undefined,
-    corners: camera.frame === 'inset' ? camera.corners : undefined,
-    shadow: camera.frame === 'inset' ? camera.shadow : undefined,
+    stage: { mode: stage.mode, x: stage.x, y: stage.y, w: stage.w, h: stage.h, reel: `${width}×${height}`, output: `${output.width}×${output.height}` },
+    background: inset ? camera.background : undefined,
+    padding: inset ? camera.padding : undefined,
+    corners: inset ? camera.corners : undefined,
+    shadow: inset ? camera.shadow : undefined,
     zoomShots: zoomPlan.shots.length,
     manualZooms: zoomPlan.manual || 0,
     pointerTargets: zoomPlan.targets,
@@ -157,6 +210,7 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
         size: st.size,
         mtime: st.mtimeMs,
         cardBake: cardBake.stamp,
+        lensBake: lensBake.stamp,
         filter,
         lensInputs,
         ...(frameInputs.length ? { frameInputs } : {}),
@@ -177,9 +231,11 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
       ? `${zoomPlan.shots.length - (zoomPlan.manual || 0)} auto + ${zoomPlan.manual || 0} manual zoom${zoomPlan.shots.length === 1 ? '' : 's'}`
       : '',
     camera.zoom !== 'off' && !zoomPlan.targets ? 'auto zoom needs a new recording (no pointer marks)' : '',
-    camera.frame === 'inset'
-      ? `inset frame (${camera.background}, ${camera.padding}, ${camera.corners}, ${camera.shadow} shadow)`
-      : '',
+    placed && (stage.mode === 'device' || camera.frame !== 'inset')
+      ? `${reel.cssW}×${reel.cssH} capture on a ${stage.w}×${stage.h} ${stage.mode} stage in ${output.width}×${output.height}`
+      : camera.frame === 'inset'
+        ? `inset frame (${camera.background}, ${camera.padding}, ${camera.corners}, ${camera.shadow} shadow)`
+        : '',
     speedMeta
       ? `${speedMeta.ramps.length} speed ramp${speedMeta.ramps.length === 1 ? '' : 's'} (${mmss(liveSec)} → ${mmss(liveMap.cleanDur)})`
       : '',
@@ -194,7 +250,7 @@ export async function prepareLive(video, LIVE, { width, height, cardBake: givenB
   console.log(`» live · Cleaning ${mmss(liveSec)} of recording · ${what}`);
   const cleanArgs = [
     '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', LIVE, ...cardInputs, ...lensInputs, ...frameInputs,
+    '-i', LIVE, ...lensInputs, ...(cardsOnReel ? [...cardInputs, ...frameInputs] : [...frameInputs, ...cardInputs]),
     '-filter_complex', filter.join(';'),
     '-map', '[v]',
     '-r', String(FPS),
@@ -247,6 +303,10 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   const { config, brand } = video;
   const LIVE = live || livePath(video);
   const FINAL = out || finalPath(video);
+  // Encode beside the master and swap it in only once it checks out, so a failed or
+  // interrupted run never leaves a half-written master for mix and deliver to copy.
+  const ENCODING = FINAL.replace(/\.mp4$/, '.encoding.mp4');
+  rmSync(ENCODING, { force: true }); // a run that was stopped mid-encode leaves this behind
   assertPlayableLive(LIVE);
 
   const platesStarted = Date.now();
@@ -263,9 +323,9 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
       return bake;
     }),
   ]);
-  const { width, height } = config.record.viewport;
+  const { width, height } = outputFrame(config);
   const cleanStarted = Date.now();
-  const { clean: cleanLive, camera, speed } = await prepareLive(video, LIVE, { width, height, cardBake });
+  const { clean: cleanLive, camera, speed } = await prepareLive(video, LIVE, { cardBake });
   const cleanSec = (Date.now() - cleanStarted) / 1000;
   const plan = buildEditPlan(video);
 
@@ -351,7 +411,7 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     '-g', '60', '-keyint_min', '30', '-bf', '2',
     ...BT709_TAGS,
     '-movflags', '+faststart', '-an',
-    FINAL,
+    ENCODING,
   ];
   assertX264Args('delivery', deliveryArgs);
   await ffmpegProgress(
@@ -363,6 +423,14 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     }
   );
   const encodeSec = (Date.now() - encodeStarted) / 1000;
+  try {
+    assertPlayable(ENCODING, { expectedSec: plan.total, label: 'delivery master' });
+  } catch (err) {
+    // Keep the good master in place; a half-written encode is never promoted.
+    rmSync(ENCODING, { force: true });
+    throw err;
+  }
+  renameSync(ENCODING, FINAL);
   console.log(`» encode · Done · ${mmss(plan.total)} master`);
   console.log(
     `» timing · plates ${platesSec.toFixed(1)}s · cards ${cardsSec.toFixed(1)}s · clean ${cleanSec.toFixed(1)}s · encode ${encodeSec.toFixed(1)}s`
@@ -455,6 +523,12 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
       });
     } catch (err) {
       console.log(`· version snapshot skipped: ${err.message}`);
+    }
+    try {
+      const { cleanupAfterProduce } = await import('./cleanup.mjs');
+      cleanupAfterProduce(video);
+    } catch (err) {
+      console.log(`· intermediate cleanup skipped: ${err.message}`);
     }
   }
   return meta;

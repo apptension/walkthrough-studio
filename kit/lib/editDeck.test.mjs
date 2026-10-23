@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   applyCardEdits,
+  applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentTrims,
   cardMarkKey,
   compactEdit,
+  describeDeck,
   editCameraMarks,
   injectStyle,
   joinKey,
@@ -136,6 +139,82 @@ test('omit drops sections from the cut but never empties it', () => {
   const deck = normalizeEdit({ omit: ['capabilities', 'capabilities', 'nope id'] });
   assert.deepEqual(deck.omit, ['capabilities']);
   assert.deepEqual(compactEdit(deck).omit, ['capabilities']);
+});
+
+test('cuts punch a hole in a live slice and close up', () => {
+  const live = { kind: 'live', id: 'live-0.00', recFrom: 0, recTo: 10, start: 0, end: 10, dur: 10, opensOnCard: true };
+  const mid = applySegmentCuts([live], [{ from: 4, to: 6 }]);
+  assert.equal(mid.length, 2);
+  assert.equal(mid[0].id, 'live-0.00');
+  assert.equal(mid[0].recFrom, 0);
+  assert.equal(mid[0].recTo, 4);
+  assert.equal(mid[0].hardCut, undefined);
+  assert.equal(mid[0].opensOnCard, true);
+  assert.equal(mid[1].id, 'live-6.00');
+  assert.equal(mid[1].recFrom, 6);
+  assert.equal(mid[1].recTo, 10);
+  assert.equal(mid[1].hardCut, true);
+  assert.equal(mid[1].opensOnCard, undefined);
+  const head = applySegmentCuts([live], [{ from: 0, to: 1 }]);
+  assert.equal(head.length, 1);
+  assert.equal(head[0].recFrom, 1);
+  assert.equal(head[0].hardCut, undefined);
+  assert.equal(head[0].opensOnCard, undefined);
+  const tail = applySegmentCuts([live], [{ from: 9.8, to: 10 }]);
+  assert.equal(tail.length, 1);
+  assert.equal(tail[0].recTo, 9.8);
+  assert.equal(tail[0].hardCut, undefined);
+  // A 0.3s cut is kept; the 0.2s of footage after it is under the keep floor, so that sliver is absorbed.
+  const sliver = applySegmentCuts([live], [{ from: 9.5, to: 9.8 }]);
+  assert.equal(sliver.length, 1);
+  assert.equal(sliver[0].recTo, 9.5);
+});
+
+test('a cut that covers a slice drops it, and never empties the cut', () => {
+  const plate = { kind: 'plate', id: 'open', start: 0, end: 3, dur: 3 };
+  const live = { kind: 'live', id: 'live-0.00', recFrom: 0, recTo: 10, start: 0, end: 10, dur: 10 };
+  const punched = applySegmentCuts([plate, live], [{ from: 0, to: 10 }]);
+  assert.deepEqual(punched.map((s) => s.id), ['open']);
+  const only = [live];
+  assert.equal(applySegmentCuts(only, [{ from: 0, to: 10 }]), only);
+});
+
+test('cuts merge, drop slivers, and round-trip through the deck', () => {
+  const deck = normalizeEdit({ cuts: [{ from: 2, to: 5 }, { from: 4, to: 7 }, { from: 1, to: 1.1 }, { to: 9, from: 12 }] }, { liveDur: 20 });
+  assert.deepEqual(deck.cuts, [
+    { from: 2, to: 7 },
+    { from: 9, to: 12 },
+  ]);
+  assert.equal(describeDeck(deck), '2 cuts · 8.0s removed');
+  assert.deepEqual(compactEdit(deck).cuts, deck.cuts);
+  const cleared = patchEdit(deck, { cuts: [] }, { liveDur: 20 });
+  assert.deepEqual(cleared.cuts, []);
+  assert.equal(compactEdit(cleared), undefined);
+});
+
+test('cuts follow the recording clock through a speed ramp', () => {
+  const map = liveTimeMap([{ from: 0, to: 10, rate: 2 }], 10);
+  const seg = { kind: 'live', id: 'live', start: 0, end: 5, dur: 5 };
+  const pieces = applySegmentCuts([seg], [{ from: 2, to: 4 }], map);
+  assert.equal(pieces.length, 2);
+  assert.deepEqual([pieces[0].recFrom, pieces[0].recTo, pieces[0].start, pieces[0].end], [0, 2, 0, 1]);
+  assert.equal(pieces[0].hardCut, undefined);
+  assert.deepEqual([pieces[1].recFrom, pieces[1].recTo, pieces[1].start, pieces[1].end], [4, 10, 2, 5]);
+  assert.equal(pieces[1].hardCut, true);
+});
+
+test('live trims cut head and tail and keep a minimum duration', () => {
+  const segs = [
+    { kind: 'plate', id: 'open', start: 0, end: 3, dur: 3 },
+    { kind: 'live', id: 'live-0.00', recFrom: 0, recTo: 10, start: 0, end: 10, dur: 10 },
+  ];
+  const trimmed = applySegmentTrims(segs, [{ id: 'live-0.00', trimStart: 2, trimEnd: 1 }]);
+  assert.equal(trimmed[1].recFrom, 2);
+  assert.equal(trimmed[1].recTo, 9);
+  assert.equal(trimmed[1].dur, 7);
+  const deck = normalizeEdit({ trims: [{ id: 'live-0.00', trimStart: 2, trimEnd: 0 }] });
+  assert.deepEqual(deck.trims, [{ id: 'live-0.00', trimStart: 2 }]);
+  assert.deepEqual(compactEdit(deck).trims, [{ id: 'live-0.00', trimStart: 2 }]);
 });
 
 test('patchEdit replaces lists wholesale, reset clears, compactEdit drops empties', () => {

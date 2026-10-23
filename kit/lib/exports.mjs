@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { frameAssets, frameGraph } from './camera.mjs';
 import { assertX264Args, BT709_PARAMS, BT709_TAGS, lossyX264, QUALITY } from './encode.mjs';
 import { duration, ffmpegProgress, mmss, run } from './media.mjs';
+import { DELIVERY, outputFrame } from './format.mjs';
 
 const even = (v) => Math.round(v / 2) * 2;
 
@@ -26,11 +27,37 @@ export function exportFile(video, id) {
   return join(exportsDir(video), `${video.slug}-${id}.${id === 'gif' ? 'gif' : 'mp4'}`);
 }
 
-/** Window placement for a 16:9 master on a social canvas. */
-export function socialGeometry({ width, height }) {
-  const w = even(width - 80);
-  const h = even((w * 9) / 16);
+/** Window placement for the master on a social canvas, at the master's own aspect. */
+export function socialGeometry({ width, height }, master = DELIVERY) {
+  const scale = Math.min((width - 80) / master.width, (height - 80) / master.height);
+  const w = even(master.width * scale);
+  const h = even(master.height * scale);
   return { w, h, x: 2 * Math.floor((width - w) / 4), y: 2 * Math.floor((height - h) / 4), radius: 26 };
+}
+
+/** The master's frame: probed from the file, or the configured output before one exists. */
+export function masterFrame(video, master) {
+  if (master && existsSync(master)) {
+    const out = run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', master]);
+    const [width, height] = String(out).trim().split(',').map(Number);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  const f = outputFrame(video.config);
+  return { width: f.width, height: f.height };
+}
+
+/** Canvas size and treatment of a preset for this master: a tall master turns the light cut tall too. */
+export function variantPlan(id, master = DELIVERY) {
+  const preset = EXPORT_PRESETS[id];
+  const tall = master.height > master.width;
+  if (preset.kind === 'scale') {
+    const long = Math.max(preset.width, preset.height);
+    const short = Math.min(preset.width, preset.height);
+    return { kind: 'scale', width: tall ? short : long, height: tall ? long : short };
+  }
+  if (preset.kind === 'gif') return { kind: 'gif', width: tall ? null : preset.width, height: tall ? preset.width : null };
+  const same = Math.abs(preset.width / preset.height - master.width / master.height) < 0.01;
+  return { kind: same ? 'scale' : 'social', width: preset.width, height: preset.height };
 }
 
 function readMeta(video) {
@@ -45,8 +72,8 @@ export function teaserWindow(meta, total) {
   return { start, dur: Math.max(2, Math.min(10, total - start - 0.5)) };
 }
 
-export function variantArgs(video, id, master) {
-  const preset = EXPORT_PRESETS[id];
+export function variantArgs(video, id, master, frame = masterFrame(video, master)) {
+  const preset = variantPlan(id, frame);
   const out = exportFile(video, id);
   const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', master];
   const tail = [
@@ -59,7 +86,7 @@ export function variantArgs(video, id, master) {
     return { out, args: [...head, '-filter_complex', `[0:v]${vf}[v]`, '-map', '[v]', ...tail] };
   }
   const { width, height } = preset;
-  const geo = socialGeometry({ width, height });
+  const geo = socialGeometry({ width, height }, frame);
   const assets = frameAssets(video, { width, height, background: 'brand', geo });
   const total = duration(master);
   const loop = ['-loop', '1', '-framerate', '30', '-t', total.toFixed(3), '-i'];
@@ -71,14 +98,15 @@ function gifExport(video, master) {
   const out = exportFile(video, 'gif');
   const total = duration(master);
   const { start, dur } = teaserWindow(readMeta(video), total);
-  const w = EXPORT_PRESETS.gif.width;
+  const plan = variantPlan('gif', masterFrame(video, master));
+  const size = plan.width ? `${plan.width}:-2` : `-2:${plan.height}`;
   run(
     'ffmpeg',
     [
       '-hide_banner', '-loglevel', 'error', '-y',
       '-ss', start.toFixed(2), '-t', dur.toFixed(2), '-i', master,
       '-filter_complex',
-      `[0:v]fps=12,scale=${w}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle`,
+      `[0:v]fps=12,scale=${size}:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle`,
       '-loop', '0', out,
     ],
     'gif teaser'

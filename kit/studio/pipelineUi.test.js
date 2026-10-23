@@ -87,3 +87,63 @@ test('pipeline CSS spins the run badge a full turn and pops settle badges', () =
   assert.match(css, /\.pip-actions/);
   assert.match(css, /\.pip-act\.primary/);
 });
+
+test('the running step reads as alive: ring, drawing arc and a row sweep', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  // The arc grows and shrinks around the ring instead of a fixed dash chasing its tail.
+  assert.match(css, /@keyframes pip-arc-draw[\s\S]*stroke-dasharray[\s\S]*stroke-dashoffset/);
+  assert.match(css, /\.pip-badge-run \.pip-arc\s*\{[\s\S]*animation:\s*pip-arc-draw/);
+  assert.match(css, /\.pip-badge-run \.pip-arc\s*\{[\s\S]*stroke-linecap:\s*round/);
+  // The quiet track has to stay visible, or the badge reads as a stray comma.
+  assert.match(css, /\.pip-badge-run \.pip-track\s*\{[\s\S]*opacity:\s*0\.3/);
+  assert.match(css, /@keyframes pip-row-sweep/);
+  assert.match(css, /\.render-pipeline li\.run::after\s*\{[\s\S]*animation:\s*pip-row-sweep/);
+  // Rotation and arc periods must differ, so the ring never looks stalled.
+  const spin = css.match(/\.pip-badge-run\s*\{[\s\S]*?animation:\s*pip-spin\s+([\d.]+)s/)?.[1];
+  const draw = css.match(/animation:\s*pip-arc-draw\s+([\d.]+)s/)?.[1];
+  assert.ok(spin && draw && spin !== draw, `spin ${spin}s and arc ${draw}s must differ`);
+});
+
+test('activity stages use the ring badge, not a gapped border spinner', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+  assert.match(app, /statusMark\(s\.state\)/);
+  assert.match(css, /\.work-stages \.pip-badge/);
+  assert.doesNotMatch(css, /\.work-stages li\.run \.work-mark\s*\{[^}]*border-top-color/);
+});
+
+test('polled lists patch rows in place so spinners do not restart', () => {
+  const app = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(app, /stages\.innerHTML\s*=\s*stageList/);
+  assert.doesNotMatch(app, /ol\.innerHTML\s*=\s*steps/);
+  const patch = app.match(/function patchStageList[\s\S]*?\n}\n/)?.[0] || '';
+  assert.match(patch, /if \(li\.dataset\.state !== s\.state\)[\s\S]*statusMark\(s\.state\)/);
+});
+
+test('stop closes the Program overlay and the pipeline unless a failure is kept', () => {
+  const app = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+  const stop = app.match(/async function stopAllWork[\s\S]*?\n}\n/)?.[0] || '';
+  assert.match(stop, /if \(!state\.pipelineFailure\)[\s\S]*state\.pipeline = null[\s\S]*renderSteps\(null\)[\s\S]*paintProgramBuild\(pipelineOverlay\(\{ running: false \}\)\)/);
+  assert.match(stop, /hideActivityDock\(\)/);
+});
+
+test('reduced motion leaves a calm ring, not a frozen spinner', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const block = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+  assert.match(block, /\.pip-badge-run \.pip-arc/);
+  assert.match(block, /stroke-dasharray:\s*none/);
+  assert.match(block, /\.render-pipeline li\.run::after\s*\{\s*opacity:\s*0/);
+});
+
+test('a guided run branches on the take choice and resumes on the right branch', async () => {
+  const { guidedSteps, guidedBranchFor } = await import('./pipelineUi.js');
+  const ids = (b) => guidedSteps(b).map((s) => s.id);
+  assert.deepEqual(ids('own'), ['guide', 'decide', 'adopt', 'own-script', 'plates', 'produce', 'audio', 'deliver', 'preview']);
+  assert.deepEqual(ids('bot'), ['guide', 'decide', 'retake', 'record', 'plates', 'recraft', 'produce', 'audio', 'deliver', 'preview']);
+  assert.deepEqual(ids('own').slice(0, 2), ids('bot').slice(0, 2), 'both branches share the record-and-choose head');
+  assert.equal(guidedBranchFor('own-script', 'bot'), 'own');
+  assert.equal(guidedBranchFor('record', 'own'), 'bot');
+  assert.equal(guidedBranchFor('produce', 'bot'), 'bot');
+  assert.equal(guidedBranchFor(null, null), 'own');
+  assert.equal(effectiveResumeStep('plates', ids('own')), 'produce', 'own plates are drawn by produce');
+});

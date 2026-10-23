@@ -79,6 +79,46 @@ export function statusesForResume(steps, fromStep) {
   }));
 }
 
+const GUIDED_TAIL = [
+  { id: 'produce', label: 'Produce master video' },
+  { id: 'audio', label: 'Add voice & music' },
+  { id: 'deliver', label: 'Export handoff pack' },
+  { id: 'preview', label: 'Show in player' },
+];
+
+/**
+ * A "record it yourself" run: the reviewer records, chooses a take, then either their own
+ * recording becomes the take ('own') or the bot re-records the captured steps ('bot').
+ * @param {'own'|'bot'} branch
+ */
+export function guidedSteps(branch = 'own') {
+  const head = [
+    { id: 'guide', label: 'You record the tour' },
+    { id: 'decide', label: 'Choose your take' },
+  ];
+  const middle =
+    branch === 'bot'
+      ? [
+          { id: 'retake', label: 'Script your steps' },
+          { id: 'record', label: 'Bot re-records your steps' },
+          { id: 'plates', label: 'Render brand plates' },
+          { id: 'recraft', label: 'Recraft around the take' },
+        ]
+      : [
+          { id: 'adopt', label: 'Keep your recording' },
+          { id: 'own-script', label: 'Write around your recording' },
+          { id: 'plates', label: 'Render brand plates' },
+        ];
+  return [...head, ...middle, ...GUIDED_TAIL];
+}
+
+/** Which branch a guided run resumes on: the step names it, else the last choice. */
+export function guidedBranchFor(fromStep, remembered = null) {
+  if (fromStep === 'adopt' || fromStep === 'own-script') return 'own';
+  if (fromStep === 'retake' || fromStep === 'record' || fromStep === 'recraft') return 'bot';
+  return remembered === 'bot' ? 'bot' : 'own';
+}
+
 /** Whether the pipeline loop should execute this step when resuming. */
 export function shouldRunStep(stepId, stepIds, fromStep) {
   if (!fromStep) return true;

@@ -66,10 +66,74 @@
         "action": "approved",
         "at": "2026-10-22T04:36:28.322Z",
         "hash": "db7e2cf157fd"
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:31:52.059Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "941230c2ce76",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:31:52.069Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "dc28abe0cb9e",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:32:23.704Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "941230c2ce76",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:32:23.711Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "dc28abe0cb9e",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:33:23.761Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "941230c2ce76",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:33:23.769Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "dc28abe0cb9e",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:34:01.970Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "941230c2ce76",
+        "auto": true
+      },
+      {
+        "action": "approved",
+        "at": "2026-10-23T07:34:01.977Z",
+        "note": "auto · narration",
+        "by": "studio",
+        "hash": "dc28abe0cb9e",
+        "auto": true
       }
     ],
-    "hash": "db7e2cf157fd",
-    "approvedAt": "2026-10-22T04:36:28.322Z",
+    "hash": "dc28abe0cb9e",
+    "approvedAt": "2026-10-23T07:34:01.977Z",
     "note": ""
   },
   "cut": {

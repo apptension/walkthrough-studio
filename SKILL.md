@@ -28,8 +28,11 @@ product-walkthrough-video/
 └── videos/<slug>/      ← one folder per video: video.config.json + flow.mjs + narration.mjs
 ```
 
-Delivery canvas is **1920×1080 (Full HD)** for plates and live capture unless a video overrides
-`record.viewport`.
+The master is **1920×1080** (landscape) or **1080×1920** (`output.format: "portrait"`). The product is
+recorded at its own size — `record.viewport` + `record.device` (Desktop 1920×1080 by default; laptop,
+tablet and phone presets, the reviewer's screen, or any even size) — and placed on that frame: filling
+it when the aspects match, as a window when they don't, as a phone for mobile devices. Pick the size in
+Studio (Direction → Recording size), in the New video wizard, or with `node cli.mjs size <slug>`.
 
 Output goes to `<repo>/tmp/videos/<slug>/` (gitignored): `<slug>.mp4`,
 `review.html`, `validate/contact-sheet.jpg`, plus the intermediate files.
@@ -229,7 +232,7 @@ guarantees a run spends nothing.
 9. **Mastered, not loud.** Delivery is −14 LUFS / −1 dBTP, narration −16 LUFS, music ducked under speech. Don't touch gains by ear in a single video; adjust `brand.json → audio.mix` so every video matches.
 10. **Demo data looks real.** A workspace, tenant or account on screen has its own name, logo, photos, colours and copy. Placeholder names, lorem ipsum, or the house Walkthrough Studio brand standing in for the client's brand on a client-facing frame is a bug.
 11. **Official logo only.** Plates use the real brand lockup (SVG/PNG from the site or app). `discover-brand` harvests candidates; the agent authors `logo.html` — never invent a wordmark when a real mark exists. Homemade wordmarks, wrong marks, or mis-scaled lockups are bugs — check open + close frames on the contact sheet.
-12. **Full HD.** Default delivery is 1920×1080 for plates and live capture. Do not ship 1440×900 for client-facing videos.
+12. **Record what viewers use.** Desktop 1920×1080 is the default; record a phone preset (mobile layout, touch) when the audience uses the product on phones, and deliver it vertical when it is for Reels/Shorts. Never hard-code a frame size in a flow — use `page.viewportSize()`; boxes and points are CSS px of the recording size.
 13. **Motion brief is memory.** Every brand pack keeps `motion-brief.md` (audience, tone, visual system, motion language, audio, plate palette). Read it before every new video for that brand; update it when the product look or voice changes.
 14. **Plate variety.** A proper walkthrough is not only title cards. Prefer 2–5 visual interstitials
     (`features` / `stats` / `callout` / `testimonials` / `logos` / `journey` / `compare` / `quote` /

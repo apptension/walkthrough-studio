@@ -49,6 +49,25 @@ const STEPS = {
       ['save', 'Saving', 'Writing the take', /» save|finish|live\.mp4|wrote/i],
     ],
   },
+  guide: {
+    title: 'Your recording',
+    done: 'Recording saved',
+    failed: 'Nothing was recorded',
+    summary: 'Press Start recording in the Recorder window, show the product in the browser, then Finish recording. Pauses are cut.',
+    stages: [
+      ['open', 'Opening the browser', 'A browser and a Recorder window open', /opening|start page/i],
+      ['ready', 'Getting ready', 'Sign in if needed, go to the first screen, press Start recording', /ready —|sign in in the browser/i],
+      ['capture', 'Recording', 'Mark chapters as you go; Pause to set up; Finish recording when done', /recording|click|fill|typed|select|check|scroll|drag|hover|press|chapter|undid|paused|goto|open/i],
+      ['save', 'Saving', 'Your recording, steps and a replay draft', /saving \(|✓ guided tour/i],
+    ],
+  },
+  'adopt-take': {
+    title: 'Keeping your recording',
+    done: 'Your recording is the take',
+    failed: 'Your recording could not be kept',
+    summary: 'Your recording becomes the take; your chapters become the timeline.',
+    stages: [['keep', 'Keeping your recording', 'Checking the file, then setting it as the take', /./]],
+  },
   audio: {
     title: 'Adding voice and music',
     done: 'Audio is mixed in',
@@ -113,6 +132,9 @@ const IMPROVE = {
   motion: ['Reworking the motion', 'Applying the motion note, then rebuilding the plate.'],
   full: ['Applying your feedback', 'Reading the note, then editing the sources.'],
   narration: ['Rewriting narration', 'Shortening and refitting the spoken lines.'],
+  'guided-script': ['Scripting your tour', 'Optimising the journey you showed: detours out, selectors hardened, chapters at your moments.'],
+  'take-recraft': ['Recrafting around the take', 'Fitting narration and the brief to what the bot actually recorded.'],
+  'own-take': ['Writing around your recording', 'Fitting narration, the brief and plates to the chapters you recorded.'],
   plates: ['Reworking the plates', 'Updating plate copy from your note.'],
   'discover-brand': [
     'Capturing the brand',
@@ -349,7 +371,8 @@ export function describeJob(job) {
   for (const line of lines) {
     const marked = line.match(STAGE_LINE);
     if (!marked) continue;
-    const idx = spec.stages.findIndex(([id]) => id === marked[1]);
+    let idx = spec.stages.findIndex(([id]) => id === marked[1]);
+    if (idx < 0 && marked[1] === job?.step) idx = spec.stages.findIndex(([, , , re]) => re?.test(marked[2]));
     if (idx < 0) continue;
     current = Math.max(current, idx);
     const detail = tidy(marked[2]);

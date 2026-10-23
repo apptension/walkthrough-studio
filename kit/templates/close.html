@@ -99,6 +99,31 @@
         opacity: 0;
         animation: fadeIn 1.4s 2.4s ease-out both, fadeOut 0.8s var(--x-logo) var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .title-exit { top: 14%; padding: 0 72px; }
+      html[data-frame='portrait'] .title { font-size: 104px; }
+      html[data-frame='portrait'] .steps-exit { top: 38%; left: 120px; right: 96px; width: auto; margin-left: 0; }
+      html[data-frame='portrait'] .steps { grid-template-columns: 1fr; gap: 44px; }
+      html[data-frame='portrait'] .track,
+      html[data-frame='portrait'] .track-fill {
+        top: 34px; bottom: 34px; left: 33px; right: auto; width: 2px; height: auto;
+        transform-origin: center top; transform: scaleY(0); animation-name: growDown;
+      }
+      html[data-frame='portrait'] .track { width: 1px; left: 33.5px; }
+      @keyframes growDown { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+      html[data-frame='portrait'] .step {
+        display: grid; grid-template-columns: 68px 1fr; column-gap: 28px; align-items: center; text-align: left;
+      }
+      html[data-frame='portrait'] .dot { width: 68px; height: 68px; font-size: 24px; grid-row: span 2; }
+      html[data-frame='portrait'] .step-label { margin-top: 0; font-size: 40px; }
+      html[data-frame='portrait'] .step-note { margin-top: 6px; font-size: 26px; max-width: none; text-wrap: pretty; }
+      html[data-frame='portrait'] .lockup-exit {
+        top: var(--close-logo-top, 80%);
+        width: min(var(--close-logo-width, 480px), 50vw);
+        margin-left: calc(min(var(--close-logo-width, 480px), 50vw) / -2);
+      }
+      html[data-frame='portrait'] .platform { font-size: 18px; white-space: normal; margin: 24px -60px 0; }
+      html[data-frame='portrait'] .bloom { width: 900px; height: 520px; margin: -260px 0 0 -450px; }
     </style>
   </head>
   <body data-duration="6.2">

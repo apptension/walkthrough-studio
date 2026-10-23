@@ -4,9 +4,11 @@
  */
 import { paintAgentStream } from './agentStream.js';
 import { createCreationView } from './creation.js';
+import { createGuideCard } from './guideCard.js';
 import { draftFromDescription } from './shortBrief.js';
-import { hasStoredCredentials, maskCredentials, revisePlan } from './briefRevise.js';
+import { hasStoredCredentials, maskCredentials, revisePlan, stagesForReplan } from './briefRevise.js';
 import { VIDEO_LANGUAGES, resolveVideoLanguage, videoLanguage } from './languages.js';
+import { screenQuery, sizeLine } from './captureSize.js';
 import { ask } from './ask.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,8 +17,10 @@ const STEPS = 5;
 export function initProjects(ctx) {
   const { api, toast, escapeHtml, openVideo, openScript, watchJob, startRender } = ctx;
   const form = $('projectForm');
+  const MUST_SHOW_PLACEHOLDER = form.elements.mustShow.placeholder;
   const dialog = $('projectDialog');
   const creation = createCreationView({ dialog, escapeHtml });
+  const guideCard = createGuideCard($('wizardGuide'), { api, escapeHtml });
   let step = 0;
   let settingsBrief = null;
   let created = null;
@@ -51,6 +55,56 @@ export function initProjects(ctx) {
     select.value = 'en';
   }
 
+  let captureOptions = [];
+  async function fillCaptureOptions() {
+    const select = form.elements.capturePreset;
+    if (!select || select.options.length) return;
+    try {
+      const q = screenQuery();
+      const r = await api(`/api/capture/options${q ? `?${q}` : ''}`);
+      captureOptions = r.options || [];
+    } catch {
+      captureOptions = [];
+    }
+    const groups = { desktop: 'Desktop & laptop', laptop: 'Desktop & laptop', tablet: 'Tablet', phone: 'Phone' };
+    const byGroup = new Map();
+    for (const o of captureOptions) {
+      const g = groups[o.group] || 'Desktop & laptop';
+      if (!byGroup.has(g)) byGroup.set(g, []);
+      byGroup.get(g).push(o);
+    }
+    for (const [g, list] of byGroup) {
+      const og = document.createElement('optgroup');
+      og.label = g;
+      for (const o of list.sort((a, b) => b.width - a.width)) {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = `${o.label.split(' · ')[0]} · ${sizeLine(o)}`;
+        og.append(opt);
+      }
+      select.append(og);
+    }
+    const fallback = captureOptions.find((o) => o.id === 'desktop-fhd') || captureOptions[0];
+    if (fallback) select.value = fallback.id;
+    syncCaptureHint();
+  }
+
+  function syncCaptureHint() {
+    const o = captureOptions.find((x) => x.id === form.elements.capturePreset?.value);
+    const hint = $('wizardCaptureHint');
+    const why = o?.reason && o.reason !== o.label ? o.reason : '';
+    if (hint) hint.textContent = !o ? '' : why ? `${o === captureOptions[0] ? 'Suggested' : 'Note'} — ${why}.` : 'You can change it later under Direction.';
+    if (o && form.elements.outputFormat && !form.elements.outputFormat.dataset.touched) {
+      form.elements.outputFormat.value = o.height > o.width ? 'portrait' : 'landscape';
+    }
+  }
+
+  function captureChoice() {
+    const o = captureOptions.find((x) => x.id === val('capturePreset'));
+    if (!o) return null;
+    return o.id === 'screen' ? { preset: 'screen', width: o.width, height: o.height, dpr: o.dpr } : { preset: o.id };
+  }
+
   /** The same control sits on the short brief and on Basics. */
   function placeLanguage() {
     const field = $('languageField');
@@ -71,6 +125,9 @@ export function initProjects(ctx) {
   }
 
   fillLanguageOptions();
+  fillCaptureOptions();
+  form.elements.capturePreset?.addEventListener('change', syncCaptureHint);
+  form.elements.outputFormat?.addEventListener('change', (e) => (e.target.dataset.touched = '1'));
 
   const PROJECT_DIALOG_SUB_NEW =
     'The agent drafts the script from this brief. Nothing is recorded until you approve it.';
@@ -357,6 +414,12 @@ export function initProjects(ctx) {
     form.querySelector('[data-brand="new"]').hidden = !isNew;
     $('wizardDiscoverRow').hidden = !isNew;
     form.querySelectorAll('[data-login]').forEach((el) => (el.hidden = !checked('loginRequired')));
+    const guided = radio('captureMode') === 'guided';
+    form.elements.mustShow.required = !guided;
+    form.querySelectorAll('[data-must-show-required]').forEach((el) => (el.hidden = guided));
+    form.elements.mustShow.placeholder = guided
+      ? 'Optional — notes for your walk, e.g. “Lead with the capacity view; end on sharing”.\nYou will show the actual journey in the browser.'
+      : MUST_SHOW_PLACEHOLDER;
     paintCredentialFields();
     if (step === 3) paintPlateStills();
     if (step === STEPS - 1) showStep(step, { focus: false });
@@ -423,11 +486,15 @@ export function initProjects(ctx) {
         if (val(k) && !url(val(k))) return [`${k === 'appUrl' ? 'App' : 'Marketing'} URL must be a full https:// URL.`, k];
       }
     }
-    if (n === 2 && !val('mustShow')) return ['List what the tour should show — one item per line.', 'mustShow'];
+    if (n === 2 && !val('mustShow') && radio('captureMode') !== 'guided') {
+      return ['List what the tour should show — one item per line. Or pick “I’ll show it” and walk it yourself.', 'mustShow'];
+    }
     return null;
   }
 
   function payload() {
+    // Size and shape of an existing video change under Direction → Recording size.
+    const newProject = !dialog.classList.contains('is-project-settings');
     const isNew = radio('brandMode') === 'new';
     return {
       title: val('title'),
@@ -453,6 +520,8 @@ export function initProjects(ctx) {
           ? { password: form.elements.password.value }
           : {}),
       },
+      capture: { mode: radio('captureMode') === 'guided' ? 'guided' : 'agent', ...(newProject && captureChoice() ? { size: captureChoice() } : {}) },
+      ...(newProject ? { output: { format: val('outputFormat') === 'portrait' ? 'portrait' : 'landscape' } } : {}),
       story: {
         lengthSec: Number(radio('lengthSec') || 120),
         tone: val('tone'),
@@ -504,13 +573,22 @@ export function initProjects(ctx) {
           ['Starts at', p.app.startUrl],
           ['Sign-in', p.app.loginRequired ? (p.app.email ? `Demo account · ${p.app.email}` : 'Yes — add credentials to kit/.env') : 'Not needed'],
           ['Source', p.app.sourcePath],
+          [
+            'Recorded at',
+            (() => {
+              const o = captureOptions.find((x) => x.id === p.capture.size?.preset);
+              const shape = p.output?.format === 'portrait' ? 'vertical 9:16 video' : 'landscape 16:9 video';
+              return o ? `${o.label.split(' · ')[0]} · ${sizeLine(o)} — ${shape}` : null;
+            })(),
+          ],
         ],
       },
       {
         title: 'Story',
         step: 2,
         rows: [
-          ['Chapters', show.length ? show.map((s, i) => `${i + 1}. ${s}`).join('\n') : ''],
+          ['Journey', p.capture.mode === 'guided' ? 'You show it — a browser opens after the brand, then a bot re-records your walk' : 'The explore agent walks the product'],
+          ['Chapters', show.length ? show.map((s, i) => `${i + 1}. ${s}`).join('\n') : p.capture.mode === 'guided' ? 'From the moments you mark' : ''],
           ['Key messages', p.story.keyMessages],
         ],
       },
@@ -534,12 +612,18 @@ export function initProjects(ctx) {
     }
     if (form.dataset.mode === 'settings' && settingsBrief) {
       const plan = revisePlan(settingsBrief, p);
+      const rerun = stagesForReplan(plan);
       groups.push({
         title: 'This save',
         step: 4,
         rows: [
           ['Changed', plan.changed.map((item) => item.label).join(', ') || 'Nothing'],
-          ['Rerun', plan.stages.join(', ') || 'None'],
+          [
+            'Rerun',
+            plan.stages.length
+              ? rerun.join(', ')
+              : `${rerun.join(', ')} — forced (no edits; re-explore and redraft)`,
+          ],
           ['Footage', plan.needsRecord ? 'Re-record before the next render' : 'Keep the current take'],
         ],
       });
@@ -590,7 +674,8 @@ export function initProjects(ctx) {
     creating = true;
     stopRequested = false;
     dialog.classList.add('is-running');
-    creation.start({ resume: Boolean(created) });
+    const resuming = Boolean(created);
+    creation.start({ resume: resuming });
     let brandName = '';
     try {
       const p = payload();
@@ -642,21 +727,65 @@ export function initProjects(ctx) {
       creation.brand(r.slug, prepared.brandFoundation);
       creation.note(`${brandName} lockup, palette and type verified`);
       await openVideo(r.slug);
-      if (draft) {
-        paintCreation('analyze', 'Opening the product, signing in when needed, and exploring routes…');
+      if (draft && p.capture.mode === 'guided') {
+        creation.renameStage('analyze', 'Your guided tour', 'You click through the product; every interaction is captured, idle time is not');
+        const prior = resuming && !creation.unfinished().includes('analyze') ? await api(`/api/video/${r.slug}/guide`).catch(() => null) : null;
+        if (!prior?.tour?.steps) {
+          paintCreation('analyze', 'A browser and a Recorder window are opening — press Start recording, show the tour, then Finish recording.');
+          const a = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
+          guideCard.show(r.slug);
+          let shown;
+          try {
+            shown = await follow(a.job.id, (job) => creation.stage('analyze', job.activity || 'Capturing your tour…'));
+          } finally {
+            guideCard.hide();
+          }
+          ensureNotStopped();
+          if (shown?.status !== 'done') {
+            throw new Error(
+              shown?.status === 'cancelled'
+                ? STOPPED_MESSAGE
+                : `${shown?.message || shown?.activity || 'The guided tour was not captured'} — Retry preparation opens the browser again.`
+            );
+          }
+        }
+        const g = await api(`/api/video/${r.slug}/guide`).catch(() => null);
+        if (g?.tour && !g.tour.steps) {
+          throw new Error('No clicks or typing were captured, so there is nothing to write the script from — Retry preparation and click through the product.');
+        }
+        creation.artifact(`f:${r.slug}/guided-tour.md`, {
+          name: `${r.slug}/guided-tour.md`,
+          note: g?.tour ? `${g.tour.steps} steps · ${g.tour.marks} moments · ${g.tour.activeSec}s of action` : 'your walk, step by step',
+        });
+        creation.artifact(`f:${r.slug}/guided-flow.mjs`, { name: `${r.slug}/guided-flow.mjs`, note: 'Replay draft of every step' });
+        creation.note(g?.tour?.idleSec ? `Tour captured — ${g.tour.idleSec}s of idle time dropped` : 'Tour captured');
+        ensureNotStopped();
+        paintCreation('draft', `${brandName} · the agent is turning your tour into the script — detours out, selectors hardened…`);
+        const j = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: {} });
+        if (j.job.status === 'needs-agent') throw new Error(j.job.message || 'Agent sign-in is required to draft');
+        paintAgentStream($('wizardStream'), j.job, { variant: 'wizard' });
+        await follow(j.job.id);
+        ensureNotStopped();
+      } else if (draft) {
+        creation.renameStage('analyze');
+        paintCreation('analyze', 'The explore agent is opening the product and walking it against your goal…');
         try {
           const a = await api(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'analyze' } });
-          await follow(a.job.id, (job) =>
-            creation.stage(
-              'analyze',
-              job.activity || 'Exploring the product — mapping routes and adapting the journey…'
-            )
+          const explored = await follow(a.job.id, (job) =>
+            creation.stage('analyze', job.activity || 'Exploring the product — every section first, then the strongest moments…')
           );
+          if (explored?.status === 'failed') throw new Error(explored.message || explored.activity || 'Exploration failed');
           creation.artifact(`f:${r.slug}/flow-analysis.md`, {
             name: `${r.slug}/flow-analysis.md`,
-            note: 'Explored routes + DOM/canvas map',
+            note: 'Screens walked + DOM/canvas map',
           });
-          creation.note('Product map ready — journey crafted to what the crawl reached');
+          if (a.job?.kind === 'improve') {
+            creation.artifact(`f:${r.slug}/explore-journey.md`, {
+              name: `${r.slug}/explore-journey.md`,
+              note: 'Scouting report · why this order',
+            });
+          }
+          creation.note('Journey decided from the live product — what to show, in order, and how to reach it');
         } catch (err) {
           // Analysis is best-effort — draft can still proceed with TODO(verify selector) guards.
           creation.note(`Product map skipped: ${err.message || err}`);
@@ -843,6 +972,8 @@ export function initProjects(ctx) {
       login.checked = Boolean(masked.app?.loginRequired) || hasStoredCredentials(masked, freshness);
     }
     set('mustShow', (masked.story?.mustShow || []).join('\n'));
+    const captureMode = form.querySelector(`input[name="captureMode"][value="${masked.capture?.mode === 'guided' ? 'guided' : 'agent'}"]`);
+    if (captureMode) captureMode.checked = true;
     set('keyMessages', (masked.story?.keyMessages || []).join('\n'));
     set('mustSay', (masked.story?.mustSay || []).join('\n'));
     set('avoid', (masked.story?.avoid || []).join('\n'));
@@ -864,7 +995,7 @@ export function initProjects(ctx) {
     discover: { view: 'brand', detail: 'Re-reading the brand from the site and the app…', body: { step: 'discover' } },
     analyze: {
       view: 'analyze',
-      detail: 'Exploring the product again — sign-in, routes, then recraft if must-show is unreachable…',
+      detail: 'The explore agent is walking the product again and rewriting the journey…',
       body: { step: 'analyze' },
     },
     planner: { view: 'draft', detail: 'The agent is rewriting the script from your changes…', body: {} },
@@ -903,10 +1034,17 @@ export function initProjects(ctx) {
         const saved = await api(`/api/video/${encodeURIComponent(slug)}/brief`, { method: 'POST', body: p });
         settingsBrief = maskCredentials(p);
         for (const s of saved.plan?.stages || []) if (!pending.includes(s)) pending.push(s);
-        toast('Brief saved', `${plan.changed.map((item) => item.label).join(', ')}. ${pending.join(', ') || 'No preparation to rerun.'}`, 'ok');
+        // Diff may be empty of stages (e.g. only a note) — still force explore + planner.
+        if (!pending.length) pending = stagesForReplan(plan);
+        toast(
+          'Brief saved',
+          `${plan.changed.map((item) => item.label).join(', ')}. Next: ${pending.join(', ')}.`,
+          'ok'
+        );
       } else if (!pending.length) {
-        toast('No brief changes', 'Nothing to replan');
-        return;
+        // No edits: still re-explore and redraft so the author can verify a recrafted flow.
+        pending = stagesForReplan(plan);
+        toast('Replanning', `No brief edits — running ${pending.join(' → ')} from the current brief.`, 'ok');
       }
       rememberReplan(slug, pending);
       pending = [...replanRun.stages];
@@ -917,11 +1055,17 @@ export function initProjects(ctx) {
           if (!replanRun.stages.includes(stage)) continue;
           ensureNotStopped();
           const { view, detail, body } = REPLAN_STAGE[stage];
-          paintCreation(view, detail);
+          const guided = stage === 'analyze' && p.capture.mode === 'guided';
+          if (stage === 'analyze') {
+            if (guided) creation.renameStage('analyze', 'Your guided tour', 'Show the journey again in the browser window');
+            else creation.renameStage('analyze');
+          }
+          paintCreation(view, guided ? 'A browser and a Recorder window are opening — press Start recording, show the tour again, then Finish recording.' : detail);
           const job = await api(`/api/video/${encodeURIComponent(slug)}/draft-project`, { method: 'POST', body });
           if (job.job?.status === 'needs-agent') throw new Error(job.job.message || 'Agent sign-in is required to redraft');
           if (job.job?.id) {
-            const finished = await follow(job.job.id);
+            if (guided) guideCard.show(slug);
+            const finished = await follow(job.job.id).finally(() => guided && guideCard.hide());
             if (finished?.status === 'needs-agent') {
               throw new Error(finished.message || 'Agent sign-in is required to redraft');
             }

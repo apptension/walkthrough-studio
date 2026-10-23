@@ -17,7 +17,7 @@ import { cardMarkDuration } from '../studio/liveCardStage.js';
 import { isCardMark, loadCardMarks } from './cardMarks.mjs';
 import { cardMarkKey } from './editDeck.mjs';
 import { buildLiveCards } from './liveCards.mjs';
-import { DELIVERY } from './project.mjs';
+import { outputFrame } from './format.mjs';
 import { FPS } from './motion.mjs';
 import { plateBrowserArgs } from './plates.mjs';
 import { spawn } from 'node:child_process';
@@ -216,8 +216,8 @@ const floorEven = (n) => Math.max(0, Math.floor(n / 2) * 2);
  * PNG and the overlay skip the empty pixels. Chapter cards keep the full frame:
  * their field paints edge to edge.
  */
-async function measureCaptionClip(page) {
-  const box = await page.evaluate(() => {
+async function measureCaptionClip(page, frame) {
+  const box = await page.evaluate((frame) => {
     const stage = document.querySelector('.preview-stage') || document.body;
     let left = Infinity;
     let top = Infinity;
@@ -229,7 +229,7 @@ async function measureCaptionClip(page) {
       if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
-      if (r.width > 1700 && r.height > 900) continue;
+      if (r.width > frame.width * 0.88 && r.height > frame.height * 0.83) continue;
       left = Math.min(left, r.left);
       top = Math.min(top, r.top);
       right = Math.max(right, r.right);
@@ -237,16 +237,16 @@ async function measureCaptionClip(page) {
       n += 1;
     }
     return n ? { left, top, right, bottom } : null;
-  });
+  }, frame);
   if (!box) return null;
   const margin = 64;
   const x = floorEven(Math.max(0, box.left - margin));
   const y = floorEven(Math.max(0, box.top - margin));
-  let w = Math.ceil((Math.min(DELIVERY.width, box.right + margin) - x) / 2) * 2;
-  let h = Math.ceil((Math.min(DELIVERY.height, box.bottom + margin) - y) / 2) * 2;
-  if (x + w > DELIVERY.width) w = floorEven(DELIVERY.width - x);
-  if (y + h > DELIVERY.height) h = floorEven(DELIVERY.height - y);
-  if (w < 2 || h < 2 || (w >= 1700 && h >= 900)) return null;
+  let w = Math.ceil((Math.min(frame.width, box.right + margin) - x) / 2) * 2;
+  let h = Math.ceil((Math.min(frame.height, box.bottom + margin) - y) / 2) * 2;
+  if (x + w > frame.width) w = floorEven(frame.width - x);
+  if (y + h > frame.height) h = floorEven(frame.height - y);
+  if (w < 2 || h < 2 || (w >= frame.width * 0.88 && h >= frame.height * 0.83)) return null;
   return { x, y, w, h };
 }
 
@@ -265,8 +265,8 @@ function bakeRaster() {
   return 'GPU raster';
 }
 
-async function renderBakeClip(browser, htmlPath, outPath, durationSec, kind = 'caption') {
-  const viewport = { width: DELIVERY.width, height: DELIVERY.height };
+async function renderBakeClip(browser, htmlPath, outPath, durationSec, kind = 'caption', frame) {
+  const viewport = { width: frame.width, height: frame.height };
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
   const frames = Math.max(1, Math.round(durationSec * FPS));
   const motion = cardMotionCss(kind, Math.round(durationSec * 1000));
@@ -304,7 +304,7 @@ async function renderBakeClip(browser, htmlPath, outPath, durationSec, kind = 'c
           a.currentTime = t;
         }
       }, (durationSec * 1000) / 2);
-      clip = await measureCaptionClip(page);
+      clip = await measureCaptionClip(page, frame);
     }
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
@@ -370,8 +370,11 @@ export async function ensureCardBakeClips(video, plans, { force = false } = {}) 
   const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : '';
   const paths = plans.map((p, i) => join(dir, bakeClipName(p, i)));
   const keyPath = (out) => out.replace(/\.mov$/, '.json');
+  const frame = outputFrame(video.config);
+  // A vertical master bakes its own cards; landscape keys stay as they were.
+  const frameKey = frame.format === 'landscape' ? '' : `:${frame.width}x${frame.height}`;
   // Every plan carries its content key so the clean-pass stamp follows card content, not paths.
-  for (const p of plans) p.key = clipKeyFor(p, css, bakeRaster());
+  for (const p of plans) p.key = clipKeyFor(p, css, bakeRaster() + frameKey);
   const fresh = (p, out) => {
     if (!existsSync(out) || !existsSync(keyPath(out))) return false;
     try {
@@ -408,7 +411,7 @@ export async function ensureCardBakeClips(video, plans, { force = false } = {}) 
         const out = paths[i];
         const t0 = Date.now();
         console.log(`» cards · Bake ${p.kind} “${p.label}” @ ${p.t.toFixed(1)}s (${cardMarkDuration(p).toFixed(1)}s)`);
-        const clip = await renderBakeClip(browser, p.htmlPath, out, cardMarkDuration(p), p.kind);
+        const clip = await renderBakeClip(browser, p.htmlPath, out, cardMarkDuration(p), p.kind, frame);
         const placed = clip ? { ox: clip.x, oy: clip.y, w: clip.w, h: clip.h } : null;
         if (placed) Object.assign(p, placed);
         seconds[i] = Number(((Date.now() - t0) / 1000).toFixed(1));

@@ -12,6 +12,7 @@ import { PURPOSES, PURPOSE_IDS, resolvePurpose } from './narrative.mjs';
 import { BRANDS, VIDEOS, brandReadiness, scaffoldVideo, slugify, upsertDotEnv } from './project.mjs';
 
 import { PLATE_TYPE_IDS as PLATE_TYPES } from './plateTypes.mjs';
+import { applyCaptureSettings } from './captureSettings.mjs';
 
 const LENGTHS = [60, 90, 120, 180];
 
@@ -80,6 +81,12 @@ export function createProject(input = {}) {
   if (!slug) throw new Error('Could not derive a slug from the title');
   if (existsSync(join(VIDEOS, slug))) throw new Error(`A video called "${slug}" already exists`);
 
+  const sizing = {
+    ...(input.capture?.size?.preset ? input.capture.size : {}),
+    ...(input.output?.format ? { output: input.output.format } : {}),
+  };
+  applyCaptureSettings({}, sizing);
+
   const app = input.app || {};
   const startUrl = httpUrl(app.startUrl, 'Start URL', { required: true });
   const appUrl = httpUrl(app.appUrl, 'App URL');
@@ -146,6 +153,11 @@ export function createProject(input = {}) {
       sourcePath: String(app.sourcePath || '').trim() || null,
       notes: String(app.notes || '').trim(),
     },
+    capture: {
+      mode: input.capture?.mode === 'guided' ? 'guided' : 'agent',
+      ...(input.capture?.size?.preset ? { size: input.capture.size.preset } : {}),
+      ...(input.output?.format === 'portrait' ? { output: 'portrait' } : {}),
+    },
     story: {
       mustShow: lines(story.mustShow),
       keyMessages: lines(story.keyMessages),
@@ -169,6 +181,10 @@ export function createProject(input = {}) {
   cfg.brand = brandId;
   cfg.record = { ...cfg.record, startUrl };
   cfg.env = env;
+  const sized = applyCaptureSettings(cfg, sizing);
+  cfg.record = sized.record;
+  if (sized.output) cfg.output = sized.output;
+  else delete cfg.output;
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
   writeFileSync(join(dir, 'brief.json'), JSON.stringify(brief, null, 2) + '\n');
   return { slug, brand: brandId, needsDiscovery, envVars };
@@ -192,7 +208,15 @@ export function draftNote(brief) {
       : 'No login.',
     brief.app.sourcePath ? `App source in workspace: ${brief.app.sourcePath} — read routes/labels from it.` : '',
     brief.app.notes ? `Access notes: ${brief.app.notes}` : '',
-    list('What to show, in order', brief.story.mustShow),
+    brief.capture?.mode === 'guided'
+      ? "Journey: the reviewer showed it in a real browser (guided-tour.md / guided-flow.mjs) — script that walk, optimised; don't invent screens."
+      : '',
+    list(
+      brief.capture?.mode === 'guided'
+        ? "What to show, in order (the reviewer's notes — their shown tour is the authority)"
+        : "What to show, in order (the reviewer's intent — the explorer's journey once it has walked the product)",
+      brief.story?.mustShow
+    ),
     list('Key messages', brief.story.keyMessages),
     list('Must say', brief.story.mustSay),
     list('Avoid', brief.story.avoid),

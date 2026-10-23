@@ -28,3 +28,9 @@ test('the same URL does not ask for a re-record', () => {
   assert.equal(recordTakeNote({ hasLive: true, urlChanged: false }), '');
   assert.match(recordTakeNote({ hasLive: true, urlChanged: true }), /replaces the old capture/);
 });
+
+test('a changed recording size asks for a new take', () => {
+  assert.equal(recordNeedsRerecord({ hasLive: true, sizeChanged: true }), true);
+  assert.equal(recordNeedsRerecord({ hasLive: false, sizeChanged: true }), false);
+  assert.match(recordRerecordReason({ sizeChanged: true }), /Recording size changed/);
+});

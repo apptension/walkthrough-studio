@@ -3,7 +3,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { hasStoredCredentials, maskCredentials, nextBrief, revisePlan, scrubSecrets } from './briefRevise.js';
+import {
+  FORCE_REPLAN_STAGES,
+  hasStoredCredentials,
+  maskCredentials,
+  nextBrief,
+  revisePlan,
+  scrubSecrets,
+  stagesForReplan,
+} from './briefRevise.js';
 import { applyBriefRevision, saveSourceRevision } from '../lib/briefRevise.mjs';
 
 const before = {
@@ -75,6 +83,15 @@ test('a language change replans the script and keeps the current take', () => {
   assert.throws(() => nextBrief(before, { ...before, language: 'xx', story: before.story }), /Eleven v4/);
 });
 
+test('Save and replan with no edits still forces explore + planner', () => {
+  const untouched = revisePlan(before, { ...before, app: { ...before.app, password: '' } });
+  assert.deepEqual(untouched.stages, []);
+  assert.deepEqual(stagesForReplan(untouched), [...FORCE_REPLAN_STAGES]);
+  assert.deepEqual(stagesForReplan(untouched, { force: false }), []);
+  const story = revisePlan(before, { ...before, audience: 'New admins', app: { ...before.app, password: '' } });
+  assert.deepEqual(stagesForReplan(story), ['planner']);
+});
+
 test('chapter list changes re-explore before the planner rewrites the script', () => {
   const plan = revisePlan(before, {
     ...before,
@@ -109,4 +126,17 @@ test('access changes re-record and brand changes discover, without writing the p
   assert.equal(JSON.parse(readFileSync(join(dir, 'video.config.json'), 'utf8')).language, 'en');
   assert.equal(scrubSecrets('keep s3cret-value out', ['s3cret-value']).includes('s3cret-value'), false);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('switching who finds the journey re-runs the journey stage and the planner, and is kept on save', () => {
+  const app = { ...before.app, password: '' };
+  const agent = { ...before, app, capture: { mode: 'agent' } };
+  const guided = { ...before, app, capture: { mode: 'guided' } };
+  const plan = revisePlan(agent, guided);
+  assert.deepEqual(plan.changed.map((c) => c.field), ['captureMode']);
+  assert.ok(plan.stages.includes('analyze'));
+  assert.ok(plan.stages.includes('planner'));
+  assert.equal(nextBrief(agent, guided).capture.mode, 'guided');
+  assert.equal(nextBrief(guided, { title: 'x' }).capture.mode, 'guided');
+  assert.equal(revisePlan({ ...before, app }, { ...before, app, capture: { mode: 'agent' } }).changed.length, 0);
 });

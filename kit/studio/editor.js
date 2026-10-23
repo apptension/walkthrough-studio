@@ -1,7 +1,7 @@
 /**
  * Studio Editor — the cut as one timeline. Plates and live slices sit on the clips track;
  * chapter cards and captions each get their own row (lane-packed when they overlap); speed,
- * zoom, voice and music sit under those. One playhead, one transport. Playback runs the whole
+ * zoom, cuts, voice and music sit under those. One playhead, one transport. Playback runs the whole
  * cut on one clock: plates are stepped frame by frame through their own animation runtime, the
  * recording plays at the ramped rate with the planned push-ins, and joins preview their
  * transition. Everything it writes lands in video.config.json through /edit, /overlays and
@@ -53,6 +53,7 @@ const ZOOM_PRESETS = [1.2, 1.4, 1.6, 1.8, 2];
 const LENS_PRESETS = [1.4, 1.8, 2.2];
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const r3 = (v) => Math.round(v * 1000) / 1000;
+const CUT_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.35"/><circle cx="6" cy="17.5" r="2.35"/><path d="m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5"/></svg>`;
 const fmtRate = (r) => `${Number(r).toFixed(2).replace(/\.?0+$/, '')}×`;
 
 /** Smootherstep — the stage's own transition preview curve (xfade dissolves use the same). */
@@ -274,6 +275,9 @@ export function initEditor(ctx) {
   const slug = () => state.slug;
   const video = () => $('livePlayer');
   const live = () => ed.deck?.live || {};
+  // The take's CSS size — the space every zoom, lens and mark is stored in.
+  const liveW = () => live().width || ed.deck?.space?.cssW || 1;
+  const liveH = () => live().height || ed.deck?.space?.cssH || 1;
   const deckEdit = () =>
     ed.deck?.deck || {
       speed: [],
@@ -286,6 +290,8 @@ export function initEditor(ctx) {
       cards: [],
       order: [],
       omit: [],
+      trims: [],
+      cuts: [],
     };
 
   function overlayLook() {
@@ -337,9 +343,10 @@ export function initEditor(ctx) {
     const atmLabels = { waves: 'Waves', mesh: 'Mesh', blobs: 'Blobs', none: 'None' };
     const seatLabels = { 'bottom-center': 'Bottom center', 'bottom-left': 'Bottom left', 'bottom-right': 'Bottom right' };
     const kindLabel = kind === 'caption' ? 'captions' : 'chapters';
-    // Backdrop: the solid fill behind the atmosphere. `auto` = template fill, `none` = clear,
-    // a brand role or a custom #hex = that colour at `backdropOpacity` %.
-    const backdrops = cat.backdrops || [
+    // Backdrop: the solid fill behind the atmosphere. `auto` = black or white from the brand,
+    // `none` = clear, a brand role or a custom #hex = that colour at `backdropOpacity` %.
+    const paperName = (look.paper === '#ffffff' ? 'white' : 'black');
+    const backdrops = (cat.backdrops || [
       { id: 'auto', label: 'Auto' },
       { id: 'none', label: 'None' },
       { id: 'ink', label: 'Ink' },
@@ -348,18 +355,25 @@ export function initEditor(ctx) {
       { id: 'amber', label: 'Secondary' },
       { id: 'teal', label: 'Support' },
       { id: 'custom', label: 'Custom…' },
-    ];
+    ]).map((c) => (c.id === 'auto' ? { ...c, label: `Auto · ${paperName}` } : c));
     const bd = String(slot.backdrop || 'auto');
     const bdCustom = bd.startsWith('#');
     const bdChoice = bdCustom ? 'custom' : bd;
     const bdColored = bdChoice !== 'auto' && bdChoice !== 'none';
     const brandHex = (role) => state.video?.direction?.colors?.[role] || state.video?.brandFoundation?.colors?.[role] || null;
-    const bdHex = bdCustom ? bd : bdColored ? brandHex(bd) || brandHex('ink') || '#0a0a0a' : brandHex('ink') || '#0a0a0a';
+    const paper = look.paper === '#ffffff' ? '#ffffff' : '#000000';
+    const bdHex = bdCustom ? bd : bdColored ? brandHex(bd) || paper : paper;
     const bdAlpha = Math.max(0, Math.min(100, Math.round(Number(slot.backdropOpacity ?? 100))));
+    const swatchTitle =
+      bdChoice === 'none'
+        ? 'No backdrop — the recording shows through'
+        : bdChoice === 'auto'
+          ? `Auto picked ${paperName} from the brand. Pick a colour to override.`
+          : 'Pick a custom colour';
     const backdropRows =
       `<div class="ins-row"><span>Backdrop</span><div class="ins-backdrop">` +
-      `<select class="ins-select" data-overlay-backdrop aria-label="Backdrop colour behind the background" title="Solid fill behind the background. Auto keeps the template’s own fill, None lets the recording show through, or pick a brand colour / custom colour and set its opacity.">${opt(backdrops, bdChoice)}</select>` +
-      `<span class="ins-swatch${bdColored ? '' : ' is-off'}" style="--sw:${escapeHtml(bdHex)}" title="${bdColored ? 'Pick a custom colour' : 'Pick a colour to paint a backdrop'}">` +
+      `<select class="ins-select" data-overlay-backdrop aria-label="Backdrop colour behind the background" title="Solid fill behind the background. Auto picks black or white from the brand, None lets the recording show through, or pick a brand colour / custom colour and set its opacity.">${opt(backdrops, bdChoice)}</select>` +
+      `<span class="ins-swatch${bdChoice === 'none' ? ' is-off' : ''}" style="--sw:${escapeHtml(bdHex)}" title="${escapeHtml(swatchTitle)}">` +
       `<input type="color" value="${escapeHtml(bdHex)}" data-overlay-backdrop-color aria-label="Custom backdrop colour" /></span></div></div>` +
       (bdColored
         ? `<label class="ins-row"><span>Opacity</span><div class="ins-inline-range"><input type="range" min="0" max="100" step="5" value="${bdAlpha}" data-overlay-backdrop-opacity aria-label="Backdrop opacity" /><output>${bdAlpha}%</output></div></label>`
@@ -832,7 +846,7 @@ export function initEditor(ctx) {
         const recTo = isLive ? (s.recTo ?? s.cleanTo ?? recFrom + s.dur) : null;
         const dur = isLive && liveOk ? Math.max(0.2, toClean(recTo) - toClean(recFrom)) : s.dur;
         const prev = seq[i - 1];
-        const want = i ? (join?.pinned?.duration ?? s.transitionIn?.dur ?? 0) : 0;
+        const want = !i || s.hardCut ? 0 : (join?.pinned?.duration ?? s.transitionIn?.dur ?? 0);
         const overlap = prev ? clamp(want, 0, Math.min(prev.dur, dur) / 2) : 0;
         seq.push({
           i,
@@ -861,25 +875,22 @@ export function initEditor(ctx) {
         ...plates.filter((p) => p.id === 'close'),
       ];
       let at = 0;
-      order.forEach((p, i) => {
-        const isLive = Boolean(p.live);
-        const dur = isLive ? d.live.cleanSec || d.live.durationSec : 6;
-        seq.push({
-          i,
-          id: isLive ? 'live' : p.id,
-          kind: isLive ? 'live' : 'plate',
-          plateId: isLive ? null : p.id,
-          type: p.type || null,
-          title: isLive ? 'Recording' : p.label || p.id,
-          at,
-          dur,
-          overlap: 0,
-          recFrom: isLive ? 0 : null,
-          recTo: isLive ? d.live.durationSec : null,
-          join: null,
-        });
-        at += dur;
-      });
+      const push = (clip) => {
+        seq.push({ ...clip, i: seq.length, at, overlap: 0, join: null });
+        at += clip.dur;
+      };
+      for (const p of order) {
+        if (!p.live) {
+          push({ id: p.id, kind: 'plate', plateId: p.id, type: p.type || null, title: p.label || p.id, dur: 6, recFrom: null, recTo: null });
+          continue;
+        }
+        const recEnd = d.live.durationSec || 0;
+        const toClean = ed.clock.toClean;
+        for (const [a, b] of keptSpans(0, recEnd, d.cuts)) {
+          const dur = Math.max(0.2, toClean(b) - toClean(a));
+          push({ id: `live-${a.toFixed(2)}`, kind: 'live', plateId: null, type: null, title: 'Recording', dur, recFrom: a, recTo: b });
+        }
+      }
     }
     ed.seq = seq;
     const last = seq.at(-1);
@@ -1058,6 +1069,8 @@ export function initEditor(ctx) {
         cards: d.cards || [],
         order: d.order || [],
         omit: d.omit || [],
+        trims: d.trims || [],
+        cuts: d.cuts || [],
       })
     );
   };
@@ -1137,6 +1150,7 @@ export function initEditor(ctx) {
     if (s.type === 'voice' && !(ed.deck?.audio?.voiceClips || []).some((c) => c.key === s.key)) ed.sel = null;
     if (s.type === 'ride' && !audioDesk().music.rides[s.i]) ed.sel = null;
     if (s.type === 'clip' && !ed.seq.some((c) => c.id === s.id)) ed.sel = null;
+    if (s.type === 'cut' && !d.cuts[s.i]) ed.sel = null;
   }
 
   // ─── Stage ───────────────────────────────────────────────────────────────────────────────
@@ -1147,8 +1161,8 @@ export function initEditor(ctx) {
     const f = ed.deck?.frame;
     el.classList.toggle('is-inset', Boolean(f));
     if (!f) return;
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     const c = ed.deck.brandColors || {};
     const [c0, c1] = f.background === 'accent' ? [c.gold, c.amber || c.gold] : f.background === 'ink' ? [c.ink, c.ink] : [c.surface || c.ink, c.ink];
     const vars = {
@@ -1335,8 +1349,8 @@ export function initEditor(ctx) {
       if (!v.paused) v.pause();
       applyLiveSeek(v, rec);
     }
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     // A selected zoom paints its push-in on the stage (strength and aim), so the slider is not a
     // silent aim-box resize — Escape is no longer required to see what the cut will do.
     const shot = !ed.playing && ed.sel?.type === 'zoom' ? selectedShot() : null;
@@ -1442,8 +1456,8 @@ export function initEditor(ctx) {
     // Mid-seek the decoder often dips below HAVE_CURRENT_DATA — keep the last loupe.
     if (paint.action === 'keep') return lens;
     g.clearRect(0, 0, cv.width, cv.height);
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     const k = cw / W;
     const aiming = ed.lensAim && !ed.playing && lens.key === ed.sel?.key;
     const T = rec - lens.t;
@@ -1792,8 +1806,8 @@ export function initEditor(ctx) {
     box.addEventListener('pointerdown', (e) => {
       const shot = selectedShot();
       if (!shot) return;
-      const W = live().width || 1920;
-      const H = live().height || 1080;
+      const W = liveW();
+      const H = liveH();
       const p = ed.aim || shot.points?.[0] || { cx: W / 2, cy: H / 2 };
       drag = {
         x: e.clientX,
@@ -1812,8 +1826,8 @@ export function initEditor(ctx) {
     box.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const rect = vp.getBoundingClientRect();
-      const W = live().width || 1920;
-      const H = live().height || 1080;
+      const W = liveW();
+      const H = liveH();
       drag.moved = true;
       if (drag.corner) {
         // Corners of the full-frame surface: pull toward the centre to push in further.
@@ -2026,8 +2040,8 @@ export function initEditor(ctx) {
       if (hud) hud.hidden = true;
       return;
     }
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     const shape = ed.lensAim ? lensShape(lens, ed.lensAim) : lens;
     const { x, y } = ed.lensAim || lensCentre(lens, clamp(rec - lens.t, 0, lens.dur));
     const { ox: canvasX, oy: canvasY } = loupeOrigin(x, y, shape.S, W, H);
@@ -2072,8 +2086,8 @@ export function initEditor(ctx) {
     box.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const rect = vp.getBoundingClientRect();
-      const W = live().width || 1920;
-      const H = live().height || 1080;
+      const W = liveW();
+      const H = liveH();
       const dx = ((e.clientX - drag.x) / rect.width) * W;
       const dy = ((e.clientY - drag.y) / rect.height) * H;
       if (Math.abs(dx) + Math.abs(dy) < 2 && !drag.moved) return;
@@ -2176,7 +2190,9 @@ export function initEditor(ctx) {
       return;
     }
     ed.liveKick = false;
-    if (!outgoing && !v.seeking && drift > 0.5) {
+    // 0.18s, not 0.5s: a short cut jumps the recording clock by less than half a second
+    // and must still seek, or playback rolls through the stretch that was removed.
+    if (!outgoing && !v.seeking && drift > 0.18) {
       try { v.currentTime = rec; } catch { /* ignore */ }
     }
     const rate = rateAt(v.currentTime);
@@ -3243,6 +3259,59 @@ export function initEditor(ctx) {
     const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
     speedEl.dataset.empty = onLive && !speedEl.innerHTML ? 'Speed · drag across a recording clip to speed it up or slow it down' : '';
     zoomEl.dataset.empty = onLive && !zoomEl.innerHTML ? 'Zoom & magnify · drag across a recording clip to zoom in or magnify a detail' : '';
+    renderCuts();
+  }
+
+  /** Recording spans left after cuts. A sliver under 0.35s is absorbed. An empty result keeps the original span. */
+  function keptSpans(from, to, cuts) {
+    let spans = [[from, to]];
+    for (const c of cuts || []) {
+      const next = [];
+      for (const [a, b] of spans) {
+        const lo = Math.max(a, c.from);
+        const hi = Math.min(b, c.to);
+        if (hi - lo < 0.01) {
+          next.push([a, b]);
+          continue;
+        }
+        if (lo - a >= 0.35) next.push([a, lo]);
+        if (b - hi >= 0.35) next.push([hi, b]);
+      }
+      spans = next;
+    }
+    return spans.length ? spans : [[from, to]];
+  }
+
+  /** Where a removed stretch sits on the cut: its right edge is the splice, and it reaches back by the time it took out. */
+  function cutBlocks() {
+    const cuts = deckEdit().cuts || [];
+    const seq = ed.seq;
+    const toClean = ed.clock?.toClean || ((t) => t);
+    return cuts.map((cut, i) => {
+      const after = seq.find((c) => c.kind === 'live' && c.recFrom >= cut.to - 0.04);
+      const before = [...seq].reverse().find((c) => c.kind === 'live' && c.recTo <= cut.from + 0.04);
+      const splice = after ? after.at : before ? before.at + before.dur : seq[0]?.at || 0;
+      const removed = Math.max(0.2, toClean(cut.to) - toClean(cut.from));
+      return { i, from: cut.from, to: cut.to, splice, removed };
+    });
+  }
+
+  function renderCuts() {
+    const el = $('etlCuts');
+    if (!el) return;
+    const pps = ed.pps;
+    const sel = ed.sel;
+    const blocks = cutBlocks();
+    el.innerHTML = blocks
+      .map((c) => {
+        const left = Math.max(0, c.splice - c.removed);
+        const on = sel?.type === 'cut' && sel.i === c.i;
+        const label = `−${(c.to - c.from).toFixed(1)}s`;
+        return `<div class="fx cut${on ? ' is-sel' : ''}" data-cut="${c.i}" title="Cut · ${fmtT(c.from)}–${fmtT(c.to)} removed from the recording · drag the ends to change it · ⌫ restores it" style="left:${left * pps}px;width:${Math.max(8, c.removed * pps)}px"><i class="h l"></i><span>${CUT_ICON}${label}</span><i class="h r"></i></div>`;
+      })
+      .join('');
+    const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
+    el.dataset.empty = onLive && !blocks.length ? 'Cut · drag across this row to remove a stretch of the recording' : '';
   }
 
   function renderAudioTracks() {
@@ -3361,6 +3430,11 @@ export function initEditor(ctx) {
     }
     const vo = $('etlAddVoice');
     if (vo) vo.title = 'Add a voice line at the playhead';
+    const cut = $('etlAddCut');
+    if (cut) {
+      cut.disabled = !onLive && ed.sel?.type !== 'range';
+      cut.title = ed.sel?.type === 'range' ? 'Cut the selected stretch out of the recording (C)' : `Cut 2s from the playhead (C)${tip}`;
+    }
     if ($('etlUndo')) $('etlUndo').disabled = !ed.undo.length;
     if ($('etlRedo')) $('etlRedo').disabled = !ed.redo.length;
     paintContext();
@@ -3378,13 +3452,14 @@ export function initEditor(ctx) {
           .join('')}<button type="button" class="ctx-btn" data-range-rate="0.5" title="Slow this stretch down">${ICONS.slow}0.5×</button></span>
         <button type="button" class="ctx-btn" data-range-zoom title="Zoom in over this stretch">${ICONS.zoom}Zoom</button>
         <button type="button" class="ctx-btn" data-range-lens title="Magnify a detail over this stretch">${ICONS.lens}Magnify</button>
+        <button type="button" class="ctx-btn cut" data-range-cut title="Remove this stretch from the recording">${CUT_ICON}Cut</button>
         <button type="button" class="ctx-btn" data-range-skip title="Keep the whole screen here — no auto zoom">${ICONS.noZoom}No zoom</button>
         <button type="button" class="ctx-btn icon" data-range-clear title="Clear selection (Esc)">${ICONS.x}</button>`;
       return;
     }
     el.innerHTML = flashText
       ? `<span class="ctx-hint flash">${ICONS.check}${escapeHtml(flashText)}</span>`
-      : `<span class="ctx-hint">Drag across the <b>speed</b> or <b>zoom</b> row to pick a stretch · click a block to edit it</span>`;
+      : `<span class="ctx-hint">Drag across the <b>speed</b>, <b>zoom</b> or <b>cut</b> row to pick a stretch · click a block to edit it</span>`;
   }
 
   let flashText = '';
@@ -3509,9 +3584,17 @@ export function initEditor(ctx) {
         }
         return;
       }
+      const cutEl = e.target.closest('[data-cut]');
       const fxEl = e.target.closest('.fx');
       const lane = e.target.closest('.etl-track');
       canvas.setPointerCapture(e.pointerId);
+      if (cutEl) {
+        const block = cutBlocks().find((c) => c.i === Number(cutEl.dataset.cut));
+        if (!block) return;
+        const mode = e.target.classList.contains('l') ? 'l' : e.target.classList.contains('r') ? 'r' : 'move';
+        ed.drag = { type: 'cut', i: block.i, mode, from: block.from, to: block.to, splice: block.splice, removed: block.removed, x0: e.clientX, t0: t, el: cutEl, moved: false };
+        return;
+      }
       if (fxEl) {
         const item = fxItem(fxEl);
         const c = liveClipAtEd(t);
@@ -3520,10 +3603,10 @@ export function initEditor(ctx) {
         ed.drag = { type: 'fx', item, clip: c, mode, x0: e.clientX, t0: t, from: item.from, to: item.to, el: fxEl, moved: false };
         return;
       }
-      if (lane && (lane.id === 'etlSpeed' || lane.id === 'etlZoom')) {
+      if (lane && (lane.id === 'etlSpeed' || lane.id === 'etlZoom' || lane.id === 'etlCuts')) {
         const c = liveClipAtEd(t);
         if (c) {
-          ed.drag = { type: 'range', clip: c, a: edToRec(c, t), x0: e.clientX, t0: t, moved: false };
+          ed.drag = { type: 'range', lane: lane.id, clip: c, a: edToRec(c, t), x0: e.clientX, t0: t, moved: false };
           return;
         }
       }
@@ -3559,7 +3642,8 @@ export function initEditor(ctx) {
         ed.sel = { type: 'range', clipId: g.clip.id, from: r3(Math.min(g.a, b)), to: r3(Math.max(g.a, b)) };
         paintSelection();
         seek(recToEd(g.clip, b));
-      } else if (g.type === 'fx' && g.moved && !g.item.fixed) dragFx(g, t);
+      } else if (g.type === 'cut' && g.moved) dragCut(g, t);
+      else if (g.type === 'fx' && g.moved && !g.item.fixed) dragFx(g, t);
       else if (g.type === 'card' && g.moved) dragCard(g, t);
       else if (g.moved && (g.type === 'voice' || g.type === 'ride' || g.type === 'slip' || g.type === 'fade')) dragAudio(g, t);
     });
@@ -3581,13 +3665,18 @@ export function initEditor(ctx) {
       } else if (g.type === 'clip') {
         await dropClip(g);
       } else if (g.type === 'range') {
-        if (!g.moved || !ed.sel || ed.sel.type !== 'range' || ed.sel.to - ed.sel.from < 0.2) {
+        if (g.lane === 'etlCuts' && g.moved && ed.sel?.type === 'range' && ed.sel.to - ed.sel.from >= 0.2) {
+          await addCut(ed.sel.from, ed.sel.to);
+        } else if (!g.moved || !ed.sel || ed.sel.type !== 'range' || ed.sel.to - ed.sel.from < 0.2) {
           seek(g.t0);
           select({ type: 'clip', id: g.clip.id });
         } else {
           renderInspector();
           paintTools();
         }
+      } else if (g.type === 'cut') {
+        if (!g.moved) select({ type: 'cut', i: g.i });
+        else await commitCut(g);
       } else if (g.type === 'fx') {
         if (!g.moved || g.item.fixed) selectFx(g.item);
         else await commitFx(g);
@@ -3913,6 +4002,44 @@ export function initEditor(ctx) {
     }
   }
 
+  function dragCut(g, t) {
+    const dt = t - g.t0;
+    const min = 0.2;
+    const liveDur = live().durationSec || 1e9;
+    const toClean = ed.clock?.toClean || ((n) => n);
+    const fromClean = ed.clock?.fromClean || ((n) => n);
+    const cleanLen = Math.max(min, toClean(g.to) - toClean(g.from));
+    let from = g.from;
+    let to = g.to;
+    if (g.mode === 'move') {
+      const cleanFrom = clamp(toClean(g.from) + dt, 0, Math.max(0, toClean(liveDur) - cleanLen));
+      from = fromClean(cleanFrom);
+      to = fromClean(cleanFrom + cleanLen);
+    } else if (g.mode === 'l') {
+      from = fromClean(clamp(toClean(g.from) + dt, 0, toClean(g.to) - min));
+    } else {
+      to = fromClean(clamp(toClean(g.to) + dt, toClean(g.from) + min, toClean(liveDur)));
+    }
+    g.newFrom = r3(Math.min(from, to));
+    g.newTo = r3(Math.max(from, to));
+    const removed = Math.max(min, toClean(g.newTo) - toClean(g.newFrom));
+    const left = g.mode === 'r' ? g.splice - g.removed : g.mode === 'move' ? g.splice - g.removed + dt : g.splice - removed;
+    g.el.style.left = `${Math.max(0, left) * ed.pps}px`;
+    g.el.style.width = `${Math.max(8, (g.mode === 'move' ? g.removed : removed) * ed.pps)}px`;
+    g.el.classList.add('is-drag');
+  }
+
+  async function commitCut(g) {
+    const from = g.newFrom ?? g.from;
+    const to = g.newTo ?? g.to;
+    if (!(to - from >= 0.2)) return;
+    const cuts = (deckEdit().cuts || []).map((c, i) => (i === g.i ? { from: r3(from), to: r3(to) } : c));
+    const r = await postDeck({ cuts }, { hint: 'Cut adjusted' });
+    if (!r) return;
+    const i = (deckEdit().cuts || []).findIndex((c) => Math.abs(c.from - from) < 0.05 && Math.abs(c.to - to) < 0.05);
+    if (i >= 0) select({ type: 'cut', i });
+  }
+
   function dragFx(g, t) {
     const c = g.clip;
     const dt = t - g.t0;
@@ -3990,7 +4117,7 @@ export function initEditor(ctx) {
     const start = clamp(t, c.recFrom, Math.max(c.recFrom, c.recTo - ed.deck.ranges.minZoomSec));
     const length = clamp(dur, ed.deck.ranges.minZoomSec, c.recTo - start);
     const id = `z${Math.round(start * 10)}`;
-    const zooms = [...deckEdit().zooms.filter((z) => z.id !== id), { id, t: r3(start), dur: r3(length), zoom: level, x: (live().width || 1920) / 2, y: (live().height || 1080) / 2 }];
+    const zooms = [...deckEdit().zooms.filter((z) => z.id !== id), { id, t: r3(start), dur: r3(length), zoom: level, x: liveW() / 2, y: liveH() / 2 }];
     const r = await postDeck({ zooms }, { hint: 'Zoom added — drag the box on the stage to aim it' });
     if (r) {
       select({ type: 'zoom', key: id });
@@ -4005,8 +4132,8 @@ export function initEditor(ctx) {
     const min = ed.deck.ranges.minLensSec || 1;
     const start = clamp(t, c.recFrom, Math.max(c.recFrom, c.recTo - min));
     const length = clamp(dur, min, Math.max(min, c.recTo - start));
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     const near = (ed.deck.marks || [])
       .filter((m) => (m.kind === 'click' || m.kind === 'type') && Number.isFinite(m.x) && m.t >= c.recFrom && m.t <= c.recTo)
       .sort((a, b) => Math.abs(a.t - start - length / 2) - Math.abs(b.t - start - length / 2))[0];
@@ -4043,8 +4170,8 @@ export function initEditor(ctx) {
   }
 
   async function adoptShot(shot, over = {}) {
-    const W = live().width || 1920;
-    const H = live().height || 1080;
+    const W = liveW();
+    const H = liveH();
     const p = shot.points?.[0] || { cx: W / 2, cy: H / 2 };
     const zoom = over.zoom ?? shot.zoom;
     const aim = clampZoomCenter(over.x ?? p.cx, over.y ?? p.cy, { zoom, width: W, height: H });
@@ -4095,6 +4222,12 @@ export function initEditor(ctx) {
       }
       return;
     }
+    if (s.type === 'cut') {
+      await postDeck({ cuts: (d.cuts || []).filter((_, i) => i !== s.i) }, { hint: 'Stretch restored' });
+      const c = curClip();
+      select(c ? { type: 'clip', id: c.id } : null);
+      return;
+    }
     if (s.type === 'ramp') await postDeck({ speed: d.speed.filter((_, i) => i !== s.i) }, { hint: 'Speed change removed' });
     else if (s.type === 'skip') await postDeck({ zoomSkips: d.zoomSkips.filter((_, i) => i !== s.i) }, { hint: 'Auto zoom allowed again' });
     else if (s.type === 'zoom') {
@@ -4115,6 +4248,31 @@ export function initEditor(ctx) {
     } else if (s.type !== 'range') return;
     const c = curClip();
     select(c ? { type: 'clip', id: c.id } : null);
+  }
+
+  async function addCut(from, to) {
+    if (!(to - from >= 0.2)) {
+      toast('Cut is too short', 'Drag a longer stretch — at least 0.2s', 'warn');
+      return null;
+    }
+    const cuts = [...(deckEdit().cuts || []), { from: r3(from), to: r3(to) }];
+    const r = await postDeck({ cuts }, { hint: `${(to - from).toFixed(1)}s cut from the recording` });
+    if (r) {
+      const i = (deckEdit().cuts || []).findIndex((c) => c.from <= from + 0.05 && c.to >= to - 0.05);
+      if (i >= 0) select({ type: 'cut', i });
+    }
+    return r;
+  }
+
+  function toolCut() {
+    const s = ed.sel;
+    if (s?.type === 'range') return addCut(s.from, s.to);
+    const c = curClip();
+    if (c?.kind !== 'live') return toast('Move onto the recording', 'Cuts remove a stretch of the screen recording', 'warn');
+    const from = edToRec(c, ed.t);
+    const to = Math.min(c.recTo, from + 2);
+    if (to - from < 0.35) return toast('Too close to the end', 'Move the playhead earlier, or drag the stretch on the Cut row', 'warn');
+    return addCut(from, to);
   }
 
   function toolSpeed() {
@@ -4214,7 +4372,7 @@ export function initEditor(ctx) {
 
   // ─── Inspector ───────────────────────────────────────────────────────────────────────────
   const section = (icon, title, body, extra = '') =>
-    `<section class="ins-sec"><header>${ICONS[icon] || ''}<strong>${title}</strong>${extra}</header><div class="ins-body">${body}</div></section>`;
+    `<section class="ins-sec"><header>${ICONS[icon] || (typeof icon === 'string' && icon.includes('<svg') ? icon : '')}<strong>${title}</strong>${extra}</header><div class="ins-body">${body}</div></section>`;
   const segBtns = (attr, values, current, label = (v) => v) =>
     `<div class="ins-seg">${values.map((v) => `<button type="button" ${attr}="${v}" class="${String(current) === String(v) ? 'on' : ''}">${label(v)}</button>`).join('')}</div>`;
 
@@ -4240,6 +4398,7 @@ export function initEditor(ctx) {
     else if (s.type === 'ride') html = renderRide();
     else if (s.type === 'join') html = renderJoin(s.i);
     else if (s.type === 'range') html = renderRange(s);
+    else if (s.type === 'cut') html = renderCut(s.i);
     else if (s.type === 'card') html = renderCardSel(s);
     root.innerHTML = html;
     wireInspector();
@@ -4267,12 +4426,12 @@ export function initEditor(ctx) {
         <li>${ICONS.film}<span><b>A recording clip</b> — speed, zoom and cursor · drag aim boxes on the stage</span></li>
         <li>${ICONS.plate}<span><b>A chapter or caption</b> — own rows under clips · look &amp; reveal on the right · double-click to edit copy</span></li>
         <li>${T_GLYPH.dissolve}<span><b>A diamond</b> — the transition between two clips</span></li>
-        <li>${ICONS.speed}<span><b>Drag across the speed or zoom row</b> to pick a stretch</span></li>
+        <li>${ICONS.speed}<span><b>Drag across the speed, zoom or cut row</b> to pick a stretch — a drag on Cut removes it</span></li>
         <li>${ICONS.lens}<span><b>Magnify</b> — a loupe over a small detail, like a total or a badge</span></li>
         <li>${ICONS.mic}<span><b>A voice line or the music</b> — move it, set its level, shape the master</span></li>
       </ul>
       ${renderAddVoice()}
-      <p class="ins-keys"><kbd>Space</kbd> play · <kbd>⌫</kbd> remove section or effect · <kbd>R</kbd> replay · <kbd>S</kbd> speed · <kbd>Z</kbd> zoom · <kbd>M</kbd> magnify · <kbd>⌘Z</kbd> undo</p>
+      <p class="ins-keys"><kbd>Space</kbd> play · <kbd>⌫</kbd> remove section or effect · <kbd>R</kbd> replay · <kbd>S</kbd> speed · <kbd>Z</kbd> zoom · <kbd>M</kbd> magnify · <kbd>C</kbd> cut · <kbd>⌘Z</kbd> undo</p>
       ${restore}</div>`;
   }
 
@@ -4478,6 +4637,21 @@ export function initEditor(ctx) {
           .map((s) => `<button type="button" class="ins-item" data-goto-shot="${escapeHtml(shotKey(s))}">${ICONS.zoom}<span><b>${s.zoom.toFixed(2)}× ${s.source === 'auto' ? '<small>auto</small>' : ''}</b><em>at ${fmtT(Math.max(0, s.start - c.recFrom))} for ${(s.end - s.start).toFixed(1)}s</em></span><i>›</i></button>`)
           .join('')
       : `<p class="ins-note">${cam.zoom === 'off' ? 'Auto zoom is off.' : 'No zooms in this clip.'}</p>`;
+    const trim = (d.trims || []).find((t) => t.id === c.id) || {};
+    const rawLen = Math.max(0.4, (c.recTo - c.recFrom) + (trim.trimStart || 0) + (trim.trimEnd || 0));
+    const maxHead = Math.max(0, r3(rawLen - 0.4 - (trim.trimEnd || 0)));
+    const maxTail = Math.max(0, r3(rawLen - 0.4 - (trim.trimStart || 0)));
+    const trimSection = section(
+      'motion',
+      'Trim',
+      `<div class="var-row${trim.trimStart ? ' is-set' : ''}"><span>Trim head</span><input type="range" min="0" max="${maxHead}" step="0.05" value="${trim.trimStart || 0}" data-live-trim="trimStart" aria-label="Trim the head of this recording clip" /><output>${(trim.trimStart || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimStart" title="Back to 0" ${trim.trimStart ? '' : 'hidden'}>${ICONS.reset}</button></div>
+      <div class="var-row${trim.trimEnd ? ' is-set' : ''}"><span>Trim tail</span><input type="range" min="0" max="${maxTail}" step="0.05" value="${trim.trimEnd || 0}" data-live-trim="trimEnd" aria-label="Trim the tail of this recording clip" /><output>${(trim.trimEnd || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimEnd" title="Back to 0" ${trim.trimEnd ? '' : 'hidden'}>${ICONS.reset}</button></div>
+      <div class="ins-pair">
+        <button type="button" class="ins-btn" data-act="trim-head-playhead" title="Drop everything before the playhead in this clip">Head to playhead</button>
+        <button type="button" class="ins-btn" data-act="trim-tail-playhead" title="Drop everything after the playhead in this clip">Tail from playhead</button>
+      </div>
+      <p class="ins-note subtle">Cuts bad waits or login bleed from this section without re-recording. Render to bake the trim into the cut.</p>`
+    );
     return (
       head(
         ICONS.film,
@@ -4487,6 +4661,7 @@ export function initEditor(ctx) {
         clipRemoveBtn(c)
       ) +
       placeSection(c) +
+      trimSection +
       renderLiveCards(c) +
       section(
         'speed',
@@ -4902,10 +5077,25 @@ export function initEditor(ctx) {
     );
   }
 
+  function renderCut(i) {
+    const cut = (deckEdit().cuts || [])[i];
+    if (!cut) return renderEmpty();
+    const sec = cut.to - cut.from;
+    return (
+      head(CUT_ICON, 'cut', `${sec.toFixed(1)}s removed`, `${fmtT(cut.from)}–${fmtT(cut.to)} of the recording`, `<button type="button" class="ins-icon danger" data-act="remove" title="Restore this stretch (⌫)">${ICONS.trash}</button>`) +
+      section(
+        CUT_ICON,
+        'This stretch',
+        `<p class="ins-note">Gone from the cut. Playback and the render skip it, and everything after closes up. Drag either end on the Cut row to take more or give some back.</p><button type="button" class="ins-btn wide" data-act="preview-cut">${ICONS.replay}Watch the join</button>`
+      )
+    );
+  }
+
   function renderRange(s) {
     const len = s.to - s.from;
     return (
       head(ICONS.sparkle, 'range', `${len.toFixed(1)}s selected`, `in “${escapeHtml(ed.seq.find((c) => c.id === s.clipId)?.title || 'recording')}”`) +
+      section(CUT_ICON, 'Cut', `<button type="button" class="ins-btn wide primary" data-range-cut>${CUT_ICON}Cut this stretch out</button><p class="ins-note subtle">Removes it from the recording. Playback skips it and the render closes the gap.</p>`) +
       section('speed', 'Speed', `${segBtns('data-range-rate', [0.5, 0.75, 1.5, 2, 3], '', fmtRate)}<p class="ins-note subtle">Faster skips the slow parts; slower lets a detail breathe.</p>`) +
       section('zoom', 'Zoom', `<button type="button" class="ins-btn wide" data-range-zoom>${ICONS.zoom}Zoom in over this stretch</button><button type="button" class="ins-btn wide" data-range-lens>${ICONS.lens}Magnify a detail here</button><button type="button" class="ins-btn wide ghost" data-range-skip>${ICONS.noZoom}Keep the whole screen (no auto zoom)</button>`)
     );
@@ -5195,6 +5385,50 @@ export function initEditor(ctx) {
     act('voice-reset', () => s?.key && withVoice(s.key, { nudge: 0, at: null }, 'Back to where the line belongs'));
     act('clip-earlier', () => ed.sel?.type === 'clip' && moveClip(ed.sel.id, -1));
     act('clip-later', () => ed.sel?.type === 'clip' && moveClip(ed.sel.id, 1));
+    const setLiveTrim = (id, patch) => {
+      const clip = ed.seq.find((c) => c.id === id && c.kind === 'live');
+      if (!clip) return Promise.resolve();
+      const cur = { ...(d.trims || []).find((t) => t.id === id) };
+      const next = { id, trimStart: cur.trimStart || 0, trimEnd: cur.trimEnd || 0, ...patch };
+      if (!next.trimStart) delete next.trimStart;
+      if (!next.trimEnd) delete next.trimEnd;
+      const trims = (d.trims || []).filter((t) => t.id !== id);
+      if (next.trimStart || next.trimEnd) trims.push(next);
+      return postDeck({ trims }, { hint: 'Recording clip trimmed' });
+    };
+    on('[data-live-trim]', 'input', (el) => {
+      const out = el.parentElement?.querySelector('output');
+      if (out) out.textContent = `${Number(el.value).toFixed(2)}s`;
+    });
+    on('[data-live-trim]', 'change', (el) => {
+      const key = el.dataset.liveTrim;
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      setLiveTrim(clip.id, { [key]: r3(Number(el.value) || 0) });
+    });
+    on('[data-live-trim-reset]', 'click', (el) => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      setLiveTrim(clip.id, { [el.dataset.liveTrimReset]: 0 });
+    });
+    act('trim-head-playhead', () => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      const cur = (d.trims || []).find((t) => t.id === clip.id) || {};
+      const rawFrom = clip.recFrom - (cur.trimStart || 0);
+      const recT = edToRec(clip, ed.t);
+      const head = r3(Math.max(0, Math.min(recT - rawFrom, (clip.recTo + (cur.trimEnd || 0)) - rawFrom - 0.4)));
+      setLiveTrim(clip.id, { trimStart: head });
+    });
+    act('trim-tail-playhead', () => {
+      const clip = ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel.id) : null;
+      if (!clip || clip.kind !== 'live') return;
+      const cur = (d.trims || []).find((t) => t.id === clip.id) || {};
+      const rawTo = clip.recTo + (cur.trimEnd || 0);
+      const recT = edToRec(clip, ed.t);
+      const tail = r3(Math.max(0, Math.min(rawTo - recT, rawTo - (clip.recFrom - (cur.trimStart || 0)) - 0.4)));
+      setLiveTrim(clip.id, { trimEnd: tail });
+    });
     act('music-mute', () => withMusic({ mute: !audioDesk().music.mute }, audioDesk().music.mute ? 'Music back in' : 'Music muted'));
     act('music-compose', () => {
       const prompt = root.querySelector('[data-music-prompt]')?.value ?? '';
@@ -5574,6 +5808,11 @@ export function initEditor(ctx) {
     const rangeC = s?.type === 'range' ? s : null;
     on('[data-range-rate]', 'click', (el) => rangeC && addRamp(rangeC.from, rangeC.to, Number(el.dataset.rangeRate)));
     on('[data-range-zoom]', 'click', () => rangeC && addZoomAt(rangeC.from, rangeC.to - rangeC.from));
+    on('[data-range-cut]', 'click', () => rangeC && addCut(rangeC.from, rangeC.to));
+    act('preview-cut', () => {
+      const cut = ed.sel?.type === 'cut' ? cutBlocks().find((c) => c.i === ed.sel.i) : null;
+      if (cut) previewRange(Math.max(0, cut.splice - 0.2), cut.splice + 0.9);
+    });
     on('[data-range-lens]', 'click', () => rangeC && addLensAt(rangeC.from, rangeC.to - rangeC.from));
     on('[data-range-skip]', 'click', async () => {
       if (!rangeC) return;
@@ -6057,6 +6296,7 @@ export function initEditor(ctx) {
       ctx.requestMake?.('quick');
     });
     $('etlAddSpeed')?.addEventListener('click', toolSpeed);
+    $('etlAddCut')?.addEventListener('click', toolCut);
     $('etlAddZoom')?.addEventListener('click', toolZoom);
     $('etlAddLens')?.addEventListener('click', toolLens);
     $('etlAddVoice')?.addEventListener('click', toolVoice);
@@ -6071,6 +6311,7 @@ export function initEditor(ctx) {
       if (b.dataset.rangeRate) addRamp(s.from, s.to, Number(b.dataset.rangeRate));
       else if (b.dataset.rangeZoom != null) addZoomAt(s.from, s.to - s.from);
       else if (b.dataset.rangeLens != null) addLensAt(s.from, s.to - s.from);
+      else if (b.dataset.rangeCut != null) addCut(s.from, s.to);
       else if (b.dataset.rangeSkip != null)
         postDeck({ zoomSkips: [...deckEdit().zoomSkips, { from: s.from, to: s.to }] }, { hint: 'No auto zoom in that stretch' }).then((r) => r && select(null));
       else if (b.dataset.rangeClear != null) select(null);
@@ -6097,6 +6338,7 @@ export function initEditor(ctx) {
         else if (e.code === 'Space') toggle();
         else if (k === 'r') replayClip();
         else if (k === 's') toolSpeed();
+        else if (k === 'c') toolCut();
         else if (k === 'z') toolZoom();
         else if (k === 'm') toolLens();
         else if (k === 'l') $('edLoop')?.click();

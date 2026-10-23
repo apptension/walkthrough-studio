@@ -2,6 +2,8 @@
    Motion tokens (--motion-*, --t-*) are injected by lib/plateMotion.mjs; defaults below keep
    feature/open logos animating even when a template omits locals. */
 :root {
+  --wt-frame-w: 1920px;
+  --wt-frame-h: 1080px;
   --expo: cubic-bezier(0.16, 1, 0.3, 1);
   --quint: cubic-bezier(0.22, 1, 0.36, 1);
   --inout: cubic-bezier(0.65, 0, 0.35, 1);
@@ -27,11 +29,30 @@
   margin: 0;
   padding: 0;
 }
+/* Vertical master canvas — kit/lib/format.mjs OUTPUT_FRAMES.portrait */
+html[data-frame='portrait'] {
+  --wt-frame-w: 1080px;
+  --wt-frame-h: 1920px;
+}
+/* Vertical videos are watched on phones: the composition lays out on a narrower virtual canvas
+   and is zoomed up, so type reads at phone size. Templates stack their rows under this rule. */
+html[data-frame='portrait'] .compose {
+  zoom: var(--wt-portrait-zoom, 1.4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 44px;
+  padding: 120px 52px 132px;
+}
+html[data-frame='portrait'] .compose > * {
+  max-width: 100%;
+}
 html,
 body {
-  /* Full HD delivery canvas — keep in sync with kit/lib/format.mjs DELIVERY */
-  width: 1920px;
-  height: 1080px;
+  /* Delivery canvas — keep in sync with kit/lib/format.mjs OUTPUT_FRAMES */
+  width: var(--wt-frame-w);
+  height: var(--wt-frame-h);
   overflow: hidden;
   background: var(--ink);
   font-family: var(--font), ui-sans-serif, system-ui, sans-serif;
