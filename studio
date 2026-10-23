@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Walkthrough Studio — one-command setup + launch.
-# Usage: ./studio [slug] [--port N] [--no-open] [--dev]
+# Usage: ./studio [slug] [--port N] [--ui-port N] [--no-open] [--dev] [--v2]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 exec node "$ROOT/scripts/studio.mjs" "$@"

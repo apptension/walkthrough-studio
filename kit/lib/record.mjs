@@ -33,6 +33,11 @@ import {
 } from "./capturePresets.mjs";
 import { outputFrame } from "./format.mjs";
 import { startRasterCapture } from "./rasterCapture.mjs";
+import {
+  createLivePreviewFeed,
+  planScreencastRestart,
+} from "./livePreviewFeed.mjs";
+import { finalizeStep } from "./finalizeDeadline.mjs";
 import { stageFor } from "./stage.mjs";
 import {
   CaptureStallError,
@@ -512,6 +517,8 @@ export async function recordLive(
     return { id, clear };
   }
 
+  // A screencast restart must not turn the pointer decoration back on after actions.hide().
+  let actionsVisible = true;
   const ctx = {
     page,
     context,
@@ -549,10 +556,12 @@ export async function recordLive(
     // ring) off around free-hand input such as drawing a signature or dragging, then back on.
     actions: {
       hide: () => {
+        actionsVisible = false;
         focus.state.enabled = false;
         return page.screencast.hideActions();
       },
       show: () => {
+        actionsVisible = true;
         focus.state.enabled = true;
         return page.screencast.showActions(actionLook());
       },
@@ -748,11 +757,22 @@ export async function recordLive(
 
   let handedOff = false;
   let screencastOn = false;
+  let previewFeed = null;
+  let castWatch = null;
+  /** Bumped on stop so an in-flight screencast restart cannot start the cast again. */
+  let castGen = 0;
+  /** Set once the flow finishes — a restart queued just before this must not fire into teardown. */
+  let finalizing = false;
   async function stopCapture() {
+    castGen += 1;
+    if (castWatch) clearInterval(castWatch);
+    castWatch = null;
     if (screencastOn) await page.screencast.stop().catch(() => {});
     screencastOn = false;
     if (rasterCap) await rasterCap.stop().catch(() => {});
     rasterCap = null;
+    if (previewFeed) await previewFeed.stop().catch(() => {});
+    previewFeed = null;
   }
   try {
     console.log("» open · Loading the start page");
@@ -837,24 +857,62 @@ export async function recordLive(
     console.log("» capture · Driving the walkthrough");
     startedAt = Date.now();
     recorder.begin(startedAt);
-    let lastPreviewAt = 0;
     const previewPath = join(out, "live-preview.jpg");
     const previewMetaPath = join(out, "live-preview.json");
+    previewFeed = createLivePreviewFeed(previewPath, previewMetaPath);
+    let lastFrameAt = 0;
+    let navigatedAt = 0;
+    let navRestartAttempts = 0;
+    /** Which navigation `navRestartAttempts` is the budget for — see planScreencastRestart. */
+    let navRestartAttemptsNavAt = 0;
+    let restartingCast = false;
     const onFrame = (frame) => {
+      lastFrameAt = Date.now();
       recorder.onFrame(frame);
-      const now = Date.now();
-      if (frame?.data && now - lastPreviewAt > 400) {
-        lastPreviewAt = now;
-        try {
-          writeFileSync(previewPath, frame.data);
-          // A fresh timestamp next to the frame — the UI blurs the stale frame
-          // left on disk from a prior take until this file's `at` catches up.
-          writeFileSync(previewMetaPath, JSON.stringify({ at: now }));
-        } catch {
-          /* a preview miss must not stop the take */
+      // Ack path: remember the JPEG and return. The feed writes it off this turn.
+      if (frame?.data) previewFeed?.push(frame.data);
+    };
+    // A click that navigates (comments, a new route) sometimes ends the cast.
+    // If no frame arrives after the main frame commits, start it again.
+    page.on("framenavigated", (frame) => {
+      try {
+        if (frame === page.mainFrame()) navigatedAt = Date.now();
+      } catch {
+        /* closing */
+      }
+    });
+    const restartCast = async () => {
+      if (restartingCast || rasterMode || !screencastOn || finalizing) return;
+      const plan = planScreencastRestart({
+        navigatedAt,
+        lastFrameAt,
+        now: Date.now(),
+        attempts: navRestartAttempts,
+        attemptsNavigatedAt: navRestartAttemptsNavAt,
+      });
+      navRestartAttempts = plan.attempts;
+      navRestartAttemptsNavAt = plan.attemptsNavigatedAt;
+      if (!plan.restart) return;
+      const gen = castGen;
+      restartingCast = true;
+      try {
+        await page.screencast.stop().catch(() => {});
+        if (gen !== castGen || !screencastOn || finalizing || page.isClosed()) return;
+        await page.screencast.start({ size: viewport, quality: 100, onFrame });
+        if (gen !== castGen || finalizing) {
+          await page.screencast.stop().catch(() => {});
+          return;
         }
+        if (actionsVisible) await page.screencast.showActions(actionLook()).catch(() => {});
+      } catch {
+        /* the next grace window can try again */
+      } finally {
+        restartingCast = false;
       }
     };
+    castWatch = setInterval(() => {
+      void restartCast();
+    }, 400);
     if (rasterMode) {
       rasterCap = await startRasterCapture(page, {
         css: viewport,
@@ -902,10 +960,15 @@ export async function recordLive(
         clearTimeout(timer);
         stallWatchdog.stop();
         stallReject = null;
+        // From here on nothing times the flow's own progress — a screencast restart
+        // queued by castWatch must not land mid-shutdown and contend with stopCapture().
+        finalizing = true;
+        if (castWatch) clearInterval(castWatch);
+        castWatch = null;
       },
     );
-    await story.settle();
-    await cursor.finish();
+    await finalizeStep("hold for the last line", story.settle(), { ms: 8_000 });
+    await finalizeStep("cursor return to seat", cursor.finish(), { ms: 5_000 });
 
     mark("end", "live end");
     await wait(900);
@@ -924,12 +987,22 @@ export async function recordLive(
         ? Number((narrationHoldSec / liveSec).toFixed(3))
         : 0,
     };
-    await page.screencast.hideActions();
+    // Nothing past this point is covered by the stall watchdog, and most of it is a CDP
+    // call or an ffmpeg close that can wedge silently on a page mid-navigation. Every step
+    // gets a deadline and a log line so a hang is visible and bounded, not infinite and mute.
+    await finalizeStep("hide cursor overlay", page.screencast.hideActions(), { ms: 5_000 });
     const endedAt = Date.now();
-    await stopCapture();
-    const capture = await recorder.finish(endedAt);
+    await finalizeStep("stop capture", stopCapture(), { ms: 8_000 });
+    const capture = await finalizeStep("encode the take", recorder.finish(endedAt), {
+      ms: 20_000,
+      critical: true,
+    });
     renameSync(outPath, finalOut);
-    await context.storageState({ path: sessionFile(video) }).catch(() => {});
+    await finalizeStep(
+      "save session",
+      context.storageState({ path: sessionFile(video) }).catch(() => {}),
+      { ms: 5_000 },
+    );
 
     if (writeMeta) {
       await Promise.all(frameJobs);

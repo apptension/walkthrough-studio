@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'node:test';
-import { OutputBusyError, acquireOutputLock, heldOutputLocks, stepResources } from './outputLock.mjs';
+import { OutputBusyError, acquireOutputLock, heldOutputLocks, releaseLocksForPid, stepResources } from './outputLock.mjs';
 
 function scratch() {
   const out = mkdtempSync(join(tmpdir(), 'lock-'));
@@ -73,6 +73,31 @@ test('a partly acquired lock set is rolled back', () => {
     assert.throws(() => acquireOutputLock({ out, slug: 'demo' }, 'produce'), OutputBusyError);
     assert.deepEqual(heldOutputLocks({ out }).map((l) => l.resource), ['plates']);
     plates.release();
+  } finally {
+    cleanup();
+  }
+});
+
+test('cancelling a job drops its locks immediately, without waiting for a future run to reclaim them', () => {
+  const { out, cleanup } = scratch();
+  try {
+    acquireOutputLock({ out, slug: 'demo' }, 'record');
+    acquireOutputLock({ out, slug: 'demo' }, 'plates');
+    const otherPid = process.pid + 1;
+    mkdirSync(join(out, '.locks'), { recursive: true });
+    writeFileSync(
+      join(out, '.locks', 'guide.lock'),
+      JSON.stringify({ step: 'guide', pid: otherPid, startedAt: new Date().toISOString() })
+    );
+
+    releaseLocksForPid({ out, slug: 'demo' }, process.pid);
+
+    // Everything this process held is gone — a stopped job's slot is free at once,
+    // not only once a later run notices the pid is dead.
+    assert.deepEqual(heldOutputLocks({ out }).map((l) => l.resource), ['guide']);
+    acquireOutputLock({ out, slug: 'demo' }, 'record').release();
+    // A lock held by some other, still-live pid must not be touched.
+    assert.deepEqual(heldOutputLocks({ out }).map((l) => l.resource), ['guide']);
   } finally {
     cleanup();
   }

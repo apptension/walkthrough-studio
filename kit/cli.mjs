@@ -49,7 +49,7 @@
  *   node cli.mjs direction <slug> [--look studio] [--zoom subtle] [--frame inset] [--cursor arrow] [--pace brisk] …
  *                                          show or set scale, logo, focus, frame detail, cursor, keys and live pace
  *   node cli.mjs motion <slug> [--energy clear] [--atmosphere aurora] [--presence 0.6] [--speed 1]
- *                                [--reveal rise|cascade|wipe] [--depth flat|soft|deep] [--sheen on|off]
+ *                                [--reveal rise|cascade|wipe|focus|veil|ink|slit|iris|embers] [--depth flat|soft|deep] [--sheen on|off]
  *                                [--plate <id|open|close>] [--reset]
  *                                          show or set the video's plate motion; --plate writes a one-plate accent
  *   node cli.mjs story <slug> [--purpose overview|feature|onboarding|launch|sales] [--check]
@@ -72,7 +72,8 @@
  *                                          add --deliver to build captions + poster + handoff after validate
  *   node cli.mjs manual                    manuals/<set>.html from every video with a `manual` block
  *   node cli.mjs publish                   copy delivered lessons into the webapp Help Center (public/help + content json)
- *   node cli.mjs studio [slug] [--port N] [--dev]  local web panel: player, timeline, captions, QC, versions, critic, agent
+ *   node cli.mjs studio [slug] [--port N] [--dev] [--legacy]  local web panel: player, timeline, captions, QC, versions, critic, agent
+ *                                                  (serves kit/studio-next/dist; --legacy, or no build yet, serves the classic kit/studio)
  *   node cli.mjs snapshot <slug> [--label] save a version (delivery + settings) under tmp/videos/<slug>/versions/
  *
  * Env: WALKTHROUGH_OUT (default <repo>/tmp/videos), WALKTHROUGH_VIDEOS, WALKTHROUGH_BRANDS.
@@ -715,7 +716,7 @@ async function main() {
       if (!slug) {
         throw new Error(
           `Usage: motion <slug> [--energy calm|clear|punchy] [--atmosphere ${ATMOSPHERE_IDS.join('|')}]\n` +
-            '       [--presence 0–1] [--speed 0.3–3] [--reveal rise|cascade|wipe] [--depth flat|soft|deep] [--sheen on|off]\n' +
+            '       [--presence 0–1] [--speed 0.3–3] [--reveal rise|cascade|wipe|focus|veil|ink|slit|iris|embers] [--depth flat|soft|deep] [--sheen on|off]\n' +
             '       [--plate <id|open|close>] [--reset]   (per-plate accent; --reset drops the override)'
         );
       }
@@ -1086,8 +1087,9 @@ async function main() {
       const portFlag = studioArgs.indexOf('--port');
       const port = Number(portFlag >= 0 ? studioArgs[portFlag + 1] : 4747) || 4747;
       const dev = studioArgs.includes('--dev') || process.env.WALKTHROUGH_DEV === '1';
+      const desk = studioArgs.includes('--legacy') ? 'legacy' : process.env.WALKTHROUGH_DESK;
       const openSlug = studioArgs.find((a, i) => !String(a).startsWith('-') && i !== portFlag + 1) || null;
-      await startStudio({ port, openSlug, dev });
+      await startStudio({ port, openSlug, dev, desk });
       // keep process alive
       await new Promise(() => {});
       return;

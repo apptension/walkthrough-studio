@@ -142,6 +142,7 @@ export function fromElement(el, { isBlock = null, marks = [] } = {}) {
       return;
     }
     if (node.nodeType !== 1) return;
+    if (node.classList.contains('title-mask') || node.classList.contains('title-glow')) return;
     if (node.tagName === 'BR') {
       chars.push({ ch: '\n', accent: false });
       return;
@@ -197,6 +198,7 @@ export function positionAt(el, offset, { isBlock = null } = {}) {
       return;
     }
     if (node.nodeType !== 1) return;
+    if (node.classList.contains('title-mask') || node.classList.contains('title-glow')) return;
     if (node.tagName === 'BR') {
       lineBreak(true);
       return;

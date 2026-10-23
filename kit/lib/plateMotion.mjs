@@ -5,6 +5,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PROMOTED_FIELDS } from './atmosphereLab.mjs';
+import { TITLE_REVEALS } from './titleReveal.mjs';
+
+export { TITLE_REVEALS, TITLE_REVEAL_LABELS } from './titleReveal.mjs';
 
 export const PROFILES = {
   calm: {
@@ -103,7 +106,7 @@ export function resolveMotion(brand) {
     atmosphereSpeed: raw.atmosphereSpeed,
     scheduleField: raw.scheduleField === true || raw.atmosphere === 'schedule',
     scheduleFieldOpacity: raw.scheduleFieldOpacity ?? raw.atmosphereOpacity ?? 0.34,
-    // Title reveal: rise (masked word rise) | cascade (per-character) | wipe (clip reveal)
+    // Title reveal template (lib/titleReveal.mjs): type motion or a WebGL mask.
     titleReveal: TITLE_REVEALS.includes(raw.titleReveal) ? raw.titleReveal : 'rise',
     // Card entrance depth: flat | soft | deep (perspective tilt as cards land)
     depth: DEPTHS.includes(raw.depth) ? raw.depth : 'soft',
@@ -151,7 +154,6 @@ const PROMOTED_BLURBS = {
 };
 
 export const ATMOSPHERE_IDS = [...CORE_ATMOSPHERE_IDS, ...PROMOTED_FIELDS.map((f) => f.id)];
-export const TITLE_REVEALS = ['rise', 'cascade', 'wipe'];
 export const DEPTHS = ['flat', 'soft', 'deep'];
 export const ENERGIES = Object.keys(PROFILES);
 

@@ -1,15 +1,29 @@
 /**
- * Runs the Studio server and, in dev mode, the restart / log loop.
+ * Runs the Studio server, which serves the desk. In --dev mode, also runs the
+ * desk on Vite with hot reload and restarts the kit server when lib/cli change.
  */
 import { spawn } from 'node:child_process';
-import { relative } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { stdout as output } from 'node:process';
 import { devWatchKind, watchPaths } from '../kit/lib/devServer.mjs';
-import { formatLog, frameWidth, parseStudioBoot, readyCard, stripAnsi } from './studioDisplay.mjs';
+import {
+  deskUrl,
+  formatLog,
+  frameWidth,
+  parseStudioBoot,
+  parseViteBoot,
+  readyCard,
+  stripAnsi,
+} from './studioDisplay.mjs';
+import { ensurePortFree } from './studioPort.mjs';
 
 export async function launchStudio(ctx) {
   const {
-    port,
+    port: requestedPort,
+    uiPort: requestedUiPort = 4748,
+    desk = 'next',
+    studioNext = null,
     dev,
     noOpen,
     openSlug,
@@ -31,20 +45,39 @@ export async function launchStudio(ctx) {
     portFree,
   } = ctx;
 
-  if (!portFree(port)) {
-    section('Launch');
-    row('port', 'bad', `${port} in use`);
-    const next = port === 4747 ? 4750 : port + 1;
-    footerFail([
-      'Stop the other Studio (Ctrl+C in that terminal), or',
-      `Use another port:  ${theme.bold}./studio --port ${next}${theme.reset}`,
-    ]);
-    process.exit(1);
-  }
-
   section('Launch');
 
+  const port = await ensurePortFree({
+    port: requestedPort,
+    role: 'api',
+    flag: '--port',
+    label: 'port',
+    theme,
+    write,
+    row,
+    footerFail,
+    portFree,
+  });
+
+  const useVite = Boolean(dev && desk === 'next' && studioNext);
+  let uiPort = requestedUiPort;
+  if (useVite) {
+    uiPort = await ensurePortFree({
+      port: requestedUiPort,
+      role: 'desk',
+      flag: '--ui-port',
+      label: 'desk',
+      theme,
+      write,
+      row,
+      footerFail,
+      portFree,
+    });
+  }
+
   let child = null;
+  let uiChild = null;
+  let uiReady = false;
   let shuttingDown = false;
   let bootedOnce = false;
   let announce = true;
@@ -55,6 +88,7 @@ export async function launchStudio(ctx) {
   let stopWatch = () => {};
   let bootTimer = null;
   let logBuf = '';
+  let uiLogBuf = '';
 
   const writeLog = (source, text, tone) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -70,17 +104,22 @@ export async function launchStudio(ctx) {
     );
   };
 
+  const killProc = (proc) => {
+    if (!proc || proc.killed || proc.exitCode != null) return;
+    try {
+      proc.kill('SIGTERM');
+    } catch {
+      /* ignore */
+    }
+  };
+
   const beginRestart = () => {
     if (phase !== 'up' || !queued.length || shuttingDown) return;
     const batch = [...new Set(queued)];
     queued.length = 0;
     phase = 'restarting';
     writeLog('restart', batch.map((file) => relative(kit, file)).join(', '));
-    try {
-      child?.kill('SIGTERM');
-    } catch {
-      /* ignore */
-    }
+    killProc(child);
   };
 
   const noteChange = (file) => {
@@ -109,13 +148,14 @@ export async function launchStudio(ctx) {
     clearSpinner?.();
     stopWatch();
     write();
-    write(`${theme.soft}Stopped Studio${theme.reset}${signal === 'SIGINT' ? `  ${theme.soft}(Ctrl+C)${theme.reset}` : ''}`);
+    write(
+      `${theme.soft}Stopped Studio${theme.reset}${
+        signal === 'SIGINT' ? `  ${theme.soft}(Ctrl+C)${theme.reset}` : ''
+      }`
+    );
     write();
-    try {
-      child?.kill('SIGTERM');
-    } catch {
-      /* ignore */
-    }
+    killProc(uiChild);
+    killProc(child);
     setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 400).unref();
   };
 
@@ -157,12 +197,20 @@ export async function launchStudio(ctx) {
   const childArgs = () => {
     const list = ['cli.mjs', 'studio', '--port', String(port)];
     if (dev) list.push('--dev');
+    if (desk === 'legacy') list.push('--legacy');
     if (openSlug) list.push(openSlug);
     return list;
   };
 
   const readyRows = (info) => {
     const rows = [];
+    const served = info.desk || desk;
+    if (useVite) {
+      rows.push({ label: 'Desk', value: `Vite · 127.0.0.1:${uiPort}`, tone: 'ok' });
+      rows.push({ label: 'API', value: `127.0.0.1:${port}` });
+    } else if (served === 'legacy') {
+      rows.push({ label: 'Desk', value: 'classic · retiring', tone: 'warn' });
+    }
     if (openSlug) rows.push({ label: 'Project', value: openSlug });
     rows.push({ label: 'Videos', value: String(info.videoCount ?? 0) });
     const audio = getAudioDetail();
@@ -170,13 +218,146 @@ export async function launchStudio(ctx) {
     rows.push(...agentRows(getAgentCheck()));
     rows.push({ label: 'Stop', value: 'Ctrl+C' });
     if (dev) {
-      rows.push({ label: 'UI', value: 'kit/studio reloads on save' });
+      rows.push({ label: 'UI', value: useVite ? 'kit/studio-next hot reload' : 'kit/studio reloads on save' });
       rows.push({ label: 'Server', value: 'kit/lib and cli.mjs restart' });
-      rows.push({ label: 'Browser', value: 'errors and warnings' });
+      if (!useVite) rows.push({ label: 'Browser', value: 'errors and warnings' });
     } else {
       rows.push({ label: 'Dev', value: './studio --dev' });
+      if (served === 'legacy') rows.push({ label: 'New desk', value: './studio' });
     }
     return rows;
+  };
+
+  const viteBin = () => {
+    if (!studioNext) return null;
+    const candidates = [
+      join(studioNext, 'node_modules', 'vite', 'bin', 'vite.js'),
+      join(studioNext, 'node_modules', 'vite', 'bin', 'vite.mjs'),
+    ];
+    return candidates.find((path) => existsSync(path)) || null;
+  };
+
+  const startViteDesk = () =>
+    new Promise((resolve, reject) => {
+      if (uiReady && uiChild && uiChild.exitCode == null) {
+        resolve(deskUrl(uiPort, openSlug));
+        return;
+      }
+
+      const bin = viteBin();
+      if (!bin) {
+        reject(new Error('vite binary missing — run npm install in kit/studio-next'));
+        return;
+      }
+
+      const origin = `http://127.0.0.1:${port}`;
+      const proc = spawn(
+        nodePath,
+        [bin, '--host', '127.0.0.1', '--port', String(uiPort), '--strictPort'],
+        {
+          cwd: studioNext,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env, STUDIO_ORIGIN: origin },
+        }
+      );
+      uiChild = proc;
+      let buffer = '';
+      let settled = false;
+      let timer = null;
+
+      const finish = (err, url) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (err) {
+          killProc(proc);
+          uiChild = null;
+          uiReady = false;
+          reject(err);
+          return;
+        }
+        uiReady = true;
+        resolve(url);
+      };
+
+      const onUiChunk = (chunk) => {
+        const text = chunk.toString();
+        buffer += text;
+        if (dev && uiReady) {
+          uiLogBuf += text;
+          const parts = uiLogBuf.split(/\r\n|\n|\r/);
+          uiLogBuf = parts.pop() ?? '';
+          for (const line of parts) {
+            if (line.trim()) writeLog('vite', stripAnsi(line));
+          }
+        }
+        if (settled) return;
+        const boot = parseViteBoot(buffer);
+        if (boot.complete) finish(null, deskUrl(uiPort, openSlug));
+      };
+
+      proc.stdout.on('data', onUiChunk);
+      proc.stderr.on('data', onUiChunk);
+
+      proc.on('exit', (code, signal) => {
+        uiReady = false;
+        uiChild = null;
+        if (!settled) {
+          finish(new Error(`desk exited before ready (${code ?? signal ?? '?'})`));
+          return;
+        }
+        if (!shuttingDown && phase === 'up') {
+          writeLog('vite', `exited ${code ?? signal ?? 0}`, 'warn');
+        }
+      });
+
+      timer = setTimeout(() => {
+        finish(new Error(`desk did not become ready on :${uiPort}`));
+      }, 20000);
+    });
+
+  const showReady = async (info) => {
+    let openUrl = useVite ? deskUrl(uiPort, openSlug) : info.url || deskUrl(port, openSlug);
+
+    if (useVite) {
+      startSpinner('desk');
+      try {
+        openUrl = await startViteDesk();
+        stopSpinner('desk', 'ok', `127.0.0.1:${uiPort}`);
+      } catch (err) {
+        stopSpinner('desk', 'bad', err.message || 'failed');
+        footerFail([
+          String(err.message || err),
+          `Manual desk:  ${theme.bold}cd kit/studio-next && STUDIO_ORIGIN=http://127.0.0.1:${port} npm run dev${theme.reset}`,
+        ]);
+        killProc(child);
+        process.exit(1);
+      }
+    }
+
+    printNotes();
+    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+    write();
+    write(
+      readyCard({
+        theme,
+        width: frameWidth(output.columns),
+        elapsed,
+        url: openUrl,
+        browserLine: noOpen ? 'browser left closed  ·  --no-open' : 'opening browser',
+        rows: readyRows(info),
+      })
+    );
+    write();
+    if (dev) {
+      writeLog(
+        'dev',
+        useVite
+          ? 'watching kit/lib and kit/cli.mjs · desk hot reload via Vite'
+          : 'watching kit/studio, kit/lib, and kit/cli.mjs'
+      );
+    }
+    if (!noOpen && openUrl) openBrowser(openUrl);
   };
 
   const runOnce = () => {
@@ -210,29 +391,17 @@ export async function launchStudio(ctx) {
       }
       if (firstAnnounce) {
         stopSpinner('server', 'ok', `127.0.0.1:${port}`);
-        printNotes();
-        const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-        write();
-        write(
-          readyCard({
-            theme,
-            width: frameWidth(output.columns),
-            elapsed,
-            url: info.url || `http://127.0.0.1:${port}/`,
-            browserLine: noOpen ? 'browser left closed  ·  --no-open' : 'opening browser',
-            rows: readyRows(info),
-          })
-        );
-        write();
-        if (dev) writeLog('dev', 'watching kit/studio, kit/lib, and kit/cli.mjs');
-        if (!noOpen && info.url) openBrowser(info.url);
+        void showReady(info).finally(() => {
+          suppressUntil = Date.now() + 600;
+          clearTimeout(debounce);
+          queued.length = 0;
+        });
       } else {
         writeLog('dev', 'listening');
+        suppressUntil = Date.now() + 600;
+        clearTimeout(debounce);
+        queued.length = 0;
       }
-      // A single save often emits a second watch event while the process is restarting.
-      suppressUntil = Date.now() + 600;
-      clearTimeout(debounce);
-      queued.length = 0;
     };
 
     const onChunk = (chunk) => {
@@ -259,11 +428,8 @@ export async function launchStudio(ctx) {
           'Studio process started but never printed its URL.',
           `Try manually:  ${theme.bold}cd kit && node cli.mjs studio${theme.reset}`,
         ]);
-        try {
-          proc.kill('SIGTERM');
-        } catch {
-          /* ignore */
-        }
+        killProc(uiChild);
+        killProc(proc);
         process.exit(1);
       }
     }, 15000);
@@ -291,6 +457,7 @@ export async function launchStudio(ctx) {
       const free = await waitForPortFree(port, portFree);
       if (!free) {
         footerFail([`Port ${port} stayed busy after restart. Stop the other process, or pass --port.`]);
+        killProc(uiChild);
         process.exit(1);
       }
       phase = 'starting';
@@ -303,12 +470,14 @@ export async function launchStudio(ctx) {
         write(`${theme.soft}${result.tail}${theme.reset}`);
       }
       footerFail([`Run from kit/:  ${theme.bold}node cli.mjs studio${theme.reset}`]);
+      killProc(uiChild);
       process.exit(result.code || 1);
     }
     if (dev) {
       write();
       writeLog('server', `exited ${result.code}`);
     }
+    killProc(uiChild);
     process.exit(result.code ?? 0);
   }
 }

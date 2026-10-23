@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import {
   applyScriptStructure,
+  commitFlowSource,
   approveScript,
   buildScript,
   insertFlowCallAfter,
@@ -62,6 +63,68 @@ describe('flow call surgery', () => {
     assert.equal(calls[0].title, 'Meet Studio');
     assert.equal(calls[1].title, 'Your dashboard');
     assert.doesNotMatch(next, /Key capabilities/);
+    assert.doesNotMatch(next, /await\s+await/);
+  });
+
+  it('removing a caption that sits above ordinary code does not glue await onto the next statement', () => {
+    // This is the record-time "Unexpected token 'const'" failure: the caption line
+    // was deleted, but `await` stayed behind and swallowed the following statement.
+    const source = `export default async function flow(ctx) {
+  const { say } = ctx;
+  await say('Stay on HN', 'Open via N comments.', 2000);
+  await say('Builder pitch', 'The Show HN post and thread stay on HN.', 2000);
+  const showItem = page.locator('.fatitem').first();
+  if (await showItem.isVisible().catch(() => false)) {
+    await frame(showItem, { holdMs: 1400 });
+  }
+}
+`;
+    const index = parseFlowCalls(source).findIndex((c) => c.title === 'Builder pitch');
+    const next = removeFlowCallAt(source, index);
+    assert.doesNotMatch(next, /Builder pitch/);
+    assert.match(next, /^ {2}const showItem = page\.locator\('\.fatitem'\)\.first\(\);$/m);
+    assert.doesNotMatch(next, /await\s+const/);
+    assert.doesNotMatch(next, /await\s+await/);
+    assert.match(next, /await say\('Stay on HN'/);
+  });
+
+  it('inserting before the first call keeps that call attached to its await', () => {
+    const next = insertFlowCallAfter(SAMPLE, -1, { kind: 'chapter', title: 'Cold open', body: 'Start here' });
+    assert.match(next, /await chapter\('Cold open'/);
+    assert.match(next, /await chapter\('Meet Studio'/);
+    assert.doesNotMatch(next, /await\s+await/);
+    assert.doesNotMatch(next, /await\s+chapter\('Cold open'[\s\S]*\n\s*chapter\('Meet Studio'/);
+  });
+});
+
+describe('commitFlowSource', () => {
+  it('leaves the file untouched when the edit would not parse', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wt-flow-'));
+    const file = join(dir, 'flow.mjs');
+    const before = 'export default async function flow() {}\n';
+    writeFileSync(file, before);
+    try {
+      assert.throws(
+        () => commitFlowSource(file, 'export default async function flow() {\n  await   const showItem = 1;\n}\n'),
+        /would break flow\.mjs/
+      );
+      assert.equal(readFileSync(file, 'utf8'), before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writes the file when the edit parses', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wt-flow-'));
+    const file = join(dir, 'flow.mjs');
+    writeFileSync(file, 'export default async function flow() {}\n');
+    const next = 'export default async function flow() {\n  const showItem = 1;\n}\n';
+    try {
+      commitFlowSource(file, next);
+      assert.equal(readFileSync(file, 'utf8'), next);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

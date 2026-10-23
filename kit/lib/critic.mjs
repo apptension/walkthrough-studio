@@ -429,3 +429,48 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
 
   return report;
 }
+
+const SEVERITY_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * Fold the critic agent's review (critic-agent.json) into critic-report.json/.md. Agent findings
+ * lead; rule findings stay only where the agent did not already speak to the same target.
+ */
+export function mergeAgentReview(video, review) {
+  const reportJson = join(video.out, 'critic-report.json');
+  const reportMd = join(video.out, 'critic-report.md');
+  const base = existsSync(reportJson) ? JSON.parse(readFileSync(reportJson, 'utf8')) : { slug: video.slug, personas: PERSONAS };
+  const rules = (base.findings || []).filter((f) => f.source !== 'agent').map((f) => ({ ...f, source: 'rules' }));
+  const agent = (review.findings || [])
+    .filter((f) => f && (f.issue || f.suggestion))
+    .map((f) => ({
+      severity: SEVERITY_RANK[f.severity] != null ? f.severity : 'medium',
+      persona: f.persona || 'skeptic',
+      action: f.action || 'change',
+      target: String(f.target || 'story'),
+      issue: String(f.issue || ''),
+      suggestion: String(f.suggestion || ''),
+      evidence: f.evidence ? String(f.evidence) : undefined,
+      at: Number.isFinite(Number(f.at)) && f.at !== null ? Number(f.at) : undefined,
+      source: 'agent',
+    }))
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  const covered = new Set(agent.map((f) => f.target));
+  const report = {
+    ...base,
+    generatedAt: new Date().toISOString(),
+    agent: {
+      summary: String(review.summary || ''),
+      score: Number.isFinite(Number(review.score)) ? Math.max(0, Math.min(100, Number(review.score))) : null,
+      strengths: Array.isArray(review.strengths) ? review.strengths.map(String).slice(0, 6) : [],
+      generatedAt: new Date().toISOString(),
+    },
+    findings: [...agent, ...rules.filter((f) => !covered.has(f.target))],
+  };
+  writeFileSync(reportJson, JSON.stringify(report, null, 2));
+  const agentMdPath = join(video.out, 'critic-agent.md');
+  const agentMd = existsSync(agentMdPath) ? readFileSync(agentMdPath, 'utf8').trim() : `# Critic review — ${video.slug}\n\n${report.agent.summary}`;
+  const rulesMd = existsSync(reportMd) ? readFileSync(reportMd, 'utf8').split('\n<!-- rules -->\n').pop().trim() : '';
+  writeFileSync(reportMd, `${agentMd}\n\n---\n\n## Automatic rule pass\n\n<!-- rules -->\n${rulesMd}\n`);
+  return report;
+}

@@ -4,6 +4,31 @@ import { chromium } from 'playwright';
 import { contextOptions, captureProfile } from './capturePresets.mjs';
 import { jpegSize, startRasterCapture } from './rasterCapture.mjs';
 
+test('a screenshot that never returns is dropped and capture continues on a fresh session', { timeout: 2000 }, async () => {
+  const hung = { send: () => new Promise(() => {}), detached: false, detach: async () => { hung.detached = true; } };
+  const live = { send: async () => ({ data: Buffer.from('frame').toString('base64') }), detach: async () => {} };
+  let opened = 0;
+  const frames = [];
+  const page = { isClosed: () => false };
+  const cap = await startRasterCapture(page, {
+    css: { width: 8, height: 8 },
+    raster: { width: 8, height: 8 },
+    shotTimeoutMs: 40,
+    sleep: () => Promise.resolve(),
+    openSession: async () => {
+      opened += 1;
+      return opened === 1 ? hung : live;
+    },
+    onFrame: (frame) => frames.push(frame.data),
+  });
+  const deadline = Date.now() + 1000;
+  while (frames.length < 1 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
+  await cap.stop();
+  assert.equal(hung.detached, true, 'the wedged session is abandoned');
+  assert.ok(frames.length >= 1, 'frames resume from the next session');
+  assert.ok(opened >= 2, 'a new session is opened after the wedge');
+});
+
 test('raster capture writes frames at the stage size while the page is driven', { timeout: 30000 }, async () => {
   const browser = await chromium.launch();
   try {

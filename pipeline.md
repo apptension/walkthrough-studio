@@ -239,7 +239,7 @@ mid-flow and leaves a `pace` mark. Narration holds are tallied into `live-meta.j
 `POST /plates/:id/motion` and `cli.mjs motion` (enums, 0–1 presence, 0.3–3 speed, `null` clears a key);
 `motionOverrides(m)` lists the accent keys a plate overrides.
 
-**Studio + versions:** `node cli.mjs studio [slug]` serves `kit/studio/` with APIs in `lib/studio.mjs`.
+**Studio + versions:** `node cli.mjs studio [slug]` serves the desk from `kit/studio-next/dist` with APIs in `lib/studio.mjs` (`lib/deskAssets.mjs` picks the desk). `--legacy`, or a checkout without a desk build, serves the classic `kit/studio/`.
 Timeline seek, chapter strip, live captions overlay, QC panel, A/B compare, and handoff controls.
 `lib/versions.mjs` keeps a numbered history (`v1`, `v2`…) with human titles. **Releases** (Render
 finish, Save version, CLI) show by default; **checkpoints** (auto after produce / mix) are optional.
