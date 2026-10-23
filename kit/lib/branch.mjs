@@ -9,6 +9,7 @@
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { beatTitle } from './journeyBeats.mjs';
 import { promptLanguageLine } from './languages.mjs';
 import { PURPOSE_IDS, resolvePurpose } from './narrative.mjs';
 import { VIDEOS, listVideos, loadVideo, slugify } from './project.mjs';
@@ -197,10 +198,11 @@ export function suggestBranchIdeas(video) {
   };
 
   for (const beat of brief?.story?.mustShow || []) {
+    const title = beatTitle(beat) || String(beat);
     push({
-      title: `${beat}`,
-      angle: `Deep dive: stay on “${beat}” until the viewer can do it alone.`,
-      outcome: `Confidently complete: ${beat}`,
+      title,
+      angle: `Deep dive: stay on “${title}” until the viewer can do it alone.`,
+      outcome: `Confidently complete: ${title}`,
       mustShow: [beat],
       keyMessages: (brief.story?.keyMessages || []).slice(0, 2),
       lengthSec: 90,

@@ -66,3 +66,67 @@ export const mmss = (sec) => {
 
 export const duration = (file) =>
   parseFloat(run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]));
+
+/**
+ * Refuse to pass a broken render downstream.
+ *
+ * ffmpeg exits 0 when it copies a damaged stream, so a corrupt master used to sail
+ * through mix and deliver as a few black seconds. Checks the container length against
+ * what was planned and decodes the head and tail, where a truncated or interleaved
+ * write shows up first.
+ *
+ * @param {string} file
+ * @param {{expectedSec?: number, toleranceSec?: number, label?: string}} opts
+ */
+export function assertPlayable(file, { expectedSec, toleranceSec = 1.5, label = 'render' } = {}) {
+  const probe = spawnSync(
+    'ffprobe',
+    [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=duration,nb_frames:format=duration',
+      '-of', 'json',
+      file,
+    ],
+    { encoding: 'utf8' }
+  );
+  const noise = (probe.stderr || '').trim();
+  if (probe.status !== 0 || noise) {
+    throw new Error(`${label} is unreadable: ${noise.split('\n')[0] || `ffprobe exit ${probe.status}`}`);
+  }
+  let info;
+  try {
+    info = JSON.parse(probe.stdout);
+  } catch {
+    throw new Error(`${label} has no readable stream info`);
+  }
+  const stream = info.streams?.[0];
+  if (!stream) throw new Error(`${label} has no video stream`);
+  const containerSec = parseFloat(info.format?.duration);
+  // Measure the picture, not the container: a master whose video stream stopped early
+  // still reports full length from its audio track, and plays as minutes of black.
+  const pictureSec = parseFloat(stream.duration);
+  const sec = Number.isFinite(pictureSec) ? pictureSec : containerSec;
+  if (!Number.isFinite(sec) || sec <= 0) throw new Error(`${label} has no duration`);
+  if (Number.isFinite(containerSec) && containerSec - sec > toleranceSec) {
+    throw new Error(
+      `${label} has ${sec.toFixed(2)}s of picture in a ${containerSec.toFixed(2)}s file — ` +
+        'the rest would play back black'
+    );
+  }
+  if (Number.isFinite(expectedSec) && Math.abs(sec - expectedSec) > toleranceSec) {
+    throw new Error(
+      `${label} is ${sec.toFixed(2)}s but ${expectedSec.toFixed(2)}s was planned — the encode was cut short`
+    );
+  }
+  for (const window of [['-t', '2'], ['-sseof', '-2']]) {
+    const decode = spawnSync('ffmpeg', ['-v', 'error', ...window, '-i', file, '-map', '0:v:0', '-f', 'null', '-'], {
+      encoding: 'utf8',
+    });
+    const errs = (decode.stderr || '').trim();
+    if (decode.status !== 0 || errs) {
+      throw new Error(`${label} does not decode cleanly: ${errs.split('\n')[0] || `ffmpeg exit ${decode.status}`}`);
+    }
+  }
+  return sec;
+}

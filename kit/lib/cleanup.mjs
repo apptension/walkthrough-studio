@@ -39,7 +39,10 @@ export function isRegenerableRel(rel, { slug = 'video' } = {}) {
   const base = rel.split('/').pop() || '';
   if (SOURCE_NAMES.has(base)) return false;
   if (!rel.includes('/') && (base === 'live.mp4' || base === `${slug}.mp4`)) return false;
-  if (!rel.includes('/') && (base === 'timeline.json' || base === 'live-meta.json' || base === 'live-preview.jpg')) {
+  if (
+    !rel.includes('/') &&
+    (base === 'timeline.json' || base === 'live-meta.json' || base === 'live-preview.jpg' || base === 'live-preview.json')
+  ) {
     return false;
   }
   if (rel.startsWith('versions/')) return false;
@@ -59,11 +62,23 @@ export function isRegenerableRel(rel, { slug = 'video' } = {}) {
   return false;
 }
 
-export function planCleanup(root, { slug = 'video' } = {}) {
+/**
+ * True for files a later pipeline step still reads (audio needs plates + the silent master,
+ * produce reuses live-clean and bakes, the Studio previews overlays, export ships the zip).
+ * The automatic post-produce pass keeps these; only an explicit Studio clean-up drops them.
+ */
+export function isPipelineInputRel(rel, { slug = 'video' } = {}) {
+  if (rel.startsWith('slices/')) return false;
+  if (rel.startsWith('validate/')) return false;
+  return isRegenerableRel(rel, { slug });
+}
+
+export function planCleanup(root, { slug = 'video', keepPipeline = false } = {}) {
   const files = [];
   for (const file of walk(root)) {
     const rel = relative(root, file.path).split(sep).join('/');
     if (!isRegenerableRel(rel, { slug })) continue;
+    if (keepPipeline && isPipelineInputRel(rel, { slug })) continue;
     files.push({ path: file.path, name: rel, bytes: file.bytes });
   }
   files.sort((a, b) => a.name.localeCompare(b.name));
@@ -76,21 +91,14 @@ export function applyCleanup(plan) {
   return plan;
 }
 
-/** Plan + apply for a video's out dir after produce/snapshot. */
+/** Plan + apply for a video's out dir after produce/snapshot. Keeps everything later steps read. */
 export function cleanupAfterProduce(video) {
   const root = video.out;
-  const plan = planCleanup(root, { slug: video.slug });
+  const plan = planCleanup(root, { slug: video.slug, keepPipeline: true });
   plan.root = root;
   if (!plan.files.length) return plan;
   applyCleanup(plan);
-  // Remove emptied overlay/plate trees even when files were nested.
-  for (const name of ['overlays', 'plates', 'slices']) {
-    try {
-      rmSync(join(root, name), { recursive: true, force: true });
-    } catch {
-      /* ok */
-    }
-  }
+  rmSync(join(root, 'slices'), { recursive: true, force: true });
   console.log(`✓ cleaned ${plan.files.length} intermediate file(s) · ${plan.totalLabel}`);
   return plan;
 }

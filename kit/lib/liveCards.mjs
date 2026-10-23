@@ -10,10 +10,10 @@
  *   chapters?: { [chapterNo]: { chapter?: { atmosphere, backdrop, backdropOpacity },
  *                               caption?: { atmosphere, backdrop, backdropOpacity } } }
  *
- * `backdrop` is the solid fill painted *behind* the atmosphere: `auto` keeps each template's own
- * fill (the ink dim / caption gradient, which turns translucent under a WebGL field so the take
- * shows through), `none` is fully transparent, a brand role (ink · surface · gold · amber · teal)
- * or a #hex picks a colour; `backdropOpacity` (0–100) is how solid that colour is.
+ * `backdrop` is the solid fill painted *behind* the atmosphere: `auto` picks black or white from
+ * the brand (white when the ink is light, black when it is dark) so the card stays opaque and
+ * the take never shows through, `none` is fully transparent, a brand role (ink · surface · gold ·
+ * amber · teal) or a #hex picks a colour; `backdropOpacity` (0–100) is how solid that colour is.
  *
  * `chapters` holds a chapter's own background (atmosphere + backdrop) for its chapter card and the
  * captions inside it; keys not listed there follow the video-wide slot. Studio's Look & reveal
@@ -30,6 +30,7 @@ import {
 import { loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
 import { atmosphereSnippet } from './atmosphere.mjs';
 import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, resolveMotion } from './plateMotion.mjs';
+import { DELIVERY, outputFrame } from './format.mjs';
 import { TEMPLATES } from './project.mjs';
 import { parseFlowCalls } from './script.mjs';
 import { esc } from './text.mjs';
@@ -50,7 +51,7 @@ export const OVERLAY_BACKDROP_ROLES = Object.freeze(['ink', 'surface', 'gold', '
 /** Fixed backdrop choices; a `#rrggbb` custom colour is also accepted. */
 export const OVERLAY_BACKDROPS = Object.freeze(['auto', 'none', ...OVERLAY_BACKDROP_ROLES]);
 export const OVERLAY_BACKDROP_CHOICES = Object.freeze([
-  { id: 'auto', label: 'Auto', hint: 'The template’s own fill — ink sheet behind a chapter, dark gradient behind a caption' },
+  { id: 'auto', label: 'Auto', hint: 'Black or white from the brand ink, solid behind the card so the take never shows through' },
   { id: 'none', label: 'None', hint: 'Transparent — only the atmosphere and copy sit over the take' },
   { id: 'ink', label: 'Ink' },
   { id: 'surface', label: 'Surface' },
@@ -222,7 +223,7 @@ function waveFieldMarkup(p, id, { rings = 9 } = {}) {
 }
 
 /** WebGL plate field for a card, or empty strings when the slot stays a CSS wash (`none`, `blobs`). */
-function cardField(brand, atmosphere, kind) {
+function cardField(brand, atmosphere, kind, frame = DELIVERY) {
   if (!atmosphere || atmosphere === 'none' || atmosphere === 'blobs' || !ATMOSPHERE_IDS.includes(atmosphere)) {
     return { FIELD: '', FIELD_SCRIPT: '' };
   }
@@ -236,26 +237,52 @@ function cardField(brand, atmosphere, kind) {
     speed: same && Number.isFinite(motion.atmosphereSpeed) ? motion.atmosphereSpeed : undefined,
     local: true,
     hooks: false,
-    width: kind === 'caption' ? 1200 : 1920,
-    height: kind === 'caption' ? 420 : 1080,
+    // A caption field is panel-sized; a chapter field covers the delivered frame.
+    width: kind === 'caption' ? 1200 : frame.width,
+    height: kind === 'caption' ? 420 : frame.height,
   });
   return { FIELD: snippet.markup, FIELD_SCRIPT: snippet.script };
 }
 
+/** Rec. 709 luma, 0–255. Same threshold the plate type uses for light ink. */
+function channelLuma(hex) {
+  const n = parseInt(String(hex || '').replace('#', ''), 16);
+  if (!Number.isFinite(n)) return 0;
+  return 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+}
+
+/**
+ * Solid paper behind a card when the backdrop is Auto.
+ * A light brand ink (white plates) gets white; a dark ink gets black.
+ */
+export function autoBackdropHex(ink) {
+  return channelLuma(ink) > 160 ? '#ffffff' : '#000000';
+}
+
 /**
  * Resolve a slot's backdrop to template tokens.
- * `mode` drives the CSS (`data-backdrop`): `auto` keeps the template fill, `none` clears it,
- * `color` paints `--wt-backdrop` (an rgba() string so the opacity bakes into the colour itself
- * and never fights the reveal animations, which animate `opacity`).
+ * `mode` drives the CSS (`data-backdrop`): `auto` paints black or white from the brand,
+ * `none` clears it, `color` paints the chosen role or hex. `--wt-backdrop` is an rgba()
+ * so the opacity bakes into the colour and never fights the reveal animations.
  */
 export function resolveBackdrop(slot, p) {
   const choice = normalizeBackdrop(slot?.backdrop) || 'auto';
   const alpha = clampNum(slot?.backdropOpacity, 100, 0, 100) / 100;
-  if (choice === 'auto' || choice === 'none') return { mode: choice, color: 'transparent', hex: null, alpha };
-  const hex = OVERLAY_BACKDROP_ROLES.includes(choice) ? normalizeBackdrop(p?.[choice]) || p?.ink || '#000000' : choice;
+  if (choice === 'none') return { mode: 'none', color: 'transparent', hex: null, alpha };
+  const hex =
+    choice === 'auto'
+      ? autoBackdropHex(p?.ink)
+      : OVERLAY_BACKDROP_ROLES.includes(choice)
+        ? normalizeBackdrop(p?.[choice]) || autoBackdropHex(p?.ink)
+        : choice;
   const n = parseInt(hex.slice(1), 16);
   const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  return { mode: 'color', hex, alpha, color: `rgba(${rgb.join(', ')}, ${Number(alpha.toFixed(3))})` };
+  return {
+    mode: choice === 'auto' ? 'auto' : 'color',
+    hex,
+    alpha,
+    color: `rgba(${rgb.join(', ')}, ${Number(alpha.toFixed(3))})`,
+  };
 }
 
 function brandTokens(p) {
@@ -342,6 +369,8 @@ export function resolveOverlays(brand, direction = {}, { chapterNo } = {}) {
 
   return {
     preset: presetId,
+    /** The colour Auto paints, so Studio can show the pick without re-deriving it. */
+    paper: autoBackdropHex(palette(brand).ink),
     chapter,
     caption,
     ...(chapters ? { chapters } : {}),
@@ -573,7 +602,7 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
   const backdrop = resolveBackdrop(slot, p);
   const common = {
     ...brandTokens(p),
-    ...cardField(brand, slot.atmosphere, kind),
+    ...cardField(brand, slot.atmosphere, kind, props.frame),
     DURATION: (ms / 1000).toFixed(2),
     ATMOSPHERE: slot.atmosphere,
     ENERGY: slot.energy,
@@ -659,6 +688,7 @@ export function buildLiveCards(video) {
   // One pairing for every consumer: the card carries its mark's key so bake and Studio match by id.
   const markByCall = pairCallsToMarks(calls, loadCardMarks(video));
   const shell = readFileSync(join(TEMPLATES, 'overlay-preview.html'), 'utf8');
+  const frame = outputFrame(video.config);
   const p = palette(video.brand);
   const direction = video.brand.direction || video.config?.direction || {};
   const look = resolveOverlays(video.brand, direction);
@@ -690,6 +720,7 @@ export function buildLiveCards(video) {
       ms,
       flowIndex: call.index,
       ...(isChapter ? cardCopyFor(video, call.index) || {} : {}),
+      frame,
     });
     const html = fill(shell, {
       LABEL: esc(call.title || id),
@@ -700,6 +731,9 @@ export function buildLiveCards(video) {
       DURATION: (ms / 1000).toFixed(2),
       KIND: kind,
       CARD_ID: id,
+      FRAME_W: frame.width,
+      FRAME_H: frame.height,
+      FRAME_ATTR: frame.format === 'portrait' ? ' data-frame="portrait"' : '',
       OVERLAY: fragment,
     });
     const file = join(paths.dir, `${id.replace(/:/g, '-')}.html`);

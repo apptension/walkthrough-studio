@@ -6,7 +6,8 @@
  * surfaces get a pointer-interaction probe (listener spy, frameworks, drag/wheel/click).
  *
  * With --explore: sign in when credentials exist, crawl safe nav targets, score mustShow
- * coverage, go deeper if unmet, then recraft the brief journey to what was actually found.
+ * coverage, go deeper if unmet. This crawl is the no-agent fallback: it maps routes but never
+ * rewrites the brief — the explore agent (browseSession.mjs) decides the journey.
  *
  *   node cli.mjs analyze <slug> [--headed] [--url https://…] [--explore]
  *
@@ -15,11 +16,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
-import {
-  applyJourneyRecraft,
-  craftJourneyFromCoverage,
-  scoreMustShowCoverage,
-} from './mustShowCoverage.mjs';
+import { analysisContextOptions, captureProfile, describeCapture } from './capturePresets.mjs';
+import { scoreMustShowCoverage } from './mustShowCoverage.mjs';
 import { tryCredentialSignIn } from './sessionAuth.mjs';
 import { sessionFile } from './signInPause.mjs';
 
@@ -397,6 +395,7 @@ export function analysisToMarkdown(report) {
   lines.push('');
   lines.push(`Analyzed \`${report.url}\` at ${report.analyzedAt}.`);
   if (report.title) lines.push(`Page title: ${report.title}`);
+  if (report.device) lines.push(`Device: ${report.device} — selectors and boxes below are for this layout.`);
   if (report.explore) {
     lines.push(
       `Explore: **${report.pages?.length || 1} page(s)** · signed-in: ${report.signedIn ? 'yes' : 'no'} · coverage: ${Math.round((report.coverage?.ratio || 0) * 100)}%`
@@ -414,13 +413,6 @@ export function analysisToMarkdown(report) {
       lines.push(
         `- ${row.matched ? '✓' : '✗'} ${row.item}${row.page ? ` → \`${row.page}\`` : ''}${row.evidence ? ` (${row.evidence})` : ''}`
       );
-    }
-    if (report.journey?.adapted) {
-      lines.push('');
-      lines.push('### Recrafted journey (brief updated)');
-      if (report.journey.dropped?.length) lines.push(`Dropped: ${report.journey.dropped.join('; ')}`);
-      if (report.journey.added?.length) lines.push(`Added: ${report.journey.added.join('; ')}`);
-      lines.push(`Use this order: ${(report.journey.mustShow || []).join(' → ')}`);
     }
     lines.push('');
   }
@@ -990,7 +982,7 @@ async function probeCanvasInteractions(page, canvas) {
   return result;
 }
 
-async function dismissCookies(page) {
+export async function dismissCookies(page) {
   const btn = page.getByRole('button', { name: /allow all|accept all|agree|akceptuj|zgadzam|zustimmen/i }).first();
   if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
     await btn.click({ force: true }).catch(() => {});
@@ -1165,7 +1157,7 @@ export async function capturePageReport(page, video, { say = () => {}, runId, pr
   };
 }
 
-function pageHintsAggregate(pages) {
+export function pageHintsAggregate(pages) {
   return {
     needsLogin: pages.some((p) => p.hints?.needsLogin),
     hasWebGL: pages.some((p) => p.hints?.hasWebGL),
@@ -1176,7 +1168,7 @@ function pageHintsAggregate(pages) {
   };
 }
 
-function pickPrimaryPage(pages) {
+export function pickPrimaryPage(pages) {
   if (!pages.length) return null;
   // Prefer the richest signed-in page; else the last hop; else first.
   const scored = [...pages].sort((a, b) => {
@@ -1264,7 +1256,7 @@ async function trySignIn(page, video, say) {
   return tryCredentialSignIn(page, video, say);
 }
 
-function writeAnalysisFiles(video, report, say) {
+export function writeAnalysisFiles(video, report, say) {
   mkdirSync(video.dir, { recursive: true });
   const jsonPath = join(video.dir, 'flow-analysis.json');
   const mdPath = join(video.dir, 'flow-analysis.md');
@@ -1276,7 +1268,7 @@ function writeAnalysisFiles(video, report, say) {
 
 /**
  * Analyze a video's start URL (or override) and write flow-analysis.json / .md.
- * Pass explore:true (or CLI --explore) to crawl, cover mustShow, and recraft the brief.
+ * Pass explore:true (or CLI --explore) for the bounded link crawl (no-agent fallback; never edits the brief).
  * @param {object} video loadVideo() result
  * @param {{ headed?: boolean, url?: string, onProgress?: (msg: string) => void, explore?: boolean, maxPages?: number, maxMs?: number }} [opts]
  */
@@ -1291,8 +1283,8 @@ export async function analyzeFlow(video, opts = {}) {
   const startUrl = opts.url || video.config.record?.startUrl || video.config.env?.appUrl || video.config.env?.marketingUrl;
   if (!startUrl) throw new Error('No URL to analyze — set record.startUrl or pass --url');
 
-  const viewport = video.config.record?.viewport || { width: 1920, height: 1080 };
-  const dpr = video.config.record?.deviceScaleFactor === 1 ? 1 : 2;
+  const ctxOptions = analysisContextOptions(video.config);
+  const { viewport, deviceScaleFactor: dpr } = ctxOptions;
   const runId = Date.now().toString(36);
 
   say(`Opening ${startUrl}`);
@@ -1301,7 +1293,7 @@ export async function analyzeFlow(video, opts = {}) {
     args: ['--use-gl=angle', '--ignore-gpu-blocklist'],
   });
   try {
-    const context = await browser.newContext({ viewport, deviceScaleFactor: dpr });
+    const context = await browser.newContext(ctxOptions);
     await context.addInitScript(listenerSpyInit);
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
@@ -1320,6 +1312,7 @@ export async function analyzeFlow(video, opts = {}) {
       title: snap.title || '',
       viewport,
       deviceScaleFactor: dpr,
+      device: describeCapture(captureProfile(video.config)),
       runId,
       dom: snap.dom,
       frameworks: snap.frameworks,
@@ -1338,7 +1331,7 @@ export async function analyzeFlow(video, opts = {}) {
 }
 
 /**
- * Bounded signed-in explore: map multiple routes, score mustShow, deepen if unmet, recraft brief.
+ * Bounded signed-in link crawl: map routes, score mustShow, deepen if unmet. Fallback when no agent can explore.
  */
 export async function exploreFlow(
   video,
@@ -1353,8 +1346,8 @@ export async function exploreFlow(
   if (!startUrl) throw new Error('No URL to analyze — set record.startUrl or pass --url');
 
   const mustShow = readMustShow(video);
-  const viewport = video.config.record?.viewport || { width: 1920, height: 1080 };
-  const dpr = video.config.record?.deviceScaleFactor === 1 ? 1 : 2;
+  const ctxOptions = analysisContextOptions(video.config);
+  const { viewport, deviceScaleFactor: dpr } = ctxOptions;
   const runId = Date.now().toString(36);
   const t0 = Date.now();
 
@@ -1371,7 +1364,7 @@ export async function exploreFlow(
   let deeper = false;
 
   try {
-    const context = await browser.newContext({ viewport, deviceScaleFactor: dpr });
+    const context = await browser.newContext(ctxOptions);
     await context.addInitScript(listenerSpyInit);
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
@@ -1485,16 +1478,6 @@ export async function exploreFlow(
       coverage = scoreMustShowCoverage(mustShow, pages);
     }
 
-    const journey = craftJourneyFromCoverage(mustShow, coverage, pages);
-    if (journey.adapted) {
-      say(
-        journey.dropped.length
-          ? `Recrafting journey — could not reach: ${journey.dropped.join('; ')}`
-          : 'Recrafting journey from explored routes'
-      );
-      applyJourneyRecraft(video, journey);
-    }
-
     const primary = pickPrimaryPage(pages) || pages[0];
     const report = {
       slug: video.slug,
@@ -1503,6 +1486,7 @@ export async function exploreFlow(
       title: primary?.title || '',
       viewport,
       deviceScaleFactor: dpr,
+      device: describeCapture(captureProfile(video.config)),
       runId,
       explore: true,
       signedIn,
@@ -1526,15 +1510,12 @@ export async function exploreFlow(
       canvases: primary?.canvases || [],
       hints: pageHintsAggregate(pages),
       coverage,
-      journey,
     };
     report.recommendations = buildRecommendations(report);
     if (!coverage.complete) {
       report.recommendations.unshift({
         kind: 'explore',
-        text: journey.adapted
-          ? `Original must-show was partially unreachable. Brief journey recrafted to: ${(journey.mustShow || []).join(' → ')}. Author flow.mjs to this list only.`
-          : `Must-show still incomplete (${coverage.unmet.join('; ')}). Prefer explored routes in flow.mjs and mark missing beats // TODO(verify selector).`,
+        text: `This automatic crawl did not see: ${coverage.unmet.join('; ')}. Explore with the browse session before deciding the journey — the crawl only follows links and cannot judge what is worth showing.`,
       });
     } else if (report.explore) {
       report.recommendations.unshift({
@@ -1551,7 +1532,6 @@ export async function exploreFlow(
     writeAnalysisFiles(video, report, say);
     say(
       `${pages.length} pages · coverage ${coverage.matched}/${coverage.total || 0}` +
-        (journey.adapted ? ' · brief recrafted' : '') +
         ` · ${report.dom.controls.length} controls on primary · ${report.recommendations.length} tips`
     );
     return report;

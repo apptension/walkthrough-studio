@@ -15,10 +15,14 @@ import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
 import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { promptLanguageLine } from './languages.mjs';
+import { captureProfile, describeCapture } from './capturePresets.mjs';
+import { outputFrame } from './format.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
-import { OUT_ROOT, SKILL, brandReadiness, listBrands, upsertDotEnv } from './project.mjs';
+import { KIT, OUT_ROOT, SKILL, brandReadiness, listBrands, upsertDotEnv } from './project.mjs';
+import { readBrowseMap, stopBrowseSession } from './browseSession.mjs';
 import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
+import { BEAT_GUIDE } from './journeyBeats.mjs';
 import { describeJob } from '../studio/progress.js';
 import { DEFAULT_BRAND_AUDIO, harvestBrandFromUrls, slugifyBrand } from './discoverBrand.mjs';
 
@@ -353,7 +357,57 @@ export function buildPrompt(video, goal, extra = '', opts = {}) {
       } Do not change other plates or narration unless the director note explicitly requires it.`
     : '';
 
+  const browse = `node ${join(KIT, 'cli.mjs')} browse ${video.slug}`;
+  const briefPath = join(video.dir, 'brief.json');
+  const journeyMd = join(video.dir, 'explore-journey.md');
+  const guidedMd = join(video.dir, 'guided-tour.md');
+  const guidedJson = join(video.dir, 'guided-tour.json');
+  const guidedFlow = join(video.dir, 'guided-flow.mjs');
+  const guidedShots = join(video.out, 'guide', 'shots');
+  const timeline = join(video.out, 'timeline.json');
+  const liveMeta = join(video.out, 'live-meta.json');
+  const guided = existsSync(guidedJson);
+  const guidedSource = `The reviewer SHOWED this tour in a real browser — that is the journey. Sources:
+- ${guidedMd}: every step in order with wall-clock time, idle gaps, ◆ moments the reviewer marked (their chapter intent) and the screenshot after each step (in ${guidedShots}; open the ones you need to see what each screen looked like).
+- ${guidedJson}: the same steps with full target descriptors (role, accessible name, label, placeholder, testid, id, css path, box and click point in CSS px at the recording viewport, the point as fractions of the box, region, dialog, duplicate count) — use these to write selectors.
+- ${guidedFlow}: a mechanical replay of every step at steady pace. It runs, but it is not a script yet.`;
+  const guidedCraft = `Turn the shown tour into the script — these decisions are yours:
+- Keep the reviewer's journey, order and data values (what they typed, chose, dragged, filtered). Their marked moments are the chapter boundaries and titles unless a title is unclear; name unnamed moments from what the screen shows.
+- Optimise the replay: drop detours, mis-clicks, abandoned attempts, back-and-forth and duplicate navigations, hovers and scrolls that reveal nothing, and anything after the story's payoff; merge repeated tries into one clean action. Never add screens the reviewer did not visit.
+- Keep the interactions that are the demo (drags, typing, filters, view switches, reveals). Idle time is already gone; write holds at steady pace for the viewer, not the reviewer's timing.
+- Start from the screen the reviewer started on: the first steps (even ones made before capture was ready) open what the rest acts on — a popover, panel or dialog seen in the first screenshot must be opened by the script.
+- Harden every selector with the descriptors and ${flowAnalysis}: getByRole/getByLabel/getByTestId first, scoped to the region/dialog it sat in. When a locator can match more than one element, take the one the reviewer used with \`await ctx.near(locator, { x, y, step })\` (the captured point; it waits for a visible match and fails loudly) — never .first() on duplicates. The tour was shown at the recording viewport, so boxes, points and drag paths are 1:1 CSS px: on canvases, calendars and boards act at \`ctx.spot(box, capturedBox, rel)\` and keep drag deltas unscaled (multiply by its k).
+- A target with no lasting handle (no testid, id, label or named role — tooltips, popovers, generated markup, a bare css path in the descriptor) is reached by its pixels, not by a prettier selector. ${guidedFlow} already passes \`fallback: { box, point }\` to ctx.near for those steps: copy that call across as generated. Never shorten, widen or re-guess a css path, and never drop the fallback, x/y or step name — that is what turns a drifted tooltip into a failed take.
+- Every step the reviewer performed is required: call it directly — no isVisible() guards, no .catch(() => {}) around clicks, typing or drags, no "skip if missing" branches; a step that cannot run must fail the take so it is fixed, not quietly dropped. Guard only UI the reviewer never touched (cookie banners, tips) with isVisible().catch(() => false). Sign-in stays off camera — never type credentials in flow().
+- Add say() captions on the moments that carry meaning, and chapter() at each beat.`;
+
   const goals = {
+    explore: `You are the product scout for the walkthrough "${video.slug}". Explore the LIVE product yourself and decide what this video should show, in what order, and how to reach each moment. Nobody has pre-chosen screens for you: the brief below says who watches and what they must be able to do afterwards — that is your goal. Read ${briefPath} first.
+
+Your browser (signed in when credentials exist; one session kept between commands):
+  ${browse} look${opts.url ? ` --url ${opts.url}` : ''}                      read the current screen (the first call opens the browser at the start URL): numbered controls [ref] and where they sit, headings, open dialog, visible text, a screenshot path
+  ${browse} click <ref> | hover <ref> | type <ref> "text" [--enter] | select <ref> "option" | drag <ref> <dx> <dy>
+  ${browse} press Escape | scroll down | scroll up | back | goto </path or url>
+  ${browse} note "what this screen offers the goal, and how strong it looks"
+  ${browse} map                       every screen seen, how it was reached, what you tried, your notes
+  ${browse} stop                      close the browser when you are done (always run it)
+Every move prints the screen it lands on. Open the screenshot (Read the .jpg) whenever layout, data density or visual impact matters — labels alone do not tell you what looks impressive on camera. Icon-only controls are listed as "icon: <name>" or "unlabeled … at x,y"; use the screenshot to tell what they are.
+
+How to explore — breadth first, led by the goal:
+1. look at the start screen and list its primary destinations (main nav, sidebar, tabs, top-bar icons, view switches).
+2. Level 1: visit EVERY primary destination once — click it, look, note in one line what it offers this audience and how strong it is on screen, then move on (nav or back). Do not go deep yet.
+3. Level 2: choose the 2–4 destinations that best serve the goal and go one or two levels deeper — open a detail, a create/edit dialog (then Escape), filters, view switches, hovers on data, drags on timelines or canvases. You are hunting payoff moments: where the product visibly does what this viewer cares about.
+4. Look for anything the reviewer named in the brief that you have not met yet (menus, settings, secondary tabs). If it truly is not in the product, say so in your report.
+5. Stop when the goal is covered and the strongest moments are found, or after about 70 moves. Run map, then stop.
+Safety: this is a real account. Never delete, sign out, pay, send invites or emails, or save a form that changes real data unless the brief's access notes say the data is a disposable demo. Opening a dialog and pressing Escape is fine. The tool refuses irreversible labels without --confirm; do not pass --confirm.
+If the session reports sign-in was not completed, explore what is reachable and say exactly what credentials or access the reviewer must add.
+
+Then decide and write — these decisions are yours:
+A. ${briefPath} → story.mustShow: the journey, ordered for impact. Keep the reviewer's intent and every beat they asked for that exists (re-order or re-word it if that tells the story better); replace what does not exist with the closest real moment; add moments you found that serve the goal better. Every how-path is the route you actually walked, with the labels the tool showed you (for icon-only controls, name the icon's purpose and position, e.g. the Reports icon in the top bar).
+${BEAT_GUIDE}
+B. ${briefPath} — fill other story fields only where they are empty or vague and you saw real material: outcome, keyMessages (what the product demonstrably does), app.notes (demo data worth using, pop-ups to dismiss, slow screens, things to avoid). Never overwrite specific reviewer wording, mustSay, avoid, stats, quotes or credentials. Never invent facts you did not see.
+C. ${journeyMd} — your scouting report: every destination with one line on what it offers and how strong it is, why this order, what you rejected and why, and per beat the exact walk (labels, where they sit, the payoff move, real data names to use).
+Edit only ${briefPath} and ${journeyMd}. Do not edit flow.mjs, narration.mjs or video.config.json, and do not record or render — the planner writes the script from your journey next.`,
     narration: `Improve narration.mjs for "${video.slug}" so VO narrates why (not clicks), ≤28 words/line, leads the pointer, and matches chapter/caption titles. Read ${critic} if present. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration.`,
     plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table. Plate types you can swap to or add (type — when: shape):
 ${plateTypeGuide()}
@@ -403,7 +457,7 @@ Write ONLY ${join(video.dir, 'branch-ideas.json')} as JSON with this shape:
       "purpose": "feature",
       "angle": "One sentence: what this cut explores deeper",
       "outcome": "After watching, the viewer can…",
-      "mustShow": ["3–5 concrete UI beats from the live product"],
+      "mustShow": ["3–5 beats: Title — why it matters · how: click “Label” in the <region> → <move>"],
       "keyMessages": ["1–3 messages"],
       "mustSay": [],
       "lengthSec": 90,
@@ -416,19 +470,46 @@ Rules: 5–8 ideas. Prefer real chapters / must-show beats / interstitial topics
 Read ${skillPath}/SKILL.md, ${skillPath}/authoring.md, ${join(video.dir, 'brief.json')}, ${config}, ${flow}, ${narration}, and ${flowAnalysis} if present.
 Keep brand, record.startUrl, env "$VAR" refs, and working Playwright patterns from the copied ${flow}. Drop off-angle chapters. Rewrite:
 1. ${config} — title, purpose feature, open/close, 1–3 interstitials for THIS feature (before: matching chapter titles).
-2. ${flow} — a shorter journey (3–5 chapter/say beats) that only covers the branch mustShow list. Reuse selectors from the copy and flow-analysis; mark guesses // TODO(verify selector).
+2. ${flow} — a shorter journey (3–5 chapter/say beats) that only covers the branch mustShow list, in order: chapter titles are the beat titles (before " — "), and each beat's "how:" path is the click/move sequence to script. Reuse selectors from the copy and flow-analysis; mark guesses // TODO(verify selector).
 3. ${narration} — intro/outro + keys matching the new chapter/say titles and plate ids; why-not-clicks, ≤28 words.
 Do not re-introduce the full overview. Do not record or render.`,
     draft: `Create the FIRST DRAFT of the walkthrough "${video.slug}" from the project brief at ${join(video.dir, 'brief.json')}. Read ${skillPath}/SKILL.md and ${skillPath}/authoring.md first, then the completed brand foundation: ${brand}, ${brief}, ${brandReport}, and ${brandLogo}.
 If ${flowAnalysis} exists, read it before writing flow.mjs — it is the live product map (explored routes when present, DOM controls, form fields with validation + suggested fill values, and WebGL/canvas pointer recipes). Prefer its Playwright hints, fill recipes (unique emails per run, env refs for login, pattern-safe values) and canvas drag/wheel snippets over guesses. When the analysis includes Explored routes / Must-show coverage / Recrafted journey, treat that as authoritative: write chapters only for beats the crawl reached (or the recrafted list). Do not invent screens the map did not find — adapt the story to the product that exists. Fill fields with ctx.typeInto(locator, value) or ctx.fillField(patterns, value) — never getByPlaceholder→click→fill (placeholders often clear on focus and hang capture). Prefer name= selectors from the analysis. Fill every required field the analysis lists before clicking submit; never invent login secrets or place real orders. When it flags WebGL, set record.deviceScaleFactor: 1, use frame() not focus() on large canvases, and drive the model with page.mouse + actions.hide()/show() rather than getByRole on missing DOM children.
 The brand discovery gate has completed. Treat its official lockup, palette, font, product promise and motion language as required inputs for the opening, interstitials, close and narration. Do not substitute generic colors, another product's visual language, an invented logo, or a homemade wordmark.
 Write, in this order:
+${guided ? `${guidedSource}\n${guidedCraft}\n` : ''}0. The journey. ${guided ? `From the shown tour: write ${briefPath} → story.mustShow as one beat per chapter you script, in that order (title, why it matters to this audience, how: the exact clicks the reviewer made, with real labels and data). The reviewer's mustShow lines are intent to honour where the tour covers them. ` : ''}If ${journeyMd} exists, the explore agent walked the live product and wrote ${briefPath} → story.mustShow from what it saw: treat that order, those titles and how-paths as authoritative, and read the report for the exact walk and real data names. Touch story.mustShow only when the script genuinely needs a beat merged or split. If there is no explore report, decide the journey yourself from ${flowAnalysis} and the app source, as a director would, and write it to story.mustShow (leave every other brief field untouched):
+${BEAT_GUIDE}
 1. ${config} — title, audience, open (eyebrow, 2-line title with one *accent*, sub), close (title, 3 steps), 2–4 interstitials[] (pick the type that carries the fact — ${PLATE_TYPE_LIST}; see authoring.md for each shape and the type guide below) placed with "before": <chapter title>, record.startUrl, env (credentials as "$ENV_VAR" references only — never literal secrets). Apply capture tips from the flow analysis (e.g. deviceScaleFactor: 1 for WebGL).
-2. ${flow} — the live journey: 4–7 chapter() cards and say() captions that follow the brief's "what to show" list (after any explore recraft). Author every wait()/hold at steady pace — the video's direction.pace scales them, so never pad waits to slow the tour or trim them to speed it; wrap one routine stretch in pace('brisk') … pace() if it needs to move faster than the rest. Use robust Playwright selectors from the flow analysis (getByRole/getByLabel/getByText), preferring the hop/route that matches each chapter. For pointer-reactive canvases, use the analysis recipes (mouse drag/wheel on the canvas box). If the app source is in this workspace, read it to confirm labels and routes; otherwise mark guessed selectors with // TODO(verify selector) and keep each step guarded (isVisible().catch(() => false)). Never fill login email/password inside flow() — the kit signs in off camera (session + saved credentials) before the screencast starts; on-camera credential typing pollutes the take.
+2. ${flow} — the live journey: 4–7 chapter() cards and say() captions that follow the "what to show" list from step 0 in order — chapter titles are the beat titles verbatim (the part before " — "), and each beat's how-path is the click/hover/type/drag sequence to script. Author every wait()/hold at steady pace — the video's direction.pace scales them, so never pad waits to slow the tour or trim them to speed it; wrap one routine stretch in pace('brisk') … pace() if it needs to move faster than the rest. Use robust Playwright selectors from the flow analysis (getByRole/getByLabel/getByText), preferring the hop/route that matches each chapter. For pointer-reactive canvases, use the analysis recipes (mouse drag/wheel on the canvas box). If the app source is in this workspace, read it to confirm labels and routes; otherwise mark guessed selectors with // TODO(verify selector) and keep each guessed step guarded (isVisible().catch(() => false))${guided ? ' — never steps the reviewer showed, which are required' : ''}. Never fill login email/password inside flow() — the kit signs in off camera (session + saved credentials) before the screencast starts; on-camera credential typing pollutes the take.
 3. ${narration} — intro, outro, one line per chapter/say title and per plate id; why-not-clicks, ≤28 words.
 Plate type guide (type — when: shape); vary the set, one proof plate at most per fact, never two of the same type back to back:
 ${plateTypeGuide()}
 Build the script on the story spine below: every beat lands in the place it names, in order. Only use proof (stats, quotes, logos) that the brief provides. Keep the brief's tone and must-say/avoid lists. Do not record or render — the reviewer approves the script in Studio first.`,
+    'guided-script': `The reviewer just showed a NEW tour of "${video.slug}" in a real browser. Rebuild the script around it, so the next bot recording follows their journey.
+${guidedSource}
+Also read ${skillPath}/authoring.md, ${briefPath}, ${config}, ${flow} (the current script — reuse its working selectors, waits and helpers where the tour visits the same screens) and ${narration}.
+${guidedCraft}
+Write:
+1. ${flow} — the optimised journey as chapter()/say() beats with hardened selectors.
+2. ${briefPath} → story.mustShow — one beat per chapter, in order:
+${BEAT_GUIDE}
+3. ${narration} — intro, outro and one line per chapter/say title (why, not clicks; ≤28 words), keys matching the new titles exactly; keep lines for plates.
+4. ${config} — only what the new journey forces: interstitials[].before must name a chapter title that still exists (move or drop plates whose chapter is gone), and record.startUrl if the tour started elsewhere. Leave plate copy, brand and direction alone.
+Do not record or render — Studio records with the bot next.`,
+    'take-recraft': `The bot just recorded the tour for "${video.slug}". Recraft the scenario around what actually happened on camera — the take is final, so this is about words, not the journey.
+Read ${timeline} (when every chapter/say landed and how long each beat ran), ${liveMeta}, ${narration}, ${flow}, ${briefPath}${guided ? `, and ${guidedMd} (the reviewer's original walk)` : ''}.
+Decide and edit:
+1. ${narration} — fit every chapter/say line to the time its beat is on screen in the take (about 2.6 spoken words per second, leave a breath before the next beat; never longer than the beat). Describe what the viewer actually sees in the take — the data, the result of each action — and why it matters. Keys stay exactly as they are.
+2. ${briefPath} → story.mustShow — make each beat's how-path match the route the bot really took (labels, order, data), so the brief documents the recorded journey.
+Edit only ${narration} and ${briefPath}. Never edit ${flow}, chapter/say titles or ${config}: that would invalidate the take.`,
+    'own-take': `The reviewer recorded the tour of "${video.slug}" themselves and chose to keep THEIR recording as the take. It is final — this is about words and plates, not the journey.
+Read ${timeline} (chapter marks: label is the chapter title, t when its card starts, dur how long the card shows; click/type marks show what happened when), ${liveMeta} (capture.cuts are paused stretches already cut out), ${guidedMd} (the reviewer's walk: every step, the screens and data they showed), ${narration}, ${briefPath} and ${config}.
+Decide and edit:
+1. ${narration} — intro, outro and one line per chapter, keyed EXACTLY by the chapter labels in ${timeline} (verbatim, same capitalisation). Fit each line to its beat: from that chapter's t to the next chapter's t (about 2.6 spoken words per second, leave a breath; never longer than the beat). Describe what the viewer sees — the data, the result of each action — and why it matters, never the clicks. Drop lines whose key is no longer a chapter or plate; keep plate lines.
+2. ${briefPath} → story.mustShow — one beat per chapter, in order, with the how-path the reviewer actually took:
+${BEAT_GUIDE}
+3. ${config} — interstitials[].before must name a chapter label that exists in ${timeline}: move or drop plates whose chapter is gone. Leave plate copy, brand and direction alone unless a plate no longer fits the story.
+Never edit ${flow}, ${timeline}, ${liveMeta} or any video file: the take is final.`,
     critic: `Read ${critic} (or run critic findings). Apply high-confidence narration and plate improvements to ${narration} and ${config} for "${video.slug}". Do not re-record. Follow the product-walkthrough-video skill hard rules.`,
     'capture-repair': `CAPTURE STALLED for "${video.slug}". The recorder aborted because the flow stopped making progress. Your job is a surgical fix so the next record can pass — then stop (Studio will re-record once).
 
@@ -453,7 +534,7 @@ FIRST infer the smallest sufficient scope from the note, then make a coherent ch
 - Plates: ${config} open, close and interstitials copy/structure/placement.
 - Brand direction: ${config} → direction colors/logo/camera/cursor/keys/motion. Use only captured lockups and brand-derived colors.
 - Timing/pacing: narration line speed, chapter/step holds, plate motion timing, and transition duration in the appropriate VIDEO-LOCAL source.
-- Journey/recording: ${flow} navigation/selectors only when the requested story changes what the viewer must see.
+- Journey/recording: ${flow} navigation/selectors only when the requested story changes what the viewer must see. When the journey changes, rewrite ${join(video.dir, 'brief.json')} → story.mustShow to match (beat shape: Title — why it matters · how: click “Label” in the <region> → <move>; strongest screen first).
 
 Scope rules:
 1. A broad note ("make it tighter", "improve the whole story", "warmer voice and calmer pacing") may coordinate several domains.
@@ -469,9 +550,29 @@ ${singlePlate}
 Studio will inspect exactly which sources changed, present the relevant review surface, and wait for human approval before rendering.`,
   };
 
-  const storyGoals = new Set(['draft', 'branch', 'script', 'narration', 'plates', 'critic', 'full']);
+  const storyGoals = new Set(['explore', 'draft', 'branch', 'script', 'narration', 'plates', 'critic', 'full', 'guided-script', 'take-recraft', 'own-take']);
   const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video))) : '';
-  return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, spine, extra].filter(Boolean).join('\n\n').trim();
+  const device = DEVICE_GOALS.has(goal) ? deviceLine(video.config) : '';
+  return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, device, spine, extra].filter(Boolean).join('\n\n').trim();
+}
+
+const DEVICE_GOALS = new Set(['explore', 'draft', 'branch', 'script', 'guided-script', 'take-recraft', 'own-take', 'capture-repair', 'full', 'plates', 'scene']);
+
+/** What the take records, so flows, selectors and plate copy fit that layout and frame. */
+export function deviceLine(config = {}) {
+  const p = captureProfile(config);
+  const out = outputFrame(config);
+  const shape = out.format === 'portrait' ? `a vertical ${out.width}×${out.height} video` : `a ${out.width}×${out.height} video`;
+  const lines = [`Recording device: ${describeCapture(p)}, delivered as ${shape}. Set in video.config.json → record.viewport / record.device and output.format — do not change the size, device or shape; the reviewer picks them in Studio (a density tip from the flow analysis may still set record.deviceScaleFactor).`];
+  if (p.mobile || p.touch) {
+    lines.push(
+      'This is the MOBILE layout: navigation often sits behind a menu button, tables become cards, hover does not exist. Explore and write the flow for what this layout shows — open menus explicitly, prefer taps (click) over hovers, keep scrolls short, and never assume a desktop sidebar.',
+    );
+  }
+  if (out.format === 'portrait') {
+    lines.push('Plates and captions render in a tall frame: keep plate titles short (≤5 words per line), lists to ≤4 items, and captions to one short line.');
+  }
+  return lines.join('\n');
 }
 
 function readBrief(video) {
@@ -731,12 +832,46 @@ export function startImprove(video, goal, opts = {}) {
   return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve' });
 }
 
+/** Exploring is interactive (many look → decide → move rounds), so it gets a long leash. */
+const EXPLORE_TIMEOUT_MS = Number(process.env.WALKTHROUGH_EXPLORE_TIMEOUT_MS) || 20 * 60 * 1000;
+
+/**
+ * The explore agent walks the live product through the browse session and writes the journey
+ * (brief.json → story.mustShow) plus explore-journey.md. Shell access is required (force).
+ */
+export function startExplore(video, { note = '', url = null } = {}) {
+  const prompt = buildPrompt(video, 'explore', note, { url });
+  const job = newJob({ kind: 'improve', goal: 'explore', slug: video.slug, prompt });
+  const outDir = join(video.out, 'studio-jobs');
+  const before = readBrief(video)?.story?.mustShow || [];
+  const startedAt = Date.now();
+  stopBrowseSession(video);
+  return launchAgent(job, {
+    prompt,
+    outDir,
+    force: true,
+    retryLabel: 'Explore',
+    timeoutMs: EXPLORE_TIMEOUT_MS,
+    onClose: () => stopBrowseSession(video),
+    onDone: () => {
+      const map = readBrowseMap(video);
+      if (!map?.screens?.length || Date.parse(map.startedAt) < startedAt - 1000) {
+        return 'The agent finished without exploring the product (no browse session was used).';
+      }
+      const after = readBrief(video)?.story?.mustShow || [];
+      if (!after.length) return 'The agent explored but left “What to show, in order” empty.';
+      job.explored = { screens: map.screens.length, moves: map.moves.length, changed: JSON.stringify(after) !== JSON.stringify(before) };
+      return '';
+    },
+  });
+}
+
 /**
  * Spawn the preferred agent CLI on `prompt`, stream its output into `job`, and settle the job on
  * exit. `onDone(job, { code })` runs after a clean exit and may flip the job to failed by
  * returning a message. Shared by improve/draft jobs and the brief draft.
  */
-function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null } = {}) {
+function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null, onClose = null } = {}) {
   mkdirSync(outDir, { recursive: true });
   const workspace = workspaceRoot();
   writePromptArtifacts(job, outDir, workspace);
@@ -794,6 +929,11 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
   }
   child.on('close', (code, signal) => {
     if (timer) clearTimeout(timer);
+    try {
+      onClose?.(job);
+    } catch {
+      /* cleanup must not mask the job result */
+    }
     job.exitCode = code;
     job.finishedAt = new Date().toISOString();
     if (job.cancelRequested || signal === 'SIGTERM' || signal === 'SIGKILL') {
@@ -1068,6 +1208,7 @@ export function startBriefDraft({ description, startUrl, language = 'en' } = {})
 const STEP_OPENING = {
   plates: 'Checking which plates need a fresh render',
   record: 'Opening the app and starting the screen recording',
+  guide: 'Opening a browser and the Recorder window — nothing is filmed until you press Start recording',
   produce: 'Planning the cut, then writing the master video',
   audio: 'Fitting the voice, then the music, then the mix',
   music: 'Composing a music bed to the length of this cut',
@@ -1160,6 +1301,9 @@ function startRecordWithRepair(video, extraArgs = []) {
     let captureAttempt = 1;
     while (true) {
       job.phase = captureAttempt === 1 ? 'recording' : 're-recording';
+      // Marks when *this* attempt's browser starts — the UI blurs the stale
+      // on-disk preview frame from a prior attempt/take until a frame lands after it.
+      job.captureStartedAt = new Date().toISOString();
       job.activity =
         captureAttempt === 1
           ? STEP_OPENING.record
@@ -1268,12 +1412,25 @@ function startRecordWithRepair(video, extraArgs = []) {
   return job;
 }
 
+/** The in-flight job for this video+step, if one is still running. */
+export function runningKitJob(slug, step) {
+  for (const job of JOBS.values()) {
+    if (job.kind === 'kit' && job.slug === slug && job.step === step && job.status === 'running') return job;
+  }
+  return null;
+}
+
 /**
  * Run a kit CLI step as a background job (plates, produce, audio, validate, critic, …).
  * `record` auto-repairs once on capture stall when an agent is available.
  */
 export function startKitJob(video, step, extraArgs = []) {
   if (step === 'record') return startRecordWithRepair(video, extraArgs);
+
+  // Two runs of one step write the same files. Hand back the live job instead of
+  // racing it; the client watches it and sees the same result.
+  const running = runningKitJob(video.slug, step);
+  if (running) return running;
 
   const job = newJob({ kind: 'kit', step, slug: video.slug });
   job.status = 'running';

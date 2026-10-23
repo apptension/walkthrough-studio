@@ -130,6 +130,28 @@
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 11%, transparent), transparent 68%);
         opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .head { text-align: left; align-self: stretch; }
+      html[data-frame='portrait'] .tl {
+        height: auto; max-width: none; display: flex; flex-direction: column; gap: 22px; padding-left: 52px;
+      }
+      html[data-frame='portrait'] .tl-rail,
+      html[data-frame='portrait'] .tl-head { display: none; }
+      html[data-frame='portrait'] .tl::before {
+        content: ''; position: absolute; left: 17px; top: 14px; bottom: 14px; width: 3px; border-radius: 2px;
+        background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--gold) 22%, transparent));
+        transform-origin: center top; animation: tlDown 1.6s 0.5s var(--inout) both;
+      }
+      @keyframes tlDown { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+      html[data-frame='portrait'] .tl[data-n] .tl-stop,
+      html[data-frame='portrait'] .tl-stop.up,
+      html[data-frame='portrait'] .tl-stop.down {
+        position: relative; top: auto; left: auto; width: auto; translate: none; transform: none; margin: 0;
+        flex-direction: row; align-items: center;
+      }
+      html[data-frame='portrait'] .tl-dot { position: absolute; left: -46px; top: 50%; margin-top: -11px; }
+      html[data-frame='portrait'] .tl-stop .tl-card { margin: 0; text-align: left; transform-origin: 0 50%; }
+      html[data-frame='portrait'] .tl-stop .tl-card::before { display: none; }
     </style>
   </head>
   <body data-duration="6.4">

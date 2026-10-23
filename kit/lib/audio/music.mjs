@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { platePaths } from '../plates.mjs';
+import { ensurePlates, platePaths } from '../plates.mjs';
 import { duration, run } from '../produce.mjs';
 import { livePath } from '../record.mjs';
 import { audioMode, composeMusic, ensureDir } from './elevenlabs.mjs';
@@ -157,6 +157,7 @@ export async function buildMusic(video, { force = false, prompt = null } = {}) {
   const LIVE = livePath(video);
   const plates = platePaths(video);
   if (!existsSync(LIVE)) throw new Error(`Record first: node cli.mjs record ${video.slug}`);
+  await ensurePlates(video);
   if (!existsSync(plates.open.mp4) || !existsSync(plates.close.mp4)) throw new Error(`Render plates first: node cli.mjs plates ${video.slug}`);
 
   let segments = {

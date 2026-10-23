@@ -273,6 +273,17 @@ export const ICON_META = {
       "stroke-linejoin": "round"
     }
   },
+  "ui-cut": {
+    "viewBox": "0 0 24 24",
+    "file": "ui/cut.svg",
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
+  },
   "ui-depth": {
     "viewBox": "0 0 24 24",
     "file": "ui/depth.svg",
@@ -1466,6 +1477,7 @@ export const ICON_BODY = {
   "ui-close": "<circle cx=\"12\" cy=\"12\" r=\"9\"/>\n  <path d=\"m9 9 6 6M15 9l-6 6\"/>",
   "ui-compare": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/>\n  <path d=\"M12 4v16\"/>\n  <path d=\"M5 4h7v16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
   "ui-cursor": "<path d=\"M5 4.5 19.5 10.5l-6.2 2.2-2.6 6.3Z\"/>",
+  "ui-cut": "<circle cx=\"6\" cy=\"6.5\" r=\"2.35\"/>\n  <circle cx=\"6\" cy=\"17.5\" r=\"2.35\"/>\n  <path d=\"m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5\"/>",
   "ui-depth": "<path d=\"m12 3 8.5 4.75L12 12.5 3.5 7.75Z\"/>\n  <path d=\"m3.5 12 8.5 4.75L20.5 12\"/>\n  <path d=\"m3.5 16.25 8.5 4.75 8.5-4.75\"/>",
   "ui-download-fill": "<path d=\"M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z\"/>\n  <path d=\"M4.5 20h15\" stroke-linecap=\"round\"/>",
   "ui-download": "<path d=\"M12 4v11\"/>\n  <path d=\"m7.5 10.5 4.5 4.5 4.5-4.5\"/>\n  <path d=\"M4.5 20h15\"/>",

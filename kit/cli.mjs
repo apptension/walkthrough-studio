@@ -16,6 +16,14 @@
  *   node cli.mjs plates <slug> [--force]   render brand open/close (+ review.html)
  *   node cli.mjs analyze <slug> [--headed] [--url https://…] [--explore]
  *                                          map DOM controls + WebGL/canvas pointer recipes → flow-analysis.md
+ *   node cli.mjs browse <slug> look|click <ref>|…|map|stop
+ *                                          the explore agent's browser: one move per call, screens + map recorded
+ *   node cli.mjs guide <slug> [--url https://…]
+ *                                          open a browser and a Recorder window (Start recording · Mark chapter ·
+ *                                          Pause · Undo · Finish) → your take (guide/take.mp4) + guided-tour.json/.md
+ *                                          + guided-flow.mjs replay draft
+ *   node cli.mjs adopt-take <slug>         keep your guided recording as the take → live.mp4 + timeline.json,
+ *                                          guided-flow.mjs → flow.mjs (the old one kept as flow.before-take.mjs)
  *   node cli.mjs smoke <slug>              10s overlay + capture check on record.startUrl
  *   node cli.mjs record <slug> [--headed] [--pace calm|steady|brisk|quick|<0.6–2>] [--repair]
  *                                          run flow.mjs → live.mp4 + timeline.json (--pace: this take only;
@@ -35,6 +43,9 @@
  *   node cli.mjs deliver <slug>           handoff package: poster, captions, chapters, QC, deliverables/
  *   node cli.mjs export <slug> [--presets square,vertical,lite,gif]
  *                                          social / light / GIF cuts from the master → exports/
+ *   (new also takes --size <preset> and --shape landscape|portrait)
+ *   node cli.mjs size <slug> [--preset iphone-15] [--dpr 3] [--custom 1440x900@2 [--mobile]] [--shape portrait]
+ *                                          show or set the recording size / device and the video shape
  *   node cli.mjs direction <slug> [--look studio] [--zoom subtle] [--frame inset] [--cursor arrow] [--pace brisk] …
  *                                          show or set scale, logo, focus, frame detail, cursor, keys and live pace
  *   node cli.mjs motion <slug> [--energy clear] [--atmosphere aurora] [--presence 0.6] [--speed 1]
@@ -43,13 +54,13 @@
  *                                          show or set the video's plate motion; --plate writes a one-plate accent
  *   node cli.mjs story <slug> [--purpose overview|feature|onboarding|launch|sales] [--check]
  *                                          show or set the story spine; --check runs the story critique now
- *   node cli.mjs edit <slug> [--speed from-to@rate]… [--zoom t+dur@zoom:x,y]… [--keep-whole from-to]…
+ *   node cli.mjs edit <slug> [--speed from-to@rate]… [--zoom t+dur@zoom:x,y]… [--keep-whole from-to]… [--cut from-to]…
  *                            [--lens t+dur:x,y[:wxh][@zoom]]… [--lens-off t]…
  *                            [--join prev>next=style[:dur]]… [--style <plate> --set --gold=#hex …]
  *                            [--music-gain dB] [--music-offset s] [--music-mute] [--ride from-to@dB]…
  *                            [--voice-gain key=dB] [--voice-nudge key=s] [--voice-mute key]…
  *                            [--master voice=-18,plate=-22,bed=-28,target=-16,peak=-1,duck=5]
- *                            [--clear speed|zooms|keep-whole|lenses|joins|style:<plate>|audio|all]
+ *                            [--clear speed|zooms|keep-whole|lenses|cuts|joins|style:<plate>|audio|all]
  *                                          show or change the edit deck (what the Studio Editor writes):
  *                                          speed ramps, manual zooms, zoom-free windows, pinned joins, plate CSS vars
  *   node cli.mjs critic <slug> [--force] [--apply] [--apply-plates]
@@ -71,6 +82,7 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { acquireOutputLock, stepResources } from './lib/outputLock.mjs';
 import { KIT, OUT_ROOT, TEMPLATES, VIDEOS, listVideos, loadVideo } from './lib/project.mjs';
 
 const [cmd, slug, ...rest] = process.argv.slice(2);
@@ -190,8 +202,11 @@ async function main() {
     }
     case 'new': {
       if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
-        throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose …] [--description "…"] [--url https://…]');
+        throw new Error('Usage: new <kebab-slug> [--title "…"] [--purpose …] [--description "…"] [--url https://…] [--size <preset>] [--shape landscape|portrait]');
       }
+      const { applyCaptureSettings } = await import('./lib/captureSettings.mjs');
+      const sizing = { ...(opt('--size') ? { preset: opt('--size') } : {}), ...(opt('--shape') ? { output: opt('--shape') } : {}) };
+      applyCaptureSettings({}, sizing);
       const { scaffoldVideo } = await import('./lib/project.mjs');
       const { PURPOSE_IDS } = await import('./lib/narrative.mjs');
       const description = opt('--description');
@@ -212,7 +227,7 @@ async function main() {
       const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
       if (drafted) {
         const { applyDraftToConfig } = await import('./studio/shortBrief.js');
-        const next = applyDraftToConfig(cfg, drafted);
+        const next = applyCaptureSettings(applyDraftToConfig(cfg, drafted), sizing);
         if (purpose) next.purpose = purpose;
         writeFileSync(cfgPath, JSON.stringify(next, null, 2) + '\n');
         console.log(`✓ ${dir}`);
@@ -225,10 +240,10 @@ async function main() {
         console.log(`  Edit the brief, then approve it before: node cli.mjs record ${slug}`);
         return;
       }
-      if (purpose || startUrl) {
+      if (purpose || startUrl || Object.keys(sizing).length) {
         if (purpose) cfg.purpose = purpose;
         if (startUrl) cfg.record = { ...(cfg.record || {}), startUrl };
-        writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+        writeFileSync(cfgPath, JSON.stringify(applyCaptureSettings(cfg, sizing), null, 2) + '\n');
       }
       console.log(`✓ ${dir}\n  1. edit video.config.json (copy, steps, env)\n  2. write flow.mjs\n  3. node cli.mjs plates ${slug} → review the brand plates\n  4. node cli.mjs all ${slug}`);
       return;
@@ -295,14 +310,63 @@ async function main() {
       console.log(`✓ flow analysis → ${join(video.dir, 'flow-analysis.md')}`);
       if (report.explore) {
         console.log(
-          `  explore: ${report.pages?.length || 1} pages · signed-in: ${report.signedIn ? 'yes' : 'no'} · coverage ${report.coverage?.matched || 0}/${report.coverage?.total || 0}` +
-            (report.journey?.adapted ? ' · brief recrafted' : '')
+          `  explore: ${report.pages?.length || 1} pages · signed-in: ${report.signedIn ? 'yes' : 'no'} · coverage ${report.coverage?.matched || 0}/${report.coverage?.total || 0}`
         );
       }
       console.log(
         `  ${report.dom.controls.length} controls · ${report.hints.formCount || 0} forms · ${report.hints.fillableFieldCount || 0} fills · ${report.canvases.length} canvases · ${report.hints.interactiveCanvasCount} pointer-reactive`
       );
       if (report.hints.hasWebGL) console.log('  tip: WebGL detected — prefer record.deviceScaleFactor: 1 and mouse drags on the canvas');
+      return;
+    }
+    case 'browse': {
+      if (!slug) throw new Error('Usage: browse <slug> look|click <ref>|hover <ref>|type <ref> "text" [--enter]|select <ref> "option"|drag <ref> dx dy|press <key>|scroll down|up|goto <url|/path>|back|note "text"|map|stop');
+      const { browseCommand } = await import('./lib/browseSession.mjs');
+      const [sub = 'look', ...subArgs] = rest;
+      const moveArgs = [];
+      for (let i = 0; i < subArgs.length; i++) {
+        if (subArgs[i] === '--url') i += 1;
+        else if (subArgs[i] !== '--headed') moveArgs.push(subArgs[i]);
+      }
+      console.log(await browseCommand(loadVideo(slug), sub, moveArgs, { url: opt('--url'), headed: flag('--headed') }));
+      return;
+    }
+    case 'guide': {
+      if (!slug) throw new Error('Usage: guide <slug> [--url https://…]  — opens a browser; show the tour, then press Finish');
+      const { runGuidedTour, guideFiles } = await import('./lib/guidedTour.mjs');
+      const video = loadVideo(slug);
+      const tour = await runGuidedTour(video, { url: opt('--url') });
+      if (tour.finishReason === 'cancelled') throw new Error('Recording cancelled — nothing was recorded.');
+      if (!tour.stats.steps && !tour.take) {
+        throw new Error(`Nothing was recorded (${tour.finishReason}). Open the tour again, press Start recording and show the product before Finish recording.`);
+      }
+      const f = guideFiles(video);
+      console.log(
+        `✓ guided tour · ${tour.stats.steps} step${tour.stats.steps === 1 ? '' : 's'} · ${tour.stats.marks} chapter${tour.stats.marks === 1 ? '' : 's'} · ${tour.stats.activeSec}s of action (${tour.stats.idleSec}s idle dropped) → ${f.md}`
+      );
+      if (tour.stats.steps) console.log(`  replay draft → ${f.flow}`);
+      else console.log('  no clicks or typing captured — keep your recording; the bot has nothing to replay');
+      if (tour.take) {
+        const cut = tour.take.cuts ? ` · ${tour.take.cuts} pause${tour.take.cuts === 1 ? '' : 's'} cut (${tour.take.cutSec}s)` : '';
+        console.log(`  your recording → ${join(video.out, tour.take.file)} (${tour.take.seconds.toFixed(1)}s${cut})`);
+        console.log(`  next: node cli.mjs adopt-take ${slug}  (keep it)${tour.stats.steps ? '  ·  or let the bot re-record from the replay' : ''}`);
+      }
+      return;
+    }
+    case 'adopt-take': {
+      if (!slug) throw new Error('Usage: adopt-take <slug>  — keep your guided recording as the take');
+      const { adoptGuidedTake } = await import('./lib/guideTake.mjs');
+      const { assertPlayable } = await import('./lib/media.mjs');
+      const video = loadVideo(slug);
+      const r = adoptGuidedTake(video, { assertPlayable });
+      const cut = r.cuts.length ? ` · ${r.cuts.length} pause${r.cuts.length === 1 ? '' : 's'} cut` : '';
+      console.log(`✓ your recording is the take · ${r.seconds.toFixed(1)}s · ${r.chapters.length} chapter${r.chapters.length === 1 ? '' : 's'} (${r.chapters.join(' · ')})${cut}`);
+      console.log(`  ${join(video.out, 'live.mp4')} · timeline.json${r.flow ? ' · flow.mjs = your steps' : ' · flow.mjs unchanged (no steps captured)'}`);
+      return;
+    }
+    case 'browse-daemon': {
+      const { runBrowseDaemon } = await import('./lib/browseSession.mjs');
+      await runBrowseDaemon(loadVideo(slug), { url: opt('--url'), headed: flag('--headed') });
       return;
     }
     case 'smoke': {
@@ -489,7 +553,10 @@ async function main() {
     }
     case 'validate': {
       const { validate } = await import('./lib/validate.mjs');
-      validate(loadVideo(slug));
+      const { ensurePlates } = await import('./lib/plates.mjs');
+      const video = loadVideo(slug);
+      await ensurePlates(video);
+      validate(video);
       return;
     }
     case 'captions': {
@@ -520,6 +587,47 @@ async function main() {
       const ids = (opt('--presets') || Object.keys(EXPORT_PRESETS).join(',')).split(',').map((s) => s.trim()).filter(Boolean);
       await buildExports(loadVideo(slug), ids);
       return;
+    }
+    case 'size': {
+      if (!slug) {
+        throw new Error(
+          'Usage: size <slug> [--preset desktop-fhd|laptop-1536|laptop-1440|laptop-1280|ipad-portrait|ipad-landscape|iphone-15|pixel-8]\n' +
+            '       [--dpr 1|2|3] [--custom WxH[@dpr]] [--mobile] [--shape landscape|portrait]'
+        );
+      }
+      const { applyCaptureSettings, captureSettings } = await import('./lib/captureSettings.mjs');
+      const pathCfg = join(VIDEOS, slug, 'video.config.json');
+      const body = {};
+      if (opt('--preset')) body.preset = opt('--preset');
+      if (opt('--dpr')) body.dpr = Number(opt('--dpr'));
+      if (opt('--custom')) {
+        const m = /^(\d+)x(\d+)(?:@([123]))?$/.exec(opt('--custom'));
+        if (!m) throw new Error('--custom takes WxH or WxH@dpr, e.g. 1440x900@2');
+        Object.assign(body, { preset: 'custom', width: Number(m[1]), height: Number(m[2]), dpr: m[3] ? Number(m[3]) : 2, mobile: flag('--mobile'), touch: flag('--mobile') });
+      }
+      if (opt('--shape')) body.output = opt('--shape');
+      if (Object.keys(body).length) {
+        const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+        writeFileSync(pathCfg, JSON.stringify(applyCaptureSettings(current, body), null, 2) + '\n');
+      }
+      const video = loadVideo(slug);
+      const briefPath = join(video.dir, 'brief.json');
+      const brief = existsSync(briefPath) ? JSON.parse(readFileSync(briefPath, 'utf8')) : {};
+      const s = captureSettings(video, { brief, mode: brief.capture?.mode === 'guided' ? 'guided' : 'agent' });
+      const st = s.space.plannedStage;
+      console.log(`Recording   ${s.current.description}`);
+      console.log(`Video       ${s.output.width}×${s.output.height} ${s.output.format}`);
+      console.log(`Stage       ${st.mode} · ${st.w}×${st.h} at ${st.x},${st.y}`);
+      if (s.space.take) {
+        console.log(`Last take   ${s.space.take.width}×${s.space.take.height}${s.space.takeMatches ? ' — matches' : ' — differs: re-record before produce'}`);
+      }
+      console.log('\nSizes (best first):');
+      for (const o of s.options) {
+        const mark = o.id === s.current.id && o.width === s.current.width && o.height === s.current.height ? '●' : ' ';
+        console.log(`  ${mark} ${o.id.padEnd(15)} ${`${o.width}×${o.height} @${o.dpr}x`.padEnd(16)} ${o.reason}`);
+      }
+      if (Object.keys(body).length && !s.space.takeMatches) console.log('\n→ re-record: node cli.mjs record ' + slug);
+      break;
     }
     case 'direction': {
       if (!slug) {
@@ -661,7 +769,7 @@ async function main() {
     case 'edit': {
       if (!slug) {
         throw new Error(
-          'Usage: edit <slug> [--speed from-to@rate]… [--zoom t+dur@zoom:x,y]… [--keep-whole from-to]…\n' +
+          'Usage: edit <slug> [--speed from-to@rate]… [--zoom t+dur@zoom:x,y]… [--keep-whole from-to]… [--cut from-to]…\n' +
             '       [--lens t+dur:x,y[:wxh][@zoom]]… [--lens-off t]…\n' +
             '       [--join prev>next=style[:dur]]… [--style <plate> --set --var=value …]\n' +
             '       [--music-gain dB] [--music-offset s] [--music-mute] [--ride from-to@dB]…\n' +
@@ -680,8 +788,9 @@ async function main() {
       const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
       const LIVE = join(video.out, 'live.mp4');
       const liveDur = existsSync(LIVE) ? duration(LIVE) : Infinity;
-      const viewport = cfg.record?.viewport || {};
-      const opts = { liveDur, width: viewport.width || 1920, height: viewport.height || 1080, styles: TRANSITION_STYLES };
+      const { captureProfile } = await import('./lib/capturePresets.mjs');
+      const cap = captureProfile(cfg);
+      const opts = { liveDur, width: cap.width, height: cap.height, styles: TRANSITION_STYLES };
       const all = (name) => args.flatMap((a, i) => (a === name && args[i + 1] ? [args[i + 1]] : []));
       const num = (v, what) => {
         const n = Number(v);
@@ -698,12 +807,13 @@ async function main() {
         else if (clear === 'keep-whole') deck = patchEdit(deck, { zoomSkips: [] }, opts);
         else if (clear === 'lenses') deck = patchEdit(deck, { lenses: [], lensOff: [] }, opts);
         else if (clear === 'audio') deck = patchEdit(deck, { audio: null }, opts);
+        else if (clear === 'cuts') deck = patchEdit(deck, { cuts: [] }, opts);
         else if (clear === 'joins') deck = patchEdit(deck, { transitions: {} }, opts);
         else if (clear.startsWith('style:')) {
           const target = plateTarget(cfg, clear.slice(6));
           if (!target) throw new Error(`No plate "${clear.slice(6)}"`);
           delete target.style;
-        } else throw new Error('--clear expects speed|zooms|keep-whole|lenses|audio|joins|style:<plate>|all');
+        } else throw new Error('--clear expects speed|zooms|keep-whole|lenses|cuts|audio|joins|style:<plate>|all');
         changed = true;
       }
       const speed = [...deck.speed];
@@ -720,6 +830,13 @@ async function main() {
         const m = spec.match(/^([\d.]+)\+([\d.]+)@([\d.]+)(?::([\d.]+),([\d.]+))?$/);
         if (!m) throw new Error(`--zoom expects t+dur@zoom[:x,y] (got ${spec})`);
         zooms.push({ t: num(m[1], 'zoom t'), dur: num(m[2], 'zoom dur'), zoom: num(m[3], 'zoom level'), ...(m[4] ? { x: num(m[4], 'x'), y: num(m[5], 'y') } : {}) });
+        changed = true;
+      }
+      const cuts = [...(deck.cuts || [])];
+      for (const spec of all('--cut')) {
+        const m = spec.match(/^([\d.]+)-([\d.]+)$/);
+        if (!m) throw new Error(`--cut expects from-to (got ${spec})`);
+        cuts.push({ from: num(m[1], 'from'), to: num(m[2], 'to') });
         changed = true;
       }
       const zoomSkips = [...deck.zoomSkips];
@@ -797,7 +914,7 @@ async function main() {
         }
         touchAudio({ master });
       }
-      if (changed) deck = patchEdit(deck, { speed, zooms, zoomSkips, lenses, lensOff, transitions, audio }, opts);
+      if (changed) deck = patchEdit(deck, { speed, zooms, zoomSkips, lenses, lensOff, transitions, audio, cuts }, opts);
       const stylePlate = opt('--style');
       if (stylePlate) {
         const target = plateTarget(cfg, stylePlate, { create: true });
@@ -829,6 +946,7 @@ async function main() {
       }
       for (const z of deck.zooms) console.log(`· zoom ${z.id} at ${z.t}s for ${z.dur}s · ${z.zoom}× on ${z.x},${z.y}`);
       for (const s of deck.zoomSkips) console.log(`· keep whole ${s.from}s–${s.to}s`);
+      for (const c of deck.cuts) console.log(`· cut ${c.from}s–${c.to}s`);
       for (const l of deck.lenses) console.log(`· magnifier ${l.id} at ${l.t}s for ${l.dur}s · ${l.w}×${l.h} on ${l.x},${l.y}${l.zoom ? ` · ${l.zoom}×` : ''}`);
       const heard = compactAudio(deck.audio);
       if (heard?.music) console.log(`· music ${heard.music.mute ? 'off' : `${heard.music.gainDb || 0} dB`}${heard.music.offset ? ` · slip ${heard.music.offset}s` : ''}${(heard.music.rides || []).map((r) => ` · ride ${r.from}–${r.to}s ${r.gainDb}dB`).join('')}`);
@@ -980,7 +1098,28 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+/** Claim the outputs this command writes, so two runs can never interleave into the same files. */
+function lockOutputs() {
+  if (!slug || !stepResources(cmd).length) return { release() {} };
+  let video;
+  try {
+    video = loadVideo(slug);
+  } catch {
+    return { release() {} }; // let the command report the bad slug itself
+  }
+  return acquireOutputLock(video, cmd);
+}
+
+async function runLocked() {
+  const lock = lockOutputs();
+  try {
+    await main();
+  } finally {
+    lock.release();
+  }
+}
+
+runLocked().catch((err) => {
   console.error(`✗ ${err.message}`);
   process.exitCode = 1;
 });

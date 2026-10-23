@@ -48,6 +48,11 @@ test('keeps master, live take, sources and versions; drops bake and plate mp4s',
   assert.ok(!names.includes('live.mp4'));
   assert.ok(!names.some((n) => n.startsWith('versions/')));
 
+  const auto = planCleanup(root, { slug: 'demo', keepPipeline: true }).files.map((file) => file.name);
+  for (const kept of ['brand-open.mp4', 'plate-capabilities.mp4', 'plates/open.html', 'demo.silent.mp4', 'live-clean.mp4', 'overlays/bake/x.mov']) {
+    assert.ok(!auto.includes(kept), `post-produce cleanup must keep ${kept}`);
+  }
+
   applyCleanup(plan);
   assert.equal(existsSync(join(root, 'audio-premaster.wav')), false);
   assert.equal(existsSync(join(root, 'overlays', 'bake', 'x.mov')), false);

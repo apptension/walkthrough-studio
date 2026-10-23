@@ -9,7 +9,7 @@ export function marksForProgram({ chapters = [], captureMarks = [] } = {}) {
 }
 
 export function programSourceForStep({ step, hasLive, liveUrl, hasDelivery, deliveryUrl } = {}) {
-  if (step === 'record' && hasLive && liveUrl) return { src: liveUrl, play: true, preserveTime: false };
+  if ((step === 'record' || step === 'adopt') && hasLive && liveUrl) return { src: liveUrl, play: true, preserveTime: false };
   if ((step === 'produce' || step === 'audio' || step === 'deliver') && hasDelivery && deliveryUrl) {
     return { src: deliveryUrl, play: false, preserveTime: step !== 'produce' };
   }

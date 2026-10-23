@@ -112,6 +112,21 @@
         color: var(--text);
         font-weight: 600;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .bloom { width: 1000px; height: 900px; margin: -450px 0 0 -500px; }
+      html[data-frame='portrait'] .copy-exit { top: 44%; padding: 0 64px; }
+      html[data-frame='portrait'] .lockup { animation-name: liftTall; }
+      @keyframes liftTall {
+        from { transform: translateY(-50%) scale(1); }
+        to { transform: translateY(calc(var(--open-lift-y, -210%) * 1.75)) scale(var(--open-lift-scale, 0.58)); }
+      }
+      html[data-frame='portrait'] .title { font-size: calc({{TITLE_SIZE}}px * 0.8); text-wrap: balance; }
+      html[data-frame='portrait'] .sub { font-size: 30px; max-width: none; }
+      html[data-frame='portrait'] .eyebrow { font-size: 20px; }
+      html[data-frame='portrait'] .lockup-exit {
+        width: min(var(--open-logo-width, 820px), 64vw);
+        margin-left: calc(min(var(--open-logo-width, 820px), 64vw) / -2);
+      }
     </style>
   </head>
   <body data-duration="6.4">

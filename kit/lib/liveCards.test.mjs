@@ -5,11 +5,13 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import {
   OVERLAY_PRESET_IDS,
+  autoBackdropHex,
   cardId,
   chapterChrome,
   parseCardId,
   patchOverlays,
   renderLiveCardHtml,
+  resolveBackdrop,
   resolveOverlays,
   saveLiveCardCopy,
 } from './liveCards.mjs';
@@ -110,10 +112,36 @@ test('patchOverlays + resolveOverlays: backdrop colour and opacity', () => {
   assert.ok(look.catalog.backdrops.some((b) => b.id === 'none'));
 });
 
+test('auto backdrop picks black or white from the brand ink', () => {
+  assert.equal(autoBackdropHex('#0a0a0a'), '#000000');
+  assert.equal(autoBackdropHex('#121412'), '#000000');
+  assert.equal(autoBackdropHex('#f7f4ee'), '#ffffff');
+  assert.equal(autoBackdropHex('#ffffff'), '#ffffff');
+  assert.equal(autoBackdropHex(null), '#000000');
+  const dark = resolveBackdrop({ backdrop: 'auto' }, { ink: '#0a0a0a' });
+  assert.equal(dark.mode, 'auto');
+  assert.equal(dark.hex, '#000000');
+  assert.equal(dark.color, 'rgba(0, 0, 0, 1)');
+  const light = resolveBackdrop({ backdrop: 'auto', backdropOpacity: 80 }, { ink: '#f4f1ea' });
+  assert.equal(light.hex, '#ffffff');
+  assert.equal(light.color, 'rgba(255, 255, 255, 0.8)');
+  assert.equal(resolveOverlays(brand, {}).paper, '#000000');
+  assert.equal(resolveOverlays({ ...brand, colors: { ...brand.colors, ink: '#f7f7f5' } }, {}).paper, '#ffffff');
+});
+
 test('renderLiveCardHtml: backdrop drives data-backdrop and --wt-backdrop', () => {
   const auto = renderLiveCardHtml(brand, 'chapter', { title: 'A', ms: 2400 });
   assert.match(auto, /data-backdrop="auto"/);
-  assert.match(auto, /--wt-backdrop: transparent;/);
+  assert.match(auto, /--wt-backdrop: rgba\(0, 0, 0, 1\);/, 'dark brand ink paints solid black');
+  assert.match(auto, /\.wt-ch:has\(\.plate-field\)\[data-backdrop='auto'\] \.dim/);
+  const light = renderLiveCardHtml(
+    { ...brand, colors: { ...brand.colors, ink: '#f7f4ee' } },
+    'caption',
+    { title: 'A', ms: 2000 }
+  );
+  assert.match(light, /data-backdrop="auto"/);
+  assert.match(light, /--wt-backdrop: rgba\(255, 255, 255, 1\);/, 'light brand ink paints solid white');
+  assert.match(light, /\.wt-cap:has\(\.plate-field\)\[data-backdrop='auto'\] \.card/);
 
   const none = renderLiveCardHtml({ ...brand, direction: { overlays: { caption: { backdrop: 'none' } } } }, 'caption', { title: 'A', ms: 2000 });
   assert.match(none, /data-backdrop="none"/);
@@ -134,8 +162,8 @@ test('renderLiveCardHtml: backdrop drives data-backdrop and --wt-backdrop', () =
   assert.match(custom, /data-backdrop="color"/);
   assert.match(custom, /--wt-backdrop: rgba\(255, 136, 0, 1\);/);
   // The CSS that paints it ships inline with the card, so the bake renders it too.
-  assert.match(custom, /\.wt-cap\[data-backdrop='color'\] \.card \{[^}]*background: var\(--wt-backdrop\)/);
-  assert.match(role, /\.wt-ch\[data-backdrop='color'\] \.dim \{[^}]*background: var\(--wt-backdrop\)/);
+  assert.match(custom, /\.wt-cap\[data-backdrop='color'\] \.card,[\s\S]*?background: var\(--wt-backdrop\)/);
+  assert.match(role, /\.wt-ch\[data-backdrop='color'\] \.dim,[\s\S]*?background: var\(--wt-backdrop\)/);
 });
 
 test('renderLiveCardHtml: chapter and caption fill templates with data-edit', () => {
@@ -264,6 +292,7 @@ test('resolveOverlays + renderLiveCardHtml: a chapter’s own background wins fo
   assert.match(ch1, /data-backdrop="color"/);
   assert.match(ch1, /--wt-backdrop: rgba\(5, 5, 5, 1\);/);
   assert.match(ch2, /data-backdrop="auto"/);
+  assert.match(ch2, /--wt-backdrop: rgba\(0, 0, 0, 1\);/, 'a chapter set back to auto still paints the brand paper');
   assert.match(ch2, /class="wt wt-ch atm-none /);
   assert.match(ch1, /class="wt wt-ch atm-waves /);
   const cap2 = renderLiveCardHtml(b, 'caption', { chapterNo: 2, chapterTitle: 'B', title: 'C', ms: 2000 });

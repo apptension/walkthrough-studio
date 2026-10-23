@@ -471,6 +471,14 @@
             0 0 12px color-mix(in srgb, var(--gold) 10%, transparent);
         }
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .compose { justify-content: flex-start; }
+      html[data-frame='portrait'] .flood,
+      html[data-frame='portrait'] .flood[data-n],
+      html[data-frame='portrait'] .flood[data-n][data-mode] { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-rows: 1fr; gap: 14px; }
+      html[data-frame='portrait'] .flood[data-n="3"],
+      html[data-frame='portrait'] .flood[data-n="2"],
+      html[data-frame='portrait'] .flood[data-n="1"] { grid-template-columns: 1fr; }
     </style>
   </head>
   <body data-duration="{{DUR}}">

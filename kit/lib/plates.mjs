@@ -14,7 +14,7 @@ import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { DELIVERY } from './format.mjs';
+import { DELIVERY, outputFrame } from './format.mjs';
 import { FPS } from './motion.mjs';
 import { motionCssVars, resolveMotion, withMotion } from './plateMotion.mjs';
 import { TEMPLATES, brandReadiness } from './project.mjs';
@@ -117,7 +117,13 @@ const writeIfChanged = (path, content) => {
  * Write plate HTML with the brand atmosphere + plate runtime injected and the editor's style
  * variables appended last so they win the cascade — templates stay pristine.
  */
-const writePlateHtml = (path, html, brand, style) => writeIfChanged(path, injectStyle(injectAtmosphere(html, brand), style));
+/** A vertical master lays every plate out on its portrait canvas (plates.css `html[data-frame]`). */
+export function withFrame(html, frame = DELIVERY) {
+  if (frame.format !== 'portrait') return html;
+  return html.replace(/<html([^>]*)>/, (m, attrs) => (/data-frame=/.test(attrs) ? m : `<html${attrs} data-frame="portrait">`));
+}
+const writePlateHtml = (path, html, brand, style, frame = DELIVERY) =>
+  writeIfChanged(path, injectStyle(injectAtmosphere(withFrame(html, frame), brand, frame), style));
 
 /** Validated per-plate CSS variables from video.config (open.style / close.style / interstitials[].style). */
 function plateStyle(it, plateId) {
@@ -1024,7 +1030,7 @@ function buildInterstitial(video, it, paths, common) {
     EYEBROW: emphasize(it.eyebrow || fallback),
     EYEBROW_RAW: escAttr(it.eyebrow || fallback),
   });
-  const write = (values) => writePlateHtml(dest.html, fill(tpl, { ...plateCommon, ...values }), plateBrand, plateStyle(it, it.id));
+  const write = (values) => writePlateHtml(dest.html, fill(tpl, { ...plateCommon, ...values }), plateBrand, plateStyle(it, it.id), outputFrame(video.config));
 
   if (it.type === 'features') {
     const items = it.items || [];
@@ -1290,9 +1296,9 @@ function buildInterstitial(video, it, paths, common) {
  * Write one interstitial's HTML (plus plates.css) into `dir/plates` for a still or a preview.
  * `brand` is a loaded brand pack; `plate` is a config entry with `type`.
  */
-export function writePreviewPlate(brand, plate, dir) {
+export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY } = {}) {
   const it = { ...plate, id: plate.id || plate.type };
-  const video = { brand, config: { interstitials: [it] }, out: dir };
+  const video = { brand, config: { interstitials: [it], output: { format: frame.format } }, out: dir };
   const paths = platePaths(video);
   mkdirSync(paths.dir, { recursive: true });
   copyFileSync(join(TEMPLATES, 'plates.css'), join(paths.dir, 'plates.css'));
@@ -1346,7 +1352,8 @@ export function buildPlates(video) {
       SUB_RAW: escAttr(openSubRaw),
     }),
     openBrand,
-    plateStyle(open, 'open')
+    plateStyle(open, 'open'),
+    outputFrame(config)
   );
 
   const close = config.close || {};
@@ -1371,7 +1378,8 @@ export function buildPlates(video) {
       PLATFORM_RAW: escAttr(platform),
     }),
     closeBrand,
-    plateStyle(close, 'close')
+    plateStyle(close, 'close'),
+    outputFrame(config)
   );
 
   for (const it of config.interstitials || []) {
@@ -1386,7 +1394,7 @@ function encoder(outPath, { width, height }) {
   const args = [
     '-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(FPS), '-i', 'pipe:0',
-    // Frames already 1920×1080 (css-scale); scale is a safety net if a plate differs
+    // Frames already at the output size (css-scale); scale is a safety net if a plate differs
     '-vf', toBt709(width, height),
     ...lossyX264(QUALITY.plate),
     '-profile:v', 'high', '-pix_fmt', 'yuv420p',
@@ -1594,8 +1602,8 @@ function assessPlateQc({ frames, snapped, reused, holdFrom, holdUntil, maxStuckO
  * Every motion frame is captured unless inside a probed-stable settle-hold window.
  * Fails hard if capture looks stuck or under-snapped (Studio/CLI cannot cache a bad plate).
  */
-async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '') {
-  const viewport = { width: DELIVERY.width, height: DELIVERY.height };
+async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '', frame = DELIVERY) {
+  const viewport = { width: frame.width, height: frame.height };
   const page = await browser.newPage({
     viewport,
     deviceScaleFactor: 2,
@@ -1939,7 +1947,7 @@ export async function renderPlates(video, { force = false, only } = {}) {
     const queue = [...jobs];
     const worker = async () => {
       for (let j = queue.shift(); j; j = queue.shift()) {
-        await renderOne(browser, j.html, j.mp4, video.brand, j.label, raster);
+        await renderOne(browser, j.html, j.mp4, video.brand, j.label, raster, outputFrame(video.config));
       }
     };
     await Promise.all(Array.from({ length: Math.min(PLATE_CONCURRENCY, jobs.length) }, worker));
@@ -1947,6 +1955,27 @@ export async function renderPlates(video, { force = false, only } = {}) {
     await browser.close();
   }
   return paths;
+}
+
+/** Plate mp4s the edit plan reads (open, close, every interstitial) that are not on disk. */
+export function missingPlates(video) {
+  const paths = platePaths(video);
+  const rows = [paths.open.mp4, paths.close.mp4, ...Object.values(paths.interstitial).map((p) => p.mp4)];
+  return rows.filter((mp4) => !existsSync(mp4));
+}
+
+/**
+ * Downstream steps (voice, music, edit plan) need the plate files. When any went missing
+ * (disk cleanup, manual delete) redraw them — the content-hash cache keeps the rest as-is.
+ */
+export async function ensurePlates(video) {
+  const missing = missingPlates(video);
+  if (!missing.length) return false;
+  console.log(`» plates · ${missing.length} plate file(s) missing — redrawing before audio`);
+  await renderPlates(video);
+  const still = missingPlates(video);
+  if (still.length) throw new Error(`Plates could not be rendered: ${still.map((p) => p.split('/').pop()).join(', ')}`);
+  return true;
 }
 
 /**

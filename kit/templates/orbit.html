@@ -141,6 +141,12 @@
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 13%, transparent), transparent 66%);
         opacity: 0; animation: fadeIn 1.2s 0.3s ease-out both, fadeOut 0.7s 5.35s var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .compose { gap: 8px; }
+      html[data-frame='portrait'] .sub { max-width: none; }
+      html[data-frame='portrait'] .legend { max-width: none; }
+      html[data-frame='portrait'] .orbit { zoom: 0.78; }
+      html[data-frame='portrait'] .bloom { left: 50%; top: 62%; width: 1000px; height: 1000px; margin: -500px 0 0 -500px; }
     </style>
   </head>
   <body data-duration="6.4">

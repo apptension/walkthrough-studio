@@ -72,6 +72,13 @@
         opacity: 0;
         animation: markIn 0.85s calc(var(--t-sub) + 0.35s) var(--expo) both;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .compose { padding: 0 52px 0 88px; }
+      html[data-frame='portrait'] .bar { left: 44px; height: 420px; margin-top: -210px; }
+      html[data-frame='portrait'] .title { max-width: none; }
+      html[data-frame='portrait'] .sub { max-width: none; }
+      html[data-frame='portrait'] .bloom { left: 50%; width: 1000px; height: 1300px; margin: -650px 0 0 -500px; }
+      html[data-frame='portrait'] .corner-logo { right: var(--mark-logo-x, 72px); bottom: var(--mark-logo-y, 120px); }
     </style>
   </head>
   <body data-duration="5.6">

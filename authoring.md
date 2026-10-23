@@ -12,6 +12,48 @@ Answer these in plain language before touching code:
 | What 2–4 things should they remember?            | `close.steps`                               |
 | What is the video for?                           | `purpose` → the story spine below           |
 
+### What to show, in order (`brief.json` → `story.mustShow`)
+
+The journey the recorder follows, one beat per entry:
+
+```
+Team capacity — see who is free this week · how: click “People” in the left sidebar → hover a capacity bar
+```
+
+- **Title** (≤5 words) is the `chapter()`/`say()` title verbatim and the narration key.
+- **Why** is one clause of viewer value; narration builds on it.
+- **How** is the path from the previous beat: exact labels in quotes, where they sit (left sidebar, top bar,
+  main area, right panel), then the move that reveals the payoff (hover, type, drag, open). Mark guesses `(verify)`.
+- Order for impact: the screen that proves the promise first, core actions next, settings/billing/admin last.
+
+The **explore agent** writes this list. It drives a live, signed-in browser one decision at a time
+(`node cli.mjs browse <slug> look | click <ref> | hover <ref> | type … | drag … | back | note … | map | stop`):
+every primary destination first (breadth), then deeper on the ones that serve the goal, reading
+screenshots to judge what looks strong. It then decides the beats and their order, writes the
+how-paths it actually walked, fills thin brief fields from what it saw, and leaves a scouting report
+in `explore-journey.md`. Every screen it looks at also lands in `flow-analysis.json/.md` with full
+selectors. The planner treats that journey as authoritative. Whoever changes the journey later keeps
+this list in sync. (Without a signed-in agent, `analyze --explore` falls back to a link crawl that
+maps routes only and never edits the brief.)
+
+**Guided tours (`brief.capture.mode: "guided"`).** Instead of the explore agent, the reviewer shows
+the journey: `node cli.mjs guide <slug>` (or "I'll show it" in the wizard, "Take over & record" in
+the Render bay) opens a real browser with a dock at the bottom — Start tour (after an off-camera
+sign-in), ◆ Mark moment (names a chapter), Undo, Pause, Finish. Every click, double/right-click,
+field fill, select, checkbox, key press, hover that reveals UI, scroll, wheel, pointer drag and
+HTML5 drop is captured with a full target descriptor and a screenshot; idle time between moves,
+paused stretches, sign-in and password values are not. The page lays out at the recording size
+(`record.viewport` + `record.device`: a phone preset gets the mobile layout, touch and its user agent; scaled to fit the screen), so boxes, click points and drag paths are the bot's CSS px 1:1; moves
+made while the dock still says "Getting ready" are kept as the tour's opening. In the replay,
+`ctx.near(locator, { x, y })` picks the duplicate the reviewer used and `ctx.spot()` places clicks
+on canvases; a shown step that cannot run fails the take instead of being skipped. The session writes `guided-tour.json/.md`
+(steps with wall-clock and idle gaps), `guided-flow.mjs` (a mechanical replay) and merges every
+visited screen into `flow-analysis`. The planner (`draft`, or `guided-script` on a re-record) then
+optimises the walk into `flow.mjs`: detours, mis-clicks and dead hovers out, the reviewer's data and
+order kept, marked moments as chapters, selectors hardened. After the bot records it,
+`take-recraft` fits narration and the `mustShow` how-paths to what the take actually shows
+(`timeline.json`), never touching `flow.mjs`.
+
 ### Story spines (`purpose`)
 
 Pick the purpose first; it decides the order of beats, where each one lives and which plates carry it.
@@ -351,6 +393,25 @@ site does not keep the session (in-memory tokens), the take stays in the visible
 keep the mouse out of it. A "Log in" link in a nav or a hidden password field is not a gate.
 `record.loginRequired` opens a visible browser only for the first take, before a session exists.
 
+### Recording size and video shape
+
+The recording size is the layout the viewer sees: `record.viewport` (CSS px) plus `record.device`
+(preset, density, mobile, touch, user agent). Studio suggests one from the brief and the reviewer's
+screen (Direction → Recording size; `node cli.mjs size <slug>` from the terminal). Explore, analyze,
+browse, the guided tour and the take all open the same device, so selectors and boxes found in one
+hold in the others.
+
+- **Desktop / laptop sizes** fill a 16:9 master when their aspect is 16:9 and sit as a window
+  otherwise. Laptop sizes show the product at a denser, "real laptop" layout.
+- **Phones and tablets** get the mobile layout: navigation behind a menu button, cards instead of
+  tables, no hover. Write the flow for that layout — open the menu explicitly, click (it lands as a
+  tap) rather than hover, keep scrolls short. In a landscape master the phone stands in the middle of
+  the frame; set `output.format: "portrait"` for a 1080×1920 master the phone nearly fills.
+- **Vertical masters** render plates and cards in the tall frame. Keep plate titles to short lines,
+  lists to ≤4 items and captions to one line.
+- Changing the size after a take asks for a re-record (Studio's freshness, `size` and `produce` say
+  so); produce keeps using the old take until then.
+
 ### Live pace
 
 Author every hold at **steady** pace and let one setting decide how fast the tour moves:
@@ -373,7 +434,7 @@ launch / social cuts; stay `steady` or `calm` for onboarding and dense screens.
 ### Cutting the take (`edit` deck)
 
 Pace shapes the *next* recording; the edit deck shapes the recording you already have, without a re-take.
-Studio → **Editor** → the speed and zoom rows under the clips (the zoom row also holds magnifiers) (or `node cli.mjs edit <slug>`). All times are seconds in `live.mp4`
+Studio → **Editor** → the speed, zoom and cut rows under the clips (the zoom row also holds magnifiers) (or `node cli.mjs edit <slug>`). All times are seconds in `live.mp4`
 (the recording's own clock), so a re-cut never moves them; only a re-record resets the deck.
 
 | Tool | Studio | CLI | Rendered as |
@@ -383,6 +444,7 @@ Studio → **Editor** → the speed and zoom rows under the clips (the zoom row 
 | Edit an auto shot | drag the striped auto block (or **Take over this zoom**) | — | the auto push-in becomes a manual one you can move, resize or remove |
 | Keep whole | drag across the zoom row → **No zoom** | `--keep-whole 120-130` | no auto zoom lands inside that window |
 | Magnifier | **Magnify** (M) at the playhead or over a selected stretch — it aims at the nearest click; drag the loupe on the stage to aim, the Inspector for strength (Auto / 1.2–2.4×) and the magnified area, the block's ends for the length. The stage draws the same loupe the render does | `--lens 55+2.5:568,961:140x24@2` | a loupe like `magnify()`: iris in and out, brand rim, sheen, shadow; auto zoom keeps clear of it |
+| Cut | **Cut** (C) at the playhead (2s) or over a selected stretch; or drag the Cut row. Drag the block's ends; ⌫ restores | `--cut 40-55` | that recording range is removed and the cut closes up; a cut inside a clip is a straight join, not a dissolve |
 | Edit a recorded magnifier | drag its striped block (or **Take over this magnifier**); ⌫ switches it off, the faded **Off** block turns it back on | `--lens-off 55.158` | the recorded `magnify` mark is left out (and replaced by your copy when you take it over) |
 | Pin a transition | click the join marker between two clips → style tile and length; **Watch the transition** replays it | `--join live>capabilities=push:0.4` | that one join uses its own style/length; the rest follow `transitions.style`. Live slices are keyed `live`, plates by id |
 | Cursor and pace | **Cursor & pace** | `direction --cursor … --pace …` | applied on the next take; the Inspector offers **Record again** |

@@ -71,6 +71,17 @@
         background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 70%);
         opacity: 0; animation: fadeIn 1.1s 0.15s ease-out both, fadeOut 0.7s 4.15s var(--exit) forwards;
       }
+      /* Vertical master */
+      html[data-frame='portrait'] .row { max-width: none; grid-template-columns: 1fr; gap: 18px; }
+      html[data-frame='portrait'] .stat {
+        min-height: 0; padding: 26px 32px; text-align: left;
+        display: grid; grid-template-columns: auto 1fr; column-gap: 28px; align-items: center;
+      }
+      html[data-frame='portrait'] .stat > .badge { grid-column: 1 / -1; margin: 0 0 14px; justify-self: start; }
+      html[data-frame='portrait'] .value { grid-row: span 2; width: auto; font-size: 84px; }
+      html[data-frame='portrait'] .label { margin-top: 0; }
+      html[data-frame='portrait'] .note { margin-top: 4px; }
+      html[data-frame='portrait'] .bloom { width: 1000px; height: 1200px; margin: -600px 0 0 -500px; }
     </style>
   </head>
   <body data-duration="5.2">

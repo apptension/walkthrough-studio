@@ -1,10 +1,12 @@
 /**
  * Zoom aim shared by the stage preview and the encode crop.
  * The centre may move until the crop meets the frame edge, and no further —
- * pixels outside the 1920×1080 frame stay hidden.
+ * pixels outside the frame stay hidden. `width`/`height` are the frame the aim lives in (the
+ * take's CSS px in the editor, reel px in the encode).
  */
 
-export function clampZoomCenter(x, y, { zoom = 1, width = 1920, height = 1080 } = {}) {
+export function clampZoomCenter(x, y, { zoom = 1, width, height } = {}) {
+  if (!(width > 0 && height > 0)) throw new Error('clampZoomCenter needs the frame width and height');
   const z = Math.max(1.001, Number(zoom) || 1);
   const halfW = width / (2 * z);
   const halfH = height / (2 * z);
@@ -31,7 +33,7 @@ export function clampZoomCenter(x, y, { zoom = 1, width = 1920, height = 1080 } 
  */
 export function zoomPreviewStyle(cx, cy, opts = {}) {
   const aim = clampZoomCenter(cx, cy, opts);
-  const { width = 1920, height = 1080, zoom = 1 } = opts;
+  const { width, height, zoom = 1 } = opts;
   const z = Math.max(1.001, Number(zoom) || 1);
   const tx = `${Number(((-aim.crop.x / width) * 100).toFixed(4))}%`;
   const ty = `${Number(((-aim.crop.y / height) * 100).toFixed(4))}%`;

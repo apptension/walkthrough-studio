@@ -8,6 +8,7 @@ import { initSelects } from './selects.js';
 import { describeJob } from './progress.js';
 import { initWorkflow } from './workflow.js';
 import { initEditor } from './editor.js';
+import { customBody, pickerOptions, screenQuery, shapeHint, stageBox, stageText, takeNote } from './captureSize.js';
 import { mountZen, zen } from './zen.js';
 import { icon } from './icons.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
@@ -16,6 +17,8 @@ import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
 import { activityThumbVisible, programPreview } from './liveWatch.js';
+import { createGuideCard } from './guideCard.js';
+import { createTakeChoice, rememberedTakeChoice } from './takeChoice.js';
 import { marksForProgram, pipelineOverlay, programSourceForStep } from './programBuild.js';
 import {
   captureSummary,
@@ -26,9 +29,12 @@ import {
   shouldEnqueue,
 } from './queueUx.js';
 import {
+  guidedBranchFor,
+  guidedSteps,
   improveGoalForStep,
   pipelineFixNote,
   shouldRunStep,
+  statusMark,
   statusesForResume,
   stepRowHtml,
 } from './pipelineUi.js';
@@ -39,6 +45,8 @@ let workflow = null;
 let editor = null;
 /** Bumps cancel in-flight Live tab show/hide animations when capture toggles quickly. */
 let liveTabGen = 0;
+/** Bumps cancel in-flight warm-up overlay fade animations when its state flips quickly. */
+let liveWarmupGen = 0;
 /** Bumps cancel overlapping Program play() handshakes (post-render double-start). */
 let programPlayGen = 0;
 const state = {
@@ -63,6 +71,10 @@ const state = {
   pipeline: null,
   /** Last failed make: `{ mode, slug, stepId, label, error, log }` — drives Retry / Fix. */
   pipelineFailure: null,
+  /** Identity of the current record attempt (`jobId:captureStartedAt`) — resets the warm-up blur per take. */
+  liveWarmupKey: null,
+  /** True while the Live pane blurs a stale on-disk frame, waiting for this take's first real frame. */
+  liveWarmingUp: false,
   motionApplied: false,
   platesPreviewed: false,
   previewingPlate: null,
@@ -774,7 +786,10 @@ Object.defineProperty(state, 'renderBusy', {
 });
 
 const PIPE_ICONS = {
+  guide: icon('walk', { size: 12 }),
+  retake: icon('pencil', { size: 12 }),
   record: icon('step-record', { size: 12 }),
+  recraft: icon('story', { size: 12 }),
   plates: icon('step-plates', { size: 12 }),
   produce: icon('step-produce', { size: 12 }),
   audio: icon('step-audio', { size: 12 }),
@@ -885,7 +900,39 @@ function syncLiveTab(view, { recording = false, repairing = false } = {}) {
   }
 }
 
-function paintLivePreview(v, { recording = false, repairing = false } = {}) {
+/** Fade the warm-up overlay in/out; mirrors syncLiveTab's generation-guarded transitionend pattern. */
+function setLiveWarmup(show) {
+  const el = $('liveWarmup');
+  if (!el) return;
+  const gen = ++liveWarmupGen;
+  if (show) {
+    el.hidden = false;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (gen === liveWarmupGen) el.classList.add('is-on');
+      })
+    );
+    return;
+  }
+  if (!el.classList.contains('is-on')) {
+    el.hidden = true;
+    return;
+  }
+  el.classList.remove('is-on');
+  const done = (ev) => {
+    if (gen !== liveWarmupGen) return;
+    if (ev && ev.target !== el) return;
+    if (ev && ev.propertyName && ev.propertyName !== 'opacity') return;
+    if (!el.classList.contains('is-on')) el.hidden = true;
+  };
+  el.addEventListener('transitionend', done);
+  setTimeout(() => {
+    el.removeEventListener('transitionend', done);
+    done();
+  }, 420);
+}
+
+function paintLivePreview(v, { recording = false, repairing = false, warmingUp = false } = {}) {
   const img = $('livePreview');
   if (!img) return;
   const view = programPreview({
@@ -897,6 +944,9 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
   });
   const onLivePane = state.monitorMode === 'live';
   const thumbOn = activityThumbVisible({ recording, repairing });
+  const warm = onLivePane && recording && warmingUp && view.show;
+  img.classList.toggle('is-warming', warm);
+  setLiveWarmup(warm);
   if (view.show && view.url) {
     img.dataset.url = view.url;
     const src = `${view.url}${view.url.includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 400)}`;
@@ -908,6 +958,7 @@ function paintLivePreview(v, { recording = false, repairing = false } = {}) {
       if (thumbOn) {
         thumb.hidden = false;
         thumb.src = src;
+        thumb.classList.toggle('is-warming', warmingUp && recording);
       } else {
         thumb.hidden = true;
         thumb.removeAttribute('src');
@@ -1521,6 +1572,7 @@ function renderActionCard(v) {
   } else if (captureBar) {
     captureBar.hidden = true;
   }
+  paintRecordChoice(v);
 
   if (state.renderBusy) {
     pill.className = 'render-pill run';
@@ -1587,6 +1639,29 @@ function renderActionCard(v) {
   paintNoVideo(action);
 }
 
+/** Re-record options: the bot replays the script, or the reviewer takes over and shows the journey. */
+function paintRecordChoice(v) {
+  const host = $('recordChoice');
+  if (!host) return;
+  const canRecord = Boolean(v && (v.hasFlow || v.freshness?.startUrl));
+  host.hidden = !canRecord || Boolean(state.renderBusy);
+  if (host.hidden) return;
+  const preferred = v.captureMode === 'guided' ? 'guided' : 'full';
+  host.querySelectorAll('[data-record-choice]').forEach((btn) => {
+    btn.classList.toggle('is-preferred', btn.dataset.recordChoice === preferred);
+  });
+  const hand = host.querySelector('[data-record-choice="guided"] em');
+  const tour = v.guidedTour;
+  if (hand) {
+    const n = (count, one) => `${count} ${one}${count === 1 ? '' : 's'}`;
+    hand.textContent = tour?.steps
+      ? `Last time: ${n(tour.steps, 'step')}${tour.marks ? ` · ${n(tour.marks, 'chapter')}` : ''}`
+      : 'Keep your take or hand it to the bot';
+  }
+  const bot = host.querySelector('[data-record-choice="full"] em');
+  if (bot) bot.textContent = v.hasFlow ? 'The bot replays the current script' : 'The bot follows the brief';
+}
+
 /** Keep the Program empty state in sync with the Render bay CTAs. */
 function paintNoVideo(action = state.action) {
   const el = $('noVideo');
@@ -1637,13 +1712,39 @@ function renderSteps(steps) {
   ol.hidden = false;
   if (idle) idle.hidden = true;
   const busy = state.jobBusy;
-  ol.innerHTML = steps
-    .map((s) => {
+  patchRows(
+    ol,
+    steps.map((s) => {
       const ico = PIPE_ICONS[s.id] || PIPE_ICONS.produce;
       const row = stepRowHtml(s, { icon: ico, actions: Boolean(state.pipelineFailure) });
-      return busy ? row.replace(/<button\b/g, '<button disabled') : row;
+      return { key: s.id, html: busy ? row.replace(/<button\b/g, '<button disabled') : row };
     })
-    .join('');
+  );
+}
+
+/**
+ * Replace only the rows whose markup changed. Rewriting the whole list restarts every running
+ * spinner and replays every settle animation, so a list repainted on each poll looks like it blinks.
+ */
+function patchRows(ol, rows) {
+  const existing = new Map([...ol.children].map((li) => [li.dataset.rowKey, li]));
+  let at = 0;
+  for (const { key, html } of rows) {
+    let li = existing.get(key);
+    if (!li || li.dataset.rowHtml !== html) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html.trim();
+      const next = tpl.content.firstElementChild;
+      next.dataset.rowKey = key;
+      next.dataset.rowHtml = html;
+      if (li) li.replaceWith(next);
+      li = next;
+    }
+    existing.delete(key);
+    if (ol.children[at] !== li) ol.insertBefore(li, ol.children[at] || null);
+    at += 1;
+  }
+  for (const stale of existing.values()) stale.remove();
 }
 
 function setStep(id, status) {
@@ -1933,13 +2034,14 @@ async function stopAllWork({ reason = 'Stopped', silent = false } = {}) {
   state.jobBusy = false;
   state.activeSurface = null;
   state.pipelineStartedAt = null;
-  // Keep a failed pipeline visible for Retry / Fix; only clear mid-run marks.
-  if (state.pipeline && !state.pipelineFailure) {
-    state.pipeline.forEach((s) => {
-      if (s.status === 'run') s.status = 'todo';
-    });
-    renderSteps(state.pipeline);
+  // A stopped run has nothing left to show; a failed one stays for Retry / Fix.
+  if (!state.pipelineFailure) {
+    state.pipeline = null;
+    renderSteps(null);
+    paintProgramBuild(pipelineOverlay({ running: false }));
   }
+  hideActivityDock();
+  if ($('renderElapsed')) $('renderElapsed').hidden = true;
   buttonBusy($('btnExport'), false);
   buttonBusy($('btnMake'), false);
   buttonBusy($('btnImprove'), false);
@@ -1979,7 +2081,7 @@ async function drainQueue() {
   const isRender = next.kind === 'make' || next.kind === 'step';
   if (isRender) {
     const fav =
-      next.kind === 'make' && next.mode === 'full'
+      next.kind === 'make' && (next.mode === 'full' || next.mode === 'guided')
         ? 'record'
         : next.kind === 'step' && next.step === 'deliver'
           ? 'export'
@@ -2055,6 +2157,7 @@ async function drainQueue() {
     buttonBusy($('btnImprove'), false);
     if (!state.queue.length) setRenderMode(false);
     if (state.video) renderActionCard(state.video);
+    if (state.pipeline) renderSteps(state.pipeline);
     updateStopButtons();
     if (state.stopRequested) {
       state.stopRequested = false;
@@ -2100,6 +2203,10 @@ function watchJob(jobId, opts = {}) {
           return;
         }
         const job = await api(`/api/jobs/${jobId}`);
+        if (signal?.aborted || state.stopRequested) {
+          finish(reject, new Error('cancelled'));
+          return;
+        }
         if (opts.quiet) {
           if (job.status === 'done') finish(resolve, job);
           else if (
@@ -2135,13 +2242,32 @@ function watchJob(jobId, opts = {}) {
         const recording = recordJob && !repairing;
         if (state.video?.slug) {
           state.video.previewUrl = state.video.previewUrl || `/media/${state.video.slug}/live-preview.jpg`;
-          paintLivePreview(state.video, { recording, repairing });
           if (recording) {
+            // A new take (or a re-take after repair) reuses the same jpg path — reset to
+            // "warming up" the moment this attempt begins so a stale frame never free-rides.
+            const attemptKey = `${jobId}:${job.captureStartedAt || job.startedAt || ''}`;
+            if (state.liveWarmupKey !== attemptKey) {
+              state.liveWarmupKey = attemptKey;
+              state.liveWarmingUp = true;
+            }
+            paintLivePreview(state.video, { recording, repairing, warmingUp: state.liveWarmingUp });
+            const baseline = Date.parse(job.captureStartedAt || job.startedAt) || 0;
+            fetch(`/media/${state.video.slug}/live-preview.json?t=${Date.now()}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((meta) => {
+                state.liveWarmingUp = !(meta?.at > baseline);
+                if (state.liveWarmupKey === attemptKey) paintLivePreview(state.video, { recording, repairing, warmingUp: state.liveWarmingUp });
+              })
+              .catch(() => {});
             fetch(`/media/${state.video.slug}/sign-in-wait.json?t=${Date.now()}`)
               .then((res) => (res.ok ? res.json() : null))
               .then((wait) => paintSignInWait(wait))
               .catch(() => paintSignInWait(null));
-          } else paintSignInWait(null);
+          } else {
+            state.liveWarmupKey = null;
+            paintLivePreview(state.video, { recording, repairing, warmingUp: false });
+            paintSignInWait(null);
+          }
         }
         if (
           job.status === 'done' ||
@@ -2162,15 +2288,32 @@ function watchJob(jobId, opts = {}) {
   });
 }
 
-function stageList(stages) {
-  return stages
-    .map(
-      (s) => `<li class="${s.state}">
-        <span class="work-mark" aria-hidden="true"></span>
-        <span class="work-copy"><strong>${escapeHtml(s.label)}</strong><em>${escapeHtml(s.detail)}</em></span>
-      </li>`
-    )
-    .join('');
+/** Update stage rows in place: the mark is swapped only when its state changes, so the ring keeps spinning. */
+function patchStageList(ol, stages) {
+  const existing = new Map([...ol.children].map((li) => [li.dataset.stageId, li]));
+  let at = 0;
+  for (const s of stages) {
+    const key = String(s.id ?? s.label);
+    let li = existing.get(key);
+    if (!li) {
+      li = document.createElement('li');
+      li.dataset.stageId = key;
+      li.innerHTML = '<span class="work-mark"></span><span class="work-copy"><strong></strong><em></em></span>';
+    }
+    existing.delete(key);
+    if (li.dataset.state !== s.state) {
+      li.dataset.state = s.state;
+      li.className = s.state;
+      li.querySelector('.work-mark').innerHTML = statusMark(s.state);
+    }
+    const label = li.querySelector('.work-copy strong');
+    const detail = li.querySelector('.work-copy em');
+    if (label.textContent !== s.label) label.textContent = s.label;
+    if (detail.textContent !== (s.detail || '')) detail.textContent = s.detail || '';
+    if (ol.children[at] !== li) ol.insertBefore(li, ol.children[at] || null);
+    at += 1;
+  }
+  for (const stale of existing.values()) stale.remove();
 }
 
 /** Fill one activity surface (render bay or session rail) from a job. */
@@ -2205,7 +2348,7 @@ function paintWork(prefix, job) {
   const stages = $(prefix === 'renderLive' ? 'renderStages' : 'sessionStages');
   if (stages) {
     stages.hidden = !view.stages.length;
-    stages.innerHTML = stageList(view.stages);
+    patchStageList(stages, view.stages);
     const active = stages.querySelector('li.run, li.fail');
     if (active) {
       const top = active.offsetTop;
@@ -2324,6 +2467,7 @@ function setMonitorMode(mode, { keepPreview = false } = {}) {
   if (liveImg) liveImg.hidden = mode !== 'live' || !liveImg.dataset.url;
   const badge = $('liveBadge');
   if (badge && mode !== 'live') badge.hidden = true;
+  if (mode !== 'live') setLiveWarmup(false);
   const player = $('player');
   if (player) {
     // Keep the element mounted for Program restore; hide it while Live owns the stage.
@@ -2696,11 +2840,18 @@ function fitFhdPreview(attempt = 0) {
     requestAnimationFrame(() => fitFhdPreview(attempt + 1));
     return;
   }
-  // Always show the full 1920×1080 delivery frame — never crop
-  const scale = Math.min(Math.max(rw, 1) / 1920, Math.max(rh, 1) / 1080);
+  // Always show the whole output frame of this video — never crop.
+  const out = state.video?.output;
+  if (out?.width && out?.height) {
+    canvas.style.setProperty('--wt-frame-w', `${out.width}px`);
+    canvas.style.setProperty('--wt-frame-h', `${out.height}px`);
+  }
+  const fw = canvas.offsetWidth || 1;
+  const fh = canvas.offsetHeight || 1;
+  const scale = Math.min(Math.max(rw, 1) / fw, Math.max(rh, 1) / fh);
   canvas.style.transform = `scale(${scale})`;
   const badge = fit.querySelector('.fhd-badge');
-  if (badge) badge.textContent = `1920×1080 · ${Math.round(scale * 100)}%`;
+  if (badge) badge.textContent = `${fw}×${fh} · ${Math.round(scale * 100)}%`;
 }
 
 function ensureFhdFitObserver() {
@@ -3151,9 +3302,46 @@ function absorbTypedAccents(el) {
   selectFieldRange(el, caret, caret);
 }
 
+/**
+ * Force pasted/dropped content to plain text. `contenteditable="plaintext-only"` already does
+ * this in current Chromium/Firefox, but Safari's support is inconsistent and the delegated
+ * `contenteditable="true"` fallback (old browsers) does not strip formatting at all — rich HTML
+ * (fonts, colors, images, tables) pasted from a doc or web page would otherwise wreck a field's
+ * markup and silently break accent parsing. Belt and braces: every browser lands on plain text.
+ */
+function insertPlainText(el, text) {
+  const clean = String(text ?? '').replace(/\r\n?/g, '\n');
+  if (!clean) return;
+  const doc = el.ownerDocument;
+  if (doc.execCommand?.('insertText', false, clean)) return;
+  const sel = doc.getSelection();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const node = doc.createTextNode(clean);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function bindPlateEditDelegation(doc) {
   if (doc.body.dataset.editDelegated === '1') return;
   doc.body.dataset.editDelegated = '1';
+  doc.body.addEventListener('paste', (e) => {
+    const el = e.target?.closest?.('[data-edit]');
+    if (!el) return;
+    e.preventDefault();
+    insertPlainText(el, e.clipboardData?.getData('text/plain'));
+  });
+  doc.body.addEventListener('drop', (e) => {
+    const el = e.target?.closest?.('[data-edit]');
+    if (!el) return;
+    e.preventDefault();
+    insertPlainText(el, e.dataTransfer?.getData('text/plain'));
+  });
   doc.body.addEventListener('input', (e) => {
     const el = e.target?.closest?.('[data-edit]');
     if (!el) return;
@@ -4544,6 +4732,7 @@ async function loadVideo(slug, { play = false } = {}) {
     renderEffects(v.motion);
     renderMotionMeta(v.motion);
     renderDirection(v.direction);
+    loadCaptureSize(slug);
     renderTransitions(v.transitions);
     renderPlateBin(v.assets);
     renderHtmlPlatePicker(v.htmlPlates || []);
@@ -4792,7 +4981,10 @@ function renderOverlays(overlays) {
   for (const slot of ['chapter', 'caption']) {
     const id = slot === 'chapter' ? 'overlayChapterBackdrop' : 'overlayCaptionBackdrop';
     const value = look[slot]?.backdrop || 'auto';
-    const choices = (look.catalog?.backdrops || []).filter((c) => c.id !== 'custom');
+    const paperName = look.paper === '#ffffff' ? 'white' : 'black';
+    const choices = (look.catalog?.backdrops || [])
+      .filter((c) => c.id !== 'custom')
+      .map((c) => (c.id === 'auto' ? { ...c, label: `Auto · ${paperName}` } : c));
     fillOverlayAtmospheres(id, value.startsWith('#') ? [...choices, { id: value, label: `Custom ${value}` }] : choices, value);
   }
   set('overlayPreset', look.preset || 'plateMatch');
@@ -5027,6 +5219,133 @@ function renderPace(direction) {
   }
 }
 
+async function loadCaptureSize(slug = state.slug) {
+  try {
+    const q = screenQuery();
+    const r = await api(`/api/video/${encodeURIComponent(slug)}/capture${q ? `?${q}` : ''}`);
+    if (state.slug && state.slug !== slug) return;
+    renderCaptureSize(r);
+  } catch {
+    if ($('sizeSection')) $('sizeSection').hidden = true;
+  }
+}
+
+function renderCaptureSize(settings) {
+  state.captureSize = settings;
+  const section = $('sizeSection');
+  if (!section) return;
+  section.hidden = false;
+  const rows = pickerOptions(settings);
+  const customOpen = !$('sizeCustom').hidden;
+  $('sizeOptions').innerHTML =
+    rows
+      .map(
+        (o) => `<button type="button" class="size-option" role="radio" aria-checked="${o.selected && !customOpen}" data-size="${escapeHtml(o.id)}" data-w="${o.width}" data-h="${o.height}" data-dpr="${o.dpr}" title="${escapeHtml(o.reason || o.label)}">
+          ${o.suggested ? '<em class="size-badge">Suggested</em>' : ''}<strong>${escapeHtml(o.title)}</strong><span>${escapeHtml(o.line)}</span></button>`,
+      )
+      .join('') +
+    `<button type="button" class="size-option" role="radio" aria-checked="${customOpen}" data-size="custom-open"><strong>Custom…</strong><span>Any width × height</span></button>`;
+  const cur = settings.current;
+  $('sizeMeta').textContent = `${cur.width}×${cur.height} @${cur.dpr}x`;
+  if (!customOpen) {
+    $('sizeW').value = cur.width;
+    $('sizeH').value = cur.height;
+    $('sizeDpr').value = String(cur.dpr);
+    $('sizeMobile').checked = Boolean(cur.mobile);
+  }
+
+  $('shapeSeg').innerHTML = settings.outputs
+    .map(
+      (f) => `<label title="${f.format === 'portrait' ? '9:16' : '16:9'} · ${f.width}×${f.height}"><input type="radio" name="shape" value="${f.format}" ${
+        f.format === settings.output.format ? 'checked' : ''
+      } /><span>${f.format === 'portrait' ? 'Vertical' : 'Landscape'}</span></label>`,
+    )
+    .join('');
+  const box = stageBox(settings.space);
+  const pv = $('sizePreview');
+  if (box) {
+    pv.style.setProperty('--frame-aspect', box.aspect);
+    pv.style.setProperty('--box-l', box.left);
+    pv.style.setProperty('--box-t', box.top);
+    pv.style.setProperty('--box-w', box.width);
+    pv.style.setProperty('--box-h', box.height);
+    pv.style.setProperty('--box-r', box.radius);
+    pv.dataset.mode = box.mode;
+  }
+  const suggested = rows.find((r) => r.suggested);
+  const hint = [stageText(settings.space), suggested && !suggested.selected && suggested.reason ? `Suggested: ${suggested.title} — ${suggested.reason}.` : '']
+    .filter(Boolean)
+    .join(' ');
+  $('sizeHint').textContent = hint;
+  const sh = shapeHint(settings);
+  $('sizeShapeHint').hidden = !sh;
+  if (sh) {
+    $('sizeShapeHint').querySelector('span').textContent = sh.text;
+    $('sizeShapeApply').textContent = sh.output === 'portrait' ? 'Make it vertical' : 'Make it landscape';
+    $('sizeShapeApply').dataset.output = sh.output;
+  }
+  const note = takeNote(settings.space);
+  $('sizeNote').hidden = !note;
+  $('sizeNote').textContent = note;
+}
+
+async function saveCaptureSize(body) {
+  try {
+    const r = await api(`/api/video/${encodeURIComponent(state.slug)}/capture`, { method: 'POST', body: { ...body, screen: state.captureSize?.screen || null } });
+    $('sizeCustom').hidden = true;
+    renderCaptureSize(r);
+    if (state.video) {
+      state.video.freshness = r.freshness;
+      state.video.output = r.output;
+    }
+    renderActionCard(state.video);
+    workflow?.render(state.video);
+    fitFhdPreview();
+    if (r.plates) renderHtmlPlatePicker(r.plates);
+    const what = body.output ? (body.output === 'portrait' ? 'Vertical 9:16 video' : 'Landscape 16:9 video') : r.current.label;
+    toast('Recording size saved', r.space.takeMatches ? what : `${what} — re-record to apply`, 'ok');
+    return r;
+  } catch (err) {
+    toast('Could not change the size', err.message || String(err), 'warn');
+    return null;
+  }
+}
+
+function wireCaptureSize() {
+  $('sizeOptions')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.size-option');
+    if (!btn) return;
+    if (btn.dataset.size === 'custom-open') {
+      $('sizeCustom').hidden = false;
+      $('sizeError').hidden = true;
+      renderCaptureSize(state.captureSize);
+      $('sizeW').focus();
+      return;
+    }
+    $('sizeCustom').hidden = true;
+    const id = btn.dataset.size;
+    saveCaptureSize(
+      id === 'screen' || id === 'custom'
+        ? { preset: id, width: Number(btn.dataset.w), height: Number(btn.dataset.h), dpr: Number(btn.dataset.dpr) }
+        : { preset: id },
+    );
+  });
+  $('sizeCustom')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const mobile = $('sizeMobile').checked;
+    const r = customBody({ width: $('sizeW').value, height: $('sizeH').value, dpr: $('sizeDpr').value, mobile, touch: mobile });
+    $('sizeError').hidden = !r.error;
+    $('sizeError').textContent = r.error || '';
+    if (r.body) saveCaptureSize(r.body);
+  });
+  $('shapeSeg')?.addEventListener('change', (e) => {
+    if (e.target?.value) saveCaptureSize({ output: e.target.value });
+  });
+  $('sizeShapeApply')?.addEventListener('click', (e) => {
+    if (e.target.dataset.output) saveCaptureSize({ output: e.target.dataset.output });
+  });
+}
+
 async function saveDirection(patch, { quiet = false } = {}) {
   try {
     const r = await api(`/api/video/${state.slug}/direction`, { method: 'PUT', body: patch });
@@ -5208,11 +5527,13 @@ function requestMake(mode) {
   const action = state.action || decideAction(v);
   const resolved = mode || action.primary?.mode || 'quick';
   const label =
-    resolved === 'full'
-      ? 'Re-record & render full'
-      : resolved === 'plates'
-        ? 'Re-render brand plates'
-        : 'Render sequence';
+    resolved === 'guided'
+      ? 'Record it yourself'
+      : resolved === 'full'
+        ? 'Re-record & render full'
+        : resolved === 'plates'
+          ? 'Re-render brand plates'
+          : 'Render sequence';
   enqueueJob({ kind: 'make', mode: resolved, label });
 }
 
@@ -5315,24 +5636,27 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
   const v = state.video?.slug === target ? state.video : target ? await api(`/api/video/${encodeURIComponent(target)}`).catch(() => null) : null;
   if (!v && !target) return;
   const resolved = mode || 'quick';
-  const record = resolved === 'full';
+  const guided = resolved === 'guided';
+  const record = resolved === 'full' || guided;
   const platesOnly = resolved === 'plates';
   const sig = signal || state.workAbort?.signal;
   const resuming = Boolean(fromStep);
 
-  const steps = platesOnly
+  let steps = platesOnly
     ? [
         { id: 'plates', label: 'Render brand plates' },
         { id: 'preview', label: 'Refresh Program' },
       ]
-    : [
-        ...(record ? [{ id: 'record', label: 'Record walkthrough' }] : []),
-        { id: 'plates', label: 'Render brand plates' },
-        { id: 'produce', label: 'Produce master video' },
-        { id: 'audio', label: 'Add voice & music' },
-        { id: 'deliver', label: 'Export handoff pack' },
-        { id: 'preview', label: 'Show in player' },
-      ];
+    : guided
+      ? guidedSteps(guidedBranchFor(fromStep, rememberedTakeChoice(target)))
+      : [
+          ...(record ? [{ id: 'record', label: 'Record walkthrough' }] : []),
+          { id: 'plates', label: 'Render brand plates' },
+          { id: 'produce', label: 'Produce master video' },
+          { id: 'audio', label: 'Add voice & music' },
+          { id: 'deliver', label: 'Export handoff pack' },
+          { id: 'preview', label: 'Show in player' },
+        ];
   state.pipeline = resuming ? statusesForResume(steps, fromStep) : steps.map((s) => ({ ...s, status: 'todo' }));
   clearPipelineFailure();
   state.pipelineStartedAt = Date.now();
@@ -5349,16 +5673,20 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
       ? 'Re-rendering brand plates'
       : resuming
         ? `Continuing from ${steps.find((s) => s.id === fromStep)?.label || fromStep}`
-        : record
-          ? 'Rendering with re-record'
-          : 'Rendering sequence';
+        : guided
+          ? 'Record it yourself'
+          : record
+            ? 'Rendering with re-record'
+            : 'Rendering sequence';
   }
   if ($('renderReason')) {
     $('renderReason').textContent = platesOnly
       ? 'Motion-safe hold probe + frame QC run on every plate. Failed QC aborts the job.'
       : resuming
         ? 'Earlier steps stay done. Retry runs from the failed step through the rest of the pipeline.'
-        : 'Live log and pipeline update here. Program refreshes when the last step finishes.';
+        : guided
+          ? 'A browser and a Recorder window open. Press Start recording, show the journey, then Finish recording. Then choose: keep your recording, or let the bot re-record your steps. Narration is fitted to the take you keep.'
+          : 'Live log and pipeline update here. Program refreshes when the last step finishes.';
   }
   paintNoVideo({
     busy: true,
@@ -5379,13 +5707,21 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
   buttonBusy($('btnNoVideoSecondary'), true);
   updateStopButtons();
 
-  const stepIds = steps.map((s) => s.id);
+  let stepIds = steps.map((s) => s.id);
   let failedStepId = null;
+  /** The take choice swaps what follows it; steps already done stay done. */
+  const switchSteps = (next, done) => {
+    steps = next;
+    stepIds = steps.map((s) => s.id);
+    state.pipeline = steps.map((s) => ({ ...s, status: done.has(s.id) ? 'done' : 'todo' }));
+    renderSteps(state.pipeline);
+  };
 
   try {
-    const produceFollows = steps.some((step) => step.id === 'produce');
-    const records = steps.some((step) => step.id === 'record');
-    for (const s of steps) {
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      const produceFollows = steps.some((step) => step.id === 'produce');
+      const records = steps.some((step) => step.id === 'record');
       if (s.id === 'preview') continue;
       // Plates do not read the take. On a re-record they run beside capture; on a
       // quick render, produce draws them beside the card bake.
@@ -5394,9 +5730,52 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
       if (sig?.aborted || state.stopRequested) throw new Error('cancelled');
       setStep(s.id, 'run');
       paintProgramBuild(pipelineOverlay({ running: true, label: s.label }));
-      setFaviconMode(s.id === 'record' ? 'record' : s.id === 'deliver' ? 'export' : 'render');
+      setFaviconMode(
+        s.id === 'record' || s.id === 'guide' || s.id === 'adopt' ? 'record' : s.id === 'retake' || s.id === 'recraft' || s.id === 'own-script' ? 'draft' : s.id === 'deliver' ? 'export' : 'render'
+      );
       try {
-        if (s.id === 'record') {
+        if (s.id === 'guide') {
+          bayGuide.show(target);
+          try {
+            await runJobPromise('guide', false, { signal: sig, slug: target });
+          } finally {
+            bayGuide.hide();
+          }
+        } else if (s.id === 'decide') {
+          setStatus('run', 'Choose your take');
+          const choice = await bayTake.ask(target, { signal: sig });
+          if (choice === 'again') {
+            setStep('decide', 'todo');
+            setStep('guide', 'todo');
+            i = stepIds.indexOf('guide') - 1;
+            continue;
+          }
+          const done = new Set(state.pipeline.filter((p) => p.status === 'done').map((p) => p.id));
+          done.add('decide');
+          switchSteps(guidedSteps(choice), done);
+          setStatus('run', choice === 'own' ? 'Keeping your recording…' : 'The bot re-records your steps…');
+          continue;
+        } else if (s.id === 'adopt') {
+          await runJobPromise('adopt-take', false, { signal: sig, slug: target });
+        } else if (s.id === 'own-script') {
+          try {
+            await runPipelineAgentGoal('own-take', target, sig);
+          } catch (err) {
+            if (isCancelError(err) || state.stopRequested) throw err;
+            // Your take is final either way; the current lines still voice, so the cut ships.
+            toast('Narration not fitted', `${err.message} — voicing the current lines`, 'warn');
+          }
+        } else if (s.id === 'retake') {
+          await runPipelineAgentGoal('guided-script', target, sig);
+        } else if (s.id === 'recraft') {
+          try {
+            await runPipelineAgentGoal('take-recraft', target, sig);
+          } catch (err) {
+            if (isCancelError(err) || state.stopRequested) throw err;
+            // The take is final either way; unfitted narration still voices, so the cut ships.
+            toast('Narration not recrafted', `${err.message} — voicing the current lines`, 'warn');
+          }
+        } else if (s.id === 'record') {
           setStep('plates', 'run');
           const forcePlates = resuming;
           const settled = await Promise.allSettled([
@@ -5471,6 +5850,7 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
     if (isCancelError(err) || state.stopRequested) {
       const running = state.pipeline?.filter((s) => s.status === 'run') || [];
       running.forEach((s) => setStep(s.id, 'todo'));
+      paintProgramBuild(pipelineOverlay({ running: false }));
       throw err;
     }
     const running = state.pipeline?.filter((s) => s.status === 'run') || [];
@@ -5510,6 +5890,28 @@ async function runMakePipeline(mode, { signal, slug: boundSlug, fromStep = null 
     state.pipelineStartedAt = null;
     renderSteps(state.pipeline);
   }
+}
+
+let bayTakeChoice = null;
+const bayTake = {
+  ask: (slug, opts) => (bayTakeChoice ||= createTakeChoice($('bayTake'), { api, escapeHtml })).ask(slug, opts),
+};
+let bayGuideCard = null;
+const bayGuide = {
+  show: (slug) => (bayGuideCard ||= createGuideCard($('bayGuide'), { api, escapeHtml })).show(slug),
+  hide: () => bayGuideCard?.hide(),
+};
+
+/** One agent pass inside a make pipeline: edit the sources, then accept the draft so the next step reads them. */
+async function runPipelineAgentGoal(goal, slug, signal) {
+  if (signal?.aborted) throw new Error('cancelled');
+  const r = await api(`/api/video/${encodeURIComponent(slug)}/improve`, { method: 'POST', body: { goal, snapshot: true } });
+  if (r.job?.status === 'needs-agent') {
+    throw new Error(r.job.message || 'Agent sign-in is required — sign in to the agent, then retry this step');
+  }
+  await watchJob(r.job.id, { surface: 'render', signal });
+  await api(`/api/video/${encodeURIComponent(slug)}/draft/approve`, { method: 'POST', body: {} }).catch(() => {});
+  if (slug === state.slug) await loadVideo(slug).catch(() => {});
 }
 
 /** @deprecated use requestMake — kept for callers */
@@ -6180,6 +6582,11 @@ function wire() {
     }
   });
   $('btnActionSecondary').onclick = () => requestMake($('btnActionSecondary').dataset.mode);
+  $('recordChoice')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-record-choice]');
+    if (!btn || btn.disabled) return;
+    requestMake(btn.dataset.recordChoice);
+  });
   $('btnNoVideoPrimary')?.addEventListener('click', () => requestMake($('btnNoVideoPrimary').dataset.mode));
   $('btnNoVideoSecondary')?.addEventListener('click', () => requestMake($('btnNoVideoSecondary').dataset.mode));
   $('actionSteps')?.addEventListener('click', (e) => {
@@ -6556,6 +6963,7 @@ function wire() {
       saveDirection({ focus: btn.dataset.focus });
     };
   });
+  wireCaptureSize();
   $('paceSeg')?.addEventListener('change', async (e) => {
     const value = e.target?.value;
     if (!value) return;
@@ -7117,6 +7525,10 @@ async function boot() {
     sel.onchange = async () => {
       const next = sel.value;
       if (!next || next === state.slug) return;
+      if (state.plateDirty && !window.confirm('This sequence has unsaved plate text edits. Switch anyway and lose them?')) {
+        sel.value = state.slug;
+        return;
+      }
       if (state.jobBusy || state.queue.length) {
         await stopAllWork({ reason: 'Stopped · sequence changed', silent: false });
       }
@@ -7127,6 +7539,11 @@ async function boot() {
         /* toast already shown in loadVideo */
       }
     };
+    window.addEventListener('beforeunload', (e) => {
+      if (!state.plateDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
     window.addEventListener('pagehide', () => {
       if (!state.jobBusy && !state.queue.length) return;
       const id = state.jobId;

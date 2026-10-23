@@ -69,6 +69,8 @@ docs/superpowers/
 videos/*
 !videos/walkthrough-studio/
 !videos/walkthrough-studio/**
+# Playwright auth state — never ship cookies / localStorage
+**/auth-session.json
 kit/brands/*
 !kit/brands/apptension/
 !kit/brands/apptension/**

@@ -6,13 +6,14 @@
 import { PURPOSE_IDS, PURPOSES } from './narrative.mjs';
 import { PLATE_TYPE_IDS, plateTypeGuide } from './plateTypes.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
+import { BEAT_GUIDE } from './journeyBeats.mjs';
 
 export const BRIEF_LENGTHS = [60, 90, 120, 180];
 
 const str = (v, max = 400) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, max));
-const lines = (v, max = 12) =>
+const lines = (v, max = 12, chars = 240) =>
   (Array.isArray(v) ? v : String(v || '').split('\n'))
-    .map((s) => str(s, 240))
+    .map((s) => str(s, chars))
     .filter(Boolean)
     .slice(0, max);
 
@@ -83,7 +84,7 @@ export function normalizeBriefDraft(raw, { brands = [], startUrl = '', language 
     story: {
       lengthSec: BRIEF_LENGTHS.includes(lengthSec) ? lengthSec : 120,
       tone: str(story.tone, 120),
-      mustShow: lines(story.mustShow, 8),
+      mustShow: lines(story.mustShow, 8, 400),
       keyMessages: lines(story.keyMessages, 6),
       mustSay: lines(story.mustSay, 8),
       avoid: lines(story.avoid, 8),
@@ -179,7 +180,7 @@ Write ONLY a JSON object with exactly this shape to the file ${outFile} (create 
   "story": {
     "lengthSec": 120,
     "tone": "three adjectives, e.g. confident, warm, plain-spoken",
-    "mustShow": ["4–7 concrete UI beats, in order, one per entry, each ≤12 words"],
+    "mustShow": ["Title — why it matters · how: click “Label” in the left sidebar → hover the result"],
     "keyMessages": ["1–4 messages the viewer should remember"],
     "mustSay": ["exact phrases, names or claims the description insists on"],
     "avoid": ["topics or words the description rules out"]
@@ -198,6 +199,7 @@ Write ONLY a JSON object with exactly this shape to the file ${outFile} (create 
 Rules:
 - Every field present; use "" or [] when the description gives nothing and discovery finds nothing. Never invent stats, quotes, logos, customer names, or credentials. Never output a password.
 - Write title, audience, outcome, tone, mustShow, keyMessages and notes in ${lang.name}. Keep product names, URLs, must-say lines, stats and quotes verbatim.
-- mustShow is the chapter list the agent will record: name the screen or control and the action, in viewing order. Fold chat noise (timestamps, author names, greetings) away; keep the intent.
+- mustShow is the journey the agent will record. Fold chat noise (timestamps, author names, greetings) away; keep the intent. When the app source is in the workspace, read its routes, nav and button labels so every how-path names real labels.
+${BEAT_GUIDE}
 - Do not create or edit any file other than ${outFile}. Do not run the recorder, the studio, or any build. Do not open browsers.`;
 }

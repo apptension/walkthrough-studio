@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { applyDirection } from './direction.mjs';
 import { loadDotEnv, refreshDotEnv } from './dotenv.mjs';
 import { DELIVERY } from './format.mjs';
+import { CAPTURE_PRESETS, DEFAULT_CAPTURE } from './capturePresets.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
 
 export { loadDotEnv, refreshDotEnv };
@@ -151,7 +152,7 @@ export function listVideos() {
 
 const DEFAULTS = {
   brand: 'walkthrough-studio',
-  record: { viewport: { width: DELIVERY.width, height: DELIVERY.height }, slowMo: 35, timeoutMs: 600000 },
+  record: { viewport: { width: CAPTURE_PRESETS[DEFAULT_CAPTURE].width, height: CAPTURE_PRESETS[DEFAULT_CAPTURE].height }, slowMo: 35, timeoutMs: 600000 },
   env: {},
 };
 

@@ -248,27 +248,38 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.34));
 }
 /* —— Backdrop (direction.overlays.<slot>.backdrop) ——
-   The solid fill *behind* the atmosphere. `auto` is whatever the rules above paint; `none`
-   clears it so only the atmosphere + copy sit over the take; `color` paints --wt-backdrop
-   (an rgba() with the chosen opacity baked in) — for a chapter that is the .dim sheet, pushed
-   under the WebGL field, for a caption it is the card's own fill. Same specificity as the
-   :has(.plate-field) rules above, so source order decides. */
+   The solid fill *behind* the atmosphere. `auto` paints --wt-backdrop, black or white from
+   the brand, so the take never shows through the WebGL field. `none` clears it. `color`
+   paints the chosen role or hex. The rgba() has the opacity baked in. These selectors
+   outrank the :has(.plate-field) rules above, which would otherwise hide the chapter sheet
+   and drop the caption card to a translucent ink wash. */
 .wt-ch[data-backdrop='none'] .dim {
   display: none !important;
 }
-.wt-ch[data-backdrop='color'] .dim {
+.wt-ch[data-backdrop='color'] .dim,
+.wt-ch[data-backdrop='auto'] .dim,
+.wt-ch:has(.plate-field)[data-backdrop='color'] .dim,
+.wt-ch:has(.plate-field)[data-backdrop='auto'] .dim {
   display: block !important;
   z-index: -1;
   background: var(--wt-backdrop);
 }
-.wt-cap[data-backdrop='none'] .card {
+.wt-cap[data-backdrop='none'] .card,
+.wt-cap:has(.plate-field)[data-backdrop='none'] .card {
   background: transparent;
 }
-.wt-cap[data-backdrop='color'] .card {
+.wt-cap[data-backdrop='color'] .card,
+.wt-cap[data-backdrop='auto'] .card,
+.wt-cap:has(.plate-field)[data-backdrop='color'] .card,
+.wt-cap:has(.plate-field)[data-backdrop='auto'] .card {
   background: var(--wt-backdrop);
 }
 .wt-cap[data-backdrop='none'] .card::before,
-.wt-cap[data-backdrop='color'] .card::before {
+.wt-cap[data-backdrop='color'] .card::before,
+.wt-cap[data-backdrop='auto'] .card::before,
+.wt-cap:has(.plate-field)[data-backdrop='none'] .card::before,
+.wt-cap:has(.plate-field)[data-backdrop='color'] .card::before,
+.wt-cap:has(.plate-field)[data-backdrop='auto'] .card::before {
   display: none;
 }
 .wt-cap .num,
@@ -558,6 +569,16 @@
   bottom: var(--cap-bottom, 40px);
   z-index: 2147483646;
   width: min(var(--cap-max, 560px), 72vw);
+}
+/* Vertical master: watched on a phone, so the caption reads larger and sits above the bottom UI. */
+html[data-frame='portrait'] .wt-cap {
+  zoom: 1.45;
+  width: min(var(--cap-max, 560px), 62vw);
+  bottom: calc(var(--cap-bottom, 40px) + 90px);
+}
+html[data-frame='portrait'] .wt-ch .content {
+  zoom: 1.3;
+  padding: 0 40px;
 }
 .wt-cap[data-seat='bottom-center'] {
   left: 50%;

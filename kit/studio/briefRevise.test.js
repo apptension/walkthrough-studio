@@ -127,3 +127,16 @@ test('access changes re-record and brand changes discover, without writing the p
   assert.equal(scrubSecrets('keep s3cret-value out', ['s3cret-value']).includes('s3cret-value'), false);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('switching who finds the journey re-runs the journey stage and the planner, and is kept on save', () => {
+  const app = { ...before.app, password: '' };
+  const agent = { ...before, app, capture: { mode: 'agent' } };
+  const guided = { ...before, app, capture: { mode: 'guided' } };
+  const plan = revisePlan(agent, guided);
+  assert.deepEqual(plan.changed.map((c) => c.field), ['captureMode']);
+  assert.ok(plan.stages.includes('analyze'));
+  assert.ok(plan.stages.includes('planner'));
+  assert.equal(nextBrief(agent, guided).capture.mode, 'guided');
+  assert.equal(nextBrief(guided, { title: 'x' }).capture.mode, 'guided');
+  assert.equal(revisePlan({ ...before, app }, { ...before, app, capture: { mode: 'agent' } }).changed.length, 0);
+});

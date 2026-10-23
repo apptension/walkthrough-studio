@@ -29,6 +29,7 @@ export function createCreationView({ dialog, escapeHtml }) {
   const stageEnd = {};
   const artifacts = new Map();
   const swatches = new Set();
+  const selfPaced = new Set();
 
   function tick() {
     const now = Date.now();
@@ -47,8 +48,11 @@ export function createCreationView({ dialog, escapeHtml }) {
     if (stage && !failed && stage !== 'ready') {
       const spent = (now - (stageStart[stage] || now)) / 1000;
       const typical = EXPECTED[stage];
-      $('wizardCreationEta').textContent =
-        spent > typical * 1.6 ? 'taking longer than usual — still working' : `this step usually takes ${about(typical)}`;
+      $('wizardCreationEta').textContent = selfPaced.has(stage)
+        ? 'at your pace'
+        : spent > typical * 1.6
+          ? 'taking longer than usual — still working'
+          : `this step usually takes ${about(typical)}`;
     }
   }
 
@@ -104,6 +108,7 @@ export function createCreationView({ dialog, escapeHtml }) {
         $('wizardBrandPreview').hidden = true;
         $('wizardBrandFont').hidden = true;
         view.querySelectorAll('[data-stage-time]').forEach((t) => (t.textContent = ''));
+        for (const id of [...selfPaced]) this.renameStage(id);
       }
       dialog.classList.add('is-creating');
       dialog.classList.remove('is-ready', 'is-failed');
@@ -133,6 +138,18 @@ export function createCreationView({ dialog, escapeHtml }) {
       });
       view.classList.toggle('is-ready', next === 'ready');
       tick();
+    },
+
+    /** Relabel a stage row (the guided tour replaces the explore agent's product map). */
+    renameStage(id, title, note) {
+      const li = view.querySelector(`[data-create-stage="${id}"]`);
+      if (!li) return;
+      li.dataset.defaultTitle ||= li.querySelector('strong')?.textContent || '';
+      li.dataset.defaultNote ||= li.querySelector('[data-stage-note]')?.textContent || '';
+      li.querySelector('strong').textContent = title || li.dataset.defaultTitle;
+      li.querySelector('[data-stage-note]').textContent = note || li.dataset.defaultNote;
+      if (title) selfPaced.add(id);
+      else selfPaced.delete(id);
     },
 
     /** Live sub-line under the active stage — the newest thing the job reported. */

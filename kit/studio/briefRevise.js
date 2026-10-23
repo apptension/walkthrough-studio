@@ -18,6 +18,7 @@ const STORY = new Set([
   'stats',
   'quotes',
   'logos',
+  'captureMode',
 ]);
 const ACCESS = new Set(['startUrl', 'appUrl', 'marketingUrl', 'loginRequired', 'sourcePath', 'notes', 'email', 'password']);
 const BRAND = new Set(['brand']);
@@ -48,6 +49,7 @@ const LABEL = {
   email: 'Demo email',
   password: 'Password',
   brand: 'Brand',
+  captureMode: 'Who finds the journey',
 };
 
 function lines(value) {
@@ -85,6 +87,7 @@ export function comparable(input = {}) {
     notes: String(app.notes || '').trim(),
     email: String(app.email || '').trim(),
     brand: String(brand.id || brand.name || '').trim(),
+    captureMode: input.capture?.mode === 'guided' ? 'guided' : 'agent',
   };
 }
 
@@ -131,7 +134,7 @@ export function revisePlan(before, after) {
   const stages = [];
   if (changed.some((key) => BRAND.has(key))) stages.push('discover');
   // Chapters (mustShow) re-run explore so unreachable beats can be recrafted before the planner.
-  if (changed.some((key) => ACCESS.has(key)) || changed.includes('mustShow')) stages.push('analyze');
+  if (changed.some((key) => ACCESS.has(key)) || changed.includes('mustShow') || changed.includes('captureMode')) stages.push('analyze');
   if (changed.some((key) => STORY.has(key))) stages.push('planner');
   return {
     changed: changed.map((field) => ({ field, label: LABEL[field] || field })),
@@ -196,6 +199,7 @@ export function nextBrief(current = {}, payload = {}) {
       ? { ...(current.brand || {}), id: brand.id, mode: brand.mode || 'existing', name: brand.name || current.brand?.name || null, url: brand.url || current.brand?.url || null }
       : current.brand,
     app,
+    capture: payload.capture?.mode ? { ...(current.capture || {}), mode: payload.capture.mode === 'guided' ? 'guided' : 'agent' } : current.capture,
     story: {
       mustShow: lines(story.mustShow ?? current.story?.mustShow),
       keyMessages: lines(story.keyMessages ?? current.story?.keyMessages),

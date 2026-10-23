@@ -68,9 +68,12 @@ export function lensGeometry(mark, { width, height }) {
     rect: point.rect,
   }));
   const size = Math.max(24, ...path.map((point) => Math.max(point.rect.w, point.rect.h)));
+  // A phone-sized reel gets a loupe in proportion; a full HD reel keeps 300–540 px.
+  const maxD = Math.min(540, even(Math.min(width, height) * 0.75));
+  const minD = Math.min(300, maxD);
   let zoom = mark.zoom ?? clamp(260 / size, 1.5, 2.4);
-  let diameter = clamp(size * zoom + 90, 300, 540);
-  if (size * zoom + 90 > 540) zoom = Math.max(1.2, (540 - 90) / size);
+  let diameter = clamp(size * zoom + 90, minD, maxD);
+  if (size * zoom + 90 > maxD) zoom = Math.max(1.2, (maxD - 90) / size);
   diameter = even(diameter);
   const { S, W, over } = glassCanvas(diameter, PAD);
   // The working canvas W holds the crop at full magnification; the crop is even, so the exact
@@ -138,7 +141,12 @@ export function lensGeometry(mark, { width, height }) {
  * 6 sample origin x · 7 sample origin y · 8 d (dist/radius) · 9 sampling factor.
  * Alpha: the same, plus 5 opacity. 3/4/6/7 first hold the entrance state, then are reused.
  */
-export function lensGraph(inputIdx, n, mark, geo, rimHex = '#F6AA1E', timing = LENS_TIMING) {
+/**
+ * The costly half: the glass itself, sampled from the take and shaded per pixel by `geq`.
+ * Ends in packed RGBA so a pre-rendered clip and an inline render hand the same bytes to
+ * the colour conversion that follows — otherwise the two paths round differently.
+ */
+export function lensOpticsChain(mark, geo, rimHex = '#F6AA1E', timing = LENS_TIMING) {
   const { S, W, over, cropW, cropX, cropY, diameter, pad = 0, cxs, cys, axs, ays } = geo;
   const G = GLASS;
   const dur = mark.dur;
@@ -196,11 +204,23 @@ export function lensGraph(inputIdx, n, mark, geo, rimHex = '#F6AA1E', timing = L
       `fillborders=left=${pad}:right=${pad}:top=${pad}:bottom=${pad}:mode=smear,`
     : '';
   return (
-    `[${inputIdx}:v]fps=30,setpts=PTS-STARTPTS,format=rgba,${extend}crop=${cropW}:${cropW}:x='${cropX}':y='${cropY}',` +
+    `fps=30,setpts=PTS-STARTPTS,format=rgba,${extend}crop=${cropW}:${cropW}:x='${cropX}':y='${cropY}',` +
     `scale=${W}:${W}:flags=lanczos,` +
     `geq=r=${channel('r', rr, G.aberration)}:g=${channel('g', gg, 0)}:b=${channel('b', bb, -G.aberration)}:a=${alpha},` +
-    `crop=${S}:${S}:${over}:${over},` +
-    `scale=${BT709_SCALE_OPTS},format=yuva420p,` +
-    `setpts=PTS+${mark.t.toFixed(3)}/TB[lens${n}]`
+    `crop=${S}:${S}:${over}:${over},format=rgba`
   );
+}
+
+/**
+ * Carrying a rendered lens to the reel: tagged BT.709 with alpha, parked at the mark's time.
+ * Split from the optics so the glass can be rendered once, cached and reused — `geq` costs
+ * seconds per lens frame, and it is the same picture every time the take has not changed.
+ */
+export function lensPlaceChain(mark) {
+  return `scale=${BT709_SCALE_OPTS},format=yuva420p,setpts=PTS+${mark.t.toFixed(3)}/TB`;
+}
+
+/** Optics plus placement in one chain — what produce builds when the glass is not pre-rendered. */
+export function lensGraph(inputIdx, n, mark, geo, rimHex = '#F6AA1E', timing = LENS_TIMING) {
+  return `[${inputIdx}:v]${lensOpticsChain(mark, geo, rimHex, timing)},${lensPlaceChain(mark)}[lens${n}]`;
 }

@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Trailers, feature walkthroughs, help videos. From your live app.</strong><br />
-  Describe the video. Studio records your real product, writes the script, narrates it in 84 languages, and hands you a 1920×1080 master.
+  Describe the video. Studio records your real product, writes the script, narrates it in 84 languages, and hands you a 1080p master — landscape 16:9 or vertical 9:16. Record the desktop app, a laptop-sized window, your own screen size, or the mobile layout on a phone or tablet.
 </p>
 
 <p align="center">
@@ -40,6 +40,7 @@ Shipping the feature is the easy part. The trailer, the walkthrough, and the hel
 Walkthrough Studio is a local desk that treats your real product as the source of truth. You write a brief. An agent drafts the script, the clicks, and the narration. Playwright records the live app. Brand plates, voice, captions, and music are rendered into one master. When the product changes, you re-record. The voice is reused, not re-bought.
 
 - **Your product plays the lead.** Live capture of the real app, not slides or mockups.
+- **Show it or let the agent explore.** Walk the tour yourself in a guided session, or let the agent scout the signed-in product and draft the journey.
 - **Agent Ready.** Cursor and Claude Code run the whole flow and edit the plain files in your repo.
 - **84 languages from one recording.** ElevenLabs narration, captions, and plate copy follow the brief.
 - **Runs on your machine.** Capture, renders, and the master never leave your disk. MIT licensed.
@@ -88,9 +89,12 @@ Pick a purpose in the brief (`overview`, `feature`, `onboarding`, `launch`, `sal
 What the agent does for you:
 
 - **Discover brand.** Logo lockup, five-color scale, type, and a motion brief from your marketing URL. Never an invented mark.
-- **Draft.** `video.config.json`, `flow.mjs`, and `narration.mjs` from a one-paragraph brief and a map of the live product's controls.
+- **Explore the live product.** A signed-in browser session (`browse`) maps controls screen by screen; the agent writes the must-show journey and hardens selectors before drafting the script.
+- **Draft.** `video.config.json`, `flow.mjs`, and `narration.mjs` from a one-paragraph brief and that product map.
 - **Improve with smart scope.** Plain-language notes. The agent picks the smallest safe scope: script, voice, plates, or brand and motion.
 - **Re-record and branch.** Redesign shipped? Re-record. Need a focused feature video? Branch it from the overview.
+
+Prefer to show the path yourself? Pick **I'll show it** in the New video wizard (or **Take over & record** in the Render bay). Studio opens a real browser with a dock — Start, Mark moment, Pause, Finish — films your take, and can keep it or replay the steps with the bot. Sign-in happens off camera so passwords never enter the recording.
 
 Everything lands as plain files in `videos/<slug>/`. Every change is a diff you can read, revert, and commit. Nothing records or renders without your approval.
 
@@ -112,7 +116,7 @@ One stage bar walks the approval chain: **Brief → Script → Direction → Rec
 
 ### Brief
 
-Describe the video in one paragraph, or fill five short steps: basics, app access, story, proof, review. Demo logins go to `kit/.env`, never into the project file.
+Describe the video in one paragraph, or fill five short steps: basics, app access, story, proof, review. Choose how capture learns the product: let the agent explore, or show the tour yourself. Demo logins go to `kit/.env`, never into the project file.
 
 <p align="center">
   <img src="docs/assets/brief.jpg?v=3" alt="New video brief: describe the video, start URL, video language" width="760" />
@@ -126,13 +130,13 @@ The rendered master, playing. Brand plates are live compositions, not frame grab
 
 ### Direction
 
-Your brand, not a template. The agent pulls logo, colors, and type from your site. You pick the atmosphere (39 live WebGL fields), title reveal, card depth, transitions, camera, and cursor.
+Your brand, not a template. The agent pulls logo, colors, and type from your site. You pick the atmosphere (39 live WebGL fields), title reveal, card depth, transitions, camera, and cursor — and the recording size: desktop, laptop, your own screen, or a phone or tablet for the mobile layout, delivered landscape or vertical.
 
 <img src="docs/assets/desk-direction.jpg?v=3" alt="Direction panel with transitions, effects, and plate previews" width="100%" />
 
 ### Editor
 
-One playhead over plates and live takes. Speed, zoom, magnify, voice, and music rows. Drag a stretch to retime, click a block to edit it.
+One playhead over plates and live takes. Speed, zoom, magnify, cut, voice, and music rows. Trim imperfect waits, cut dead air, retime a stretch, or aim a loupe — without a re-record.
 
 <img src="docs/assets/desk-editor.jpg?v=3" alt="Editor timeline with speed, zoom, and mix rows" width="100%" />
 
@@ -178,6 +182,10 @@ Everything Studio does is a CLI command. Run from `kit/`:
 ```bash
 node cli.mjs discover-brand --name Acme --url https://acme.com   # harvest site → agent authors brand pack
 node cli.mjs new billing --title "Billing" --purpose launch      # scaffold videos/billing/
+node cli.mjs size billing --preset iphone-15 --shape portrait    # record the mobile layout, deliver 9:16
+node cli.mjs browse billing look                                 # agent-driven explore of the signed-in app
+node cli.mjs guide billing                                       # you show the tour; Studio films + captures steps
+node cli.mjs adopt-take billing                                  # keep your guided recording as the take
 node cli.mjs all billing                                         # record → produce → audio → validate
 node cli.mjs deliver billing                                     # poster, SRT/VTT, chapters, QC, handoff pack
 node cli.mjs export billing --presets square,vertical,gif        # social cuts from the master
@@ -261,6 +269,12 @@ Yes. Studio saves every agent prompt so you can run it with any model, and the C
 
 **What happens when the product changes?**
 Re-record. The flow, the script, and the voice are reused. Studio marks the project out of date when sources change after the last render.
+
+**Can I record the mobile app layout?**
+Yes. Direction → Recording size (or `node cli.mjs size <slug>`) picks desktop, laptop, tablet, phone, or your screen. Phone presets use the mobile layout and touch; set the master to portrait for Reels and Shorts.
+
+**Do passwords appear in the video?**
+No. Studio signs in off camera and restores the session before the screencast. Guided tours never store password field values.
 
 ---
 

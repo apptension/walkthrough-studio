@@ -22,6 +22,7 @@ import { ATMOSPHERE_IDS, resolveMotion } from './plateMotion.mjs';
 import { countUpRuntimeSource } from './countUp.mjs';
 import { typeFitRuntimeSource } from './typeFit.mjs';
 import { GLSL_PREAMBLE } from './atmosphereGlsl.mjs';
+import { DELIVERY } from './format.mjs';
 import { labShaderSource, PROMOTED_FIELDS } from './atmosphereLab.mjs';
 
 export { GLSL_PREAMBLE };
@@ -297,8 +298,8 @@ export function atmosphereSnippet(brand, opts = {}) {
   };
   const local = opts.local === true;
   const withHooks = opts.hooks !== false;
-  const width = opts.width || 1920;
-  const height = opts.height || 1080;
+  const width = opts.width || DELIVERY.width;
+  const height = opts.height || DELIVERY.height;
   const enabled = atmo.id !== 'none';
   const c = brand.colors || {};
   const gold = rgb01(c.gold, [0.96, 0.67, 0.12]);
@@ -456,8 +457,8 @@ ${typeFitRuntimeSource()}
 }
 
 /** Inject runtime (and field canvas) into filled plate HTML — templates stay untouched. */
-export function injectAtmosphere(html, brand) {
-  const { markup, script } = atmosphereSnippet(brand);
+export function injectAtmosphere(html, brand, frame = DELIVERY) {
+  const { markup, script } = atmosphereSnippet(brand, { width: frame.width, height: frame.height });
   if (!html.includes('<div class="bg"></div>')) return html;
   let out = html.replace('<div class="bg"></div>', `<div class="bg"></div>\n      ${markup}`);
   if (out.includes('</body>')) out = out.replace('</body>', `${script}\n</body>`);

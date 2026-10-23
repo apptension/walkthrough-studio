@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertVideoCopied } from '../encode.mjs';
+import { assertPlayable } from '../media.mjs';
 import { duration, finalPath, run } from '../produce.mjs';
 import { snapshotVersion } from '../versions.mjs';
 import { compactAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice } from './desk.mjs';
@@ -106,7 +107,8 @@ export function mixAudio(video, { out } = {}) {
   if (!existsSync(metaPath)) throw new Error('produce-meta.json missing — run produce');
   const produceMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
   const { segments } = produceMeta;
-  const total = duration(source);
+  // The video stream is copied, so a broken picture would pass straight through.
+  const total = assertPlayable(source, { label: 'delivery master' });
   const duckWindows = liveWindowsFromMeta(produceMeta, video);
 
   const voicePath = join(video.out, 'voice', 'voice.json');
@@ -233,6 +235,7 @@ export function mixAudio(video, { out } = {}) {
   ];
   assertVideoCopied(muxArgs);
   run('ffmpeg', muxArgs, 'mux audio onto the delivery master (video copied)');
+  assertPlayable(tmp, { expectedSec: total, label: 'mixed master' });
   renameSync(tmp, FINAL);
   unlinkSync(premaster);
 

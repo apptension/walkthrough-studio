@@ -83,3 +83,54 @@ test('setAgentPreference pins WALKTHROUGH_AGENT and updates active provider when
     restoreAgentPreference(prev);
   }
 });
+
+test('a shown tour drives the draft; guided-script and take-recraft name their sources and limits', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'wt-guided-prompt-'));
+  try {
+    const video = {
+      slug: 'demo',
+      dir,
+      out: join(dir, 'out'),
+      config: { purpose: 'overview' },
+      brand: { dir: join(dir, 'brand'), motionBrief: 'motion-brief.md', logo: 'logo.html' },
+    };
+    assert.doesNotMatch(buildPrompt(video, 'draft'), /SHOWED this tour/);
+    writeFileSync(join(dir, 'guided-tour.json'), '{}');
+    const draft = buildPrompt(video, 'draft');
+    assert.match(draft, /SHOWED this tour/);
+    assert.match(draft, /guided-flow\.mjs/);
+    assert.match(draft, /drop detours/);
+    const script = buildPrompt(video, 'guided-script');
+    assert.match(script, /guided-tour\.md/);
+    assert.match(script, /interstitials\[\]\.before/);
+    assert.match(script, /Do not record/);
+    assert.match(script, /ctx\.near\(locator/, 'duplicates resolve to the element the reviewer used');
+    assert.match(script, /Every step the reviewer performed is required/);
+    assert.doesNotMatch(script, /Guard optional UI with isVisible/, 'no blanket guard that lets a shown step skip silently');
+    assert.match(draft, /never steps the reviewer showed/);
+    const recraft = buildPrompt(video, 'take-recraft');
+    assert.match(recraft, /timeline\.json/);
+    assert.match(recraft, /Never edit .*flow\.mjs/);
+    const own = buildPrompt(video, 'own-take');
+    assert.match(own, /keyed EXACTLY by the chapter labels/);
+    assert.match(own, /capture\.cuts/);
+    assert.match(own, /Never edit .*flow\.mjs.*timeline\.json/);
+    assert.match(own, /Recording device:/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('agent prompts name the recording device and the video shape', async () => {
+  const { deviceLine } = await import('./agentRunner.mjs');
+  const desk = deviceLine({});
+  assert.match(desk, /Desktop · 1920×1080 CSS px/);
+  assert.doesNotMatch(desk, /MOBILE layout/);
+  const phone = deviceLine({ record: { viewport: { width: 390, height: 844 }, device: { preset: 'iphone-15' } }, output: { format: 'portrait' } });
+  assert.match(phone, /iPhone · 390×844 CSS px @3x, mobile, touch/);
+  assert.match(phone, /MOBILE layout/);
+  assert.match(phone, /vertical 1080×1920 video/);
+  assert.match(phone, /tall frame/);
+});
