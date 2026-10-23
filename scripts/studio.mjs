@@ -7,6 +7,8 @@
  *   ./studio --port 4750
  *   ./studio --no-open
  *   ./studio --dev
+ *   ./studio --dev --ui-port 4758
+ *   ./studio --legacy
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
@@ -15,21 +17,25 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdout as output } from 'node:process';
 import { VERSION } from '../kit/lib/version.mjs';
+import { buildDesk, buildFresh, depsFresh, installDesk, parseStudioArgs } from './studioDesk.mjs';
 import { launchStudio } from './studioSession.mjs';
-import { box, createTheme, formatCheckRow, frameWidth, visibleWidth, wrapAnsi } from './studioDisplay.mjs';
+import {
+  createTheme,
+  formatCheckRow,
+  studioBanner,
+  visibleWidth,
+  wrapAnsi,
+} from './studioDisplay.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(ROOT, 'kit');
+const STUDIO_NEXT = join(KIT, 'studio-next');
 const MIN_NODE = [20, 0, 0];
 const MIN_NPM = [11, 17, 0];
 
-const args = process.argv.slice(2);
-const noOpen = args.includes('--no-open');
-const dev = args.includes('--dev');
-const portFlag = args.indexOf('--port');
-const port = Number(portFlag >= 0 ? args[portFlag + 1] : 4747) || 4747;
-const openSlug =
-  args.find((a, i) => !String(a).startsWith('-') && i !== portFlag + 1) || null;
+const { help, noOpen, dev, legacy, v2, port, uiPort, openSlug } = parseStudioArgs(process.argv.slice(2));
+/** 'next' (the desk) or 'legacy' (the classic desk). A desk that cannot be prepared falls back to legacy. */
+let desk = legacy ? 'legacy' : 'next';
 
 const tty = Boolean(output.isTTY);
 const c = createTheme(
@@ -83,18 +89,21 @@ function note(msg, fix) {
 }
 
 function banner() {
-  const subtitle = dev ? 'check → setup → launch → watch' : 'check → setup → launch';
-  const project = openSlug ? `   ${c.soft}·${c.reset}   ${openSlug}` : '';
+  const tags = [];
+  if (legacy) tags.push('classic');
+  if (dev) tags.push('dev');
   write();
   write(
-    box(
-      [
-        `${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}${VERSION}${c.reset}${dev ? `   ${c.accent}dev${c.reset}` : ''}`,
-        `${c.soft}${subtitle}${c.reset}${project}`,
-      ],
-      { width: frameWidth(output.columns), theme: c }
-    )
+    studioBanner({
+      theme: c,
+      version: VERSION,
+      tags,
+      columns: output.columns || 80,
+      withMark: true,
+    })
   );
+  if (openSlug) write(`${c.soft}project${c.reset}  ${openSlug}`);
+  write();
 }
 
 function footerFail(fixes) {
@@ -304,6 +313,58 @@ function ensureDeps() {
   return true;
 }
 
+/**
+ * Install and build the desk when its lockfile or sources changed. Any failure
+ * falls back to the classic desk with a note, so ./studio still opens.
+ */
+function prepareDesk() {
+  if (desk === 'legacy') {
+    row('desk', 'warn', 'classic  ·  --legacy');
+    note(
+      'The classic desk is retiring and will be removed in a later release',
+      'Run ./studio without --legacy for the new desk. Tell us what is missing.'
+    );
+    return;
+  }
+  const fallBack = (detail, fix) => {
+    desk = 'legacy';
+    row('desk', 'warn', `classic  ·  ${detail}`);
+    note("The new desk couldn't be prepared, so Studio opened the classic desk", fix);
+  };
+  if (!existsSync(join(STUDIO_NEXT, 'package.json'))) {
+    fallBack('kit/studio-next missing', 'Re-clone, or git checkout kit/studio-next');
+    return;
+  }
+  if (!depsFresh(STUDIO_NEXT)) {
+    startSpinner('desk');
+    const installed = installDesk(STUDIO_NEXT);
+    if (!installed.ok) {
+      stopSpinner('desk', 'warn', 'npm ci failed');
+      if (installed.detail) writeErr(`${c.soft}${installed.detail}${c.reset}`);
+      fallBack('packages missing', `From kit/studio-next/:  ${c.bold}npm ci${c.reset}  then run ./studio again`);
+      return;
+    }
+    clearSpinner();
+  }
+  if (dev) {
+    row('desk', 'ok', 'Vite dev server');
+    return;
+  }
+  if (buildFresh(STUDIO_NEXT)) {
+    row('desk', 'ok', 'ready');
+    return;
+  }
+  startSpinner('desk');
+  const built = buildDesk(STUDIO_NEXT);
+  if (!built.ok) {
+    stopSpinner('desk', 'warn', 'build failed');
+    if (built.detail) writeErr(`${c.soft}${built.detail}${c.reset}`);
+    fallBack('build failed', `From kit/studio-next/:  ${c.bold}npm run build${c.reset}  to see the error`);
+    return;
+  }
+  stopSpinner('desk', 'ok', 'built');
+}
+
 function ensureChromium() {
   if (chromiumReady()) {
     row('Chromium', 'ok', 'ready');
@@ -405,6 +466,9 @@ function clearSpinner() {
 async function launch() {
   await launchStudio({
     port,
+    uiPort,
+    desk,
+    studioNext: STUDIO_NEXT,
     dev,
     noOpen,
     openSlug,
@@ -429,22 +493,26 @@ async function launch() {
 
 async function main() {
   // Help
-  if (args.includes('-h') || args.includes('--help')) {
+  if (help) {
     write(`
-${c.bold}${c.accent}Walkthrough Studio${c.reset}  ${c.soft}${VERSION}${c.reset}  ${c.soft}one-command setup + launch${c.reset}
+${studioBanner({ theme: c, version: VERSION, columns: output.columns || 80 })}
 
   ${c.bold}./studio${c.reset}                      check, install if needed, open Studio
   ${c.bold}./studio${c.reset} <slug>               open a project
   ${c.bold}./studio${c.reset} --port 4750          use another port
   ${c.bold}./studio${c.reset} --no-open            start without opening a browser
-  ${c.bold}./studio${c.reset} --dev                live log, UI reload, server restart
+  ${c.bold}./studio${c.reset} --dev                live log, desk hot reload, server restart
+  ${c.bold}./studio${c.reset} --dev --ui-port 4758 dev desk on another port
+  ${c.bold}./studio${c.reset} --legacy             the classic desk (retiring)
 
-${c.soft}Dev mode prints the server log. Saving kit/studio reloads the browser${c.reset}
-${c.soft}(CSS updates in place). Saving kit/lib or kit/cli.mjs restarts the server,${c.reset}
-${c.soft}then reloads the browser. Browser warnings and errors appear in the log.${c.reset}
-${c.soft}Restart ./studio itself after changing scripts/studio.mjs.${c.reset}
+${c.soft}Studio serves the desk on --port (default 4747). ./studio installs the desk's${c.reset}
+${c.soft}packages and rebuilds it whenever kit/studio-next changes, so a git pull is enough.${c.reset}
 
-${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Claude Code for Improve jobs.${c.reset}
+${c.soft}Dev mode prints the server log and runs the desk on Vite (--ui-port, default 4748)${c.reset}
+${c.soft}with hot reload. Saving kit/lib or kit/cli.mjs restarts the server.${c.reset}
+${c.soft}Restart ./studio after changing scripts/studio.mjs.${c.reset}
+
+${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Claude Code for agent jobs.${c.reset}
 `);
     return;
   }
@@ -495,6 +563,8 @@ ${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Cl
     process.exit(1);
   }
 
+  prepareDesk();
+  if (v2 && desk === 'next') note('--v2 is now the default desk; the flag is no longer needed', '');
   ensureEnv();
   agentCheck = await checkAgents();
 

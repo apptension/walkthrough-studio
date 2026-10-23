@@ -19,6 +19,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
+import { previewCacheControl } from './livePreviewFeed.mjs';
+import { deskFile, resolveDesk } from './deskAssets.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   agentAuthStatus,
@@ -31,12 +33,13 @@ import {
   listJobs,
   setAgentPreference,
   startBriefDraft,
+  startCriticReview,
   startDiscoverBrand,
   startExplore,
   startImprove,
   startKitJob,
 } from './agentRunner.mjs';
-import { loadNarrationLines, runCritic } from './critic.mjs';
+import { loadNarrationLines, mergeAgentReview, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
 import { ZOOM_LEVELS, insetGeometry, planZooms, zoomTiming } from './camera.mjs';
 import { takeSpace, videoSpace } from './stage.mjs';
@@ -119,8 +122,8 @@ import {
   setCutReview,
   setNarrationLine,
 } from './script.mjs';
-import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, DEPTHS, ENERGIES, TITLE_REVEALS, lookVarTable, motionOverrides, patchMotion, plateLook, resolveMotion } from './plateMotion.mjs';
-import { PURPOSES, PURPOSE_IDS, critiqueStory, resolvePurpose } from './narrative.mjs';
+import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, DEPTHS, ENERGIES, TITLE_REVEALS, TITLE_REVEAL_LABELS, lookVarTable, motionOverrides, patchMotion, plateLook, resolveMotion } from './plateMotion.mjs';
+import { PURPOSES, PURPOSE_IDS, critiqueStory, resolvePurpose, withPurpose } from './narrative.mjs';
 import {
   buildLiveCards,
   listLiveCards,
@@ -160,6 +163,7 @@ import {
 } from './versions.mjs';
 
 const STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio');
+const NEXT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio-next', 'dist');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -447,6 +451,7 @@ function videoSummary(slug) {
       atmospheres: ATMOSPHERE_IDS,
       atmosphereLabels: ATMOSPHERE_LABELS,
       titleReveals: TITLE_REVEALS,
+      titleRevealLabels: TITLE_REVEAL_LABELS,
       depths: DEPTHS,
       // Look choice → plate CSS variables, so the Editor paints a change the moment it is picked.
       lookVars: lookVarTable(video.brand),
@@ -651,6 +656,7 @@ function criticSummary(video) {
     generatedAt: report.generatedAt,
     fingerprint: report.fingerprint,
     purpose: report.purpose || null,
+    agent: report.agent || null,
     high: count('high'),
     medium: count('medium'),
     low: count('low'),
@@ -2174,12 +2180,7 @@ async function handleApi(req, res, url) {
     if (!PURPOSE_IDS.includes(body.purpose)) return json(res, 400, { error: `purpose must be one of ${PURPOSE_IDS.join(', ')}` });
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
-    const next = {};
-    for (const [k, v] of Object.entries(current)) {
-      next[k] = v;
-      if (k === 'audience') next.purpose = body.purpose;
-    }
-    if (!('purpose' in next)) next.purpose = body.purpose;
+    const next = withPurpose(current, body.purpose);
     writeFileSync(pathCfg, JSON.stringify(next, null, 2) + '\n');
     const briefPath = join(video.dir, 'brief.json');
     const brief = readJsonSafe(briefPath);
@@ -2263,12 +2264,20 @@ async function handleApi(req, res, url) {
 
   if (rest === '/critic' && req.method === 'POST') {
     const body = await readBody(req).catch(() => ({}));
-    const report = await runCritic(loadVideo(slug), {
-      force: Boolean(body.force),
+    const video = loadVideo(slug);
+    const wantsAgent = body.agent === true && !body.apply && !body.applyPlates;
+    // The agent reviews the current cut, so the rule pass it seeds from must be fresh too.
+    const report = await runCritic(video, {
+      force: Boolean(body.force) || wantsAgent,
       apply: Boolean(body.apply),
       applyPlates: Boolean(body.applyPlates),
     });
-    return json(res, 200, { ok: true, report });
+    const agent = wantsAgent ? agentAuthStatus() : null;
+    const job =
+      agent?.available && agent.authenticated
+        ? startCriticReview(video, { note: body.note || '', onReport: (review) => mergeAgentReview(video, review) })
+        : null;
+    return json(res, 200, { ok: true, report, job: job ? jobPayload(job) : null });
   }
 
   if (rest === '/suggest-plates' && req.method === 'POST') {
@@ -2674,6 +2683,28 @@ function serveMedia(req, res, url) {
     return true;
   }
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
+  // The recorder renames a finished JPEG into place many times a second. Stating
+  // the size and then streaming the path races that rename: Content-Length no
+  // longer matches the body, and the browser waits forever — the Live pane
+  // freezes on the last frame that decoded. Read the bytes, then advertise
+  // their real length, and don't let a cache keep an older body.
+  const previewCache = previewCacheControl(basename(file));
+  if (previewCache) {
+    let body;
+    try {
+      body = readFileSync(file);
+    } catch {
+      json(res, 404, { error: 'missing' });
+      return true;
+    }
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Content-Length': body.length,
+      'Cache-Control': previewCache,
+    });
+    res.end(body);
+    return true;
+  }
   const st = statSync(file);
   if (mime.startsWith('video/') && req.headers.range) {
     const range = req.headers.range;
@@ -2703,29 +2734,31 @@ function serveMedia(req, res, url) {
   return true;
 }
 
-function serveStatic(req, res, url, { dev = false } = {}) {
-  let rel = url.pathname === '/' ? '/index.html' : url.pathname;
-  if (rel.includes('..')) {
+function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
+  const { bad, file, immutable } = deskFile(url.pathname, desk, { nextDist: NEXT_DIST, legacyDir: STUDIO_DIR });
+  if (bad) {
     res.writeHead(400);
     res.end('bad');
     return true;
   }
-  const file = join(STUDIO_DIR, rel.replace(/^\//, ''));
-  if (!existsSync(file) || !file.startsWith(STUDIO_DIR)) return false;
+  if (!file) return false;
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
   const raw = readFileSync(file);
-  const payload = dev && /\.html?$/i.test(file) ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
+  // The dev hub reloads the classic desk; the new desk reloads through Vite.
+  const inject = dev && desk === 'legacy' && /\.html?$/i.test(file);
+  const payload = inject ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
   const fresh = dev || /\.(html|js|css|mjs|svg)$/i.test(file);
   res.writeHead(200, {
     'Content-Type': mime,
     'Content-Length': payload.length,
-    'Cache-Control': fresh ? 'no-store' : 'public, max-age=3600',
+    'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : fresh ? 'no-store' : 'public, max-age=3600',
   });
   res.end(payload);
   return true;
 }
 
-export async function startStudio({ port = 4747, openSlug = null, dev = false } = {}) {
+export async function startStudio({ port = 4747, openSlug = null, dev = false, desk: requestedDesk = process.env.WALKTHROUGH_DESK } = {}) {
+  const desk = resolveDesk(requestedDesk, { nextDist: NEXT_DIST });
   // Surface fatal async failures — otherwise a rejected promise can kill the process with no log.
   if (!globalThis.__wtStudioHandlers) {
     globalThis.__wtStudioHandlers = true;
@@ -2746,7 +2779,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false } 
       if (url.pathname.startsWith('/media/') || url.pathname.startsWith('/version-media/')) {
         if (serveMedia(req, res, url)) return;
       }
-      if (serveStatic(req, res, url, { dev: Boolean(devHub) })) return;
+      if (serveStatic(req, res, url, { dev: Boolean(devHub), desk })) return;
       res.writeHead(404);
       res.end('Not found');
     } catch (err) {
@@ -2760,6 +2793,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false } 
   const agent = agentAuthStatus();
   console.log(`✓ Walkthrough Studio → ${url}`);
   console.log(`  agent CLI: ${formatAgentBanner(agent)}`);
+  console.log(`  desk: ${desk === 'next' ? 'new' : 'classic (retiring — the new desk is the default)'}`);
   console.log(`  videos: ${listVideos().join(', ') || '(none)'} · out: ${OUT_ROOT}`);
-  return { server, url };
+  return { server, url, desk };
 }

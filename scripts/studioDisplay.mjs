@@ -205,6 +205,81 @@ export function parseStudioBoot(text) {
       .map((part) => part.trim())
       .filter(Boolean).length;
   }
+  const deskWord = text.match(/desk:\s*(new|classic)/)?.[1] || null;
+  const desk = deskWord === 'new' ? 'next' : deskWord === 'classic' ? 'legacy' : null;
   const complete = Boolean(url && agentLine && videosLine !== null);
-  return { url, agentLine, videoCount, complete };
+  return { url, agentLine, videoCount, desk, complete };
+}
+
+/** Vite prints Local: http://127.0.0.1:PORT/ once the desk is reachable. */
+export function parseViteBoot(text) {
+  const local = text.match(/Local:\s+(https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/?)/i)?.[1] || null;
+  if (!local) return { url: null, complete: false };
+  const url = local.endsWith('/') ? local : `${local}/`;
+  return { url, complete: true };
+}
+
+/**
+ * Block-letter WALKTHROUGH / STUDIO wordmark (half-block shade mid-tones).
+ * Painted with the theme ink so NO_COLOR / dumb terminals still read cleanly.
+ */
+const STUDIO_LOGO_RAW = [
+  '█   █ █▀█ █   █ █ ▀█▀ █ █ █▀█ █▀█ █ █ █▀▀ █ █',
+  '█ █ ▓ █▀▓ ▓░  ▓▀▄  ▓░ █▀▓ ▓▀▄ █ ▓ █ ▓ ▓░█ █▀▓',
+  '▀▀▀▀▀ ▀ ▀ ▀▀▀ ▀ ▀  ▀  ▀ ▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀',
+  '█▀▀ ▀█▀ █ █ █▀▄ ▀█▀ █▀█',
+  '▀▀▓  ▓░ █ ▓ █ ▓  ▓░ █ ▓',
+  '▀▀▀  ▀  ▀▀▀ ▀▀  ▀▀▀ ▀▀▀',
+];
+
+export function studioMarkLines(theme = createTheme(false)) {
+  const paint = theme.ink || theme.soft || '';
+  const r = theme.reset || '';
+  return STUDIO_LOGO_RAW.map((line) => (paint ? `${paint}${line}${r}` : line));
+}
+
+/** Compact fallback when the terminal is too narrow for the block logo. */
+export function studioWordmark(theme = createTheme(false), { version = '', tags = [] } = {}) {
+  const tagBits = tags.filter(Boolean).map((t) => `${theme.accent}${t}${theme.reset}`);
+  const ver = version ? `  ${theme.soft}${version}${theme.reset}` : '';
+  const extra = tagBits.length ? `   ${tagBits.join('  ')}` : '';
+  return `${theme.bold}${theme.ink}Walkthrough Studio${theme.reset}${ver}${extra}`;
+}
+
+/**
+ * Banner: block logo, then a meta line (version / tags / subtitle).
+ * Falls back to the compact wordmark when the TTY is narrower than the logo.
+ */
+export function studioBanner({
+  theme = createTheme(false),
+  version = '',
+  tags = [],
+  columns = 80,
+  withMark = true,
+} = {}) {
+  const subtitle = tags.includes('classic')
+    ? `${theme.soft}classic desk · retiring · check → setup → launch${theme.reset}`
+    : `${theme.soft}one-command setup + launch${theme.reset}`;
+  const tagBits = tags.filter(Boolean).map((t) => `${theme.accent}${t}${theme.reset}`);
+  const meta = [
+    version ? `${theme.soft}${version}${theme.reset}` : '',
+    ...tagBits,
+    subtitle,
+  ]
+    .filter(Boolean)
+    .join(`  ${theme.soft}·${theme.reset}  `);
+
+  const logoWidth = visibleWidth(STUDIO_LOGO_RAW[0]);
+  if (!withMark || columns < logoWidth + 2) {
+    return [studioWordmark(theme, { version, tags }), subtitle].join('\n');
+  }
+
+  return [...studioMarkLines(theme), '', meta].join('\n');
+}
+
+/** Desk URL, including an optional project slug. */
+export function deskUrl(port, slug = null) {
+  const base = `http://127.0.0.1:${port}/`;
+  if (!slug) return base;
+  return `${base}?slug=${encodeURIComponent(slug)}`;
 }

@@ -3,12 +3,16 @@ import { test } from 'node:test';
 import {
   box,
   createTheme,
+  deskUrl,
   formatCheckRow,
   formatLog,
   frameWidth,
   parseStudioBoot,
+  parseViteBoot,
   readyCard,
   stripAnsi,
+  studioBanner,
+  studioMarkLines,
   visibleWidth,
   wrapAnsi,
 } from './studioDisplay.mjs';
@@ -106,4 +110,45 @@ test('frame width tracks the terminal and boot parsing counts videos', () => {
   assert.equal(boot.complete, true);
   assert.equal(boot.videoCount, 2);
   assert.match(boot.url, /slug=demo/);
+  assert.equal(boot.desk, null);
+});
+
+test('boot parsing reads which desk the server chose', () => {
+  const lines = (desk) =>
+    [
+      '✓ Walkthrough Studio → http://127.0.0.1:4747/',
+      '  agent CLI: ready · Cursor',
+      `  desk: ${desk}`,
+      '  videos: one · out: /tmp/videos',
+    ].join('\n');
+  assert.equal(parseStudioBoot(lines('new')).desk, 'next');
+  assert.equal(parseStudioBoot(lines('classic (retiring — the new desk is the default)')).desk, 'legacy');
+  assert.equal(parseStudioBoot(lines('new')).videoCount, 1);
+});
+
+test('vite boot parsing and desk URLs', () => {
+  const boot = parseViteBoot('  ➜  Local:   http://127.0.0.1:4748/\n  ➜  Network: use --host');
+  assert.equal(boot.complete, true);
+  assert.equal(boot.url, 'http://127.0.0.1:4748/');
+  assert.equal(parseViteBoot('still starting').complete, false);
+  assert.equal(deskUrl(4748), 'http://127.0.0.1:4748/');
+  assert.equal(deskUrl(4748, 'demo'), 'http://127.0.0.1:4748/?slug=demo');
+});
+
+test('block logo and banner stay readable', () => {
+  const mark = studioMarkLines(color).map(stripAnsi);
+  assert.equal(mark.length, 6);
+  assert.match(mark[0], /^█   █ █▀█/);
+  assert.match(mark[3], /^█▀▀ ▀█▀/);
+  const wide = stripAnsi(
+    studioBanner({ theme: color, version: '1.0.0', tags: ['classic'], columns: 80 })
+  );
+  assert.match(wide, /█▀▀ ▀█▀/);
+  assert.match(wide, /classic desk · retiring/);
+  assert.match(wide, /1\.0\.0/);
+  const narrow = stripAnsi(
+    studioBanner({ theme: plain, version: '1.0.0', tags: ['classic'], columns: 36 })
+  );
+  assert.match(narrow, /Walkthrough Studio/);
+  assert.match(stripAnsi(studioBanner({ theme: plain, version: '1.0.0', columns: 80 })), /one-command setup/);
 });
