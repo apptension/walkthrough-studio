@@ -1,7 +1,8 @@
 /**
  * Studio Editor — the cut as one timeline. Plates and live slices sit on the clips track;
- * chapter cards and captions each get their own row (lane-packed when they overlap); speed,
- * zoom, cuts, voice and music sit under those. One playhead, one transport. Playback runs the whole
+ * chapter cards and captions each get their own row; speed, zoom, cuts, voice and music
+ * sit under those. Overlapping blocks on a row stack into sub-lanes instead of painting
+ * on top of each other. One playhead, one transport. Playback runs the whole
  * cut on one clock: plates are stepped frame by frame through their own animation runtime, the
  * recording plays at the ramped rate with the planned push-ins, and joins preview their
  * transition. Everything it writes lands in video.config.json through /edit, /overlays and
@@ -3071,22 +3072,41 @@ export function initEditor(ctx) {
   }
 
   const CARD_LANE_H = 26;
+  const FX_LANE_H = 26;
 
-  /** Pack overlapping cards into sub-lanes so labels stay readable. */
-  function packCardLanes(items) {
+  /**
+   * Pack overlapping items into sub-lanes (by .t/.end) so overlapping blocks stack
+   * instead of painting on top of each other. Segments that share a .key (one zoom
+   * split across a crossfade, one ramp across two live clips) stay on the same row.
+   */
+  function packLanes(items) {
     const sorted = [...items].sort((a, b) => a.t - b.t || a.end - b.end);
-    const laneEnds = [];
+    const lanes = [];
     for (const it of sorted) {
-      let lane = laneEnds.findIndex((end) => it.t >= end - 0.04);
+      let lane = lanes.findIndex((placed) =>
+        !placed.some((p) => {
+          const overlaps = it.t < p.end - 0.04 && p.t < it.end - 0.04;
+          const same = it.key != null && p.key === it.key;
+          return overlaps && !same;
+        })
+      );
       if (lane < 0) {
-        lane = laneEnds.length;
-        laneEnds.push(it.end);
-      } else {
-        laneEnds[lane] = Math.max(laneEnds[lane], it.end);
+        lane = lanes.length;
+        lanes.push([]);
       }
+      lanes[lane].push({ t: it.t, end: it.end, key: it.key });
       it.lane = lane;
     }
-    return { items: sorted, lanes: Math.max(1, laneEnds.length || 1) };
+    return { items: sorted, lanes: Math.max(1, lanes.length || 1) };
+  }
+
+  /** Match a track's height — and the icon beside it — to how many sub-lanes it holds. */
+  function fitLane(track, headClass, lanes, { base = 30, laneH = FX_LANE_H } = {}) {
+    const h = Math.max(base, 4 + lanes * laneH);
+    track.style.height = `${h}px`;
+    const head = document.querySelector(`.etl-head.${headClass}`);
+    if (head) head.style.height = `${h}px`;
+    return h;
   }
 
   function cardOwnerAt(recT) {
@@ -3129,7 +3149,7 @@ export function initEditor(ctx) {
           };
         })
         .filter(Boolean);
-      const packed = packCardLanes(items);
+      const packed = packLanes(items);
       const h = Math.max(CARD_LANE_H, packed.lanes * CARD_LANE_H + 4);
       host.style.height = `${h}px`;
       if (head) head.style.height = `${h}px`;
@@ -3202,60 +3222,86 @@ export function initEditor(ctx) {
     const pps = ed.pps;
     const d = deckEdit();
     const sel = ed.sel;
-    const pill = (cls, seg, attrs, label, handles) =>
-      `<div class="fx ${cls}" ${attrs} style="left:${seg.a * pps}px;width:${Math.max(6, (seg.b - seg.a) * pps)}px">${handles ? '<i class="h l"></i>' : ''}<span>${label}</span>${handles ? '<i class="h r"></i>' : ''}</div>`;
+    const pill = (cls, seg, attrs, label, handles, top) =>
+      `<div class="fx ${cls}" ${attrs} style="left:${seg.a * pps}px;width:${Math.max(6, (seg.b - seg.a) * pps)}px;top:${top}px">${handles ? '<i class="h l"></i>' : ''}<span>${label}</span>${handles ? '<i class="h r"></i>' : ''}</div>`;
     const conflicts = ed.deck?.conflicts || [];
-    speedEl.innerHTML = live().exists
-      ? d.speed
-          .flatMap((r, i) => {
-            const warn = conflicts.some((c) => c.from === r.from && c.to === r.to);
-            return fxSegments(r.from, r.to).map((seg) =>
+    const speedItems = live().exists
+      ? d.speed.flatMap((r, i) => {
+          const warn = conflicts.some((c) => c.from === r.from && c.to === r.to);
+          return fxSegments(r.from, r.to).map((seg) => ({
+            key: `ramp:${i}`,
+            t: seg.a,
+            end: seg.b,
+            render: (top) =>
               pill(
                 `ramp ${r.rate < 1 ? 'slow' : 'fast'}${sel?.type === 'ramp' && sel.i === i ? ' is-sel' : ''}${warn ? ' is-warn' : ''}`,
                 seg,
                 `data-ramp="${i}" title="${fmtRate(r.rate)} · ${fmtT(r.from)}–${fmtT(r.to)} in the recording${warn ? ' · covers a chapter card' : ''}"`,
                 `${r.rate < 1 ? ICONS.slow : ICONS.speed}${fmtRate(r.rate)}`,
-                true
-              )
-            );
-          })
-          .join('')
-      : '';
+                true,
+                top
+              ),
+          }));
+        })
+      : [];
+    const speedPacked = packLanes(speedItems);
+    fitLane(speedEl, 'speed', speedPacked.lanes);
+    speedEl.innerHTML = speedPacked.items.map((it) => it.render(4 + it.lane * FX_LANE_H)).join('');
     const shots = live().exists ? ed.deck.zoomShots || [] : [];
-    zoomEl.innerHTML =
-      d.zoomSkips
-        .flatMap((s, i) =>
-          fxSegments(s.from, s.to).map((seg) =>
-            pill(`skip${sel?.type === 'skip' && sel.i === i ? ' is-sel' : ''}`, seg, `data-skip="${i}" title="No auto zoom here"`, `${ICONS.noZoom}No zoom`, true)
-          )
-        )
-        .join('') +
-      shots
-        .flatMap((s) =>
-          fxSegments(s.start, s.end).map((seg) =>
+    // Zoom skips, zoom shots, and the magnifier can all land on the same stretch of time
+    // (e.g. a manual zoom drawn over an auto one, or a magnifier under a "no zoom" skip),
+    // so pack them into lanes the same way overlapping chapter/caption cards are, rather
+    // than letting them paint on top of each other.
+    const zoomItems = [];
+    d.zoomSkips.forEach((s, i) => {
+      fxSegments(s.from, s.to).forEach((seg) => {
+        zoomItems.push({
+          key: `skip:${i}`,
+          t: seg.a,
+          end: seg.b,
+          render: (top) => pill(`skip${sel?.type === 'skip' && sel.i === i ? ' is-sel' : ''}`, seg, `data-skip="${i}" title="No auto zoom here"`, `${ICONS.noZoom}No zoom`, true, top),
+        });
+      });
+    });
+    shots.forEach((s) => {
+      fxSegments(s.start, s.end).forEach((seg) => {
+        zoomItems.push({
+          key: `shot:${shotKey(s)}`,
+          t: seg.a,
+          end: seg.b,
+          render: (top) =>
             pill(
               `shot ${s.source}${sel?.type === 'zoom' && sel.key === shotKey(s) ? ' is-sel' : ''}`,
               seg,
               `data-shot="${escapeHtml(shotKey(s))}" title="${s.source === 'auto' ? 'Auto zoom (follows the clicks) — drag to take over' : 'Your zoom'} · ${s.zoom.toFixed(2)}×"`,
               `${ICONS.zoom}${s.source === 'auto' ? 'Auto ' : ''}${s.zoom.toFixed(2)}×`,
-              s.source !== 'auto'
-            )
-          )
-        )
-        .join('') +
-      (live().exists ? lensItems() : [])
-        .flatMap((l) =>
-          fxSegments(l.t, l.t + l.dur).map((seg) =>
+              s.source !== 'auto',
+              top
+            ),
+        });
+      });
+    });
+    (live().exists ? lensItems() : []).forEach((l) => {
+      fxSegments(l.t, l.t + l.dur).forEach((seg) => {
+        zoomItems.push({
+          key: l.key,
+          t: seg.a,
+          end: seg.b,
+          render: (top) =>
             pill(
               `lens ${l.source}${sel?.type === 'lens' && sel.key === l.key ? ' is-sel' : ''}`,
               seg,
               `data-lens="${escapeHtml(l.key)}" title="${l.source === 'off' ? 'Recorded magnifier — switched off' : l.source === 'auto' ? 'Recorded magnifier — drag to take over' : 'Your magnifier'} · ${l.dur.toFixed(1)}s"`,
               `${l.source === 'off' ? ICONS.lensOff : ICONS.lens}${l.source === 'off' ? 'Off' : `${(l.zoom || 2).toFixed(1)}×`}`,
-              l.source === 'edit'
-            )
-          )
-        )
-        .join('');
+              l.source === 'edit',
+              top
+            ),
+        });
+      });
+    });
+    const zoomPacked = packLanes(zoomItems);
+    fitLane(zoomEl, 'zoom', zoomPacked.lanes);
+    zoomEl.innerHTML = zoomPacked.items.map((it) => it.render(4 + it.lane * FX_LANE_H)).join('');
     const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
     speedEl.dataset.empty = onLive && !speedEl.innerHTML ? 'Speed · drag across a recording clip to speed it up or slow it down' : '';
     zoomEl.dataset.empty = onLive && !zoomEl.innerHTML ? 'Zoom & magnify · drag across a recording clip to zoom in or magnify a detail' : '';
@@ -3302,14 +3348,20 @@ export function initEditor(ctx) {
     const pps = ed.pps;
     const sel = ed.sel;
     const blocks = cutBlocks();
-    el.innerHTML = blocks
-      .map((c) => {
-        const left = Math.max(0, c.splice - c.removed);
-        const on = sel?.type === 'cut' && sel.i === c.i;
-        const label = `−${(c.to - c.from).toFixed(1)}s`;
-        return `<div class="fx cut${on ? ' is-sel' : ''}" data-cut="${c.i}" title="Cut · ${fmtT(c.from)}–${fmtT(c.to)} removed from the recording · drag the ends to change it · ⌫ restores it" style="left:${left * pps}px;width:${Math.max(8, c.removed * pps)}px"><i class="h l"></i><span>${CUT_ICON}${label}</span><i class="h r"></i></div>`;
-      })
-      .join('');
+    const cutItems = blocks.map((c) => {
+      const left = Math.max(0, c.splice - c.removed);
+      const on = sel?.type === 'cut' && sel.i === c.i;
+      const label = `−${(c.to - c.from).toFixed(1)}s`;
+      return {
+        key: `cut:${c.i}`,
+        t: left,
+        end: left + c.removed,
+        html: `<div class="fx cut${on ? ' is-sel' : ''}" data-cut="${c.i}" title="Cut · ${fmtT(c.from)}–${fmtT(c.to)} removed from the recording · drag the ends to change it · ⌫ restores it" style="left:${left * pps}px;width:${Math.max(8, c.removed * pps)}px;top:__TOP__px"><i class="h l"></i><span>${CUT_ICON}${label}</span><i class="h r"></i></div>`,
+      };
+    });
+    const cutPacked = packLanes(cutItems);
+    fitLane(el, 'cut', cutPacked.lanes);
+    el.innerHTML = cutPacked.items.map((it) => it.html.replace('__TOP__', String(4 + it.lane * FX_LANE_H))).join('');
     const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
     el.dataset.empty = onLive && !blocks.length ? 'Cut · drag across this row to remove a stretch of the recording' : '';
   }
@@ -3322,34 +3374,39 @@ export function initEditor(ctx) {
     const audio = ed.deck?.audio;
     const clips = audio?.voiceClips || [];
     const sel = ed.sel;
-    const pill = (cls, left, width, attrs, label) =>
-      `<div class="fx ${cls}" ${attrs} style="left:${left}px;width:${Math.max(8, width)}px"><span>${label}</span></div>`;
-    voiceEl.innerHTML = clips
-      .map((c) => {
-        const on = sel?.type === 'voice' && sel.key === c.key;
-        const name = c.key.length > 22 ? `${c.key.slice(0, 20)}…` : c.key;
-        const long = c.long > 0.1;
-        const speaking = ed.regenerating === c.key;
-        const tip = [c.text || c.key];
-        if (speaking) tip.push('Speaking this line again…');
-        if (c.take > 1 || c.takes > 1) tip.push(`Take ${c.take || 1} of ${Math.max(c.take || 1, c.takes || 1)}`);
-        if (c.textOverride) tip.push('Rewritten from the script');
-        if (c.trimStart || c.trimEnd) tip.push(`Trimmed ${(c.trimStart + c.trimEnd).toFixed(1)}s · drag the ends`);
-        tip.push('Drag to move it');
-        if (long) tip.push(`Runs ${c.long.toFixed(1)}s past its window on this cut`);
-        if (c.moved) tip.push(`Moves here on the next render (the mix has it at ${fmtT(c.writtenStart)})`);
-        // Fades shade the ends of the pill in proportion; trims show as handles.
-        const w = Math.max(8, c.dur * pps);
-        const fi = c.fadeIn ? Math.min(100, (c.fadeIn / Math.max(0.01, c.dur)) * 100).toFixed(1) : 0;
-        const fo = c.fadeOut ? Math.min(100, (c.fadeOut / Math.max(0.01, c.dur)) * 100).toFixed(1) : 0;
-        const cls = `fx voice${c.mute ? ' is-mute' : ''}${on ? ' is-sel' : ''}${c.moved ? ' is-moved' : ''}${long ? ' is-long' : ''}${c.trimStart || c.trimEnd ? ' is-trimmed' : ''}${c.textOverride || (c.speed && Math.abs(c.speed - 1) > 0.01) ? ' is-regen' : ''}${c.take > 1 ? ' is-take' : ''}${speaking ? ' is-speaking' : ''}`;
-        // A take past the first wears its number ahead of the name, so a narrow pill still shows it;
-        // a line being spoken again says so in place of its name.
-        const badge = c.take > 1 ? `<b class="take" aria-label="Take ${c.take}">${c.take}</b>` : '';
-        const label = speaking ? `${ICONS.sparkle}Speaking…` : `${long ? ICONS.warn : ICONS.mic}${badge}${escapeHtml(name)}`;
-        return `<div class="${cls}" data-voice="${escapeHtml(c.key)}" title="${escapeHtml(tip.join(' · '))}" style="--fi:${fi}%;--fo:${fo}%;left:${c.start * pps}px;width:${w}px"><i class="h l" title="Trim the head"></i><span>${label}</span><i class="h r" title="Trim the tail"></i></div>`;
-      })
-      .join('');
+    const VOICE_LANE_H = 30;
+    const voiceItems = clips.map((c) => {
+      const on = sel?.type === 'voice' && sel.key === c.key;
+      const name = c.key.length > 22 ? `${c.key.slice(0, 20)}…` : c.key;
+      const long = c.long > 0.1;
+      const speaking = ed.regenerating === c.key;
+      const tip = [c.text || c.key];
+      if (speaking) tip.push('Speaking this line again…');
+      if (c.take > 1 || c.takes > 1) tip.push(`Take ${c.take || 1} of ${Math.max(c.take || 1, c.takes || 1)}`);
+      if (c.textOverride) tip.push('Rewritten from the script');
+      if (c.trimStart || c.trimEnd) tip.push(`Trimmed ${(c.trimStart + c.trimEnd).toFixed(1)}s · drag the ends`);
+      tip.push('Drag to move it');
+      if (long) tip.push(`Runs ${c.long.toFixed(1)}s past its window on this cut`);
+      if (c.moved) tip.push(`Moves here on the next render (the mix has it at ${fmtT(c.writtenStart)})`);
+      // Fades shade the ends of the pill in proportion; trims show as handles.
+      const w = Math.max(8, c.dur * pps);
+      const fi = c.fadeIn ? Math.min(100, (c.fadeIn / Math.max(0.01, c.dur)) * 100).toFixed(1) : 0;
+      const fo = c.fadeOut ? Math.min(100, (c.fadeOut / Math.max(0.01, c.dur)) * 100).toFixed(1) : 0;
+      const cls = `fx voice${c.mute ? ' is-mute' : ''}${on ? ' is-sel' : ''}${c.moved ? ' is-moved' : ''}${long ? ' is-long' : ''}${c.trimStart || c.trimEnd ? ' is-trimmed' : ''}${c.textOverride || (c.speed && Math.abs(c.speed - 1) > 0.01) ? ' is-regen' : ''}${c.take > 1 ? ' is-take' : ''}${speaking ? ' is-speaking' : ''}`;
+      // A take past the first wears its number ahead of the name, so a narrow pill still shows it;
+      // a line being spoken again says so in place of its name.
+      const badge = c.take > 1 ? `<b class="take" aria-label="Take ${c.take}">${c.take}</b>` : '';
+      const label = speaking ? `${ICONS.sparkle}Speaking…` : `${long ? ICONS.warn : ICONS.mic}${badge}${escapeHtml(name)}`;
+      return {
+        key: c.key,
+        t: c.start,
+        end: c.start + c.dur,
+        html: `<div class="${cls}" data-voice="${escapeHtml(c.key)}" title="${escapeHtml(tip.join(' · '))}" style="--fi:${fi}%;--fo:${fo}%;left:${c.start * pps}px;width:${w}px;top:__TOP__px"><i class="h l" title="Trim the head"></i><span>${label}</span><i class="h r" title="Trim the tail"></i></div>`,
+      };
+    });
+    const voicePacked = packLanes(voiceItems);
+    fitLane(voiceEl, 'voice', voicePacked.lanes, { base: 34, laneH: VOICE_LANE_H });
+    voiceEl.innerHTML = voicePacked.items.map((it) => it.html.replace('__TOP__', String(4 + it.lane * VOICE_LANE_H))).join('');
     const music = audioDesk().music;
     const bedDur = audio?.music?.durationSec || ed.total;
     const from = Math.max(0, music.offset || 0);
@@ -3365,21 +3422,26 @@ export function initEditor(ctx) {
         : bedSrc === 'upload'
           ? 'Music · upload'
           : 'Music';
+    const rideItems = (music.rides || [])
+      .map((r, i) => ({
+        key: `ride:${i}`,
+        t: r.from,
+        end: Math.min(r.to, ed.total),
+        i,
+        r,
+      }))
+      .filter((it) => it.r.from < ed.total);
+    const ridePacked = packLanes(rideItems);
+    const musicH = fitLane(musicEl, 'music', ridePacked.lanes, { base: 34 });
     const bed =
       audio?.music && to > from
-        ? `<div class="music-bed${music.mute ? ' is-mute' : ''}${music.loop && short ? ' is-loop' : ''}${bedSrc === 'upload' ? ' is-upload' : ''}${bedOn ? ' is-sel' : ''}" style="left:${from * pps}px;width:${Math.max(12, (to - from) * pps)}px"><i class="h l" title="Fade in"></i><span>${ICONS.music}${bedLabel}</span><i class="h r" title="Fade out"></i></div>`
+        ? `<div class="music-bed${music.mute ? ' is-mute' : ''}${music.loop && short ? ' is-loop' : ''}${bedSrc === 'upload' ? ' is-upload' : ''}${bedOn ? ' is-sel' : ''}" style="left:${from * pps}px;width:${Math.max(12, (to - from) * pps)}px${ridePacked.lanes > 1 ? `;top:4px;height:${musicH - 8}px` : ''}"><i class="h l" title="Fade in"></i><span>${ICONS.music}${bedLabel}</span><i class="h r" title="Fade out"></i></div>`
         : '';
-    const rides = (music.rides || [])
-      .filter((r) => r.from < ed.total)
-      .map((r, i) =>
-        pill(
-          `ride${sel?.type === 'ride' && sel.i === i ? ' is-sel' : ''}`,
-          r.from * pps,
-          (Math.min(r.to, ed.total) - r.from) * pps,
-          `data-ride="${i}" title="${r.gainDb > 0 ? '+' : ''}${r.gainDb} dB · drag the ends to retime"`,
-          `${r.gainDb > 0 ? '+' : ''}${r.gainDb} dB`
-        ).replace('<span>', '<i class="h l"></i><span>').replace('</span></div>', '</span><i class="h r"></i></div>')
-      )
+    const rides = ridePacked.items
+      .map((it) => {
+        const top = 4 + it.lane * FX_LANE_H;
+        return `<div class="fx ride${sel?.type === 'ride' && sel.i === it.i ? ' is-sel' : ''}" data-ride="${it.i}" title="${it.r.gainDb > 0 ? '+' : ''}${it.r.gainDb} dB · drag the ends to retime" style="left:${it.r.from * pps}px;width:${Math.max(8, (Math.min(it.r.to, ed.total) - it.r.from) * pps)}px;top:${top}px"><i class="h l"></i><span>${it.r.gainDb > 0 ? '+' : ''}${it.r.gainDb} dB</span><i class="h r"></i></div>`;
+      })
       .join('');
     musicEl.innerHTML = bed + rides;
     voiceEl.dataset.empty = !clips.length
