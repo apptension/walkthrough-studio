@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.0-beta.6 — 2026-10-24
+
+The v2 desk stays responsive with many neon primary buttons and during Program playback. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.6 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio --v2
+```
+
+Upgrade from 1.0.0-beta.5:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.6
+./studio --v2
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio --v2` rebuilds the desk when its sources change.
+
+### Performance
+
+- **Neon buttons:** Pointer glow runs only while the cursor is over a brand-gradient control, coalesced to one update per frame (no document-wide `closest` on every move).
+- **Program transport:** `updateTransport` skips redundant `desk.set` when the readout is unchanged, so the timeline and caption overlay re-render less often during playback.
+
 ## 1.0.0-beta.5 — 2026-10-24
 
 Produce works again for every video without a Duplicate replay, plate text editing lands on visible copy, and close-plate steps are clickable through the atmosphere layers. Pin this tag. `main` is the development line.

@@ -88,6 +88,16 @@ describe('transport', () => {
     expect(desk.get().transport).toMatchObject({ t: 0, d: 100, playing: false });
   });
 
+  it('skips desk.set when the transport readout is unchanged', () => {
+    desk.set({ transport: { t: 4.2, d: 100, playing: true, buffered: 8 }, duration: 100 });
+    const before = desk.get().transport;
+    runtime.player!.currentTime = 4.2;
+    Object.defineProperty(runtime.player!, 'paused', { value: false, configurable: true });
+    Object.defineProperty(runtime.player!, 'ended', { value: false, configurable: true });
+    monitor.updateTransport();
+    expect(desk.get().transport).toBe(before);
+  });
+
   it('flashes the chapter toast for 1.4 s when a new chapter starts', () => {
     vi.useFakeTimers();
     desk.set({ chapters: [{ start: 0, title: 'Intro' }, { start: 10, title: 'Invite' }] });
