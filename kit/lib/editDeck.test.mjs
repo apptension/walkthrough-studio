@@ -133,6 +133,16 @@ test('a sequence order permutes the slices and stores only when it differs', () 
   assert.equal(compactEdit(patchEdit(deck, { order: [] })), undefined);
 });
 
+test('applySegmentRepeats is a no-op that returns the SAME array when there is nothing to replay', () => {
+  // Like applySegmentOrder/applySegmentOmit, an empty `repeats` list returns the identical
+  // reference rather than a copy. buildEditPlan (edit.mjs) relies on this being documented: it
+  // must copy the result before truncating its own `raw` array in place, or it empties both
+  // arrays at once (segments[0] ends up undefined and produce crashes for every video without
+  // a Duplicate replay — see the 1.0.0-beta.4 regression).
+  const segs = [{ id: 'open', kind: 'plate' }, { id: 'close', kind: 'plate' }];
+  assert.equal(applySegmentRepeats(segs, []), segs);
+});
+
 test('a duplicated section plays again right after its source, and its pieces keep their own ids', () => {
   const segs = [
     { id: 'open', kind: 'plate' },

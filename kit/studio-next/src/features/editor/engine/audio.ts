@@ -1,5 +1,6 @@
 import { api } from '@/desk/api';
 import { toast } from '@/desk/toast';
+import { neonButtonLabel } from '@/ui/neonFx';
 
 import type { PreviewAudio } from './audioPreview';
 import { postDeck, refresh, snapshotDeck, validateSelection } from './data';
@@ -111,7 +112,7 @@ export async function regenerateLine(key: string, body: Record<string, unknown>,
   root?.querySelectorAll<HTMLButtonElement>('[data-act="voice-regen"], [data-act="voice-revert"], [data-take]').forEach((b) => (b.disabled = true));
   const regen = root?.querySelector('[data-act="voice-regen"]');
   regen?.classList.add('is-busy');
-  const regenLabel = regen?.querySelector('span');
+  const regenLabel = neonButtonLabel(regen);
   if (regenLabel) regenLabel.textContent = 'Speaking…';
   ed.regenerating = key;
   renderTimeline();

@@ -317,7 +317,9 @@ export function wireTransport(signal: AbortSignal): void {
     },
     signal,
   );
-  on('edEditText', 'click', () => (ed.textMode ? exitText() : void enterText(ed.plateField?.path || null)), signal);
+  // Generic entry (not a click on a specific field already in view) — jump to the plate's
+  // best-populated frame first so the editor doesn't land on a mid-reveal or empty one.
+  on('edEditText', 'click', () => (ed.textMode ? exitText() : void enterText(ed.plateField?.path || null, { seekToPeak: true })), signal);
   on(
     'edFullscreen',
     'click',

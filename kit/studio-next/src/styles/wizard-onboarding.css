@@ -139,9 +139,12 @@
 #projectDialog .lp-input.is-valid input { padding-right: 40px; border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .lp-input.is-valid > svg { color: var(--accent); }
 .lp-host {
-  position: absolute; right: 10px; top: 50%; display: grid; place-items: center; width: 20px; height: 20px; transform: translateY(-50%);
+  position: absolute; right: 10px; top: 0; bottom: 0; margin-block: auto;
+  display: grid; place-items: center; width: 20px; height: 20px;
   border-radius: 50%; background: var(--accent); color: var(--on-accent, #0b0d0b); animation: lp-pop 0.3s var(--ease-out);
 }
+/* The check's corner sits below the viewBox centre. A scale pop must not use transform for placement — that keyframe replaces it and the badge lands in the lower half of the field. */
+.lp-host svg { display: block; transform: translateY(-1px); }
 .lp-full {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: -4px; padding: 6px 2px; border: 0; background: none;
   font: 500 12px var(--font); color: var(--muted); cursor: pointer; transition: color 0.15s;

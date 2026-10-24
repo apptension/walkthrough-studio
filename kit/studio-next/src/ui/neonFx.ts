@@ -55,6 +55,16 @@ export function neonFxHtml(): string {
   return `<span class="neon-btn__fx" aria-hidden="true"><span class="neon-btn__water">${blobs}${sparks}</span><span class="neon-btn__glow"></span></span>`;
 }
 
+/**
+ * The caption of a string-built neon button.
+ * The effect layer is a span and it is the first one, so `querySelector('span')` hits it
+ * and `textContent` wipes the water, glow, and sparks.
+ */
+export function neonButtonLabel(host: ParentNode | null | undefined): HTMLElement | null {
+  const el = host?.querySelector(':scope > span:not(.neon-btn__fx)');
+  return el instanceof HTMLElement ? el : null;
+}
+
 /** Pointer glow + press ripple for every neon fill, including ones React did not re-render. */
 export function bindNeonGlow(root: ParentNode & { addEventListener: Document['addEventListener'] } = document): () => void {
   const host = root instanceof Document ? root : root.ownerDocument ?? document;

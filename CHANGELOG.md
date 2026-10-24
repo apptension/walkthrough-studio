@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.0-beta.5 — 2026-10-24
+
+Produce works again for every video without a Duplicate replay, plate text editing lands on visible copy, and close-plate steps are clickable through the atmosphere layers. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.5 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio --v2
+```
+
+Upgrade from 1.0.0-beta.4:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.5
+./studio --v2
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio --v2` rebuilds the desk when its sources change.
+
+### Fixes
+
+- **Produce:** `buildEditPlan` no longer empties every segment when a video has no Duplicate replay (1.0.0-beta.4 regression).
+- **Plate text:** Click-to-edit dispatches once, pins live animation frames before edit CSS freezes motion, and ignores pointer hits on decorative bloom/grid layers so close-plate steps receive clicks.
+- **Edit text:** Generic “Edit text” seeks to the plate’s best-populated frame; field clicks stay in place on the current frame.
+- **Voice regen:** Neon button labels update via `neonButtonLabel` so the water/glow layer is not wiped.
+- **Desk:** Creation storyboard spacing and project-name validation check alignment.
+
 ## 1.0.0-beta.4 — 2026-10-24
 
 Plates can be staged more than one way, drafts follow one house voice, and the score is composed to cover the picture. Pin this tag. `main` is the development line.
