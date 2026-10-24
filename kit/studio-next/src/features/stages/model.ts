@@ -26,6 +26,8 @@ export type StageMap = Record<StageKey, StageState>;
 export interface StageHint {
   text: string;
   tone: 'warn' | '';
+  /** Optional status pill on the right (e.g. the Out of date badge). */
+  badge?: string;
 }
 
 export const STAGE_LABEL: Record<StageKey, string> = {
@@ -152,8 +154,9 @@ export function stageMetaText(key: StageKey, state: StageState): string {
 export function stageHint(map: StageMap): StageHint {
   if (map.cut.tone === 'warn' && map.cut.meta === OUT_OF_DATE) {
     return {
-      text: 'Out of date — sources changed since the last render. Use Render to catch up.',
+      text: 'Sources changed since the last render. Use Render to catch up.',
       tone: 'warn',
+      badge: OUT_OF_DATE,
     };
   }
   if (map.script.tone !== 'done') {

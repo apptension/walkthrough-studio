@@ -47,35 +47,38 @@ export function PlatePane() {
         </p>
       </div>
       <div id="liveStage" className="live-stage" hidden aria-label="Recording preview">
-        <div className="live-viewport" id="liveViewport">
-          <video id="livePlayer" muted playsInline preload="auto" />
-          <canvas id="liveLens" className="live-lens" aria-hidden="true" />
-          <div id="liveZoomBox" className="live-zoom-box" hidden>
-            <i className="zh nw" />
-            <i className="zh ne" />
-            <i className="zh sw" />
-            <i className="zh se" />
-            <div className="frame-editor stage-panel" data-frame-editor="zoom" data-tone="zoom" role="group" aria-label="Zoom controls">
-              <span className="sp-ico" aria-hidden="true">
-                <Icon name="zoom" size={14} />
-              </span>
-              <strong className="sp-title" data-zoom-kind="">
-                Focus zoom
-              </strong>
-              <label className="frame-editor-hit sp-slider" data-zoom-strength="">
-                <Scrubber data-frame-zoom="" min="1.2" max="2.2" step="0.05" aria-label="Zoom strength" />
-                <output className="sp-value" data-zoom-value="" aria-live="off">
-                  1.50×
-                </output>
-              </label>
-              <span className="sp-keys" data-zoom-keys="" aria-hidden="true" />
-              <span className="sp-sep" aria-hidden="true" />
-              <button type="button" className="frame-editor-hit sp-icon-btn is-danger" data-frame-remove="zoom" title="Remove zoom" aria-label="Remove zoom">
-                <Icon name="trash" size={14} />
-              </button>
+        <div className="live-frame" id="liveFrame">
+          <iframe id="liveBackdrop" className="live-backdrop" hidden title="Stage backdrop" />
+          <div className="live-viewport" id="liveViewport">
+            <video id="livePlayer" muted playsInline preload="auto" />
+            <canvas id="liveLens" className="live-lens" aria-hidden="true" />
+            <div id="liveZoomBox" className="live-zoom-box" hidden>
+              <i className="zh nw" />
+              <i className="zh ne" />
+              <i className="zh sw" />
+              <i className="zh se" />
+              <div className="frame-editor stage-panel" data-frame-editor="zoom" data-tone="zoom" role="group" aria-label="Zoom controls">
+                <span className="sp-ico" aria-hidden="true">
+                  <Icon name="zoom" size={14} />
+                </span>
+                <strong className="sp-title" data-zoom-kind="">
+                  Focus zoom
+                </strong>
+                <label className="frame-editor-hit sp-slider" data-zoom-strength="">
+                  <Scrubber data-frame-zoom="" min="1.2" max="2.2" step="0.05" aria-label="Zoom strength" />
+                  <output className="sp-value" data-zoom-value="" aria-live="off">
+                    1.50×
+                  </output>
+                </label>
+                <span className="sp-keys" data-zoom-keys="" aria-hidden="true" />
+                <span className="sp-sep" aria-hidden="true" />
+                <button type="button" className="frame-editor-hit sp-icon-btn is-danger" data-frame-remove="zoom" title="Remove zoom" aria-label="Remove zoom">
+                  <Icon name="trash" size={14} />
+                </button>
+              </div>
             </div>
+            <div id="liveLensBox" className="live-lens-box" hidden aria-hidden="true" />
           </div>
-          <div id="liveLensBox" className="live-lens-box" hidden aria-hidden="true" />
         </div>
       </div>
       <div id="liveLensHud" className="lens-stage-hud" data-tone="lens" hidden aria-label="Magnifier controls">

@@ -115,7 +115,7 @@ export function GuideDesk() {
 const TERMS: ReadonlyArray<[string, string]> = [
   ['Plate', 'A designed brand scene — opener, title cards, close.'],
   ['Chapter', 'A section of the live tour. Becomes a YouTube chapter.'],
-  ['Out of date', 'Sources changed since the last render. Press Render to catch up.'],
+  ['Out of date', 'Sources changed since the last render. Use Render to catch up.'],
   ['Checkpoint', 'Automatic save from each render. Hidden in Versions unless you need it.'],
   ['Handoff pack', 'Everything the client receives, as one zip.'],
   ['Smart scope', 'The agent chooses the smallest safe change from a director note.'],

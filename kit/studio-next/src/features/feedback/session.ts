@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import type { Job } from '@/api/types';
-import { fmt, elapsedSec } from '@/desk/format';
+import { fmtShort, elapsedSec } from '@/desk/format';
 import { showRightTab } from '@/desk/panels';
 import { runtime } from '@/desk/runtime';
 import { desk } from '@/desk/store';
@@ -17,8 +17,9 @@ import { describeJob, type JobStage } from '@/logic/progress';
 export const THINK_ORDER = ['think', 'edit', 'html', 'preview', 'approve'] as const;
 export type ThinkStep = (typeof THINK_ORDER)[number];
 
-export const IDLE_TITLE = 'Agent’s off the clock 💤';
+export const IDLE_TITLE = 'Waiting for a note';
 export const IDLE_META = 'Apply a note and its progress shows here.';
+export const IDLE_PHASE = { text: 'Idle', className: 'badge', hidden: false } as const;
 
 export interface ProposalStep {
   label: string;
@@ -51,7 +52,9 @@ export interface SessionView {
   phase: { text: string; className: string; hidden: boolean };
   now: { text: string; hidden: boolean };
   elapsed: { text: string; hidden: boolean };
-  logButton: boolean;
+  /** Lines the header barrel rolls through: what is happening now first, then where the run is. */
+  ticker: string[];
+  /** Raw log — only shown when the job has no stream or stages to tell its story. */
   log: { text: string; hidden: boolean };
   /** `null` until the first paint: the bar has no width / aria-valuenow yet. */
   bar: { hidden: boolean; pct: number | null };
@@ -89,10 +92,10 @@ export function initialSessionView(): SessionView {
     art: true,
     title: IDLE_TITLE,
     meta: IDLE_META,
-    phase: { text: '—', className: 'badge', hidden: true },
+    phase: { ...IDLE_PHASE },
     now: { text: '', hidden: true },
     elapsed: { text: '0:00', hidden: true },
-    logButton: false,
+    ticker: [],
     log: { text: '', hidden: true },
     bar: { hidden: true, pct: null },
     stages: { hidden: true, list: [] },
@@ -157,8 +160,8 @@ export function setSessionIdle(): void {
     idle: true,
     now: { text: '', hidden: true },
     elapsed: { ...session.get().elapsed, hidden: true },
-    phase: { ...session.get().phase, hidden: true },
-    logButton: false,
+    phase: { ...IDLE_PHASE },
+    ticker: [],
     streamJob: null,
     log: { text: '', hidden: true },
   });
@@ -171,7 +174,55 @@ export function resetThinkSteps(): void {
 
 /** `stopAllWork`: the rail says why it stopped. */
 export function sessionStopped(reason: string): void {
-  session.set({ title: reason, meta: 'Ready for new work', spinner: false });
+  session.set((v) => ({
+    // The label says "Stopped"; the title keeps naming the job that was stopped.
+    title: v.idle ? reason : v.title,
+    meta: 'Ready for new work',
+    spinner: false,
+    phase: { text: 'Stopped', className: 'badge', hidden: false },
+    ticker: [reason === 'Stopped' ? 'Ready for new work' : reason],
+  }));
+}
+
+const PIPE_NOW: Record<ThinkStep, string> = {
+  think: 'Thinking it through',
+  edit: 'Editing the sources',
+  html: 'Rebuilding plate HTML',
+  preview: 'Preparing the preview',
+  approve: 'Waiting for your decision',
+};
+
+function clip(text: string, max = 96): string {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+}
+
+/** What the agent is doing this second, from the newest stream entry. */
+function streamNow(job: Job): string {
+  const last = (job.stream?.entries || []).at(-1);
+  if (!last) return '';
+  const text = clip(last.text.replace(/[`*]/g, '').split('\n').find((l) => l.trim()) || '');
+  if (last.kind === 'tool') return clip([last.title || 'Tool', text].filter(Boolean).join(' · '));
+  if (last.kind === 'think') return text ? `Thinking · ${text}` : 'Thinking…';
+  return text;
+}
+
+/** Header barrel: live activity, then progress through the run. */
+function tickerLines(job: Job, view: ReturnType<typeof describeJob>, working: boolean, step: ThinkStep | null): string[] {
+  if (!working) return [clip(job.status === 'done' ? view.summary : view.now || view.summary)].filter(Boolean);
+  const runIdx = view.stages.findIndex((s) => s.state === 'run');
+  const runStage = runIdx >= 0 ? view.stages[runIdx] : undefined;
+  const activity =
+    streamNow(job) ||
+    (runStage ? clip([runStage.label, runStage.detail].filter(Boolean).join(' · ')) : '') ||
+    clip(view.now) ||
+    clip(view.summary);
+  const where = runStage
+    ? `Step ${runIdx + 1} of ${view.stages.length} · ${runStage.label}`
+    : step
+      ? PIPE_NOW[step]
+      : clip(view.summary);
+  return [...new Set([activity, where].filter(Boolean))];
 }
 
 /** `showActivityDock(job, { surface: 'session' })` → `paintWork('session', job)` and the rail's own extras. */
@@ -183,12 +234,10 @@ export function paintSession(job: Job): void {
   const running = status === 'running' || status === 'queued';
   const failed = status === 'failed' || status === 'needs-agent';
   const done = status === 'done';
-  const streamed = job.kind === 'improve' && (job.stream?.entries || []).length > 0;
-  const nowHidden = !view.now || streamed || (view.stages.length > 0 && !failed);
+  const streamed = (job.stream?.entries || []).length > 0;
+  const nowHidden = !view.now || (job.kind === 'improve' && streamed) || (view.stages.length > 0 && !failed);
   const pct = Math.round(view.progress * 100);
   const logText = (job.log || []).map((l) => l.line).join('\n').slice(-5000);
-  const expanded = s.activityExpanded;
-  const prev = session.get();
 
   session.set({
     running,
@@ -200,14 +249,14 @@ export function paintSession(job: Job): void {
     title: view.title,
     meta: view.summary,
     phase: { text: view.statusLabel, className: `badge ${view.badge}`.trim(), hidden: false },
-    now: { text: view.now, hidden: expanded ? true : nowHidden },
+    now: { text: view.now, hidden: nowHidden },
     bar: { hidden: !view.stages.length, pct },
     stages: { hidden: !view.stages.length, list: view.stages },
     pipeHidden: view.stages.length > 0,
-    elapsed: { text: fmt(elapsedSec(job)), hidden: false },
-    logButton: true,
+    elapsed: { text: fmtShort(elapsedSec(job)), hidden: false },
+    ticker: tickerLines(job, view, working, session.get().thinkStep),
     streamJob: job,
-    log: { text: logText, hidden: expanded ? false : prev.log.hidden },
+    log: { text: logText, hidden: !logText || streamed || view.stages.length > 0 },
   });
 
   if (runtime.elapsedTimer) clearInterval(runtime.elapsedTimer);
@@ -215,7 +264,7 @@ export function paintSession(job: Job): void {
   if (running) {
     runtime.elapsedTimer = setInterval(() => {
       const j = desk.get().job || job;
-      session.set((v) => ({ elapsed: { ...v.elapsed, text: fmt(elapsedSec(j)) } }));
+      session.set((v) => ({ elapsed: { ...v.elapsed, text: fmtShort(elapsedSec(j)) } }));
     }, 1000);
   }
 }
@@ -226,7 +275,9 @@ export function markPlateHtmlFailed(msg: string): void {
     title: 'Plate HTML failed',
     meta: msg,
     now: { text: msg, hidden: false },
-    phase: { text: 'FAILED', className: 'badge err', hidden: false },
+    phase: { text: 'Failed', className: 'badge bad', hidden: false },
+    ticker: [clip(msg)],
+    spinner: false,
     running: false,
     done: false,
     failed: true,
@@ -253,8 +304,12 @@ export function showProposal(opts: ProposalOpts = {}): void {
     reviewDetail:
       opts.reviewDetail || (review === 'script' ? 'Open the changed story and narration' : 'Bring the proposed plate into focus'),
     spinner: false,
-    title: 'Preview ready',
-    meta: 'Choose a path below',
+    idle: false,
+    art: false,
+    phase: { text: 'Done', className: 'badge ok', hidden: false },
+    title: v.idle ? 'Preview ready' : v.title,
+    meta: v.idle ? 'Choose a path below' : v.meta,
+    ticker: ['Open the run to see every step'],
     proposalSeq: v.proposalSeq + 1,
   }));
   showRightTab('feedback');
@@ -276,17 +331,7 @@ export function setApprovePlateVisible(on: boolean): void {
   session.set({ approvePlate: on });
 }
 
-/** `#btnSessionLog`: show or fold the raw log under the rail. */
-export function toggleSessionLog(): void {
-  const expanded = !desk.get().activityExpanded;
-  desk.set({ activityExpanded: expanded });
-  session.set((v) => ({
-    log: { ...v.log, hidden: !expanded },
-    now: { ...v.now, hidden: expanded || !v.now.text },
-  }));
-}
-
-/** `#btnProposalWork`: reveal the agent's work under the decision. Returns the new state. */
+/** The header chevron while deciding: reveal the agent's run under the decision. Returns the new state. */
 export function toggleProposalWork(): boolean {
   const expanded = !session.get().showWork;
   session.set({ showWork: expanded });

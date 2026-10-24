@@ -1,7 +1,7 @@
 import { api } from '@/desk/api';
 import { desk } from '@/desk/store';
 import { applyCardMotionToDocument } from '@/logic/cardMotion';
-import { cardElapsedMs, cardMarkDuration, cardMarkInClip, liveMarksAtRecTime, resolveLiveCardFromPlates } from '@/logic/liveCardStage';
+import { cardElapsedMs, cardMarkDuration, cardMarkInClip, cardMarkKey, liveMarksAtRecTime, resolveLiveCardFromPlates } from '@/logic/liveCardStage';
 import { lensLoupe, planFrameEditor, planLensPaint, planLiveSeek } from '@/logic/livePreview';
 import {
   joinFrameOwner,
@@ -11,6 +11,8 @@ import {
   soloJoinFocus,
   stagePointerOwner,
 } from '@/logic/plateSync';
+import { stageLayout } from '@/logic/stageLayout';
+import { sectionAtPlayhead } from './layoutPreview';
 import { zoomPreviewStyle } from '@/logic/zoomAim';
 
 import { paintLensBox, paintZoomBox, selectedShot } from './aim';
@@ -27,32 +29,65 @@ import { $, ICONS, LAYER_PROPS, LENS_PAD, PLATE_ICON, T_GLYPH, clamp, escapeHtml
 
 /** The stage half of `kit/studio/editor.js`: what the monitor shows at the playhead. */
 
-/** Inset framing previews with the render's geometry: frame rect, corner radius, brand backdrop. */
+/**
+ * The stage previews the render's geometry: the output frame's shape, the take's stage rect in
+ * it (fill, inset window or device), corner radius and brand backdrop.
+ */
+/** The backdrop iframe shows the same HTML the render rasterises, scaled into the output frame. */
+function paintBackdrop(url: string | null, shadowFromHtml: boolean): void {
+  const frame = document.getElementById('liveBackdrop') as HTMLIFrameElement | null;
+  const stage = $('liveStage');
+  if (!frame || !stage) return;
+  stage.classList.toggle('has-backdrop', Boolean(url));
+  if (!url) {
+    frame.hidden = true;
+    if (frame.getAttribute('src')) frame.removeAttribute('src');
+    return;
+  }
+  frame.hidden = false;
+  const next = url.split('?')[0] ?? url;
+  const current = frame.getAttribute('src') || '';
+  if (!current.includes(next)) frame.src = url;
+  if (shadowFromHtml) stage.style.setProperty('--frame-shadow', 'none');
+}
+
 export function paintFrame(): void {
   const el = $('liveStage');
   if (!el) return;
-  const f = ed.deck?.frame;
-  el.classList.toggle('is-inset', Boolean(f));
-  if (!f) return;
-  const W = liveW();
-  const H = liveH();
+  const section = sectionAtPlayhead();
+  const space = ed.deck?.space;
+  const stage = section?.stage && space?.output ? { output: space.output, stage: section.stage } : space;
+  const layout = stageLayout(stage);
+  el.classList.toggle('is-framed', Boolean(layout));
+  el.classList.toggle('is-inset', Boolean(layout?.placed));
+  if (!layout) {
+    paintBackdrop(null, false);
+    return;
+  }
+  const cam = ed.deck?.camera || {};
+  const bg = cam['background'] || ed.deck?.frame?.background || 'brand';
+  const shadow = cam['shadow'] || ed.deck?.frame?.shadow || 'soft';
   const c = ed.deck?.brandColors || {};
-  const [c0, c1] =
-    f.background === 'accent' ? [c['gold'], c['amber'] || c['gold']] : f.background === 'ink' ? [c['ink'], c['ink']] : [c['surface'] || c['ink'], c['ink']];
+  const [c0, c1] = bg === 'accent' ? [c['gold'], c['amber'] || c['gold']] : bg === 'ink' ? [c['ink'], c['ink']] : [c['surface'] || c['ink'], c['ink']];
+  const vp = layout.viewport;
+  const backdrop = section?.htmlUrl || null;
   const vars: Record<string, string> = {
-    '--frame-x': `${(f.x / W) * 100}%`,
-    '--frame-y': `${(f.y / H) * 100}%`,
-    '--frame-w': `${(f.w / W) * 100}%`,
-    '--frame-h': `${(f.h / H) * 100}%`,
-    '--frame-rx': `${(f.radius / f.w) * 100}%`,
-    '--frame-ry': `${(f.radius / f.h) * 100}%`,
+    '--out-ar': String(layout.aspect),
+    '--frame-x': vp.left,
+    '--frame-y': vp.top,
+    '--frame-w': vp.width,
+    '--frame-h': vp.height,
+    '--frame-rx': vp.rx,
+    '--frame-ry': vp.ry,
     '--frame-c0': c0 || '#151715',
     '--frame-c1': c1 || '#0b120d',
     '--frame-accent': c['gold'] || '#42f272',
-    '--frame-glow': f.background === 'ink' ? '0%' : f.background === 'accent' ? '25%' : '33%',
-    '--frame-shadow': f.shadow === 'off' ? 'none' : f.shadow === 'deep' ? '0 16px 44px rgba(0,0,0,.75)' : '0 12px 34px rgba(0,0,0,.55)',
+    '--frame-glow': bg === 'ink' ? '0%' : bg === 'accent' ? '25%' : '33%',
+    '--frame-shadow': backdrop || shadow === 'off' ? 'none' : shadow === 'deep' ? '0 16px 44px rgba(0,0,0,.75)' : '0 12px 34px rgba(0,0,0,.55)',
   };
   for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
+  paintBackdrop(backdrop, Boolean(backdrop));
+  P.fit();
 }
 
 export function syncLiveSource(): void {
@@ -464,7 +499,10 @@ export function renderFrame(): void {
   const prev = ed.seq[i - 1];
   const indexChanged = ed.cur !== i;
   ed.cur = i;
-  if (indexChanged) ed.liveSeeked = false;
+  if (indexChanged) {
+    ed.liveSeeked = false;
+    paintFrame();
+  }
   ed.hud = null;
   const inJoin = Boolean(ed.fx && prev && c.overlap > 0 && ed.t < c.at + c.overlap);
   const joinP = inJoin ? (ed.t - c.at) / c.overlap : 0;
@@ -503,6 +541,10 @@ export function renderFrame(): void {
   plateL.hidden = !(showCardLayer || plateContentReady);
   if (plateWasHidden && !plateL.hidden) P.fit();
   liveL.hidden = !(inL === liveL || outL === liveL || liveFocus);
+  if (document.body.classList.contains('is-live-card') !== showLiveCard) {
+    document.body.classList.toggle('is-live-card', showLiveCard);
+    P.fit();
+  }
   if (showLiveCard) {
     liveL.hidden = false;
     plateL.style.zIndex = '3';
@@ -626,7 +668,10 @@ export function liveHitAtPlayhead(): LiveHit | null {
   const c = curClip();
   if (c?.kind !== 'live') return null;
   const recT = edToRec(c, ed.t);
-  const hits = liveMarksAtRecTime(ed.deck?.marks, recT, { recFrom: c.recFrom, recTo: c.recTo });
+  const carried = new Set((ed.deck?.layouts?.sections || []).filter((s) => s.textOn).map((s) => s.key));
+  const hits = liveMarksAtRecTime(ed.deck?.marks, recT, { recFrom: c.recFrom, recTo: c.recTo }).filter(
+    (m) => !(m.kind === 'chapter' && carried.has(m.key || cardMarkKey(m))),
+  );
   const mark = hits[0];
   if (!mark) return null;
   const card = resolveLiveCard(mark);

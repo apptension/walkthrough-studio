@@ -32,7 +32,7 @@ describe('ActivitySection', () => {
     expect($('renderLiveArt').hidden).toBe(false);
     expect($('renderLiveArt')).toHaveAttribute('data-art', 'tumbleweed');
     expect($('activityLive').hidden).toBe(true);
-    expect($('renderLiveTitle')).toHaveTextContent('All quiet on set 🌵');
+    expect($('renderLiveTitle')).toHaveTextContent('All quiet on set');
     expect($('renderLiveMeta')).toHaveTextContent('Render above, or queue a single step below.');
     expect($('renderLiveBar').hidden).toBe(true);
     expect($('renderLiveNow').hidden).toBe(true);

@@ -10,6 +10,7 @@ const { api } = await import('./api');
 const { loadVideo } = await import('./video');
 const { desk } = await import('./store');
 const { bridges } = await import('./bridge');
+const { runtime } = await import('./runtime');
 const jobs = await import('./jobs');
 
 const mockedApi = vi.mocked(api);
@@ -22,6 +23,7 @@ beforeEach(() => {
   desk.reset();
   mockedApi.mockReset();
   bridges.feedback = null;
+  runtime.workAbort = null;
 });
 
 describe('enqueueJob', () => {
@@ -115,6 +117,191 @@ describe('stopAllWork', () => {
     await jobs.stopAllWork({ silent: true });
     expect(mockedApi).toHaveBeenCalledWith('/api/jobs/cancel-all', { method: 'POST', body: {} });
     expect(desk.get().toasts).toEqual([]);
+  });
+
+  it('waits for the kill to actually land before freeing the video for new work', async () => {
+    desk.set({ slug: 'demo', jobBusy: true, jobId: 'j9', queue: [] });
+    let polls = 0;
+    mockedApi.mockImplementation((path: string) => {
+      if (path === '/api/jobs/j9/cancel') return Promise.resolve({ job: { id: 'j9', status: 'cancelling' } });
+      if (path === '/api/jobs/j9') {
+        polls += 1;
+        // Still dying on the first couple of polls — only settles on the third.
+        return Promise.resolve({ id: 'j9', status: polls < 3 ? 'cancelling' : 'cancelled' });
+      }
+      return Promise.resolve({});
+    });
+    await jobs.stopAllWork({ reason: 'Stopped' });
+    expect(polls).toBe(3);
+    expect(desk.get().jobBusy).toBe(false);
+  });
+
+  it('leaves the Live pane when Stop cuts off a take', async () => {
+    mockedApi.mockResolvedValue({});
+    const video = makeVideo({ slug: 'demo', previewUrl: '/media/demo/live-preview.jpg' });
+    desk.set({
+      slug: 'demo',
+      jobBusy: true,
+      jobId: 'j9',
+      video,
+      monitorMode: 'live',
+      liveWarmupKey: 'j9:1',
+      liveWarmingUp: true,
+      signInWait: { title: 'Sign in', next: 'Continue' },
+      live: {
+        ...desk.get().live,
+        url: '/media/demo/live-preview.jpg',
+        src: 'blob:frozen',
+        recording: true,
+        repairing: false,
+        warming: true,
+        badge: 'Live',
+        tab: true,
+        onAir: true,
+        thumb: true,
+      },
+    });
+    await jobs.stopAllWork({ reason: 'Stopped' });
+    expect(desk.get().monitorMode).toBe('program');
+    expect(desk.get().live).toMatchObject({
+      recording: false,
+      repairing: false,
+      warming: false,
+      tab: false,
+      onAir: false,
+      thumb: false,
+    });
+    expect(desk.get().liveWarmupKey).toBeNull();
+    expect(desk.get().signInWait).toBeNull();
+  });
+
+  it('ignores a preview poll that lands after Stop', async () => {
+    let releasePreview: (res: Response) => void = () => {};
+    let releaseSignIn: (res: Response) => void = () => {};
+    const previewHung = new Promise<Response>((resolve) => {
+      releasePreview = resolve;
+    });
+    const signInHung = new Promise<Response>((resolve) => {
+      releaseSignIn = resolve;
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('live-preview.json')) return previewHung;
+      if (url.includes('sign-in-wait.json')) return signInHung;
+      return Promise.resolve(new Response(null, { status: 404 }));
+    });
+    try {
+      desk.set({
+        slug: 'demo',
+        jobId: 'j9',
+        jobBusy: true,
+        video: makeVideo({ slug: 'demo', previewUrl: '/media/demo/live-preview.jpg' }),
+      });
+      let seen = 0;
+      mockedApi.mockImplementation((path: string) => {
+        if (path === '/api/jobs/j9/cancel') return Promise.resolve({ job: { id: 'j9', status: 'cancelled' } });
+        if (path === '/api/jobs/j9') {
+          seen += 1;
+          return Promise.resolve({
+            id: 'j9',
+            status: seen === 1 ? 'running' : 'cancelled',
+            step: 'record',
+            phase: 'recording',
+            log: [],
+            createdAt: '',
+            startedAt: '2026-01-01T00:00:00.000Z',
+          });
+        }
+        return Promise.resolve({});
+      });
+      runtime.workAbort = new AbortController();
+      const watched = jobs.watchJob('j9').catch((err: unknown) => err);
+      await vi.waitFor(() => expect(desk.get().live.recording).toBe(true));
+      await jobs.stopAllWork({ reason: 'Stopped' });
+      releasePreview(
+        new Response(JSON.stringify({ at: Date.now() }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      releaseSignIn(
+        new Response(JSON.stringify({ title: 'Sign in', next: 'Continue' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      await watched;
+      await Promise.resolve();
+      expect(desk.get().monitorMode).toBe('program');
+      expect(desk.get().live.recording).toBe(false);
+      expect(desk.get().live.tab).toBe(false);
+      expect(desk.get().signInWait).toBeNull();
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('gives up waiting after its timeout rather than hanging Stop forever', async () => {
+    vi.useFakeTimers();
+    try {
+      desk.set({ slug: 'demo', jobBusy: true, jobId: 'j9', queue: [] });
+      mockedApi.mockImplementation((path: string) => {
+        if (path === '/api/jobs/j9/cancel') return Promise.resolve({ job: { id: 'j9', status: 'cancelling' } });
+        if (path === '/api/jobs/j9') return Promise.resolve({ id: 'j9', status: 'cancelling' });
+        return Promise.resolve({});
+      });
+      const done = jobs.stopAllWork({ reason: 'Stopped' });
+      await vi.advanceTimersByTimeAsync(5000);
+      await done;
+      expect(desk.get().jobBusy).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('drainQueue and OutputBusyError', () => {
+  it('retries a step that lost the race for an output lock a just-stopped job is still releasing', async () => {
+    desk.set({ slug: 'demo', video: makeVideo({ slug: 'demo' }) });
+    let runCalls = 0;
+    mockedApi.mockImplementation((path: string) => {
+      if (path === '/api/video/demo/run') {
+        runCalls += 1;
+        return Promise.resolve({ job: { id: `j${runCalls}` } });
+      }
+      if (path === '/api/jobs/j1') {
+        return Promise.resolve({
+          id: 'j1',
+          status: 'failed',
+          message: 'produce is already running for demo (pid 4242, 0m). Wait for it to finish or stop it first.',
+          log: [],
+        });
+      }
+      if (path === '/api/jobs/j2') return Promise.resolve({ id: 'j2', status: 'done', log: [] });
+      return Promise.resolve({});
+    });
+    jobs.enqueueJob({ kind: 'step', step: 'produce', label: 'Render' }, { silent: true });
+    await vi.waitFor(() => expect(desk.get().jobBusy).toBe(false), { timeout: 3000 });
+    expect(runCalls).toBe(2);
+    expect(desk.get().toasts.some((t) => t.title === 'Done' && t.detail === 'Render')).toBe(true);
+    expect(desk.get().toasts.some((t) => t.kind === 'err')).toBe(false);
+  });
+
+  it('still fails a real error without retrying', async () => {
+    desk.set({ slug: 'demo', video: makeVideo({ slug: 'demo' }) });
+    let runCalls = 0;
+    mockedApi.mockImplementation((path: string) => {
+      if (path === '/api/video/demo/run') {
+        runCalls += 1;
+        return Promise.resolve({ job: { id: 'j1' } });
+      }
+      if (path === '/api/jobs/j1') return Promise.resolve({ id: 'j1', status: 'failed', message: 'ffmpeg exploded', log: [] });
+      return Promise.resolve({});
+    });
+    jobs.enqueueJob({ kind: 'step', step: 'produce', label: 'Render' }, { silent: true });
+    await vi.waitFor(() => expect(desk.get().jobBusy).toBe(false), { timeout: 3000 });
+    expect(runCalls).toBe(1);
+    expect(desk.get().toasts.some((t) => t.title === 'Render' && t.detail === 'ffmpeg exploded' && t.kind === 'err')).toBe(true);
   });
 });
 

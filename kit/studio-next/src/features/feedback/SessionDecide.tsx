@@ -1,15 +1,15 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useBusy } from '@/features/tools-panel/busy';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/ui/icons';
 
 import { approveDraft, approvePlate, discardDraft, reviewProposal } from './proposal';
-import { toggleProposalWork, useSession } from './session';
+import { useSession } from './session';
 
 interface SessionDecideProps {
   railRef: RefObject<HTMLDivElement | null>;
-  progressRef: RefObject<HTMLDivElement | null>;
 }
 
 function ProposalSteps() {
@@ -22,6 +22,42 @@ function ProposalSteps() {
         </li>
       ))}
     </ol>
+  );
+}
+
+interface DecideButtonProps {
+  id: string;
+  tone: 'review' | 'primary' | 'plate' | 'danger';
+  icon: string;
+  label: ReactNode;
+  detail: ReactNode;
+  busy?: boolean;
+  hidden?: boolean;
+  review?: string | undefined;
+  onClick: () => void;
+}
+
+function DecideButton({ id, tone, icon, label, detail, busy, hidden, review, onClick }: DecideButtonProps) {
+  return (
+    <button
+      type="button"
+      id={id}
+      className={cn('decide-btn', tone, busy && 'busy')}
+      data-review={review}
+      disabled={busy}
+      hidden={hidden}
+      onClick={onClick}
+    >
+      <span className="decide-ico" aria-hidden="true">
+        <Icon name={icon} size={15} />
+      </span>
+      <span className="decide-copy">
+        <strong>{label}</strong> <em>{detail}</em>
+      </span>
+      <span className="decide-go" aria-hidden="true">
+        <Icon name="chevron" size={13} />
+      </span>
+    </button>
   );
 }
 
@@ -39,56 +75,55 @@ function DecideActions() {
   const discarding = useBusy('btnDiscardDraft');
   return (
     <div className="session-decide-actions">
-      <button
-        type="button"
+      <DecideButton
         id="btnReviewProposal"
-        className="decide-btn review"
-        data-review={review ?? undefined}
+        tone="review"
+        icon={review === 'script' ? 'ui-story' : 'ui-eye'}
+        label={reviewLabel}
+        detail={reviewDetail}
+        review={review ?? undefined}
         onClick={reviewProposal}
-      >
-        <strong>{reviewLabel}</strong> <em>{reviewDetail}</em>
-      </button>{' '}
-      <button
-        type="button"
+      />
+      <DecideButton
         id="btnApproveDraft"
-        className={cn('decide-btn primary', approving && 'busy')}
-        disabled={approving}
+        tone="primary"
+        icon="ui-render"
+        label="Approve & render full"
+        detail="Stitch plates + live into master"
+        busy={approving}
         onClick={() => void approveDraft()}
-      >
-        <strong>Approve & render full</strong> <em>Stitch plates + live into master</em>
-      </button>{' '}
-      <button
-        type="button"
+      />
+      <DecideButton
         id="btnApprovePlate"
-        className={cn('decide-btn', platePending && 'busy')}
-        disabled={platePending}
+        tone="plate"
+        icon="ui-plate"
+        label="Approve plate only"
+        detail="Encode this plate without a full render"
+        busy={platePending}
         hidden={!approvePlateShown}
         onClick={approvePlate}
-      >
-        <strong>Approve plate only</strong> <em>Encode this plate without a full render</em>
-      </button>{' '}
-      <button
-        type="button"
+      />
+      <DecideButton
         id="btnDiscardDraft"
-        className={cn('decide-btn danger', discarding && 'busy')}
-        disabled={discarding}
+        tone="danger"
+        icon="ui-restore"
+        label="Discard changes"
+        detail="Restore the previous sources"
+        busy={discarding}
         onClick={() => void discardDraft()}
-      >
-        <strong>Discard changes</strong> <em>Restore the previous sources</em>
-      </button>
+      />
     </div>
   );
 }
 
-/** `#sessionDecide`: the agent finished, the director picks a path. */
-export function SessionDecide({ railRef, progressRef }: SessionDecideProps) {
-  const { open, assertive, title, reason, showWork, seq } = useSession(
+/** `#sessionDecide`: the agent finished, the director picks a path. The run itself folds under the header chevron. */
+export function SessionDecide({ railRef }: SessionDecideProps) {
+  const { open, assertive, title, reason, seq } = useSession(
     useShallow((s) => ({
       open: s.decideOpen,
       assertive: s.decideAssertive,
       title: s.proposalTitle,
       reason: s.proposalReason,
-      showWork: s.showWork,
       seq: s.proposalSeq,
     })),
   );
@@ -105,12 +140,6 @@ export function SessionDecide({ railRef, progressRef }: SessionDecideProps) {
     return () => cancelAnimationFrame(frame);
   }, [seq, railRef]);
 
-  const onWork = () => {
-    const expanded = toggleProposalWork();
-    if (expanded) progressRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    else if (railRef.current) railRef.current.scrollTop = 0;
-  };
-
   return (
     <div
       ref={ref}
@@ -122,24 +151,15 @@ export function SessionDecide({ railRef, progressRef }: SessionDecideProps) {
     >
       <div className="session-decide-head">
         <span className="decision-check" aria-hidden="true">
-          ✓
+          <Icon name="check" size={13} />
         </span>
         <div className="session-decide-copy">
-          <span className="decision-eyebrow">Agent finished · your decision</span>{' '}
+          <span className="decision-eyebrow">Your decision</span>{' '}
           <strong id="proposalTitle">{title}</strong> <span id="proposalReason">{reason}</span>
         </div>
       </div>
       <ProposalSteps />
       <DecideActions />
-      <button
-        type="button"
-        id="btnProposalWork"
-        className="proposal-work-toggle"
-        aria-expanded={showWork ? 'true' : 'false'}
-        onClick={onWork}
-      >
-        {showWork ? 'Hide agent work' : 'View agent work'}
-      </button>
     </div>
   );
 }

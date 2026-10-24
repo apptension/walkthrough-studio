@@ -10,30 +10,90 @@ export type AgentAuthView = Partial<Omit<AgentAuth, 'runners' | 'preference'>> &
   runners?: Partial<Record<string, Partial<AgentRunner>>>;
 };
 
-/** `agentTip(auth, id)` — the three-line setup / status tip under a runner logo. */
-export function agentTip(auth: AgentAuthView, id: AgentId): string {
+export interface AgentTipView {
+  /** Agent name, with “in use” when selected. */
+  title: string;
+  /** One-line state a person can act on. */
+  status: string;
+  /** Concrete next step(s). */
+  detail: string;
+}
+
+function agentLabel(_auth: AgentAuthView, id: AgentId): string {
+  // Stable product names in the tip — server labels vary ("Cursor agent", etc.).
+  return id === 'claude' ? 'Claude Code' : 'Cursor';
+}
+
+function signInDetail(id: AgentId): string {
+  return id === 'claude'
+    ? 'In a terminal run: claude /login\nOr add ANTHROPIC_API_KEY to kit/.env'
+    : 'In a terminal run: agent login\nOr add CURSOR_API_KEY to kit/.env';
+}
+
+function installDetail(id: AgentId): string {
+  return id === 'claude'
+    ? 'Install from claude.ai/code, then run: claude /login'
+    : 'Install the Cursor CLI, then run: agent login';
+}
+
+function prettyVia(via: string | null | undefined): string {
+  if (!via) return '';
+  if (via === 'agent-login') return 'Cursor login';
+  if (/api[_-]?key/i.test(via) || via === 'env') return 'API key in kit/.env';
+  return via;
+}
+
+/** Structured tip under a runner logo — title, status, what to do next. */
+export function agentTipView(auth: AgentAuthView, id: AgentId): AgentTipView {
   const runner = auth.runners?.[id];
-  const label = runner?.label || (id === 'claude' ? 'Claude Code' : 'Cursor agent');
+  const label = agentLabel(auth, id);
   const active = (auth.provider || auth.preference) === id;
+  const title = active ? `${label} · in use` : label;
+
   if (!runner?.available) {
-    return `${label}\nNot installed\n${
-      runner?.message ||
-      (id === 'claude' ? 'Install from claude.ai/code, then run claude → /login.' : 'Install Cursor CLI, then run agent login.')
-    }`;
+    return {
+      title,
+      status: 'Not installed',
+      detail: installDetail(id),
+    };
   }
   if (!runner.authenticated) {
-    return `${label}${active ? ' · selected' : ''}\nNeeds sign-in\n${
-      runner.message ||
-      (id === 'claude' ? 'Run claude → /login, or set ANTHROPIC_API_KEY in kit/.env.' : 'Run agent login, or set CURSOR_API_KEY in kit/.env.')
-    }`;
+    return {
+      title,
+      status: 'Needs sign-in before Improve can run',
+      detail: signInDetail(id),
+    };
   }
   if (runner.soft) {
-    return `${label}${active ? ' · selected' : ''}\nSigned in (unverified)\n${runner.message || 'Retry Improve after agent login refreshes.'}`;
+    return {
+      title,
+      status: 'Signed in, but not verified yet',
+      detail: id === 'claude'
+        ? 'Run claude /login again, then retry Improve'
+        : 'Run agent login again, then retry Improve',
+    };
   }
   if (active) {
-    return `${label}\nActive · ready for Improve${runner.via ? `\nvia ${runner.via}` : ''}`;
+    const via = prettyVia(runner.via);
+    return {
+      title,
+      status: 'Ready',
+      detail: via ? `Signed in via ${via}` : 'This agent will handle Improve requests',
+    };
   }
-  return `${label}\nReady — click to use for Improve${auth.switchable ? '' : '\n(other runner unavailable)'}`;
+  return {
+    title,
+    status: 'Ready',
+    detail: auth.switchable === false
+      ? 'Click to use for Improve\nThe other agent isn’t available'
+      : 'Click to use this agent for Improve',
+  };
+}
+
+/** Flat tip text (tests + `data-tip`). */
+export function agentTip(auth: AgentAuthView, id: AgentId): string {
+  const tip = agentTipView(auth, id);
+  return [tip.title, tip.status, tip.detail].filter(Boolean).join('\n');
 }
 
 export interface AgentButtonView {
@@ -42,6 +102,7 @@ export interface AgentButtonView {
   pressed: boolean;
   available: boolean;
   tip: string;
+  tipView: AgentTipView;
   ariaLabel: string;
 }
 
@@ -53,13 +114,15 @@ export function agentButtonView(auth: AgentAuthView, id: AgentId): AgentButtonVi
   const available = Boolean(runner?.available);
   const ready = available && Boolean(runner?.authenticated) && !runner?.soft;
   const state: AgentState = ready ? 'ready' : available ? 'needs-auth' : 'missing';
+  const tipView = agentTipView(auth, id);
   return {
     state,
     live: isActive && state !== 'missing',
     pressed: isActive,
     available,
     tip: agentTip(auth, id),
-    ariaLabel: `${runner?.label || id}${isActive ? ', active' : ''}${
+    tipView,
+    ariaLabel: `${agentLabel(auth, id)}${isActive ? ', in use' : ''}${
       state === 'ready' ? ', ready' : state === 'needs-auth' ? ', needs sign-in' : ', not installed'
     }`,
   };

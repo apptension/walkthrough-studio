@@ -43,6 +43,7 @@ import { loadNarrationLines, mergeAgentReview, runCritic } from './critic.mjs';
 import { CAMERA_OPTIONS, CURSOR_OPTIONS, FOCUS_PRESETS, PALETTE_PRESETS, listLockups, patchDirection } from './direction.mjs';
 import { ZOOM_LEVELS, insetGeometry, planZooms, zoomTiming } from './camera.mjs';
 import { takeSpace, videoSpace } from './stage.mjs';
+import { PLACEMENT_META, SIZE_IDS, takeCapture, videoLayout } from './layout.mjs';
 import { applyCaptureSettings, captureOptions, captureSettings, parseScreen } from './captureSettings.mjs';
 import { outputFrame } from './format.mjs';
 import { lensGeometry, lensTiming } from './lens.mjs';
@@ -391,6 +392,27 @@ function captureMarks(video) {
     .map((mark) => ({ start: Number(mark.t) || 0, title: mark.label || '', kind: mark.kind }));
 }
 
+function recordFailureFor(video) {
+  const shotPath = join(video.out, 'error.png');
+  const liveFile = join(video.out, 'live.mp4');
+  const notePath = join(video.out, 'error.txt');
+  return recordFailureView({
+    shotMtime: existsSync(shotPath) ? statSync(shotPath).mtimeMs : null,
+    liveMtime: existsSync(liveFile) ? statSync(liveFile).mtimeMs : null,
+    note: existsSync(notePath) ? readFileSync(notePath, 'utf8') : '',
+    screenshot: `/media/${video.slug}/error.png`,
+  });
+}
+
+/** The slice of the summary the Render cluster decides from — cheap enough to poll after every edit. */
+function renderState(video) {
+  return {
+    freshness: freshnessInfo(video),
+    hasDelivery: existsSync(join(video.out, `${video.slug}.mp4`)),
+    recordFailure: recordFailureFor(video),
+  };
+}
+
 function videoSummary(slug) {
   const video = loadVideo(slug);
   const brandState = brandReadiness(video.config.brand);
@@ -415,15 +437,7 @@ function videoSummary(slug) {
     : null;
   const handoffZip = join(video.out, `${slug}-handoff.zip`);
   const freshness = freshnessInfo(video);
-  const shotPath = join(video.out, 'error.png');
-  const liveFile = join(video.out, 'live.mp4');
-  const notePath = join(video.out, 'error.txt');
-  const recordFailure = recordFailureView({
-    shotMtime: existsSync(shotPath) ? statSync(shotPath).mtimeMs : null,
-    liveMtime: existsSync(liveFile) ? statSync(liveFile).mtimeMs : null,
-    note: existsSync(notePath) ? readFileSync(notePath, 'utf8') : '',
-    screenshot: `/media/${slug}/error.png`,
-  });
+  const recordFailure = recordFailureFor(video);
   return {
     slug,
     title: video.config.title,
@@ -1061,7 +1075,38 @@ async function writtenLines(video) {
 /** The deck with the written narration attached; the API handlers use this one. */
 async function editDeckFull(video) {
   const narration = await loadNarration(video).catch(() => null);
-  return editDeck(video, { written: await writtenLines(video), narration });
+  const deck = editDeck(video, { written: await writtenLines(video), narration });
+  const output = deck.space?.output;
+  let sections = [];
+  if (output?.width && output?.height) {
+    try {
+      const resolved = await videoLayout(video, {
+        marks: deck.marks,
+        liveDur: deck.live?.durationSec || 0,
+        layouts: deck.deck?.layouts,
+        output: { width: output.width, height: output.height },
+        capture: takeCapture(deck.space),
+        camera: deck.camera,
+      });
+      sections = resolved.sections.map((s) => ({
+        key: s.key,
+        from: Number(s.from.toFixed(3)),
+        to: Number(s.to.toFixed(3)),
+        no: s.no,
+        custom: s.custom,
+        layout: s.layout,
+        copy: s.copy,
+        source: s.source,
+        stage: s.stage,
+        panel: s.panel,
+        textOn: Boolean(s.textOn),
+        htmlUrl: s.htmlUrl,
+      }));
+    } catch (err) {
+      console.warn('section layouts:', err.message || err);
+    }
+  }
+  return { ...deck, layouts: { placements: PLACEMENT_META, sizes: [...SIZE_IDS], sections } };
 }
 
 function editDeck(video, { written = new Map(), narration = null } = {}) {
@@ -1510,6 +1555,10 @@ async function handleApi(req, res, url) {
 
   if (rest === '' && req.method === 'GET') {
     return json(res, 200, videoSummary(slug));
+  }
+
+  if (rest === '/freshness' && req.method === 'GET') {
+    return json(res, 200, renderState(video));
   }
 
   if (rest === '/config' && req.method === 'GET') {

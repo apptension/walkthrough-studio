@@ -1,14 +1,15 @@
 import { Fragment, useCallback } from 'react';
 
-import { desk, useDesk } from '@/desk/store';
-import { runCriticFromStudio } from '@/features/review/critic';
+import { desk, IMPROVE_DEFAULT, useDesk } from '@/desk/store';
+import { fillNoteFromCritic, runCriticFromStudio } from '@/features/review/critic';
 import { clearQcPending } from '@/features/review/qc';
 import { useBusy } from '@/features/tools-panel/busy';
+import { directorNoteForCritic } from '@/logic/criticFindings';
 import { HelpTip } from '@/ui/HelpTip';
-import { SecIcon } from '@/ui/icons';
+import { Icon, SecIcon } from '@/ui/icons';
 import { cn } from '@/lib/cn';
 
-import { noteField, resetImproveTarget, startImprove } from './improve';
+import { isCriticFillLabel, noteField, resetImproveTarget, startImprove } from './improve';
 
 const NOTE_HELP =
   'Smart scope picks the smallest safe change. A broad note can coordinate story & script, brand direction, timing, plates, and voice & mix together. Name an exact plate, scene, or line only when you want a surgical edit.';
@@ -65,7 +66,12 @@ function DirectorNote() {
         value={note}
         onChange={(e) => {
           const value = e.target.value;
-          desk.set((s) => ({ improve: { ...s.improve, note: value } }));
+          desk.set((s) => {
+            const improve = { ...s.improve, note: value };
+            // Editing a critic-filled note drops the special Apply label.
+            if (isCriticFillLabel(s.improve.label)) improve.label = IMPROVE_DEFAULT.label;
+            return { improve };
+          });
           if (desk.get().qcPending.length) clearQcPending();
           if (!value.trim() && desk.get().improve.plateId) resetImproveTarget();
         }}
@@ -126,12 +132,34 @@ function ForceDomain() {
 
 function CriticHint() {
   const url = useDesk((s) => s.video?.criticUrl ?? null);
+  const critic = useDesk((s) => s.video?.critic ?? null);
+  const canFill = Boolean(directorNoteForCritic(critic));
+  const show = Boolean(url || canFill);
   return (
-    <p id="criticHint" className="meta critic-hint" hidden={!url}>
-      <a id="criticLink" href={url ?? '#'} target="_blank" rel="noopener">
-        Open critic report →
+    <div id="criticHint" className="critic-hint" hidden={!show}>
+      <button
+        type="button"
+        id="btnCriticFill"
+        className="critic-link critic-link--fill"
+        hidden={!canFill}
+        title="Paste the critic findings into the director note"
+        onClick={() => fillNoteFromCritic()}
+      >
+        <Icon name="ui-note" size={13} />
+        <span>Use critic findings</span>
+      </button>
+      <a
+        id="criticLink"
+        className="critic-link"
+        href={url ?? '#'}
+        target="_blank"
+        rel="noopener"
+        hidden={!url}
+      >
+        <Icon name="ui-open" size={13} />
+        <span>Open report</span>
       </a>
-    </p>
+    </div>
   );
 }
 
@@ -142,7 +170,7 @@ export function FeedbackTab() {
       <header className="feedback-hero">
         <h2 className="feedback-title">Direct the cut</h2>
         <p className="panel-lede feedback-lede">
-          Write what should change in plain language, or apply findings from Review. The agent picks the smallest safe scope and waits for your approval before rendering.
+          Describe the change in plain language — the agent picks a safe scope and waits for your OK.
         </p>
       </header>
       <QcPendingChips />

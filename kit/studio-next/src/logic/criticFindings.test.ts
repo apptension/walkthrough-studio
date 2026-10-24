@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { test } from 'vitest';
 
-import { criticFindingMarkup } from './criticFindings';
+import { criticFindingMarkup, directorNoteForCritic, listedCriticFindings } from './criticFindings';
 
 function channel(hex: string, i: number) {
   const s = hex.replace('#', '');
@@ -16,6 +16,39 @@ function contrast(a: string, b: string) {
   const [hi, lo] = [L(a), L(b)].sort((x, y) => y - x) as [number, number];
   return (hi + 0.05) / (lo + 0.05);
 }
+
+test('directorNoteForCritic leads with the agent summary and ranks findings', () => {
+  const note = directorNoteForCritic({
+    agent: { summary: 'The cut sells the shift but undersells proof.', score: 64, strengths: [] },
+    findings: [
+      { severity: 'low', message: '', target: 'intro.copy', persona: 'buyer', issue: 'Wordy', suggestion: 'Trim' },
+      { severity: 'high', message: '', target: 'narration:2', persona: 'skeptic', issue: 'Vague claim', suggestion: 'Name a number' },
+    ],
+  });
+  assert.match(note, /undersells proof/);
+  assert.match(note, /2 critic findings/);
+  assert.ok(note.indexOf('Vague claim') < note.indexOf('Wordy'));
+  assert.match(note, /\[high · skeptic\] Vague claim \(narration:2\) — Name a number/);
+});
+
+test('listedCriticFindings caps and ranks by severity', () => {
+  const listed = listedCriticFindings(
+    Array.from({ length: 10 }, (_, i) => ({
+      severity: i === 3 ? 'high' : 'low',
+      message: '',
+      issue: `F${i}`,
+      suggestion: 'Fix',
+    })),
+    3,
+  );
+  assert.equal(listed.length, 3);
+  assert.equal(listed[0]?.issue, 'F3');
+});
+
+test('directorNoteForCritic is empty without findings or summary', () => {
+  assert.equal(directorNoteForCritic({ findings: [] }), '');
+  assert.equal(directorNoteForCritic(null), '');
+});
 
 test('Fix with AI sits in the finding header as the primary button', () => {
   const html = criticFindingMarkup(

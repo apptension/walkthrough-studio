@@ -72,23 +72,42 @@ describe('agent chrome', () => {
     },
   };
 
-  it('describes each runner', () => {
-    expect(agentTip(auth, 'cursor')).toBe('Cursor agent\nActive · ready for Improve\nvia agent-login');
-    expect(agentTip(auth, 'claude')).toBe('Claude Code\nNeeds sign-in\nRun claude → /login, or set ANTHROPIC_API_KEY in kit/.env.');
-    expect(agentTip({}, 'cursor')).toBe('Cursor agent\nNot installed\nInstall Cursor CLI, then run agent login.');
-    expect(agentTip({ ...auth, provider: 'claude', preference: 'claude' }, 'cursor')).toBe('Cursor agent\nReady — click to use for Improve');
+  it('describes each runner in plain next steps', () => {
+    expect(agentTip(auth, 'cursor')).toBe('Cursor · in use\nReady\nSigned in via Cursor login');
+    expect(agentTip(auth, 'claude')).toBe(
+      'Claude Code\nNeeds sign-in before Improve can run\nIn a terminal run: claude /login\nOr add ANTHROPIC_API_KEY to kit/.env',
+    );
+    expect(agentTip({}, 'cursor')).toBe('Cursor\nNot installed\nInstall the Cursor CLI, then run: agent login');
+    expect(agentTip({ ...auth, provider: 'claude', preference: 'claude' }, 'cursor')).toBe(
+      'Cursor\nReady\nClick to use this agent for Improve',
+    );
     expect(agentTip({ ...auth, provider: 'claude', switchable: false }, 'cursor')).toBe(
-      'Cursor agent\nReady — click to use for Improve\n(other runner unavailable)',
+      'Cursor\nReady\nClick to use for Improve\nThe other agent isn’t available',
     );
     expect(agentTip({ runners: { cursor: runner({ soft: true, message: '' }) } }, 'cursor')).toBe(
-      'Cursor agent\nSigned in (unverified)\nRetry Improve after agent login refreshes.',
+      'Cursor\nSigned in, but not verified yet\nRun agent login again, then retry Improve',
     );
   });
 
   it('paints state, live and labels like renderAgentChrome', () => {
-    expect(agentButtonView(auth, 'cursor')).toMatchObject({ state: 'ready', live: true, pressed: true, available: true, ariaLabel: 'Cursor agent, active, ready' });
-    expect(agentButtonView(auth, 'claude')).toMatchObject({ state: 'needs-auth', live: false, pressed: false, ariaLabel: 'Claude Code, needs sign-in' });
-    expect(agentButtonView({}, 'claude')).toMatchObject({ state: 'missing', available: false, ariaLabel: 'claude, not installed' });
+    expect(agentButtonView(auth, 'cursor')).toMatchObject({
+      state: 'ready',
+      live: true,
+      pressed: true,
+      available: true,
+      ariaLabel: 'Cursor, in use, ready',
+    });
+    expect(agentButtonView(auth, 'claude')).toMatchObject({
+      state: 'needs-auth',
+      live: false,
+      pressed: false,
+      ariaLabel: 'Claude Code, needs sign-in',
+    });
+    expect(agentButtonView({}, 'claude')).toMatchObject({
+      state: 'missing',
+      available: false,
+      ariaLabel: 'Claude Code, not installed',
+    });
     expect(agentButtonView({ provider: null, preference: 'auto', runners: auth.runners }, 'cursor').pressed).toBe(false);
   });
 });

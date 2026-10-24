@@ -307,6 +307,31 @@ export function insetGeometry({ width, height, padding = 'balanced', corners = '
 
 const hex = (c, fallback) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c.slice(1) : fallback);
 
+/**
+ * Alpha mask for one recording window, cached beside the take. The section graph uses it to round
+ * the recording that sits on a backdrop rendered from the shared HTML template.
+ */
+export function frameMask(dir, geo) {
+  const key = createHash('sha1')
+    .update(JSON.stringify({ v: 1, w: geo.w, h: geo.h, r: geo.radius }))
+    .digest('hex')
+    .slice(0, 12);
+  mkdirSync(dir, { recursive: true });
+  const mask = join(dir, `win-mask-${key}.png`);
+  if (existsSync(mask)) return mask;
+  run(
+    'ffmpeg',
+    [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', `color=c=black:s=${geo.w}x${geo.h}:d=1`,
+      '-vf', `format=gray,geq=lum='${roundedMask(geo.w, geo.h, geo.radius)}'`,
+      '-frames:v', '1', '-update', '1', mask,
+    ],
+    'window mask',
+  );
+  return mask;
+}
+
 /** Rounded-rect coverage (anti-aliased) as a geq expression over a w×h frame. */
 function roundedMask(w, h, r) {
   const dx = `max(abs(X-${w / 2}+0.5)-${w / 2 - r},0)`;

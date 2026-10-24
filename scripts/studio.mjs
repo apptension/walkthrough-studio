@@ -2,7 +2,7 @@
 /**
  * One-command Walkthrough Studio: check toolchain → install if needed → launch → open browser.
  *
- *   ./studio
+ *   ./studio --v2
  *   ./studio walkthrough-studio
  *   ./studio --port 4750
  *   ./studio --no-open
@@ -33,7 +33,7 @@ const STUDIO_NEXT = join(KIT, 'studio-next');
 const MIN_NODE = [20, 0, 0];
 const MIN_NPM = [11, 17, 0];
 
-const { help, noOpen, dev, legacy, v2, port, uiPort, openSlug } = parseStudioArgs(process.argv.slice(2));
+const { help, noOpen, dev, legacy, port, uiPort, openSlug } = parseStudioArgs(process.argv.slice(2));
 /** 'next' (the desk) or 'legacy' (the classic desk). A desk that cannot be prepared falls back to legacy. */
 let desk = legacy ? 'legacy' : 'next';
 
@@ -322,7 +322,7 @@ function prepareDesk() {
     row('desk', 'warn', 'classic  ·  --legacy');
     note(
       'The classic desk is retiring and will be removed in a later release',
-      'Run ./studio without --legacy for the new desk. Tell us what is missing.'
+      'Run ./studio --v2 for the new desk. Tell us what is missing.'
     );
     return;
   }
@@ -497,7 +497,7 @@ async function main() {
     write(`
 ${studioBanner({ theme: c, version: VERSION, columns: output.columns || 80 })}
 
-  ${c.bold}./studio${c.reset}                      check, install if needed, open Studio
+  ${c.bold}./studio${c.reset} --v2                 the new desk: check, install if needed, open Studio
   ${c.bold}./studio${c.reset} <slug>               open a project
   ${c.bold}./studio${c.reset} --port 4750          use another port
   ${c.bold}./studio${c.reset} --no-open            start without opening a browser
@@ -505,7 +505,7 @@ ${studioBanner({ theme: c, version: VERSION, columns: output.columns || 80 })}
   ${c.bold}./studio${c.reset} --dev --ui-port 4758 dev desk on another port
   ${c.bold}./studio${c.reset} --legacy             the classic desk (retiring)
 
-${c.soft}Studio serves the desk on --port (default 4747). ./studio installs the desk's${c.reset}
+${c.soft}Studio serves the desk on --port (default 4747). ./studio --v2 installs the desk's${c.reset}
 ${c.soft}packages and rebuilds it whenever kit/studio-next changes, so a git pull is enough.${c.reset}
 
 ${c.soft}Dev mode prints the server log and runs the desk on Vite (--ui-port, default 4748)${c.reset}
@@ -564,7 +564,6 @@ ${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Cl
   }
 
   prepareDesk();
-  if (v2 && desk === 'next') note('--v2 is now the default desk; the flag is no longer needed', '');
   ensureEnv();
   agentCheck = await checkAgents();
 

@@ -140,6 +140,7 @@ export function renderCardTracks(): void {
         };
       })
       .filter((it): it is CardItem => Boolean(it));
+    const carried = new Set((ed.deck?.layouts?.sections || []).filter((s) => s.textOn).map((s) => s.key));
     const packed = packLanes(items);
     const h = Math.max(CARD_LANE_H, packed.lanes * CARD_LANE_H + 4);
     host.style.height = `${h}px`;
@@ -147,10 +148,11 @@ export function renderCardTracks(): void {
     host.innerHTML = packed.items
       .map((it) => {
         const on = sel?.type === 'card' && sel.key === it.key;
+        const onStage = kind === 'chapter' && carried.has(it.key);
         const label = it.m.label || kind;
-        const title = `${kind === 'chapter' ? 'Chapter' : 'Caption'} · ${label} · drag to move · edges trim · double-click to edit copy`;
+        const title = `${kind === 'chapter' ? 'Chapter' : 'Caption'} · ${label}${onStage ? ' · title sits beside the recording' : ''} · drag to move · edges trim · double-click to edit copy`;
         const top = 3 + it.lane * CARD_LANE_H;
-        return `<button type="button" class="ec-card ${kind}${on ? ' is-on' : ''}" style="left:${it.a * pps}px;width:${Math.max(18, (it.b - it.a) * pps)}px;top:${top}px;height:${CARD_LANE_H - 6}px" data-mark-t="${it.m.t}" data-mark-dur="${it.dur}" data-mark-key="${escapeHtml(it.key)}" data-card-id="${escapeHtml(it.card?.id || '')}" data-card-kind="${kind}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i class="h l" data-edge="l"></i><span class="ec-card-t">${escapeHtml(label)}</span><i class="h r" data-edge="r"></i></button>`;
+        return `<button type="button" class="ec-card ${kind}${on ? ' is-on' : ''}${onStage ? ' is-carried' : ''}" style="left:${it.a * pps}px;width:${Math.max(18, (it.b - it.a) * pps)}px;top:${top}px;height:${CARD_LANE_H - 6}px" data-mark-t="${it.m.t}" data-mark-dur="${it.dur}" data-mark-key="${escapeHtml(it.key)}" data-card-id="${escapeHtml(it.card?.id || '')}" data-card-kind="${kind}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i class="h l" data-edge="l"></i><span class="ec-card-t">${escapeHtml(label)}</span><i class="h r" data-edge="r"></i></button>`;
       })
       .join('');
     host.dataset['empty'] =

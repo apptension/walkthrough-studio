@@ -54,7 +54,8 @@ describe('loadVideo', () => {
     const s = desk.get();
     expect(s.video?.slug).toBe('demo');
     expect(s.action).not.toBeNull();
-    expect(s.status.text).toBe(s.action?.status);
+    // The render state lives on `action`; the status line only carries activity and notices.
+    expect(s.status.text).not.toBe(s.action?.status);
     expect(s.cues).toEqual([{ start: 0, end: 1, text: 'Hi' }]);
     expect(s.programLoaded).toBe(true);
     expect(runtime.player?.getAttribute('src')).toMatch(/^\/media\/demo\/demo\.mp4\?t=\d+$/);

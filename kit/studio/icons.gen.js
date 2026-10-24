@@ -1260,6 +1260,17 @@ export const ICON_META = {
       "stroke-linejoin": "round"
     }
   },
+  "ui-version": {
+    "viewBox": "0 0 24 24",
+    "file": "ui/version.svg",
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
+  },
   "ui-video": {
     "viewBox": "0 0 24 24",
     "file": "ui/video.svg",
@@ -1571,6 +1582,7 @@ export const ICON_BODY = {
   "ui-trash": "<path d=\"M4 6.5h16\"/>\n  <path d=\"M9.5 6.5v-2h5v2\"/>\n  <path d=\"m6 6.5.9 12.6a1.5 1.5 0 0 0 1.5 1.4h7.2a1.5 1.5 0 0 0 1.5-1.4L18 6.5\"/>\n  <path d=\"M10 10.5v6M14 10.5v6\"/>",
   "ui-undo": "<path d=\"M8.5 14 4 9.5 8.5 5\"/>\n  <path d=\"M4 9.5h10.5a5 5 0 0 1 0 10H11\"/>",
   "ui-upload": "<path d=\"M12 15.5v-11\"/>\n  <path d=\"m7.5 9 4.5-4.5L16.5 9\"/>\n  <path d=\"M4.5 20h15\"/>",
+  "ui-version": "<path d=\"M5 3.5h10.5L20.5 8.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5.5A2 2 0 0 1 5 3.5Z\"/>\n  <path d=\"M8 3.5v4.75h6.25V3.5\"/>\n  <rect x=\"7\" y=\"13\" width=\"10\" height=\"5.5\" rx=\"1.25\"/>",
   "ui-video": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"m10 9 5 3-5 3Z\" fill=\"currentColor\"/>",
   "ui-volume": "<path d=\"M3.5 9.5v5H7l5 4v-13l-5 4Z\"/>\n  <path d=\"M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11\"/>",
   "ui-walk": "<circle cx=\"12.5\" cy=\"4.5\" r=\"2\" fill=\"currentColor\" stroke=\"none\"/>\n  <path d=\"M11.75 8.5 10.25 14\"/>\n  <path d=\"m8 12 3.75-3.5 3.5 2.75 2.5-1.25\"/>\n  <path d=\"m10.25 14-3.5 7.5M10.25 14l3.25 3.25.75 4.25\"/>",

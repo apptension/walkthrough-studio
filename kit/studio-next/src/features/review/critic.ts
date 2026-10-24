@@ -2,11 +2,11 @@ import type { CriticFinding, Job, Story } from '@/api/types';
 import { api, enc } from '@/desk/api';
 import { watchJob } from '@/desk/jobs';
 import { showRightTab } from '@/desk/panels';
-import { desk, setButtonBusy } from '@/desk/store';
+import { desk, IMPROVE_DEFAULT, setButtonBusy } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { loadVideo } from '@/desk/video';
-import { startImprove } from '@/features/feedback/improve';
-import { directorNoteForFinding } from '@/logic/criticFindings';
+import { noteField, startImprove } from '@/features/feedback/improve';
+import { directorNoteForCritic, directorNoteForFinding } from '@/logic/criticFindings';
 
 /** `runCriticFromStudio`, `btnCriticApply`, `fixFindingWithAi` and the story purpose picker from `kit/studio/app.js`. */
 
@@ -85,6 +85,35 @@ export function fixFindingWithAi(f: CriticFinding): void {
   }));
   showRightTab('feedback');
   startImprove(/^narration/.test(target) ? 'narration' : plate ? 'plates' : 'full');
+}
+
+/** Paste the critic report into the Feedback note so the user can edit, then Apply. */
+export function fillNoteFromCritic(): boolean {
+  const critic = desk.get().video?.critic;
+  const note = directorNoteForCritic(critic);
+  if (!note) {
+    toast('No critic findings yet', 'Run the critic in Review, then bring the findings here', 'warn');
+    return false;
+  }
+  const n = critic?.findings?.length ?? 0;
+  desk.set((s) => ({
+    improve: {
+      ...s.improve,
+      ...IMPROVE_DEFAULT,
+      note,
+      label: n <= 1 ? 'Apply critic finding' : `Apply ${n} critic findings`,
+    },
+    qcPending: [],
+  }));
+  showRightTab('feedback');
+  queueMicrotask(() => {
+    const el = noteField.el;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  });
+  toast('Critic findings loaded', 'Edit the note if you want, then Apply');
+  return true;
 }
 
 /** `#storyPurpose` change: confirm the video's purpose so every agent pass follows one spine. */

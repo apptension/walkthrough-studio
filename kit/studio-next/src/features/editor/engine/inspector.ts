@@ -5,8 +5,10 @@ import { cardMarkDuration, cardMarkKey } from '@/logic/liveCardStage';
 import { lensLoupe, lensZoomCeiling } from '@/logic/livePreview';
 import { narratorKeyNote } from '@/logic/narratorNote';
 import { paintRanges } from '@/ui/rangeFill';
+import { helpLabel, helpState, helpTips } from '@/ui/helpStore';
 
 import { deckLens, selectedShot } from './aim';
+import { sectionForClip } from './layoutPreview';
 import { wireInspector } from './inspectorWire';
 import { lensItems, selectedLens, shotKey } from './seq';
 import { joinStyle, liveCardAtPlayhead, marksInLiveClip, plateReady, resolveLiveCard } from './stage';
@@ -15,6 +17,9 @@ import { renderPlateFields } from './text';
 import { plateInfo } from './timeline';
 import type { Clip, DeckPlate, NarratorVoice, PlateRow, Selection } from './types';
 import { $, CUT_ICON, ICONS, LENS_PRESETS, PLATE_ICON, SPEED_PRESETS, T_GLYPH, ZEN_ART, ZOOM_PRESETS, clamp, errMessage, escapeHtml, fmtRate, fmtT, r3 } from './util';
+
+const PLACE_HELP =
+  'Drag the block to reorder. Use the trash or ⌫ to pull it out of the cut — restore it anytime from the empty inspector.';
 
 /** The Inspector (#inspectorRoot) renderers from `kit/studio/editor.js`. */
 
@@ -268,6 +273,36 @@ export function renderInspector(): void {
   // Every inspector range is the same meter the stage panels drag.
   paintRanges(root);
   wireInspector();
+  wireInsHelp(root);
+}
+
+/** Bind string-HTML `.help-tip[data-ins-help]` buttons to the shared HelpPop. */
+function wireInsHelp(root: HTMLElement): void {
+  root.querySelectorAll<HTMLButtonElement>('.help-tip[data-ins-help]').forEach((btn) => {
+    const text = btn.dataset['insHelp'] || '';
+    if (!text) return;
+    btn.addEventListener('pointerenter', () => {
+      if (helpState().pinned) return;
+      helpTips.showSoon(btn, text);
+    });
+    btn.addEventListener('pointerleave', () => {
+      helpTips.cancelShow();
+      if (!helpState().pinned) helpTips.scheduleHide();
+    });
+    btn.addEventListener('focus', () => {
+      if (btn.matches(':focus-visible')) helpTips.show(btn, text);
+    });
+    btn.addEventListener('blur', () => {
+      if (!helpState().pinned) helpTips.scheduleHide();
+    });
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const open = helpState().anchor === btn;
+      if (open && helpState().pinned) helpTips.hide();
+      else helpTips.show(btn, text, true);
+    });
+  });
 }
 
 export const head = (icon: string, kind: string, title: string, sub: string, actions = ''): string =>
@@ -324,6 +359,48 @@ export function clipRemoveBtn(_c: Clip): string {
   }" ${alone ? 'disabled' : ''}>${ICONS['trash']}</button>`;
 }
 
+const SIZE_LABEL: Record<string, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
+const SIDE_PLACEMENTS = new Set(['left', 'right', 'top', 'bottom']);
+
+/** Where this recording section sits in the frame, and the words beside it. */
+export function layoutSection(c: Clip): string {
+  const pack = ed.deck?.layouts;
+  const current = sectionForClip(c);
+  if (!pack?.sections?.length || !current) return '';
+  const placement = current.layout?.placement || 'fill';
+  const size = current.layout?.size || 'medium';
+  const textOn = Boolean(current.layout?.text?.on);
+  const side = SIDE_PLACEMENTS.has(placement);
+  const title = current.layout?.text?.title ?? current.copy?.title ?? '';
+  const body = current.layout?.text?.body ?? current.copy?.body ?? '';
+  const tiles = Object.entries(pack.placements || {})
+    .map(
+      ([id, meta]) =>
+        `<button type="button" class="layout-place${id === placement ? ' on' : ''}" data-layout-place="${id}" title="${escapeHtml(meta.hint)}"><i class="lp lp-${id}" aria-hidden="true"></i><span>${escapeHtml(meta.label)}</span></button>`,
+    )
+    .join('');
+  const copy = side
+    ? `<label class="ins-check"><input type="checkbox" data-layout-text ${textOn ? 'checked' : ''} /> Side text</label>${
+        textOn
+          ? `<label class="layout-field"><span>Title</span><input type="text" data-layout-title maxlength="80" value="${escapeHtml(title)}" aria-label="Title beside the recording" /></label>
+        <label class="layout-field"><span>Text</span><textarea data-layout-body maxlength="240" rows="3" aria-label="Text beside the recording">${escapeHtml(body)}</textarea></label>`
+          : ''
+      }`
+    : '';
+  return section(
+    'motion',
+    'Layout',
+    `<div class="layout-places" role="group" aria-label="Where the recording sits">${tiles}</div>
+      <div class="ins-quick"><span>Size</span>${segBtns('data-layout-size', pack.sizes?.length ? pack.sizes : ['small', 'medium', 'large'], placement === 'fill' ? '' : size, (v) => SIZE_LABEL[String(v)] || String(v))}</div>
+      ${copy}
+      <div class="ins-pair">
+        <button type="button" class="ins-btn" data-act="layout-all" ${current.custom ? '' : 'disabled'}>Apply to all sections</button>
+        <button type="button" class="ins-btn ghost" data-act="layout-reset" ${current.custom ? '' : 'disabled'}>Video default</button>
+      </div>
+      <p class="ins-note subtle">${escapeHtml(pack.placements?.[placement]?.hint || 'Edge to edge.')} Each stretch between chapters has its own layout, and the stage shows the frame the render will make.</p>`,
+  );
+}
+
 export function placeSection(c: Clip): string {
   return section(
     'motion',
@@ -331,8 +408,8 @@ export function placeSection(c: Clip): string {
     `<div class="ins-pair">
         <button type="button" class="ins-btn" data-act="clip-earlier" ${c.i <= 0 ? 'disabled' : ''}>${ICONS['undo']}Earlier</button>
         <button type="button" class="ins-btn" data-act="clip-later" ${c.i >= ed.seq.length - 1 ? 'disabled' : ''}>Later${ICONS['redo']}</button>
-      </div>
-      <p class="ins-note subtle">Drag the block to reorder. Use the trash or <kbd>⌫</kbd> to pull it out of the cut — restore it anytime from the empty inspector.</p>`,
+      </div>`,
+    `<button type="button" class="help-tip" data-ins-help="${escapeHtml(PLACE_HELP)}" aria-label="${escapeHtml(helpLabel('Place'))}" aria-expanded="false">?</button>`,
   );
 }
 
@@ -538,6 +615,7 @@ export function renderLive(c: Clip): string {
       clipRemoveBtn(c),
     ) +
     placeSection(c) +
+    layoutSection(c) +
     trimSection +
     renderLiveCards(c) +
     section('speed', 'Speed', `${speedRows}<div class="ins-quick"><span>Whole clip</span>${segBtns('data-clip-rate', [1, 1.25, 1.5, 2], wholeRate, fmtRate)}</div>`) +

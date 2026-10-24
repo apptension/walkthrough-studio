@@ -33,7 +33,10 @@ function StageButton({ stage, state, current }: StageButtonProps) {
   );
 }
 
-/** `#stageBar` — `renderStageBar(v)` from `kit/studio/workflow.js`. */
+/**
+ * `#stageBar` — `renderStageBar(v)` from `kit/studio/workflow.js`.
+ * Hidden for now, but it must stay mounted: it registers `bridges.workflow`.
+ */
 export function StageBar() {
   const video = useDesk((s) => s.video);
   useWorkflowBridge();
@@ -43,16 +46,31 @@ export function StageBar() {
     return { map, current: currentStage(map), hint: stageHint(map) };
   }, [video]);
 
+  const hint = view?.hint;
+  const hasHint = Boolean(hint?.text || hint?.badge);
+
   return (
-    <nav id="stageBar" className="stage-bar" aria-label="Production stages">
+    <nav id="stageBar" className="stage-bar" aria-label="Production stages" hidden>
       <ol className="stage-list">
         {STAGE_ORDER.map((key) => (
           <StageButton key={key} stage={key} state={view?.map[key] ?? null} current={view?.current === key} />
         ))}
       </ol>
-      <p id="stageHint" className="stage-hint" aria-live="polite" data-tone={view?.hint.tone || undefined}>
-        {view?.hint.text}
-      </p>
+      <div
+        id="stageHint"
+        className="stage-hint"
+        aria-live="polite"
+        data-tone={hint?.tone || undefined}
+        hidden={!hasHint || undefined}
+      >
+        {hint?.text ? <span className="stage-hint-text">{hint.text}</span> : null}
+        {hint?.badge ? (
+          <span className="chrome-status stage-status-badge" data-kind={hint.tone || 'warn'}>
+            <i aria-hidden="true" />
+            <span>{hint.badge}</span>
+          </span>
+        ) : null}
+      </div>
     </nav>
   );
 }

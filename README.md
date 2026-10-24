@@ -14,7 +14,7 @@
   <a href="#agent-ready"><img src="https://img.shields.io/badge/Agent%20Ready-Cursor%20%C2%B7%20Claude%20Code-42f272?style=flat-square&labelColor=0a0a0a" alt="Agent Ready: Cursor and Claude Code" /></a>
   <a href="#84-languages-one-recording"><img src="https://img.shields.io/badge/languages-84-42f272?style=flat-square&labelColor=0a0a0a" alt="84 languages" /></a>
   <a href="kit/package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white&labelColor=0a0a0a" alt="Node.js 20+" /></a>
-  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.2"><img src="https://img.shields.io/badge/release-v1.0.0--beta.2-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.2" /></a>
+  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.3"><img src="https://img.shields.io/badge/release-v1.0.0--beta.3-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.3" /></a>
   <a href="https://apptension.com/builders-toolkit/walkthrough-studio"><img src="https://img.shields.io/badge/site-apptension.com-0a0a0a?style=flat-square" alt="Product page" /></a>
 </p>
 
@@ -51,29 +51,30 @@ Walkthrough Studio is a local desk that treats your real product as the source o
 ## Quick start
 
 ```bash
-git clone --branch v1.0.0-beta.2 --depth 1 https://github.com/apptension/walkthrough-studio.git
+git clone --branch v1.0.0-beta.3 --depth 1 https://github.com/apptension/walkthrough-studio.git
 cd walkthrough-studio
-./studio
+./studio --v2
 ```
 
-That checks out the current public beta, [v1.0.0-beta.2](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.2). `main` is the development line. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
+That checks out the current public beta, [v1.0.0-beta.3](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.3). `main` is the development line. Run `./studio --v2`. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio --v2` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
 
 Voice and music need an `ELEVENLABS_API_KEY` in `kit/.env`. Agent jobs need a signed-in Cursor CLI (`agent`) or Claude Code (`claude`). Studio opens without either.
 
-### Upgrading from 1.0.0-beta.1
+### Upgrading from 1.0.0-beta.2
 
 ```bash
-git fetch --tags && git checkout v1.0.0-beta.2    # or: git pull on main
-./studio
+git fetch --tags && git checkout v1.0.0-beta.3    # or: git pull on main
+./studio --v2
 ```
 
-The desk is rebuilt in React and TypeScript in this release. You don't need to do anything to switch:
+Your projects, brands, and `kit/.env` stay where they are. `./studio --v2` rebuilds the desk when its sources change.
 
-- **Same command, same address.** `./studio` installs the desk's packages, builds it once (a few seconds), and serves it on [http://127.0.0.1:4747](http://127.0.0.1:4747) as before. Bookmarks and `?slug=` links keep working.
-- **Your projects aren't touched.** `videos/`, `kit/brands/`, `kit/.env`, renders, and versions are read exactly as before. The desk talks to the same server over the same API.
-- **Your layout carries over.** Panel widths, the timeline height, and per-video take choices are stored in the browser under the same keys as before.
-- **The classic desk is still here for now.** `./studio --legacy` opens it. It is retiring and will be removed in a later release, so please [open an issue](https://github.com/apptension/walkthrough-studio/issues) if something only works there. If the new desk can't be installed or built, `./studio` says why and opens the classic desk instead of failing.
-- **`--v2` is no longer needed.** If you ran the preview with `./studio --v2`, plain `./studio` is now the same desk. The flag still works.
+- **Place a chapter in the frame.** In the Editor, each stretch between chapters can sit Fill, Centre, Left, Right, Top, or Bottom, with optional text beside the recording. The preview and the master use the same backdrop.
+- **The header says if the master is current.** The Render chip shows a running job, a review waiting on you, or which sources changed. It updates after a save and when you come back to the tab.
+- **Use critic findings** copies the review into the Feedback note. Edit it, then Apply.
+- **Stop** waits until the cancelled job has released its files, so the next step does not trip over a lock that is still held.
+
+Coming from 1.0.0-beta.1? Check out this tag the same way, then run `./studio --v2`. That serves the React desk on [http://127.0.0.1:4747](http://127.0.0.1:4747). `./studio --legacy` still opens the classic desk.
 
 ---
 
@@ -193,7 +194,7 @@ One recording, every channel. The handoff pack includes the master, poster, capt
 ### In the browser
 
 ```bash
-./studio                      # check → setup → build the desk → launch → open
+./studio --v2                 # the new desk: check → setup → build → launch → open
 ./studio <slug>               # open a project
 ./studio --port 4750          # another port
 ./studio --no-open            # start without opening a browser
@@ -239,7 +240,7 @@ Then ask: *"Make a 90 second help video showing how to invite a teammate."* The 
 | **macOS or Linux** | Playwright capture and ffmpeg encode |
 | **Node.js 20+** and **npm 11.17+** | Runs the kit (`kit/.npmrc` sets `engine-strict=true`) |
 | **ffmpeg + ffprobe** | Plates, capture, mix, delivery (`brew install ffmpeg`) |
-| **Chromium (Playwright)** | Recording and plate renders, installed by `./studio` |
+| **Chromium (Playwright)** | Recording and plate renders, installed by `./studio --v2` |
 | **ElevenLabs API key** | Narration and music bed, on your account |
 | **Cursor CLI or Claude Code** | Agent jobs: draft, improve, branch, fix |
 
@@ -247,7 +248,7 @@ Then ask: *"Make a 90 second help video showing how to invite a teammate."* The 
 brew install node@20          # or: nvm install 20 && nvm use 20
 npm install -g npm@latest     # 11.17+
 brew install ffmpeg           # ffmpeg + ffprobe
-./studio
+./studio --v2
 ```
 
 Manual setup, if you prefer:
@@ -334,7 +335,7 @@ Issues and pull requests are welcome.
 
 1. Keep secrets out of git (`kit/.env`, credentials, API keys).
 2. Prefer small, focused PRs with a short "why" in the description.
-3. Run `./studio` and smoke the UI path you changed before opening a PR. For desk changes, run `npm run verify` in `kit/studio-next`.
+3. Run `./studio --v2` and smoke the UI path you changed before opening a PR. For desk changes, run `npm run verify` in `kit/studio-next`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 

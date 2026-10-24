@@ -25,6 +25,7 @@ import {
 } from './audio';
 import { requestMake, requestMusicFit, saveDirection } from './ctx';
 import { postDeck, refresh } from './data';
+import { layoutRow, layoutText, sectionForClip, upsertLayout } from './layoutPreview';
 import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSelected, restoreOmitted, select, selectFx, toolLens, toolZoom } from './edits';
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
@@ -36,8 +37,132 @@ import { enterLiveCard, enterText, enterTextFor, exitText, paintFieldChips, pain
 import { cutBlocks, fxSegments } from './timeline';
 import { moveClip, saveCardTiming } from './timelineWire';
 import { pause } from './transport';
-import type { DeckLens, PlateRow, Trim, VoiceDesk } from './types';
+import type { DeckLens, DeckSection, LayoutRow, PlateRow, Trim, VoiceDesk } from './types';
 import { $, clamp, errMessage, fmtRate, r3 } from './util';
+
+/** `wireInspector()` from `kit/studio/editor.js` — binds the controls `renderInspector` just painted. */
+
+const SIDE_PLACEMENTS = new Set(['left', 'right', 'top', 'bottom']);
+let layoutCopyTimer: ReturnType<typeof setTimeout> | 0 = 0;
+
+function wireLayout(
+  root: HTMLElement,
+  on: (sel: string, ev: string, fn: (el: Field, e: Event) => void) => void,
+  act: (name: string, fn: () => unknown) => void,
+  selClip: () => { kind?: string; id?: string } | null | undefined,
+): void {
+  clearTimeout(layoutCopyTimer);
+  const selected = (): DeckSection | null => {
+    const clip = selClip();
+    return clip?.kind === 'live' ? sectionForClip(clip as Parameters<typeof sectionForClip>[0]) : null;
+  };
+  const copyOf = (section: DeckSection) => {
+    const title = root.querySelector<HTMLInputElement>('[data-layout-title]')?.value ?? section.layout?.text?.title ?? section.copy?.title ?? '';
+    const body = root.querySelector<HTMLTextAreaElement>('[data-layout-body]')?.value ?? section.layout?.text?.body ?? section.copy?.body ?? '';
+    return { title, body };
+  };
+  const save = (row: LayoutRow | null, hint: string) => {
+    const section = selected();
+    if (!section) return;
+    void postDeck({ layouts: upsertLayout(deckEdit().layouts, section.key, row) }, { hint });
+  };
+  on('[data-layout-place]', 'click', (el) => {
+    const section = selected();
+    if (!section) return;
+    const placement = el.dataset['layoutPlace'] || 'fill';
+    if (placement === 'fill') {
+      save(null, 'Section fills the frame');
+      return;
+    }
+    const cur = layoutRow(section);
+    const copy = copyOf(section);
+    const side = SIDE_PLACEMENTS.has(placement);
+    save(
+      {
+        key: section.key,
+        placement,
+        size: cur.placement === 'fill' ? 'medium' : cur.size,
+        text: layoutText(side ? (cur.placement === 'fill' ? true : cur.text.on) : false, copy.title, copy.body, section.source),
+      },
+      'Section layout',
+    );
+  });
+  on('[data-layout-size]', 'click', (el) => {
+    const section = selected();
+    if (!section) return;
+    const cur = layoutRow(section);
+    const placement = cur.placement === 'fill' ? 'center' : cur.placement;
+    const copy = copyOf(section);
+    save(
+      {
+        key: section.key,
+        placement,
+        size: el.dataset['layoutSize'] || 'medium',
+        text: layoutText(SIDE_PLACEMENTS.has(placement) && cur.text.on, copy.title, copy.body, section.source),
+      },
+      'Section size',
+    );
+  });
+  on('[data-layout-text]', 'change', (el) => {
+    const section = selected();
+    if (!section?.layout || !SIDE_PLACEMENTS.has(section.layout.placement)) return;
+    const copy = copyOf(section);
+    save(
+      {
+        key: section.key,
+        placement: section.layout.placement,
+        size: section.layout.size,
+        text: layoutText(el.checked, copy.title, copy.body, section.source),
+      },
+      el.checked ? 'Side text on' : 'Side text off',
+    );
+  });
+  const commitCopy = () => {
+    const section = selected();
+    if (!section?.layout || !section.layout.text.on || !SIDE_PLACEMENTS.has(section.layout.placement)) return;
+    const copy = copyOf(section);
+    save(
+      {
+        key: section.key,
+        placement: section.layout.placement,
+        size: section.layout.size,
+        text: layoutText(true, copy.title, copy.body, section.source),
+      },
+      'Side text',
+    );
+  };
+  on('[data-layout-title], [data-layout-body]', 'input', () => {
+    clearTimeout(layoutCopyTimer);
+    layoutCopyTimer = setTimeout(commitCopy, 400);
+  });
+  on('[data-layout-title], [data-layout-body]', 'change', () => {
+    clearTimeout(layoutCopyTimer);
+    commitCopy();
+  });
+  act('layout-all', () => {
+    const section = selected();
+    const pack = ed.deck?.layouts;
+    if (!section || !pack) return;
+    const cur = layoutRow(section);
+    if (cur.placement === 'fill') {
+      void postDeck({ layouts: [] }, { hint: 'Every section fills the frame' });
+      return;
+    }
+    const rows = pack.sections.map((s) => ({
+      key: s.key,
+      placement: cur.placement,
+      size: cur.size,
+      text: layoutText(
+        Boolean(cur.text.on) && SIDE_PLACEMENTS.has(cur.placement),
+        s.layout?.text?.title || s.source?.title || '',
+        s.layout?.text?.body || s.source?.body || '',
+        s.source,
+      ),
+    }));
+    void postDeck({ layouts: rows }, { hint: 'Layout applied to every section' });
+  });
+  act('layout-reset', () => save(null, 'Section follows the video'));
+}
 
 /** `wireInspector()` from `kit/studio/editor.js` — binds the controls `renderInspector` just painted. */
 
@@ -56,6 +181,7 @@ export function wireInspector(): void {
   const act = (name: string, fn: () => unknown) => root.querySelector(`[data-act="${name}"]`)?.addEventListener('click', () => void fn());
   const key = s?.key ?? '';
   const selClip = () => (ed.sel?.type === 'clip' ? ed.seq.find((c) => c.id === ed.sel?.id) : null);
+  wireLayout(root, on, act, selClip);
 
   on('input[type="range"]', 'input', (el) => paintRange(el));
   act('remove', removeSelected);

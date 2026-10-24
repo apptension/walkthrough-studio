@@ -4,7 +4,7 @@ import { api, enc } from '@/desk/api';
 import { bridges } from '@/desk/bridge';
 import { enqueueJob } from '@/desk/jobs';
 import { showRightTab } from '@/desk/panels';
-import { desk, setButtonBusy, setStatus } from '@/desk/store';
+import { desk, setButtonBusy } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { loadVideo } from '@/desk/video';
 import { renderHtmlPlatePicker } from '@/features/feedback/proposal';
@@ -202,7 +202,6 @@ export async function applyOverlaysLook(): Promise<void> {
       if (first) bridges.plate?.showPlateHtml(first.id);
     }
     toast('Live cards updated', r.overlays?.preset || 'look saved');
-    setStatus('warn', 'Live card look updated — preview is live · Produce to bake into the master');
   } catch (err) {
     toast('Live cards failed', errMessage(err), 'err');
   } finally {
@@ -361,6 +360,8 @@ export async function saveCaptureSize(body: Record<string, unknown>): Promise<Ca
     }
     bridges.plate?.fitFhdPreview();
     if (r.plates) renderHtmlPlatePicker(r.plates);
+    // The stage geometry (output shape, take placement) comes from the edit deck.
+    if (bridges.editor?.active) await bridges.editor.refresh();
     const what = body.output ? (body.output === 'portrait' ? 'Vertical 9:16 video' : 'Landscape 16:9 video') : r.current?.label;
     toast('Recording size saved', r.space?.takeMatches ? String(what) : `${what} — re-record to apply`, 'ok');
     return r;
@@ -425,7 +426,6 @@ export async function applyMotion(): Promise<void> {
       ],
     });
     toast('Live preview updated', energy);
-    setStatus('warn', 'Motion preview — approve to render');
   } catch (err) {
     toast('Motion failed', errMessage(err), 'err');
   } finally {

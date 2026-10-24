@@ -57,6 +57,8 @@ const ALIAS = {
   chevron: 'ui-chevron',
   settings: 'ui-settings',
   branch: 'ui-branch',
+  version: 'ui-version',
+  snapshot: 'ui-version',
   download: 'ui-download',
   sound: 'ui-sound',
   chapters: 'ui-chapters',

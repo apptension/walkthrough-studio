@@ -27,6 +27,7 @@ import { requestJsonOrNull } from '@/api/client';
 import {
   desk,
   setButtonBusy,
+  clearRunStatus,
   setStatus,
   type QueueItem,
   type StepStatus,
@@ -50,6 +51,41 @@ export function isCancelError(err: unknown): boolean {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `OutputBusyError` from `kit/lib/outputLock.mjs`: another step still holds the output files
+ * this one needs. The usual cause is a step we just cancelled — the kill signal landed, but the
+ * process hasn't actually exited (and freed its lock) yet. The message names the step and pid so
+ * a person could tell them apart from a real failure, but to the UI they all read the same way.
+ */
+function isOutputBusyError(err: unknown): boolean {
+  return /already running for .* \(pid \d+/i.test(errorMessage(err));
+}
+
+/** In-flight job states — `waitForJobsToSettle` polls until none of `ids` are still in one. */
+const PENDING_STATUS = new Set(['running', 'queued', 'cancelling', 'waiting']);
+
+/**
+ * After cancelling, wait for the server to confirm the kill actually landed before this video's
+ * output locks can be considered free. `cancelJob` only *sends* SIGTERM (then SIGKILL after a
+ * grace period) and returns — the lock isn't released until the child's `close` event fires and
+ * `finalizeCancelled` runs. Starting the next step before that can lose the race and throw
+ * `OutputBusyError` for a resource the stopped job hasn't let go of yet.
+ */
+async function waitForJobsToSettle(ids: string[], { timeoutMs = 4000, intervalMs = 150 } = {}): Promise<void> {
+  if (!ids.length) return;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const jobs = await Promise.all(ids.map((id) => api<Job>(`/api/jobs/${id}`).catch(() => null)));
+    if (jobs.every((j) => !j?.status || !PENDING_STATUS.has(j.status))) return;
+    if (Date.now() >= deadline) return;
+    await sleep(intervalMs);
+  }
 }
 
 function beginWorkAbort(): AbortSignal {
@@ -123,13 +159,25 @@ export async function stopAllWork({ reason = 'Stopped', silent = false } = {}): 
   } catch {
     /* ignore */
   }
+  // The watcher bails out on abort and never paints the take as finished, so the
+  // Live tab would keep the last frame. Drop it before waiting for the process to die.
+  clearLiveCapture();
   const id = desk.get().jobId;
+  let settling: string[] = [];
   try {
-    if (id) await api(`/api/jobs/${id}/cancel`, { method: 'POST', body: {} });
-    else await api('/api/jobs/cancel-all', { method: 'POST', body: {} });
+    if (id) {
+      const r = await api<{ job?: Job }>(`/api/jobs/${id}/cancel`, { method: 'POST', body: {} });
+      settling = [r?.job?.id || id];
+    } else {
+      const r = await api<{ jobs?: Job[] }>('/api/jobs/cancel-all', { method: 'POST', body: {} });
+      settling = (r?.jobs || []).map((j) => j.id).filter(Boolean);
+    }
   } catch {
     /* ignore — process may already be gone */
   }
+  // Don't let the queue (or a quick re-click) claim this video's output locks until the
+  // kill actually landed — see `waitForJobsToSettle`.
+  await waitForJobsToSettle(settling);
   desk.set({ jobBusy: false, activeSurface: null, pipelineStartedAt: null });
   // A stopped run has nothing left to show; a failed one stays for Retry / Fix.
   if (!desk.get().pipelineFailure) {
@@ -211,8 +259,6 @@ export async function drainQueue(): Promise<void> {
           if (next.step === 'audio' || next.step === 'music' || next.step === 'mix') await bridges.editor?.refresh();
         }
       }
-      const action = desk.get().action;
-      setStatus(action?.kind || 'ok', action?.status || 'Up to date');
     } else if (next.kind === 'improve') {
       if (!bridges.feedback) throw new Error('Feedback rail is not mounted');
       await bridges.feedback.runImproveJob(next, { signal });
@@ -235,11 +281,8 @@ export async function drainQueue(): Promise<void> {
     setButtonBusy('btnImprove', false);
     if (!desk.get().queue.length) setRenderMode(false);
     const v = desk.get().video;
-    if (v) {
-      const action = decideAction(v);
-      desk.set({ action });
-      setStatus(action.kind, action.status);
-    }
+    if (v) desk.set({ action: decideAction(v) });
+    clearRunStatus();
     if (desk.get().stopRequested) {
       desk.set({ stopRequested: false, queue: [] });
     } else {
@@ -313,6 +356,9 @@ export function watchJob(jobId: string, opts: WatchOpts = {}): Promise<Job> {
             body: { cancel: answer == null, value: answer },
           }).catch(() => {});
         }
+        // Stop can land while a sign-in question is open. The job object above is
+        // still "running", and painting it would put the frozen Live pane back.
+        if (settled || signal?.aborted || desk.get().stopRequested) return;
         if (opts.onUpdate) opts.onUpdate(job);
         else showActivityDock(job, { surface });
         paintCapture(job, jobId);
@@ -335,6 +381,33 @@ export function watchJob(jobId: string, opts: WatchOpts = {}): Promise<Job> {
   });
 }
 
+/**
+ * Leave Live. Stop aborts the job watcher before its next poll can paint the take
+ * as finished, and a preview poll already in flight must not be able to put it back.
+ */
+function clearLiveCapture(): void {
+  desk.set({ liveWarmupKey: null, liveWarmingUp: false });
+  paintSignInWait(null);
+  const video = desk.get().video;
+  if (video) {
+    paintLivePreview(video, { recording: false, repairing: false, warmingUp: false });
+    return;
+  }
+  desk.set((s) => ({
+    live: {
+      ...s.live,
+      recording: false,
+      repairing: false,
+      warming: false,
+      badge: null,
+      tab: false,
+      onAir: false,
+      thumb: false,
+    },
+  }));
+  if (desk.get().monitorMode === 'live') setMonitorMode('program', { keepPreview: true });
+}
+
 /** The live capture frame, the warm-up blur and the sign-in wait while a record job runs. */
 function paintCapture(job: Job, jobId: string): void {
   const s = desk.get();
@@ -353,13 +426,15 @@ function paintCapture(job: Job, jobId: string): void {
     paintLivePreview(video, { recording, repairing, warmingUp: desk.get().liveWarmingUp });
     const baseline = Number(Date.parse(String(job.captureStartedAt || job.startedAt))) || 0;
     void requestJsonOrNull<{ at?: number }>(`/media/${video.slug}/live-preview.json?t=${Date.now()}`).then((meta) => {
+      if (desk.get().liveWarmupKey !== attemptKey) return;
       desk.set({ liveWarmingUp: !((meta?.at ?? 0) > baseline) });
-      if (desk.get().liveWarmupKey === attemptKey) {
-        paintLivePreview(desk.get().video, { recording, repairing, warmingUp: desk.get().liveWarmingUp });
-      }
+      paintLivePreview(desk.get().video, { recording, repairing, warmingUp: desk.get().liveWarmingUp });
     });
     void requestJsonOrNull<{ title?: string; next?: string }>(`/media/${video.slug}/sign-in-wait.json?t=${Date.now()}`).then(
-      (wait) => paintSignInWait(wait),
+      (wait) => {
+        if (desk.get().liveWarmupKey !== attemptKey) return;
+        paintSignInWait(wait);
+      },
     );
   } else {
     desk.set({ liveWarmupKey: null });
@@ -414,6 +489,9 @@ export function showActivityDock(job: Job, { surface }: { surface?: Surface } = 
 
 /* -------------------------------------------------------------- running */
 
+/** How many times a step retries after losing a race for an output lock it just freed itself. */
+const OUTPUT_BUSY_RETRIES = 3;
+
 export async function runJobPromise(
   step: string,
   force: boolean | undefined = false,
@@ -423,8 +501,19 @@ export async function runJobPromise(
   if (signal?.aborted) throw new Error('cancelled');
   const target = slug || desk.get().slug;
   if (!target) throw new Error('No sequence selected');
-  const r = await api<{ job: Job }>(`/api/video/${enc(target)}/run`, { method: 'POST', body: { step, force, presets } });
-  return watchJob(r.job.id, { surface: 'render', signal, quiet });
+  for (let attempt = 0; ; attempt++) {
+    const r = await api<{ job: Job }>(`/api/video/${enc(target)}/run`, { method: 'POST', body: { step, force, presets } });
+    try {
+      return await watchJob(r.job.id, { surface: 'render', signal, quiet });
+    } catch (err) {
+      // The output lock this step needs was just freed by a job we cancelled a moment ago —
+      // `stopAllWork` already waits for that, but a step started outside it (another tab, a
+      // bare `kit` run) can still lose this race. Retry rather than surface a scary error for
+      // what is really "almost ready".
+      if (attempt >= OUTPUT_BUSY_RETRIES || !isOutputBusyError(err) || signal?.aborted || desk.get().stopRequested) throw err;
+      await sleep(500 * (attempt + 1));
+    }
+  }
 }
 
 export function requestMake(mode?: string): void {

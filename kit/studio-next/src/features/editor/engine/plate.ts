@@ -3,7 +3,7 @@ import { api } from '@/desk/api';
 import { drainQueue, watchJob } from '@/desk/jobs';
 import { playPlatePreview, setMonitorLabel, setMonitorMode } from '@/desk/monitor';
 import { showLeftTab, showRightTab } from '@/desk/panels';
-import { desk, setButtonBusy, setStatus } from '@/desk/store';
+import { clearRunStatus, desk, setButtonBusy, setStatus } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { loadVideo } from '@/desk/video';
 import { paintMotionLiveOptimistic } from '@/features/direction/actions';
@@ -21,6 +21,8 @@ import {
   type CopyChar,
   type DomMark,
 } from '@/logic/copyEdit';
+import { cardOnStage, stageLayout } from '@/logic/stageLayout';
+import { layoutsAreCustom, sectionAtPlayhead } from './layoutPreview';
 
 import { chrome, EMPTY_ACCENT } from './chrome';
 import { paintStatus } from './edits';
@@ -97,9 +99,38 @@ export function fitFhdPreview(attempt = 0): void {
   const fw = canvas.offsetWidth || 1;
   const fh = canvas.offsetHeight || 1;
   const scale = Math.min(Math.max(rw, 1) / fw, Math.max(rh, 1) / fh);
-  canvas.style.transform = `scale(${scale})`;
+  fitBackdrop();
+  // Cards baked onto an inset take shrink with its window, as in the render.
+  // A section layout composites cards on the whole output instead, matching prepareLive.
+  const section = sectionAtPlayhead();
+  const space = ed.deck?.space;
+  const framed = section?.stage && space?.output ? { output: space.output, stage: section.stage } : space;
+  const layout = stageLayout(framed);
+  const st = framed?.stage;
+  const outFrame = framed?.output;
+  if (document.body.classList.contains('is-live-card') && layout?.placed && layout.cardsOnStage && !layoutsAreCustom() && st && outFrame) {
+    const c = cardOnStage(outFrame, st, scale);
+    canvas.style.transform = `translate(${c.dx}px, ${c.dy}px) scale(${c.scale})`;
+    canvas.style.borderRadius = `${c.radius}px`;
+  } else {
+    canvas.style.transform = `scale(${scale})`;
+    canvas.style.borderRadius = '';
+  }
   const badge = fit.querySelector('.fhd-badge');
   if (badge) badge.textContent = `${fw}×${fh} · ${Math.round(scale * 100)}%`;
+}
+
+/** Scale the shared backdrop HTML (output px) down into the output-shaped frame. */
+function fitBackdrop(): void {
+  const frame = document.getElementById('liveFrame');
+  const iframe = document.getElementById('liveBackdrop') as HTMLIFrameElement | null;
+  if (!frame || !iframe || iframe.hidden) return;
+  const out = ed.deck?.space?.output;
+  if (!out?.width || !out.height) return;
+  iframe.style.width = `${out.width}px`;
+  iframe.style.height = `${out.height}px`;
+  iframe.style.transformOrigin = 'top left';
+  iframe.style.transform = `scale(${frame.clientWidth / out.width})`;
 }
 
 const onWindowResize = () => fitFhdPreview();
@@ -915,10 +946,6 @@ export async function savePlateCopyEdits(): Promise<void> {
     const live = String(plateId).startsWith('overlay:');
     const n = Object.keys(fields).length;
     toast('Text saved', live ? `${n} field(s) → flow.mjs` : `${n} field(s) updated on the plate`);
-    setStatus(
-      'warn',
-      live ? 'Live card copy updated — preview is live · Produce to bake into the master' : 'Plate copy updated — Approve plate or Render full when ready',
-    );
     updatePlateEditChrome();
   } catch (err) {
     toast('Save failed', errMessage(err), 'err');
@@ -1060,7 +1087,6 @@ export async function approvePlateOnly(): Promise<void> {
       setMonitorMode('program');
     }
     toast('Plate encoded', 'Full video still uses old cut until you Render full');
-    setStatus('warn', 'Plate updated — Render full when ready');
     showLeftTab('render');
     desk.set({
       bay: {
@@ -1075,6 +1101,7 @@ export async function approvePlateOnly(): Promise<void> {
   } finally {
     setButtonBusy('btnApprovePlate', false);
     desk.set({ jobBusy: false, activeSurface: null });
+    clearRunStatus();
     void drainQueue();
   }
 }
@@ -1087,8 +1114,14 @@ interface RebuildResponse {
 
 export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = null }: { selectFirst?: boolean; plateId?: string | null } = {}): Promise<RebuildResponse> {
   setThinkStep('html');
-  setStatus('run', 'Rebuilding plate HTML…');
-  const r = await api<RebuildResponse>(`/api/video/${desk.get().slug}/plates/rebuild-html`, { method: 'POST', body: {} });
+  const activity = 'Rebuilding plate HTML…';
+  setStatus('run', activity);
+  let r: RebuildResponse;
+  try {
+    r = await api<RebuildResponse>(`/api/video/${desk.get().slug}/plates/rebuild-html`, { method: 'POST', body: {} });
+  } finally {
+    clearRunStatus(activity);
+  }
   // Drop the ready-cache: the same plate id now points at new HTML (bg, atmosphere, palette).
   plateFrameReady = null;
   renderHtmlPlatePicker(r.plates || []);

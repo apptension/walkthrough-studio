@@ -19,7 +19,7 @@ import {
   updateTransport,
 } from './monitor';
 import { runtime } from './runtime';
-import { desk, setStatus } from './store';
+import { clearRunStatus, desk } from './store';
 import { toast } from './toast';
 
 /**
@@ -119,7 +119,7 @@ export function applySummary(v: VideoSummary): void {
     htmlPlates: v.htmlPlates ?? [],
     versionSelection: s.versionSelection.filter((id) => alive.has(id)),
   });
-  setStatus(action.kind, action.status);
+  if (!s.jobBusy) clearRunStatus();
   // A busy bay keeps the pipeline's headline; only the pill says Rendering.
   if (s.jobBusy && s.bay) desk.set({ bay: { ...s.bay, pillClass: 'render-pill run', pillText: 'Rendering' } });
   const versions = v.versions ?? [];

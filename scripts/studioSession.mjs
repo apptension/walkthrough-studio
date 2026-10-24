@@ -223,7 +223,7 @@ export async function launchStudio(ctx) {
       if (!useVite) rows.push({ label: 'Browser', value: 'errors and warnings' });
     } else {
       rows.push({ label: 'Dev', value: './studio --dev' });
-      if (served === 'legacy') rows.push({ label: 'New desk', value: './studio' });
+      if (served === 'legacy') rows.push({ label: 'New desk', value: './studio --v2' });
     }
     return rows;
   };
