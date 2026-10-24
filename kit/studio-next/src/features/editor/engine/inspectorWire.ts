@@ -5,6 +5,7 @@ import { toast } from '@/desk/toast';
 import { cardMarkKey } from '@/logic/liveCardStage';
 import { lensLoupe, lensZoomCeiling } from '@/logic/livePreview';
 
+import { neonButtonLabel } from '@/ui/neonFx';
 import { paintRange } from '@/ui/rangeFill';
 
 import { deckLens, lensTarget, paintLensBox, paintZoomBox, selectedShot } from './aim';
@@ -266,7 +267,9 @@ export function wireInspector(): void {
     }),
   );
   act('record', () => requestMake('full'));
-  act('text', () => (ed.textMode ? exitText() : enterText()));
+  // Generic entry (not a click on a specific field already in view) — jump to the plate's
+  // best-populated frame first so the editor doesn't land on a mid-reveal or empty one.
+  act('text', () => (ed.textMode ? exitText() : enterText(null, { seekToPeak: true })));
   on('[data-edit-card]', 'click', (el) => {
     if (ed.textMode && ed.liveCardId && ed.liveCardId === el.dataset['editCard']) exitText();
     else void enterLiveCard(el.dataset['editCard'] || null, el.dataset['markT'] ?? null, el.dataset['markKey'] || null);
@@ -730,7 +733,7 @@ export function wireInspector(): void {
     const nextText = Object.prototype.hasOwnProperty.call(b, 'text') ? b.text : effective;
     const dirty = (nextText || written) !== effective || Math.abs(b.speed - (clip.speed || clip.spokenSpeed || 1)) > 0.01;
     root.querySelector('[data-act="voice-regen"]')?.classList.toggle('is-dirty', dirty);
-    const label = root.querySelector('[data-act="voice-regen"] span');
+    const label = neonButtonLabel(root.querySelector('[data-act="voice-regen"]'));
     if (label && !ed.regenerating) label.textContent = dirty ? 'Regenerate with changes' : 'Regenerate';
   };
   on('[data-voice-text]', 'input', markDirty);

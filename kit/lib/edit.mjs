@@ -352,7 +352,10 @@ export function buildEditPlan(video) {
       seg.id = `live-${Number(recStart).toFixed(2)}`;
     }
   }
-  const replayed = applySegmentRepeats(raw, deck.repeats);
+  // applySegmentRepeats returns `raw` itself when there is nothing to replay (the common case —
+  // no Duplicate on this video); `.slice()` copies it first so truncating `raw` below cannot
+  // also truncate `replayed`, which emptied every segment (including open/close) and crashed produce.
+  const replayed = applySegmentRepeats(raw, deck.repeats).slice();
   raw.length = 0;
   raw.push(...replayed);
 

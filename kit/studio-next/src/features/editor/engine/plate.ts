@@ -33,6 +33,7 @@ import {
   PLATE_PEEK_CSS,
   clearPlateRevealOverrides,
   composePlateForEdit,
+  pinLiveAnimationFrames,
   plateEditPeakSec,
 } from './plateCss';
 import { ed } from './state';
@@ -490,12 +491,18 @@ function bindPlateCanvasPick(doc: Document | null | undefined): void {
       e.preventDefault();
       e.stopPropagation();
       const detail = { path };
+      // Dispatch once: this listener always runs in the top Studio window (it's bound from the
+      // outer bundle onto the plate iframe's document), so `window.parent` is usually `window`
+      // itself. Firing on both unconditionally double-invoked every click-to-edit handler,
+      // racing two concurrent `enterText()` calls — the slower one would find the first call's
+      // animations already cancelled and compose the frame with nothing to pin, leaving
+      // per-template reveal elements stuck at their pre-reveal `opacity: 0`.
+      const top = window.parent && window.parent !== window ? window.parent : window;
       try {
-        window.parent?.dispatchEvent?.(new CustomEvent('plate-canvas-edit', { detail }));
+        top.dispatchEvent(new CustomEvent('plate-canvas-edit', { detail }));
       } catch {
         /* cross-origin shouldn't happen for same-origin plates */
       }
-      window.dispatchEvent(new CustomEvent('plate-canvas-edit', { detail }));
     },
     true,
   );
@@ -773,7 +780,12 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
     return;
   }
 
+  // plateEditPeakSec scans live animations for exit delays — read it, and freeze every running
+  // Web Animation to exactly what's on screen right now, BEFORE `body.studio-edit` goes on below.
+  // That class's blanket `animation: none !important` rule stops every CSS animation the instant
+  // it's applied, so anything done after it can no longer see (or recover) the live frame.
   const peakSec = plateEditPeakSec(doc);
+  pinLiveAnimationFrames(doc);
 
   // Always refresh edit CSS (module may have updated since the iframe first loaded)
   let editStyle = doc.getElementById('studio-edit-style') as HTMLStyleElement | null;

@@ -189,7 +189,7 @@
 .ct-film-label b { margin-right: 5px; font: 700 10px var(--mono); color: var(--ct-a); }
 
 /* —— storyboard —— */
-.ct-story { gap: 12px; flex: 1; }
+.ct-story { display: flex; flex-direction: column; gap: 22px; flex: 1; min-height: 0; }
 .ct-story-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
 .ct-story-head h5 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.015em; color: var(--ink); }
 .ct-story-head p { margin: 3px 0 0; font-size: 12px; color: var(--ink-dim); }

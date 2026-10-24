@@ -227,6 +227,14 @@ body {
 .stage > .copy-exit {
   z-index: 2;
 }
+/* Atmosphere paints above copy on some plates — close steps sit under the bloom
+   (z-index 2) and the full-stage grid (z-index 1). Those layers are not targets;
+   a click has to land on the words. */
+.blob,
+.grid,
+.bloom {
+  pointer-events: none;
+}
 .grain {
   position: absolute;
   inset: -50%;

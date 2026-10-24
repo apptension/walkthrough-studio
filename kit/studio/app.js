@@ -109,6 +109,8 @@ const PLATE_EDIT_CSS = `
   Here we disable every reveal mechanism and force the finished visual state.
 */
 body.studio-edit .black { display: none !important; }
+/* Paint-only atmosphere. On the close plate the bloom and the full-stage grid sit above the steps. */
+.blob, .grid, .bloom, .burst, .halo { pointer-events: none !important; }
 body.studio-edit .grain { opacity: 0.22 !important; animation: none !important; }
 body.studio-edit .sweep { display: none !important; } /* decorative pass — not needed to edit */
 
@@ -434,6 +436,9 @@ body.studio-edit .wt-ch .ghost[data-edit] {
 
 /** Motion-mode affordance: every editable field looks clickable without freezing the plate. */
 const PLATE_PEEK_CSS = `
+/* Paint-only atmosphere. On the close plate the bloom and the full-stage grid sit above the steps,
+   so a click on a step never reached the words. */
+.blob, .grid, .bloom, .burst, .halo { pointer-events: none !important; }
 body[data-motion="1"] [data-edit] {
   cursor: text;
   outline: 1.5px dashed transparent;

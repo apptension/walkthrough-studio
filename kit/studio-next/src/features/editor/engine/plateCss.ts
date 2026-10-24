@@ -11,6 +11,8 @@ export const PLATE_EDIT_CSS = `
 body.studio-edit .black { display: none !important; }
 body.studio-edit .grain { opacity: 0.22 !important; animation: none !important; }
 body.studio-edit .sweep { display: none !important; } /* decorative pass — not needed to edit */
+/* Paint-only atmosphere. On the close plate the bloom and the full-stage grid sit above the steps. */
+.blob, .grid, .bloom, .burst, .halo { pointer-events: none !important; }
 
 /* Kill motion on all nodes; we paint the final composed frame via CSS below */
 body.studio-edit *,
@@ -334,6 +336,9 @@ body.studio-edit .wt-ch .ghost[data-edit] {
 
 /** Motion-mode affordance: every editable field looks clickable without freezing the plate. */
 export const PLATE_PEEK_CSS = `
+/* Paint-only atmosphere. On the close plate the bloom and the full-stage grid sit above the steps,
+   so a click on a step never reached the words. */
+.blob, .grid, .bloom, .burst, .halo { pointer-events: none !important; }
 body[data-motion="1"] [data-edit] {
   cursor: text;
   outline: 1.5px dashed transparent;
@@ -386,6 +391,9 @@ export function plateCssSec(doc: Document, name: string): number | null {
 
 const finite = (n: number | null | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
 
+/** Names templates use for exit/fade-out keyframes — kept visible instead of run to completion. */
+const EXIT_RE = /fadeOut|exit|carOut|copyLineOut|blackOut|dissolve|exitUp|exitScale/i;
+
 /**
  * Peak composition time: fully entered, just before the first fade-out / exit / black-out.
  * Prefers explicit --hold-from/--hold-until when set; otherwise earliest exit − slack.
@@ -407,7 +415,6 @@ export function plateEditPeakSec(doc: Document): number {
   ].filter((n): n is number => finite(n) && n > 0.2);
 
   // Scan running animations for exit/fadeOut delays (templates sometimes hardcode them)
-  const EXIT_RE = /fadeOut|exit|carOut|copyLineOut|blackOut|dissolve|exitUp|exitScale/i;
   try {
     for (const a of doc.getAnimations?.() || []) {
       const name = (a as CSSAnimation).animationName || '';
@@ -495,15 +502,51 @@ export function forceAll(doc: Document, selector: string, styles: Record<string,
 }
 
 /**
- * Composed static edit frame.
- * Timeline seek alone freezes mask/rise/wipe/trace mid-reveal (sliced glyphs, half-drawn logos).
- * Cancelling animations snaps SVG draws back to empty base styles. Inline !important finishes
- * every reveal so the editor always shows the readable end state.
+ * Freeze every running Web Animation to exactly what's on screen right now — "edit in place
+ * what he sees". Must run BEFORE `body.studio-edit` is applied: that class's blanket
+ * `animation: none !important` rule (see PLATE_EDIT_CSS) stops every CSS animation the instant
+ * it's added, so by the time anything reads `getAnimations()` afterward the live state is already
+ * gone and every template-specific class not covered by the static selector overrides below
+ * (`.pr-card`, `.q-card`, `.tm-card`, `.k-tile`, `.o-tile`, `.p-step`, `.fq-q`, `.ck-row`,
+ * `.logo-tile`, the `.panel`/`.score` checklist pieces, and more) snaps to its plain declared
+ * style — usually the pre-reveal `opacity: 0`.
+ *
+ * Rather than guess a "finished" keyframe (fragile: picking the wrong keyframe, or running after
+ * a duplicate/concurrent entry already cancelled things, reliably mis-renders), this reads each
+ * animation's own `getComputedStyle` at this exact instant — i.e. whatever is actually painted,
+ * whether that's fully revealed or still mid-entrance — and pins that. It's simpler, matches the
+ * literal "freeze what's visible" intent, and has no per-class allowlist to keep growing.
  */
-export function composePlateForEdit(doc: Document | null | undefined): void {
+export function pinLiveAnimationFrames(doc: Document | null | undefined): void {
   if (!doc?.body) return;
-
-  // 1) Kill running animations so they cannot keep writing mid-keyframe values
+  const view = doc.defaultView;
+  if (!view) return;
+  for (const a of doc.getAnimations?.() || []) {
+    try {
+      const effect = a.effect as KeyframeEffect | null;
+      const target = effect?.target as Element | null;
+      const keyframes = effect?.getKeyframes?.() || [];
+      if (!target || !keyframes.length) continue;
+      const props = new Set<string>();
+      for (const kf of keyframes) {
+        for (const prop of Object.keys(kf)) {
+          if (prop === 'offset' || prop === 'easing' || prop === 'composite') continue;
+          props.add(prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`));
+        }
+      }
+      if (!props.size) continue;
+      const live = view.getComputedStyle(target);
+      const styles: Record<string, string> = {};
+      for (const prop of props) {
+        const value = live.getPropertyValue(prop);
+        if (value) styles[prop] = value;
+      }
+      if (Object.keys(styles).length) forceStyle(target, styles);
+    } catch {
+      /* ignore */
+    }
+  }
+  // Cancel only after every target's live look is pinned via inline styles.
   for (const a of doc.getAnimations?.() || []) {
     try {
       a.cancel();
@@ -511,8 +554,18 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
       /* ignore */
     }
   }
+}
 
-  // 2) Open every clip / overflow gate
+/**
+ * Composed static edit frame: finishes reveals that aren't driven by a Web Animation (clip-path
+ * masks, SVG stroke tricks, JS-timed overlays) so the editor always shows a readable frame.
+ * Call `pinLiveAnimationFrames` first — before `body.studio-edit` is applied — to freeze anything
+ * that *is* a Web Animation to what was actually on screen.
+ */
+export function composePlateForEdit(doc: Document | null | undefined): void {
+  if (!doc?.body) return;
+
+  // 1) Open every clip / overflow gate
   forceAll(doc, '.mask, .mask.word, .title-line, .line-exit, .copy-exit, .title-exit, .steps-exit, .compose, .flood, .head, .title, [data-edit]', {
     overflow: 'visible',
     'clip-path': 'none',
@@ -535,7 +588,7 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
     'will-change': 'auto',
   });
 
-  // 3) Finish rises / wipes / letters / image logos
+  // 2) Finish rises / wipes / letters / image logos
   forceAll(doc, '.rise, .word, .letter, .wipe-l, .wipe-r, .logo-img', {
     overflow: 'visible',
     'clip-path': 'none',
@@ -548,7 +601,7 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
     'will-change': 'auto',
   });
 
-  // 4) Finish SVG draw / trace builds
+  // 3) Finish SVG draw / trace builds
   forceAll(doc, '.draw, .trace, .logo path, .logo .piece, svg .draw, svg .trace', {
     'stroke-dashoffset': '0',
     'stroke-dasharray': '1',
@@ -561,7 +614,7 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
     'clip-path': 'none',
   });
 
-  // 5) Scale / grow entrances that default to 0
+  // 4) Scale / grow entrances that default to 0
   forceAll(doc, '.dot', { transform: 'scale(1)', opacity: '1' });
   forceAll(doc, '.track, .track-fill', { transform: 'scaleX(1)', opacity: '1' });
   forceAll(doc, '.step-label, .step-note, .platform, .eyebrow, .sub, .body, .card, .stat, .t-card, .badge', {
@@ -571,7 +624,7 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
     visibility: 'visible',
   });
 
-  // 6) Live chapter / caption overlays — parent .content/.card default opacity:0
+  // 5) Live chapter / caption overlays — parent .content/.card default opacity:0
   const isOverlay = String(doc.body.dataset['cardId'] || desk.get().activePlateId || '').startsWith('overlay:');
   if (isOverlay || doc.querySelector('.wt-ch, .wt-cap')) {
     // Freeze the held frame. filter/transform:none here used to sharpen the blobs
@@ -630,7 +683,7 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
     });
   }
 
-  // 7) Open-plate lockup: keep post-lift seat when vars exist; otherwise identity
+  // 6) Open-plate lockup: keep post-lift seat when vars exist; otherwise identity
   const root = doc.documentElement;
   const cs = (doc.defaultView || window).getComputedStyle(root);
   const liftY = cs.getPropertyValue('--open-lift-y').trim();

@@ -7,6 +7,7 @@ import { select, showInspectorTab } from './edits';
 import { renderInspector, section } from './inspector';
 import { refreshPlatePreview } from './look';
 import { P } from './plateCtl';
+import { plateEditPeakSec } from './plateCss';
 import { curClip, recToEd } from './seq';
 import { ensureLiveCards, liveCardAtPlayhead, liveHitAtPlayhead, paintClipChip, plateReady, renderFrame, requestPlate, resolveLiveCard } from './stage';
 import { ed, htmlPlates, timers, type PlateFieldState } from './state';
@@ -35,7 +36,10 @@ export function flushPlateResync(): void {
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export async function enterText(focusPath: string | null = null, { cardId = null }: { cardId?: string | null } = {}): Promise<void> {
+export async function enterText(
+  focusPath: string | null = null,
+  { cardId = null, seekToPeak = false }: { cardId?: string | null; seekToPeak?: boolean } = {},
+): Promise<void> {
   const c = curClip();
   if (cardId || c?.kind === 'live') await ensureLiveCards(cardId || null);
   let card = cardId ? htmlPlates().find((p) => p.id === cardId) || null : null;
@@ -79,6 +83,18 @@ export async function enterText(focusPath: string | null = null, { cardId = null
       toast('Card not ready', 'Open Direction → Apply live cards, then try again', 'warn');
     }
     return;
+  }
+  // Clicking a field in place edits exactly what's on screen — the timeline never moves.
+  // Only a generic "Edit text" entry (no specific field already in view) jumps to the plate's
+  // best-populated frame first, so copy that's still mid-reveal (or not yet entered) isn't
+  // what greets the editor.
+  if (seekToPeak && c?.kind === 'plate' && c.plateId === plateId) {
+    const peakDoc = $<HTMLIFrameElement>('plateFrame')?.contentDocument;
+    if (peakDoc?.body) {
+      const peakSec = plateEditPeakSec(peakDoc);
+      const target = c.at + clamp(peakSec, 0.3, Math.max(0.5, c.dur - 0.2));
+      if (Math.abs(target - ed.t) > 0.05) seek(target);
+    }
   }
   P.composite?.(true);
   ed.textMode = true;
@@ -150,13 +166,19 @@ export async function enterLiveCard(cardId: string | null, markT: number | strin
   flashHint('Editing card copy — Save, then Produce to bake into the master');
 }
 
-/** Click-to-edit from the motion stage: open text mode and land on that field. */
-export async function enterTextFor(path: string | null): Promise<void> {
+/**
+ * Click-to-edit from the motion stage: open text mode and land on that field.
+ * `seekToPeak` defaults off — a click on a specific field edits exactly what's on screen, in
+ * place, without moving the timeline. Pass it only for entries that aren't targeting something
+ * already visible (e.g. a generic "Edit text" action), where jumping to the plate's
+ * best-populated frame first is more useful than leaving the playhead wherever it was.
+ */
+export async function enterTextFor(path: string | null, { seekToPeak = false }: { seekToPeak?: boolean } = {}): Promise<void> {
   const c = curClip();
   if (c?.kind === 'live') {
     const card = liveCardAtPlayhead();
     if (card) {
-      await enterText(path, { cardId: card.id });
+      await enterText(path, { cardId: card.id, seekToPeak });
       if (!ed.textMode) return;
       showInspectorTab();
       flashHint(path ? `Editing “${path}”` : 'Editing card copy');
@@ -170,7 +192,7 @@ export async function enterTextFor(path: string | null): Promise<void> {
       seek(plate.at + Math.min(plate.dur * 0.55, Math.max(0.5, plate.dur - 1.6)));
     }
   }
-  await enterText(path);
+  await enterText(path, { seekToPeak });
   if (!ed.textMode) return;
   showInspectorTab();
   flashHint(path ? `Editing “${path}”` : ed.liveCardId ? 'Editing card copy' : 'Editing text');
