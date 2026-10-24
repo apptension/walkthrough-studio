@@ -73,15 +73,52 @@ export function bindNeonGlow(root: ParentNode & { addEventListener: Document['ad
     const el = target.closest(NEON_FILL_SELECTOR);
     return el instanceof HTMLElement ? el : null;
   };
-  const move = (e: PointerEvent) => {
+  let glowBtn: HTMLElement | null = null;
+  let pendingMove: PointerEvent | null = null;
+  let moveRaf = 0;
+  const recordGlowMove =
+    import.meta.env.DEV && typeof window !== 'undefined'
+      ? () => {
+          const api = (window as Window & { __studioPerf?: { recordNeonGlowMove: () => void } }).__studioPerf;
+          api?.recordNeonGlowMove();
+        }
+      : () => {};
+  const applyGlow = () => {
+    moveRaf = 0;
+    const e = pendingMove;
+    pendingMove = null;
+    if (!glowBtn || !e) return;
+    recordGlowMove();
+    const r = glowBtn.getBoundingClientRect();
+    glowBtn.style.setProperty('--neon-mx', `${e.clientX - r.left}px`);
+    glowBtn.style.setProperty('--neon-my', `${e.clientY - r.top}px`);
+  };
+  const clearGlow = () => {
+    glowBtn = null;
+    pendingMove = null;
+    if (moveRaf) {
+      cancelAnimationFrame(moveRaf);
+      moveRaf = 0;
+    }
+  };
+  const over = (e: PointerEvent) => {
     const btn = fillOf(e.target);
-    if (!btn) return;
-    const r = btn.getBoundingClientRect();
-    btn.style.setProperty('--neon-mx', `${e.clientX - r.left}px`);
-    btn.style.setProperty('--neon-my', `${e.clientY - r.top}px`);
+    if (btn) glowBtn = btn;
+  };
+  const out = (e: PointerEvent) => {
+    if (!glowBtn) return;
+    const related = e.relatedTarget;
+    if (related instanceof Node && glowBtn.contains(related)) return;
+    if (e.target instanceof Node && glowBtn.contains(e.target)) clearGlow();
+  };
+  const move = (e: PointerEvent) => {
+    if (!glowBtn) return;
+    pendingMove = e;
+    if (!moveRaf) moveRaf = requestAnimationFrame(applyGlow);
   };
   const down = (e: PointerEvent) => {
     const btn = fillOf(e.target);
+    if (btn) glowBtn = btn;
     if (!btn || btn.matches(':disabled') || btn.classList.contains('busy') || btn.classList.contains('is-busy')) return;
     const fx = btn.querySelector(':scope > .neon-btn__fx');
     if (!fx) return;
@@ -93,10 +130,15 @@ export function bindNeonGlow(root: ParentNode & { addEventListener: Document['ad
     fx.append(dot);
     dot.addEventListener('animationend', () => dot.remove(), { once: true });
   };
+  host.addEventListener('pointerover', over, true);
+  host.addEventListener('pointerout', out, true);
   host.addEventListener('pointermove', move, true);
   host.addEventListener('pointerdown', down, true);
   return () => {
+    host.removeEventListener('pointerover', over, true);
+    host.removeEventListener('pointerout', out, true);
     host.removeEventListener('pointermove', move, true);
     host.removeEventListener('pointerdown', down, true);
+    clearGlow();
   };
 }

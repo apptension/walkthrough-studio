@@ -227,9 +227,22 @@ export function updateTransport(): void {
     }
   }
   const playing = !player.paused && !player.ended;
-  const patch: Partial<ReturnType<typeof desk.get>> = { duration: d, transport: { t, d, playing, buffered } };
-
+  const prev = s.transport;
   const ch = chapterAt(t);
+  const chapterBump = Boolean(ch && s.lastChapter !== ch.start);
+  const transportSame =
+    !chapterBump &&
+    Math.abs(prev.t - t) < 1e-4 &&
+    prev.d === d &&
+    prev.playing === playing &&
+    Math.abs(prev.buffered - buffered) < 1e-4 &&
+    s.duration === d;
+  if (transportSame) {
+    updateSceneFromTime(t);
+    return;
+  }
+
+  const patch: Partial<ReturnType<typeof desk.get>> = { duration: d, transport: { t, d, playing, buffered } };
   if (ch && s.lastChapter !== ch.start) {
     patch.lastChapter = ch.start;
     patch.chapterToast = { title: String(ch.title || ''), on: true };
