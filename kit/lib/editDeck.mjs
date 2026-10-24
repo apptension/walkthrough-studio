@@ -20,6 +20,7 @@
  */
 import { compactAudio, describeAudio, isEmptyAudio, normalizeAudio } from './audio/desk.mjs';
 import { CAPTURE_PRESETS, DEFAULT_CAPTURE } from './capturePresets.mjs';
+import { normalizeLayouts } from './layout.mjs';
 
 /** Size the deck validates against when the caller has no take yet. */
 const CAPTURE = CAPTURE_PRESETS[DEFAULT_CAPTURE];
@@ -661,6 +662,7 @@ export function normalizeEdit(edit = {}, { liveDur = Infinity, width = CAPTURE.w
     transitions: normalizeTransitions(src.transitions, styles),
     audio: normalizeAudio(src.audio),
     cards: normalizeCards(src.cards, { liveDur }),
+    layouts: normalizeLayouts(src.layouts),
     order: normalizeOrder(src.order),
     omit: normalizeOrder(src.omit),
     trims: normalizeTrims(src.trims),
@@ -678,6 +680,7 @@ export function isEmptyDeck(deck) {
       !deck.lensOff?.length &&
       !Object.keys(deck.transitions || {}).length &&
       !deck.cards?.length &&
+      !deck.layouts?.length &&
       !deck.order?.length &&
       !deck.omit?.length &&
       !deck.trims?.length &&
@@ -690,7 +693,7 @@ export function isEmptyDeck(deck) {
 export function patchEdit(current = {}, patch = {}, opts = {}) {
   if (patch.reset) return normalizeEdit({}, opts);
   const merged = { ...(current || {}) };
-  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'order', 'omit', 'trims', 'cuts']) {
+  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'layouts', 'order', 'omit', 'trims', 'cuts']) {
     if (key in patch) merged[key] = patch[key] ?? (key === 'transitions' ? {} : []);
   }
   return normalizeEdit(merged, opts);
@@ -706,6 +709,7 @@ export function compactEdit(deck) {
   if (deck?.lensOff?.length) out.lensOff = deck.lensOff;
   if (deck?.transitions && Object.keys(deck.transitions).length) out.transitions = deck.transitions;
   if (deck?.cards?.length) out.cards = deck.cards;
+  if (deck?.layouts?.length) out.layouts = deck.layouts;
   if (deck?.order?.length) out.order = deck.order;
   if (deck?.omit?.length) out.omit = deck.omit;
   if (deck?.trims?.length) out.trims = deck.trims;
@@ -851,6 +855,7 @@ export function describeDeck(deck) {
   if (deck?.lensOff?.length) bits.push(`${deck.lensOff.length} magnifier${deck.lensOff.length === 1 ? '' : 's'} off`);
   const joins = Object.keys(deck?.transitions || {}).length;
   if (joins) bits.push(`${joins} join override${joins === 1 ? '' : 's'}`);
+  if (deck?.layouts?.length) bits.push(`${deck.layouts.length} section layout${deck.layouts.length === 1 ? '' : 's'}`);
   if (deck?.order?.length) bits.push('sequence reordered');
   if (deck?.omit?.length) bits.push(`${deck.omit.length} section${deck.omit.length === 1 ? '' : 's'} omitted`);
   if (deck?.trims?.length) bits.push(`${deck.trims.length} live trim${deck.trims.length === 1 ? '' : 's'}`);

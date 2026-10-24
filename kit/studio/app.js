@@ -14,7 +14,7 @@ import { mountZen, zen } from './zen.js';
 import { icon } from './icons.js';
 import { accentState, fieldSource, fromElement, parseSource, positionAt, toHtml, toggleAccent } from './copyEdit.js';
 import { liveTabVisible, needsProgramRestore, normalizeMonitorMode } from './monitorMode.js';
-import { criticFindingMarkup, directorNoteForFinding } from './criticFindings.js';
+import { criticFindingMarkup, directorNoteForCritic, directorNoteForFinding } from './criticFindings.js';
 import { firstShortHold } from './voiceHold.js';
 import { capturedTour, describeRecordFailure, recordFailureAction, recordFailureNote } from './recordFailure.js';
 import { activityThumbVisible, programPreview } from './liveWatch.js';
@@ -1362,7 +1362,9 @@ function renderTimeline(chapters, duration) {
 }
 
 function setStatus(kind, text) {
-  $('statusLine').dataset.kind = kind;
+  const line = $('statusLine');
+  line.dataset.kind = kind;
+  line.title = text || '';
   $('statusText').textContent = text;
 }
 
@@ -2672,7 +2674,7 @@ function setSessionIdle() {
   if (!rail || state.proposalOpen) return;
   rail.classList.remove('is-running', 'is-done', 'is-failed');
   if ($('sessionSpinner')) $('sessionSpinner').hidden = true;
-  if ($('sessionTitle')) $('sessionTitle').textContent = 'Agent’s off the clock 💤';
+  if ($('sessionTitle')) $('sessionTitle').textContent = 'Waiting for a note';
   if ($('sessionMeta')) $('sessionMeta').textContent = 'Apply a note and its progress shows here.';
   if ($('sessionArt')) $('sessionArt').hidden = false;
   $('sessionProgress')?.classList.add('is-idle');
@@ -2681,7 +2683,13 @@ function setSessionIdle() {
     $('sessionNow').textContent = '';
   }
   if ($('sessionElapsed')) $('sessionElapsed').hidden = true;
-  if ($('sessionPhase')) $('sessionPhase').hidden = true;
+  const phase = $('sessionPhase');
+  if (phase) {
+    phase.hidden = false;
+    phase.textContent = 'Idle';
+    phase.className = 'badge';
+    phase.dataset.tone = 'idle';
+  }
   if ($('btnSessionLog')) $('btnSessionLog').hidden = true;
   paintAgentStream($('sessionStream'), null, { variant: 'rail' });
   if ($('sessionLog')) {
@@ -4280,8 +4288,12 @@ function renderVersions(v) {
 function renderCritic(v) {
   const hint = $('criticHint');
   const link = $('criticLink');
-  if (hint && link) {
-    hint.hidden = !v.criticUrl;
+  const fill = $('btnCriticFill');
+  const canFill = Boolean(directorNoteForCritic(v.critic));
+  if (hint) hint.hidden = !(v.criticUrl || canFill);
+  if (fill) fill.hidden = !canFill;
+  if (link) {
+    link.hidden = !v.criticUrl;
     if (v.criticUrl) link.href = v.criticUrl;
   }
   const full = $('criticReportLink');
@@ -4379,6 +4391,31 @@ function fixFindingWithAi(f) {
   }
   document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
   startImprove(/^narration/.test(f.target) ? 'narration' : plate ? 'plates' : 'full');
+}
+
+/** Paste the critic report into the Feedback note so the user can edit, then Apply. */
+function fillNoteFromCritic() {
+  const note = directorNoteForCritic(state.video?.critic);
+  if (!note) {
+    toast('No critic findings yet', 'Run the critic in Review, then bring the findings here', 'warn');
+    return false;
+  }
+  const noteEl = $('improveNote');
+  if (noteEl) {
+    noteEl.value = note;
+    noteEl.focus();
+    noteEl.setSelectionRange(note.length, note.length);
+  }
+  const btn = $('btnImprove');
+  if (btn) {
+    delete btn.dataset.plateId;
+    btn.dataset.improve = 'full';
+    const n = state.video?.critic?.findings?.length ?? 0;
+    btn.textContent = n <= 1 ? 'Apply critic finding' : `Apply ${n} critic findings`;
+  }
+  document.querySelector('.tools-panel .ptab[data-right="feedback"]')?.click();
+  toast('Critic findings loaded', 'Edit the note if you want, then Apply');
+  return true;
 }
 
 /* ——— Plate accent (per-plate motion override) ——— */
@@ -6740,12 +6777,17 @@ function wire() {
   $('btnImprove').onclick = () => startImprove('full');
   $('improveNote')?.addEventListener('input', (e) => {
     if (!e.target.value.trim() && $('btnImprove')?.dataset.plateId) resetImproveTarget();
+    const btn = $('btnImprove');
+    if (btn && /^Apply( \d+)? critic findings?$/.test((btn.textContent || '').trim())) {
+      btn.textContent = 'Apply with smart scope';
+    }
   });
   document.querySelectorAll('[data-improve]').forEach((btn) => {
     if (btn.id === 'btnImprove') return;
     btn.onclick = () => startImprove(btn.dataset.improve);
   });
   $('btnCritic').onclick = () => runCriticFromStudio({ force: false });
+  $('btnCriticFill')?.addEventListener('click', () => fillNoteFromCritic());
   $('btnCriticRun')?.addEventListener('click', () => runCriticFromStudio({ force: true }));
   $('btnCriticApply')?.addEventListener('click', async () => {
     buttonBusy($('btnCriticApply'), true);
@@ -7406,25 +7448,37 @@ function initStages() {
 
 function agentTip(auth, id) {
   const runner = auth.runners?.[id];
-  const label = runner?.label || (id === 'claude' ? 'Claude Code' : 'Cursor agent');
+  const label = runner?.label || (id === 'claude' ? 'Claude Code' : 'Cursor');
   const active = (auth.provider || auth.preference) === id;
+  const title = active ? `${label} · in use` : label;
   if (!runner?.available) {
-    return `${label}\nNot installed\n${runner?.message || (id === 'claude'
-      ? 'Install from claude.ai/code, then run claude → /login.'
-      : 'Install Cursor CLI, then run agent login.')}`;
+    return `${title}\nNot installed\n${
+      id === 'claude'
+        ? 'Install from claude.ai/code, then run: claude /login'
+        : 'Install the Cursor CLI, then run: agent login'
+    }`;
   }
   if (!runner.authenticated) {
-    return `${label}${active ? ' · selected' : ''}\nNeeds sign-in\n${runner.message || (id === 'claude'
-      ? 'Run claude → /login, or set ANTHROPIC_API_KEY in kit/.env.'
-      : 'Run agent login, or set CURSOR_API_KEY in kit/.env.')}`;
+    return `${title}\nNeeds sign-in before Improve can run\n${
+      id === 'claude'
+        ? 'In a terminal run: claude /login\nOr add ANTHROPIC_API_KEY to kit/.env'
+        : 'In a terminal run: agent login\nOr add CURSOR_API_KEY to kit/.env'
+    }`;
   }
   if (runner.soft) {
-    return `${label}${active ? ' · selected' : ''}\nSigned in (unverified)\n${runner.message || 'Retry Improve after agent login refreshes.'}`;
+    return `${title}\nSigned in, but not verified yet\n${
+      id === 'claude' ? 'Run claude /login again, then retry Improve' : 'Run agent login again, then retry Improve'
+    }`;
   }
   if (active) {
-    return `${label}\nActive · ready for Improve${runner.via ? `\nvia ${runner.via}` : ''}`;
+    const via = runner.via === 'agent-login' ? 'Cursor login' : runner.via ? runner.via : '';
+    return `${title}\nReady\n${via ? `Signed in via ${via}` : 'This agent will handle Improve requests'}`;
   }
-  return `${label}\nReady — click to use for Improve${auth.switchable ? '' : '\n(other runner unavailable)'}`;
+  return `${title}\nReady\n${
+    auth.switchable === false
+      ? 'Click to use for Improve\nThe other agent isn’t available'
+      : 'Click to use this agent for Improve'
+  }`;
 }
 
 function renderAgentChrome(auth = {}) {

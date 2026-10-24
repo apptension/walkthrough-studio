@@ -275,6 +275,7 @@ export const deckEdit = (): DeckEdit =>
     transitions: {},
     audio: null,
     cards: [],
+    layouts: [],
     order: [],
     omit: [],
     trims: [],

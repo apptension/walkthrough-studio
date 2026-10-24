@@ -4521,14 +4521,16 @@ export function initEditor(ctx) {
   }
 
   function placeSection(c) {
+    const placeHelp =
+      'Drag the block to reorder. Use the trash or ⌫ to pull it out of the cut — restore it anytime from the empty inspector.';
     return section(
       'motion',
       'Place',
       `<div class="ins-pair">
         <button type="button" class="ins-btn" data-act="clip-earlier" ${c.i <= 0 ? 'disabled' : ''}>${ICONS.undo}Earlier</button>
         <button type="button" class="ins-btn" data-act="clip-later" ${c.i >= ed.seq.length - 1 ? 'disabled' : ''}>Later${ICONS.redo}</button>
-      </div>
-      <p class="ins-note subtle">Drag the block to reorder. Use the trash or <kbd>⌫</kbd> to pull it out of the cut — restore it anytime from the empty inspector.</p>`
+      </div>`,
+      `<button type="button" class="help-tip" title="${escapeHtml(placeHelp)}" aria-label="About Place">?</button>`,
     );
   }
 

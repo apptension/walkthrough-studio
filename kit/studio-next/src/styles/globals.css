@@ -1,7 +1,8 @@
 /*
  * The desk's look is the legacy stylesheet, verbatim (`studio.css`, synced by
- * `scripts/sync-legacy.mjs`). Components render the legacy markup against it,
- * so nothing here restyles anything — this file only adapts the page shell.
+ * `scripts/sync-legacy.mjs`). Components render the legacy markup against it.
+ * This file only adapts the page shell and studio-next chrome refinements —
+ * never edit kit/studio/styles.css for next-only polish.
  */
 @import './studio.css';
 
@@ -9,4 +10,864 @@
    workspace to be direct flex children of <body>. */
 #root {
   display: contents;
+}
+
+/* —— studio-next chrome ——
+   Sequence picker + settings + branch read as one control.
+   New video stays separate. Compact icons match help (32×32); Search uses a loupe. */
+
+.chrome-sequence {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 420px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  /* Keep the shared outline without clipping hover tips on settings/branch. */
+  overflow: visible;
+}
+
+.chrome-sequence .chrome-project,
+.chrome-sequence #slugSelect {
+  border-radius: 7px 0 0 7px;
+}
+
+.chrome-sequence .btn.icon-text:last-child {
+  border-radius: 0 7px 7px 0;
+}
+
+.chrome-sequence .chrome-project {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: none;
+  height: 100%;
+}
+
+.chrome-sequence .chrome-project select,
+.chrome-sequence #slugSelect {
+  --sel-h: 100%;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  line-height: 1.2;
+}
+
+.chrome-sequence #slugSelect > .sel-trigger {
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+}
+
+.chrome-sequence #slugSelect > .sel-trigger selectedcontent {
+  display: flex;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.chrome-sequence .btn.icon-text {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 32px;
+  min-width: 32px;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chrome-sequence .btn.icon-text .btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.chrome-sequence .btn.icon-text:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chrome-sequence .btn.icon-text:focus-visible {
+  z-index: 1;
+}
+
+.chrome-sequence .btn.icon-text[hidden] {
+  display: none !important;
+}
+
+.chrome-nav {
+  gap: 10px;
+  align-items: center;
+}
+
+/* New video — same height as Render; quiet grey like other chrome buttons,
+   brand gradient border + ink on hover. */
+.chrome-nav > #btnNewVideo.chrome-new {
+  --chrome-new-fill: rgba(255, 255, 255, 0.04);
+  --chrome-new-fill-hot: var(--well);
+  flex: 0 0 auto;
+  position: relative;
+  box-sizing: border-box;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  background: var(--chrome-new-fill);
+  box-shadow: none;
+}
+
+.chrome-nav > #btnNewVideo.chrome-new .chrome-new-grad {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:hover,
+.chrome-nav > #btnNewVideo.chrome-new:focus-visible {
+  color: transparent;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--chrome-new-fill-hot), var(--chrome-new-fill-hot)) padding-box,
+    var(--brand-gradient-hot) border-box;
+  box-shadow: 0 0 22px -10px var(--accent-glow);
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:hover .btn-label,
+.chrome-nav > #btnNewVideo.chrome-new:focus-visible .btn-label {
+  background-image: var(--brand-gradient-hot);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:hover .chrome-new-ico,
+.chrome-nav > #btnNewVideo.chrome-new:focus-visible .chrome-new-ico {
+  fill: url(#chromeNewGradHot);
+  color: transparent;
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:active {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+  transform: translateY(0.5px);
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:active .btn-label {
+  background: none;
+  color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
+}
+
+.chrome-nav > #btnNewVideo.chrome-new:active .chrome-new-ico {
+  fill: currentColor;
+  color: var(--ink);
+}
+
+.chrome .command-trigger .command-loupe {
+  display: none;
+  flex-shrink: 0;
+}
+
+.chrome-actions #btnHelp {
+  box-sizing: border-box;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Instant name tips for icon chrome controls (native title is too slow / easy to miss). */
+.chrome #btnProjectSettings,
+.chrome #btnBranch,
+.chrome #btnHelp {
+  position: relative;
+}
+
+.chrome #btnProjectSettings[title]:hover::after,
+.chrome #btnBranch[title]:hover::after,
+.chrome #btnHelp[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #0a0b0a;
+  border: 1px solid var(--line-2);
+  color: var(--ink-dim);
+  font: 600 10.5px/1.2 var(--font);
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 40;
+  box-shadow: var(--shadow-float);
+}
+
+/* Agent tip — title / status / next step, easier to scan than a plain dump. */
+.chrome-agent-host .agent-tip {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 300px;
+  padding: 10px 12px;
+  line-height: 1.35;
+}
+
+.chrome-agent-host .agent-tip-title {
+  font: 700 12px/1.25 var(--font);
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.chrome-agent-host .agent-tip-status {
+  font: 600 11px/1.3 var(--font);
+  color: var(--ink-dim);
+}
+
+.chrome-agent-host .agent-tip-detail {
+  font: 500 11px/1.4 var(--font);
+  color: var(--muted);
+}
+
+.chrome-agent-host .agent-tip.is-warn .agent-tip-status {
+  color: var(--warn);
+}
+
+.chrome-agent-host .agent-tip.is-ok .agent-tip-status {
+  color: var(--good);
+}
+
+/* Stage bar: hidden for now — Out of date lives on the Render cluster. */
+.stage-bar[hidden] {
+  display: none;
+}
+
+.stage-bar .stage-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-bar .stage-hint-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-bar .stage-status-badge {
+  flex: 0 0 auto;
+  max-width: none;
+  margin: 0;
+}
+
+.stage-bar .stage-hint:empty,
+.stage-bar .stage-hint[hidden] {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .chrome-nav > #btnNewVideo.chrome-new {
+    width: 30px;
+    min-width: 30px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+
+  .chrome-nav > #btnNewVideo.chrome-new .btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .chrome-actions #btnExport,
+  .chrome-actions #btnSnapshot,
+  .chrome .command-trigger {
+    box-sizing: border-box;
+    height: 32px;
+    min-width: 32px;
+    width: 32px;
+    padding: 0;
+    border-radius: 8px;
+    justify-content: center;
+  }
+
+  .chrome .command-trigger {
+    gap: 0;
+    color: var(--ink-dim);
+    background: transparent;
+  }
+
+  .chrome .command-trigger:hover {
+    color: var(--ink);
+  }
+
+  .chrome .command-trigger .command-loupe {
+    display: block;
+  }
+
+  .chrome .command-trigger .btn-label,
+  .chrome .command-trigger kbd {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .chrome-actions #btnMake {
+    box-sizing: border-box;
+    height: 32px;
+    min-width: 32px;
+    width: 32px;
+    padding: 0;
+    border-radius: 8px;
+  }
+}
+
+/* —— Render cluster ——
+   The header's one status chip folds out of Render's left edge and the two read as one pill.
+   The chip measures itself; its wrapper animates to that width, so every state change (any
+   label length) morphs. Its outline is an inset shadow so a folded chip takes no space. */
+
+.render-cluster {
+  --fresh: var(--warn);
+  --fresh-ms: 460ms;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+
+.render-cluster[data-tone='warn'] { --fresh: var(--warn); }
+.render-cluster[data-tone='danger'] { --fresh: var(--danger); }
+.render-cluster[data-tone='accent'] { --fresh: var(--accent); }
+.render-cluster[data-tone='review'] { --fresh: var(--brand-yellow); }
+.render-cluster[data-tone='run'] { --fresh: var(--accent); }
+.render-cluster[data-tone='ok'] { --fresh: var(--good); }
+
+/* One halo around chip + Render while something waits on you. */
+.render-cluster::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--fresh) 42%, transparent),
+    0 0 20px -6px color-mix(in srgb, var(--fresh) 70%, transparent);
+  transition: opacity var(--fresh-ms) var(--ease), box-shadow 0.35s var(--ease);
+}
+
+.render-cluster[data-attention]::before {
+  opacity: 1;
+  animation: render-halo 2.8s ease-in-out infinite;
+}
+
+.render-fresh {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  border-radius: 8px 0 0 8px;
+  transition: width var(--fresh-ms) var(--ease-spring);
+}
+
+.render-fresh-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 300px;
+  overflow: hidden;
+  border-radius: 8px 0 0 8px;
+  background-color: color-mix(in srgb, var(--fresh) 11%, #0c0d0c);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fresh) 40%, transparent);
+  color: var(--fresh);
+  font: 650 11px/1 var(--font);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(10px);
+  transition:
+    opacity calc(var(--fresh-ms) * 0.7) var(--ease),
+    transform var(--fresh-ms) var(--ease-spring),
+    background-color 0.35s var(--ease),
+    box-shadow 0.35s var(--ease),
+    color 0.35s var(--ease);
+}
+
+.render-cluster:not([data-kind='idle']) .render-fresh-chip {
+  opacity: 1;
+  transform: none;
+}
+
+.render-fresh-chip[data-click] {
+  cursor: pointer;
+}
+
+.render-fresh-chip[data-click]:hover {
+  background-color: color-mix(in srgb, var(--fresh) 17%, #0c0d0c);
+}
+
+/* A slow light sweep — fast while catching up. */
+.render-fresh-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--fresh) 30%, transparent) 50%, transparent 70%);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+
+.render-cluster[data-attention] .render-fresh-chip::after {
+  opacity: 1;
+  animation: render-sweep 3.6s var(--ease) 0.6s infinite;
+}
+
+.render-cluster[data-kind='busy'] .render-fresh-chip::after {
+  opacity: 1;
+  animation: render-sweep 1.3s linear infinite;
+}
+
+.render-fresh-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-left: 10px;
+}
+
+.render-fresh-mark > * {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 0.25s var(--ease),
+    transform 0.4s var(--ease-spring);
+}
+
+.render-fresh-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fresh);
+  transition: background 0.35s var(--ease);
+}
+
+.render-fresh-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--fresh);
+  opacity: 0;
+}
+
+.render-fresh-spin {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+}
+
+.render-fresh-check {
+  display: block;
+  color: var(--good);
+  stroke-width: 3;
+}
+
+.render-cluster:not([data-tone='run']):not([data-tone='ok']) .render-fresh-dot,
+.render-cluster[data-tone='run'] .render-fresh-spin,
+.render-cluster[data-tone='ok'] .render-fresh-check {
+  opacity: 1;
+  transform: none;
+}
+
+.render-cluster[data-attention] .render-fresh-dot::after {
+  animation: render-ping 2.2s ease-out infinite;
+}
+
+.render-cluster[data-tone='run'] .render-fresh-spin {
+  animation: render-spin 0.8s linear infinite;
+}
+
+/* Each new label enters on its own; the wrapper's width carries the morph. */
+.render-fresh-label {
+  min-width: 0;
+  padding-right: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: render-label-in 0.42s var(--ease-spring) both;
+}
+
+/* Render loses its left corners while the chip is out, so the seam disappears. */
+.render-cluster #btnMake {
+  transition:
+    border-radius var(--fresh-ms) var(--ease-spring),
+    background 0.2s var(--ease),
+    color 0.2s var(--ease);
+}
+
+.render-cluster:not([data-kind='idle']) #btnMake {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.render-cluster:has(.render-fresh-chip[data-click='render']:hover) #btnMake:not(:disabled) {
+  background: var(--brand-fill-hot);
+}
+
+/* —— Why it's out of date —— */
+.render-tip {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  width: 296px;
+  padding: 12px 13px 11px;
+  border-radius: 10px;
+  background: #0a0b0a;
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-float);
+  color: var(--ink-dim);
+  font: 500 11px/1.45 var(--font);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: 24px 0;
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.26s var(--ease-spring),
+    visibility 0s linear 0.26s;
+}
+
+.render-tip[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0.12s, 0.12s, 0s;
+}
+
+.render-tip:empty {
+  display: none;
+}
+
+.render-tip-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font: 700 12.5px/1.2 var(--font);
+  letter-spacing: -0.01em;
+}
+
+.render-tip { --tip-tone: var(--warn); }
+.render-tip[data-tone='danger'] { --tip-tone: var(--danger); }
+.render-tip[data-tone='accent'],
+.render-tip[data-tone='run'] { --tip-tone: var(--accent); }
+.render-tip[data-tone='review'] { --tip-tone: var(--brand-yellow); }
+
+.render-tip-title i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tip-tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tip-tone) 20%, transparent);
+}
+
+.render-tip-lead {
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+.render-tip-detail {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font: 500 10.5px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+/* The running pipeline: done ticks, the live step pulses, the rest wait. */
+.render-tip-steps {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.render-tip-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.render-tip-steps i {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-2);
+}
+
+.render-tip-steps li[data-status='done'] {
+  color: var(--ink-dim);
+}
+
+.render-tip-steps li[data-status='done'] i {
+  border-color: var(--good);
+  background: var(--good);
+}
+
+.render-tip-steps li[data-status='run'] {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.render-tip-steps li[data-status='run'] i {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 2px, transparent 2.5px);
+  animation: render-ping-soft 1.4s ease-out infinite;
+}
+
+.render-tip-steps li[data-status='fail'] {
+  color: var(--danger);
+}
+
+.render-tip-steps li[data-status='fail'] i {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.render-tip-changes {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.render-tip-changes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.render-tip-changes li + li {
+  border-top: 1px solid var(--line);
+}
+
+.render-tip-change {
+  display: grid;
+  min-width: 0;
+}
+
+.render-tip-change b {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.render-tip-change em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.render-tip-changes time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font: 500 10.5px/1 var(--mono);
+}
+
+.render-tip-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.render-tip-next {
+  color: var(--tip-tone);
+  font-weight: 650;
+}
+
+@keyframes render-halo {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes render-sweep {
+  0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(120%); }
+}
+
+@keyframes render-ping {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes render-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes render-ping-soft {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 5px transparent; }
+}
+
+@keyframes render-label-in {
+  from { opacity: 0; filter: blur(3px); transform: translateY(5px); }
+  to { opacity: 1; filter: none; transform: none; }
+}
+
+/* Narrow chrome: the chip keeps its mark; the tip still explains. */
+@media (max-width: 1100px) {
+  .render-fresh-label {
+    display: none;
+  }
+
+  .render-fresh-mark {
+    margin-inline: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .render-cluster,
+  .render-cluster *,
+  .render-cluster::before,
+  .render-fresh-chip::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* Panel tabs — solid wash matching the body; no accent underline. */
+.panel-tabs {
+  overflow: visible;
+}
+
+.panel-body {
+  background: color-mix(in srgb, #fff 1.2%, var(--panel));
+}
+
+.ptab.active {
+  color: var(--ink);
+  background: color-mix(in srgb, #fff 1.2%, var(--panel));
+  margin-bottom: -1px;
+  padding-bottom: calc(8px + 1px);
+  z-index: 1;
+  box-shadow: none;
+}
+
+.ptab.active::after {
+  content: none;
+  display: none;
+  animation: none;
+}
+
+/* Section chevron — icon only; stay centered through the 180° flip. */
+.panel-sec-chevron,
+.panel-sec-head:hover .panel-sec-chevron,
+.panel-sec[open] > .panel-sec-head .panel-sec-chevron {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.panel-sec-head:hover .panel-sec-chevron,
+.panel-sec[open] > .panel-sec-head .panel-sec-chevron {
+  color: var(--ink-dim);
+}
+
+.panel-sec-chevron svg {
+  display: block;
+  margin: 0 auto;
+  /* Center of the 24×24 viewBox — not 55%, which drifted the tip after rotate. */
+  transform-origin: 50% 50%;
+  transform-box: view-box;
 }

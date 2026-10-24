@@ -4,11 +4,12 @@ import { chooseAgent } from '@/desk/boot';
 import { useDesk } from '@/desk/store';
 import { Icon } from '@/ui/icons';
 
-import { agentButtonView, type AgentAuthView, type AgentId } from './agentView';
+import { agentButtonView, type AgentAuthView, type AgentId, type AgentTipView } from './agentView';
 
 const AGENTS: AgentId[] = ['cursor', 'claude'];
 
 const EMPTY: AgentAuthView = {};
+const EMPTY_TIP: AgentTipView = { title: '', status: '', detail: '' };
 
 /** Leaving the host (not moving between its children) hides the tip. */
 function leftHost(e: PointerEvent<HTMLElement> | FocusEvent<HTMLElement>): boolean {
@@ -22,14 +23,17 @@ function leftHost(e: PointerEvent<HTMLElement> | FocusEvent<HTMLElement>): boole
  */
 export function AgentChrome() {
   const auth = useDesk((s) => s.agentAuth) ?? EMPTY;
-  const [tip, setTip] = useState({ text: '', shown: false });
+  const [tip, setTip] = useState({ ...EMPTY_TIP, shown: false, tone: '' as '' | 'ok' | 'warn' });
   const [switching, setSwitching] = useState(false);
   const views = AGENTS.map((id) => ({ id, view: agentButtonView(auth, id) }));
 
   const showTip = (target: EventTarget) => {
     const btn = (target as Element).closest?.<HTMLElement>('[data-agent]');
-    const text = btn?.dataset['tip'];
-    if (text) setTip({ text, shown: true });
+    const id = btn?.dataset['agent'] as AgentId | undefined;
+    const view = views.find((v) => v.id === id)?.view;
+    if (!view) return;
+    const tone = view.state === 'ready' ? 'ok' : view.state === 'needs-auth' || view.state === 'missing' ? 'warn' : '';
+    setTip({ ...view.tipView, shown: true, tone });
   };
   const hideTip = () => setTip((t) => (t.shown ? { ...t, shown: false } : t));
 
@@ -82,8 +86,21 @@ export function AgentChrome() {
           </button>
         </Fragment>
       ))}
-      <div id="agentTip" className="agent-tip" role="tooltip" hidden={!tip.shown}>
-        {tip.text}
+      <div
+        id="agentTip"
+        className={`agent-tip${tip.tone === 'ok' ? ' is-ok' : tip.tone === 'warn' ? ' is-warn' : ''}`}
+        role="tooltip"
+        hidden={!tip.shown}
+      >
+        {tip.title ? <strong className="agent-tip-title">{tip.title}</strong> : null}
+        {tip.status ? <span className="agent-tip-status">{tip.status}</span> : null}
+        {tip.detail
+          ? tip.detail.split('\n').map((line) => (
+              <span key={line} className="agent-tip-detail">
+                {line}
+              </span>
+            ))
+          : null}
       </div>
     </div>
   );

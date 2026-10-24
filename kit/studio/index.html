@@ -28,32 +28,36 @@
 
     <!-- Premiere-style chrome: menu · monitor · tools · timeline -->
     <header class="chrome">
-      <div class="chrome-brand" title="Walkthrough Studio">
-        <canvas class="logo" id="brandMark" width="48" height="48" aria-hidden="true"></canvas>
-        <span class="chrome-title">Walkthrough Studio</span>
-      </div>
+      <div class="chrome-main">
+        <div class="chrome-brand" title="Walkthrough Studio">
+          <canvas class="logo" id="brandMark" width="48" height="48" aria-hidden="true"></canvas>
+          <span class="chrome-title">Walkthrough Studio</span>
+        </div>
 
-      <label class="chrome-project">
-        <span class="sr-only">Sequence</span>
-        <select id="slugSelect" aria-label="Select sequence"></select>
-      </label>
-      <button type="button" id="btnNewVideo" class="btn compact icon-text" title="Create a new video from a brief">
-        <svg viewBox="0 0 24 24" data-sprite="ui-plus-fill" width="13" height="13" aria-hidden="true" fill="currentColor"><path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-1.1 4.5h2.2v3.4h3.4v2.2h-3.4v3.4h-2.2v-3.4H7.5v-2.2h3.4Z"/></svg>
-        New video
-      </button>
-      <button type="button" id="btnProjectSettings" class="btn compact icon-text" title="Edit the brief and replan" hidden>
-        <svg viewBox="0 0 24 24" data-sprite="ui-settings" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h8M16 7h4M14 4.5v5"/>
+        <div class="chrome-nav">
+          <label class="chrome-project">
+            <span class="sr-only">Sequence</span>
+            <select id="slugSelect" aria-label="Select sequence"></select>
+          </label>
+          <button type="button" id="btnNewVideo" class="btn compact icon-text" title="Create a new video from a brief" aria-label="New video">
+            <svg viewBox="0 0 24 24" data-sprite="ui-plus-fill" width="13" height="13" aria-hidden="true" fill="currentColor"><path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-1.1 4.5h2.2v3.4h3.4v2.2h-3.4v3.4h-2.2v-3.4H7.5v-2.2h3.4Z"/></svg>
+            <span class="btn-label">New video</span>
+          </button>
+          <button type="button" id="btnProjectSettings" class="btn compact icon-text" title="Edit the brief and replan" aria-label="Project settings" hidden>
+            <svg viewBox="0 0 24 24" data-sprite="ui-settings" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h8M16 7h4M14 4.5v5"/>
   <path d="M4 12h3M11 12h9M9 9.5v5"/>
   <path d="M4 17h10M18 17h2M16 14.5v5"/></svg>
-        Project settings
-      </button>
-      <button type="button" id="btnBranch" class="btn compact icon-text" title="Branch focused feature videos from this overview">
-        <svg viewBox="0 0 24 24" data-sprite="ui-branch" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5.5" r="2.5"/>
+            <span class="btn-label">Project settings</span>
+          </button>
+          <button type="button" id="btnBranch" class="btn compact icon-text" title="Branch focused feature videos from this overview" aria-label="Branch">
+            <svg viewBox="0 0 24 24" data-sprite="ui-branch" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5.5" r="2.5"/>
   <circle cx="17" cy="5.5" r="2.5"/>
   <circle cx="12" cy="18.5" r="2.5"/>
   <path d="M7 8v1a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V8M12 12v4"/></svg>
-        Branch
-      </button>
+            <span class="btn-label">Branch</span>
+          </button>
+        </div>
+      </div>
 
       <div id="statusLine" class="chrome-status" aria-live="polite">
         <i id="statusDot"></i>
@@ -61,22 +65,22 @@
       </div>
 
       <div class="chrome-actions">
-        <button type="button" id="btnMake" class="btn primary icon-text" title="Render / rebuild delivery">
+        <button type="button" id="btnMake" class="btn primary icon-text" title="Render / rebuild delivery" aria-label="Render">
           <svg viewBox="0 0 24 24" data-sprite="ui-play-fill" width="14" height="14" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M8 5.75v12.5L18.5 12Z"/></svg>
-          <span id="btnMakeLabel">Render</span>
+          <span id="btnMakeLabel" class="btn-label">Render</span>
           <span id="queueBadge" class="queue-badge" hidden>0</span>
         </button>
-        <button type="button" id="btnExport" class="btn icon-text" title="Export handoff package">
+        <button type="button" id="btnExport" class="btn icon-text" title="Export handoff package" aria-label="Export">
           <svg viewBox="0 0 24 24" data-sprite="ui-step-deliver" width="14" height="14" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z"/>
   <path d="M4.5 20h15" stroke-linecap="round"/></svg>
-          Export
+          <span class="btn-label">Export</span>
         </button>
-        <button type="button" id="btnSnapshot" class="btn icon-text" title="Save a named version">
+        <button type="button" id="btnSnapshot" class="btn icon-text" title="Save a named version" aria-label="Save version">
           <svg viewBox="0 0 24 24" data-sprite="ui-plus-fill" width="14" height="14" aria-hidden="true" fill="currentColor"><path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-1.1 4.5h2.2v3.4h3.4v2.2h-3.4v3.4h-2.2v-3.4H7.5v-2.2h3.4Z"/></svg>
-          Save version
+          <span class="btn-label">Save version</span>
         </button>
         <button type="button" id="btnCommand" class="btn command-trigger" title="Open command menu (⌘K)" aria-label="Open command menu">
-          <span>Search</span><kbd>⌘K</kbd>
+          <span class="btn-label">Search</span><kbd>⌘K</kbd>
         </button>
         <button type="button" id="btnHelp" class="btn icon" title="Studio guide and shortcuts (?)" aria-label="Studio guide">?</button>
 
@@ -103,7 +107,7 @@
         <li><button type="button" class="pstage" data-stage="cut"><span class="stage-dot" aria-hidden="true"></span><span class="stage-text"><strong>Cut</strong><em data-stage-meta="cut">—</em></span></button></li>
         <li><button type="button" class="pstage" data-stage="deliver"><span class="stage-dot" aria-hidden="true"></span><span class="stage-text"><strong>Deliver</strong><em data-stage-meta="deliver">—</em></span></button></li>
       </ol>
-      <p id="stageHint" class="stage-hint" aria-live="polite"></p>
+      <div id="stageHint" class="stage-hint" aria-live="polite" hidden></div>
     </nav>
 
     <!-- Hidden compat hooks for legacy actionCard IDs (UI lives in left Render bay) -->
@@ -619,7 +623,7 @@
 
         <div class="tools-scroll">
           <div id="rightFeedback" class="panel-body">
-            <p class="panel-lede">Direct the whole video in plain language. The agent chooses the smallest safe scope, coordinates related sources, and waits for your approval before rendering.</p>
+            <p class="panel-lede">Describe the change in plain language — the agent picks a safe scope and waits for your OK.</p>
             <label class="field">
               <span data-ico="note" data-help="Smart scope picks the smallest safe change. A broad note can coordinate story &amp; script, brand direction, timing, plates, and voice &amp; mix together. Name an exact plate, scene, or line only when you want a surgical edit.">Director note</span>
               <textarea id="improveNote" rows="4" placeholder="e.g. Tighten the story, make the pacing calmer, and give the voice more warmth — keep the captured brand intact"></textarea>
@@ -635,9 +639,10 @@
                 <button type="button" id="btnCritic" class="btn" title="An AI reviewer watches the cut and lists issues in Review">Run critic</button>
               </div>
             </div>
-            <p id="criticHint" class="meta critic-hint" hidden>
-              <a id="criticLink" href="#" target="_blank" rel="noopener">Open critic report →</a>
-            </p>
+            <div id="criticHint" class="critic-hint" hidden>
+              <button type="button" id="btnCriticFill" class="critic-link critic-link--fill" hidden title="Paste the critic findings into the director note"><svg viewBox="0 0 24 24" data-sprite="ui-note" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13 20.5h8"/><path d="M16.75 3.75a2.3 2.3 0 0 1 3.5 3.5L8 19.5 3.5 20.5l1-4.5Z"/></svg><span>Use critic findings</span></button>
+              <a id="criticLink" class="critic-link" href="#" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24" data-sprite="ui-open" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3.5h6.5V10"/><path d="M20.5 3.5 11.5 12.5"/><path d="M18.5 14v4.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2H10"/></svg><span>Open report</span></a>
+            </div>
           </div>
 
           <div id="rightInspector" class="panel-body inspector" hidden>
@@ -1118,12 +1123,12 @@
               <div class="work-kicker">
                 <span class="activity-spinner" id="sessionSpinner" hidden></span>
                 <span id="sessionElapsed" class="activity-elapsed" hidden>0:00</span>
-                <span id="sessionPhase" class="badge" hidden>—</span>
+                <span id="sessionPhase" class="badge" data-tone="idle">Idle</span>
                 <button type="button" id="btnStopSession" class="btn tiny danger" hidden title="Stop agent and clear queue">Stop</button>
                 <button type="button" id="btnSessionLog" class="btn tiny" hidden>Log</button>
               </div>
               <div id="sessionArt" class="zen-slot" data-art="sleep" aria-hidden="true"></div>
-              <strong id="sessionTitle" class="work-title">Agent’s off the clock 💤</strong>
+              <strong id="sessionTitle" class="work-title">Waiting for a note</strong>
               <p id="sessionMeta" class="work-summary">Apply a note and its progress shows here.</p>
             </div>
             <div class="work-bar" id="sessionBar" hidden><span></span></div>

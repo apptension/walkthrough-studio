@@ -1,10 +1,11 @@
 import { bridges } from '@/desk/bridge';
-import { exportPack, requestMake } from '@/desk/jobs';
+import { exportPack } from '@/desk/jobs';
 import { useDesk } from '@/desk/store';
 import { snapshotVersion } from '@/features/project-panel/versionActions';
 import { Icon } from '@/ui/icons';
 
 import { AgentChrome } from './AgentChrome';
+import { RenderCluster } from './RenderCluster';
 
 /** `buttonBusy(btn, on)` as class + disabled, from the store's `busy` map. */
 function useBusy(id: string): boolean {
@@ -15,33 +16,6 @@ function busyClass(base: string, busy: boolean): string {
   return busy ? `${base} busy` : base;
 }
 
-/** `#btnMake` — the label `renderActionCard` sets and the `updateQueueBadge` count. */
-function MakeButton() {
-  const busy = useBusy('btnMake');
-  const label = useDesk((s) => s.action?.makeLabel ?? 'Render');
-  const queued = useDesk((s) => s.queue.length);
-  return (
-    <button
-      type="button"
-      id="btnMake"
-      className={busyClass('btn primary icon-text', busy)}
-      title="Render / rebuild delivery"
-      disabled={busy}
-      onClick={() => requestMake()}
-    >
-      <Icon name="ui-play-fill" size={14} />
-      {' '}
-      <span id="btnMakeLabel">
-        {label}
-      </span>
-      {' '}
-      <span id="queueBadge" className="queue-badge" hidden={queued === 0}>
-        {String(queued)}
-      </span>
-    </button>
-  );
-}
-
 function ExportButton() {
   const busy = useBusy('btnExport');
   return (
@@ -50,11 +24,15 @@ function ExportButton() {
       id="btnExport"
       className={busyClass('btn icon-text', busy)}
       title="Export handoff package"
+      aria-label="Export"
       disabled={busy}
       onClick={exportPack}
     >
       <Icon name="ui-step-deliver" size={14} />
-      {' '}Export
+      {' '}
+      <span className="btn-label">
+        Export
+      </span>
     </button>
   );
 }
@@ -67,11 +45,15 @@ function SnapshotButton() {
       id="btnSnapshot"
       className={busyClass('btn icon-text', busy)}
       title="Save a named version"
+      aria-label="Save version"
       disabled={busy}
       onClick={() => void snapshotVersion()}
     >
-      <Icon name="ui-plus-fill" size={14} />
-      {' '}Save version
+      <Icon name="ui-version" size={14} />
+      {' '}
+      <span className="btn-label">
+        Save version
+      </span>
     </button>
   );
 }
@@ -79,7 +61,7 @@ function SnapshotButton() {
 export function ChromeActions() {
   return (
     <div className="chrome-actions">
-      <MakeButton />
+      <RenderCluster />
       {' '}
       <ExportButton />
       {' '}
@@ -93,7 +75,8 @@ export function ChromeActions() {
         aria-label="Open command menu"
         onClick={() => bridges.workflow?.openCommandMenu()}
       >
-        <span>
+        <Icon name="ui-loupe" size={14} className="command-loupe" />
+        <span className="btn-label">
           Search
         </span>
         <kbd>
@@ -105,8 +88,8 @@ export function ChromeActions() {
         type="button"
         id="btnHelp"
         className="btn icon"
-        title="Studio guide and shortcuts (?)"
-        aria-label="Studio guide"
+        title="Help"
+        aria-label="Help"
         onClick={() => bridges.workflow?.openHelp()}
       >
         ?

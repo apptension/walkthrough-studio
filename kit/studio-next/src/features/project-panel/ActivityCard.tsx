@@ -116,7 +116,7 @@ function ActivityCard({ job, expanded }: { job: Job | null; expanded: boolean })
           src={thumbOn ? (live.src ?? undefined) : undefined}
         />{' '}
         <strong id="renderLiveTitle" className="work-title">
-          {view ? view.title : 'All quiet on set 🌵'}
+          {view ? view.title : 'All quiet on set'}
         </strong>
         <p id="renderLiveMeta" className="work-summary">
           {view ? view.summary : 'Render above, or queue a single step below.'}

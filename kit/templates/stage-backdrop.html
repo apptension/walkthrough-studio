@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{LABEL}}</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: {{FRAME_W}}px;
+        height: {{FRAME_H}}px;
+        overflow: hidden;
+        color-scheme: light;
+        font-family: '{{FONT}}', ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+      }
+      /* The same picture camera.frameAssets paints with ffmpeg: a diagonal brand gradient and an
+         accent glow in the upper right. Keep the two in step. */
+      .stage {
+        position: relative;
+        width: {{FRAME_W}}px;
+        height: {{FRAME_H}}px;
+        background:
+          radial-gradient(ellipse 52% 83% at 82% 12%, {{GLOW}}, transparent 70%),
+          linear-gradient(135deg, {{C0}}, {{C1}});
+      }
+      /* Where the recording goes. Transparent so the window stays a hole; the shadow falls outside it. */
+      .window {
+        position: absolute;
+        left: {{WIN_X}}px;
+        top: {{WIN_Y}}px;
+        width: {{WIN_W}}px;
+        height: {{WIN_H}}px;
+        border-radius: {{WIN_R}}px;
+        box-shadow: {{WIN_SHADOW}};
+      }
+      .panel {
+        position: absolute;
+        left: {{PANEL_X}}px;
+        top: {{PANEL_Y}}px;
+        width: {{PANEL_W}}px;
+        height: {{PANEL_H}}px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: {{PANEL_ALIGN}};
+        text-align: {{PANEL_TEXT_ALIGN}};
+        box-sizing: border-box;
+        padding: 0 {{PANEL_PAD}}px;
+        color: {{TEXT}};
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: {{EYEBROW_GAP}}px;
+        margin: 0 0 {{EYEBROW_MB}}px;
+        font-size: {{EYEBROW_SIZE}}px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: {{ACCENT}};
+      }
+      .eyebrow i {
+        display: inline-block;
+        width: {{EYEBROW_RULE}}px;
+        height: 2px;
+        border-radius: 2px;
+        background: {{ACCENT}};
+      }
+      .title {
+        margin: 0;
+        max-width: {{TITLE_MAX}}px;
+        font-size: {{TITLE_SIZE}}px;
+        line-height: 1.04;
+        font-weight: 760;
+        letter-spacing: -0.028em;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+      }
+      .body {
+        margin: {{BODY_MT}}px 0 0;
+        max-width: {{BODY_MAX}}px;
+        font-size: {{BODY_SIZE}}px;
+        line-height: 1.38;
+        font-weight: 450;
+        color: {{MUTED}};
+        text-wrap: pretty;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="window"></div>
+      {{PANEL}}
+    </div>
+  </body>
+</html>

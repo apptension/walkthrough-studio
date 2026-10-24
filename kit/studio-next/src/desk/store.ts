@@ -189,6 +189,10 @@ export interface DeskState {
   platesPreviewed: boolean;
 
   /* —— chrome —— */
+  /**
+   * What is happening right now (`run`) or a one-off notice (`ok` / `warn`) for the Render
+   * cluster. Never the render state itself — that is `action`, read straight from freshness.
+   */
   status: { kind: StatusKind; text: string };
   busy: Record<string, boolean>;
   bay: BayOverride | null;
@@ -341,6 +345,13 @@ export function setButtonBusy(id: string, on: boolean): void {
 
 export function setStatus(kind: StatusKind, text: string): void {
   desk.set({ status: { kind, text } });
+}
+
+/** Drop the running-activity line — only if it is still `text`, when given. */
+export function clearRunStatus(text?: string): void {
+  const s = desk.get().status;
+  if (s.kind !== 'run' || (text !== undefined && s.text !== text)) return;
+  desk.set({ status: { kind: '', text: '' } });
 }
 
 export function openDialog(id: DialogId, open = true): void {

@@ -126,7 +126,7 @@ export function initWorkflow(ctx) {
   function hintFor(v, s) {
     // Out of date lives on the right of the stages stripe (not under Cut).
     if (s.cut.tone === 'warn' && s.cut.meta === 'Out of date') {
-      return { text: 'Out of date — sources changed since the last render. Use Render to catch up.', tone: 'warn' };
+      return { text: 'Sources changed since the last render. Use Render to catch up.', tone: 'warn', badge: 'Out of date' };
     }
     if (s.script.tone !== 'done') {
       return { text: 'Review and approve the script before recording — narration and on-screen copy are cheap to change now.', tone: '' };
@@ -164,9 +164,26 @@ export function initWorkflow(ctx) {
     }
     const hint = hintFor(v, s);
     const hintEl = $('stageHint');
-    hintEl.textContent = hint.text;
+    hintEl.replaceChildren();
+    hintEl.hidden = !(hint.text || hint.badge);
     if (hint.tone) hintEl.dataset.tone = hint.tone;
     else delete hintEl.dataset.tone;
+    if (hint.text) {
+      const copy = document.createElement('span');
+      copy.className = 'stage-hint-text';
+      copy.textContent = hint.text;
+      hintEl.appendChild(copy);
+    }
+    if (hint.badge) {
+      const badge = document.createElement('span');
+      badge.className = 'chrome-status stage-status-badge';
+      badge.dataset.kind = hint.tone || 'warn';
+      const dot = document.createElement('i');
+      const label = document.createElement('span');
+      label.textContent = hint.badge;
+      badge.append(dot, document.createTextNode(' '), label);
+      hintEl.appendChild(badge);
+    }
   }
 
   /* ---------- script sheet ---------- */

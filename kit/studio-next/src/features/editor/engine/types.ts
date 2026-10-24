@@ -3,6 +3,8 @@
  * Every field is optional where the server may omit it — the legacy code guards with `|| []`.
  */
 
+import type { OutputSize, StageRect } from '@/logic/stageLayout';
+
 export interface SpeedRamp {
   from: number;
   to: number;
@@ -103,6 +105,8 @@ export interface DeckEdit {
   transitions: Record<string, unknown>;
   audio: AudioDesk | null;
   cards: CardTiming[];
+  /** Per-section stage placement. A missing key keeps the video's camera frame. */
+  layouts?: LayoutRow[];
   order: string[];
   omit: string[];
   trims: Trim[];
@@ -366,14 +370,50 @@ export interface Frame {
   shadow: string;
 }
 
+export interface LayoutText {
+  on: boolean;
+  title?: string;
+  body?: string;
+}
+
+export interface LayoutRow {
+  key: string;
+  placement: string;
+  size: string;
+  text: LayoutText;
+}
+
+export interface DeckSection {
+  key: string;
+  from: number;
+  to: number;
+  no: number;
+  custom: boolean;
+  layout: { placement: string; size: string; text: LayoutText } | null;
+  copy: { title: string; body: string };
+  /** Chapter title and card body, before this section's own wording. */
+  source?: { title: string; body: string };
+  stage: StageRect;
+  panel: { x: number; y: number; w: number; h: number; side: string } | null;
+  textOn: boolean;
+  htmlUrl: string | null;
+}
+
+export interface DeckLayouts {
+  placements: Record<string, { label: string; hint: string }>;
+  sizes: string[];
+  sections: DeckSection[];
+}
+
 export interface Deck {
   slug?: string;
   deck?: DeckEdit;
+  layouts?: DeckLayouts;
   summary?: string;
   stale?: boolean;
   audioStale?: boolean;
   rendered?: boolean;
-  space?: { cssW?: number; cssH?: number; [key: string]: unknown };
+  space?: { cssW?: number; cssH?: number; output?: OutputSize | null; stage?: StageRect | null; [key: string]: unknown };
   live?: DeckLive;
   marks?: DeckMark[];
   zoomShots?: ZoomShot[];

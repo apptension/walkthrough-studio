@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { boot } from '@/desk/boot';
+import { watchFreshness } from '@/desk/freshness';
 import { wirePanelResize } from '@/desk/layout';
 import { useDesk } from '@/desk/store';
 import { BranchDialog } from '@/features/branch/BranchDialog';
@@ -58,6 +59,7 @@ function PanelHandle({ id, side, label }: { id: string; side: 'left' | 'right' |
 export function App() {
   const bootError = useDesk((s) => s.bootError);
   useEffect(() => wirePanelResize(), []);
+  useEffect(() => watchFreshness(), []);
   useEffect(() => {
     void boot();
   }, []);

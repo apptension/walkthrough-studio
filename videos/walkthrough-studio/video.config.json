@@ -329,6 +329,14 @@
         {
           "key": "intro",
           "at": 3.052
+        },
+        {
+          "key": "Ready to ship",
+          "at": 105.851
+        },
+        {
+          "key": "Export the handoff",
+          "at": 103.921
         }
       ]
     }

@@ -10,9 +10,11 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflashGraph, flashesFor } from './deflash.mjs';
-import { crossZoomGraph, frameAssets, frameGraph, planZooms, zoomGraph, zoomTiming } from './camera.mjs';
+import { crossZoomGraph, frameAssets, frameGraph, frameMask, planZooms, zoomGraph, zoomTiming } from './camera.mjs';
+import { loadCardMarks } from './cardMarks.mjs';
 import { buildEditPlan, resolveEdit, xfadeArgs } from './edit.mjs';
-import { compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
+import { cardMarkKey, compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
+import { rasterLayoutPngs, sectionStageGraph, takeCapture, videoLayout } from './layout.mjs';
 import { lensGeometry, lensPlaceChain, lensTiming } from './lens.mjs';
 import { prepareLensBakes } from './lensBake.mjs';
 import {
@@ -76,7 +78,7 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   const height = reel.reelH;
   const clean = join(video.out, 'live-clean.mp4');
   const stampPath = join(video.out, 'live-clean.json');
-  const cardBake = givenBake || (await prepareLiveCardBakes(video, LIVE));
+  let cardBake = givenBake || (await prepareLiveCardBakes(video, LIVE));
   const norm = `fps=${FPS},${toBt709(width, height)}`;
   const filter = [`[0:v]${norm}[lraw]`];
   let lv = '[lraw]';
@@ -128,10 +130,37 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   const framed = speed ? '[vf]' : '[v]';
   const frameInputs = [];
   const placed = stage.mode === 'fill' ? null : stage;
+  // A per-section layout replaces the single camera frame: each stretch between chapters is
+  // placed on its own backdrop, and cards then cover the delivered frame (a chapter whose title
+  // is already the side text is not baked again).
+  const layoutPack = await videoLayout(video, {
+    marks: loadCardMarks(video, { liveDur: liveSec }),
+    liveDur: liveSec,
+    layouts: deck.layouts,
+    output: { width: output.width, height: output.height },
+    capture: takeCapture(space),
+    camera,
+  });
+  const useSections = layoutPack.custom;
+  if (useSections && cardBake.plans?.length && layoutPack.carried.length) {
+    const drop = new Set(layoutPack.carried);
+    const plans = [];
+    const files = [];
+    cardBake.plans.forEach((p, i) => {
+      if (drop.has(cardMarkKey(p))) return;
+      plans.push(p);
+      files.push(cardBake.files[i]);
+    });
+    cardBake = { ...cardBake, plans, files };
+  }
+  let sectionAssets = null;
+  let sectionInputs = [];
+  let sectionInputCount = 0;
   // Cards are designed for a full delivered frame. A stage of that same shape carries them on the
   // screen (they shrink with an inset window); a phone or other-shaped stage gets them over the
-  // whole output, where they stay legible.
-  const cardsOnReel = Math.abs(stage.w / stage.h - output.width / output.height) < 0.01 * (output.width / output.height);
+  // whole output, where they stay legible. Section layouts always composite cards on the output.
+  const cardsOnReel =
+    !useSections && Math.abs(stage.w / stage.h - output.width / output.height) < 0.01 * (output.width / output.height);
   const bakeAt = (src, startInputIndex) =>
     cardBake.mode === 'clean' && cardBake.plans.length
       ? cardBakeOverlayGraph(cardBake.plans, cardBake.files, { srcLabel: src, outLabel: '[lbake]', startInputIndex })
@@ -149,7 +178,26 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
     lv = bakeGraph.outLabel;
   }
   const staged = '[lstage]';
-  if (placed) {
+  if (useSections) {
+    const maskDir = join(video.out, 'camera');
+    sectionAssets = layoutPack.sections.map((s) =>
+      s.htmlPath
+        ? { ...s, bg: s.htmlPath.replace(/\.html$/, '.png'), mask: frameMask(maskDir, s.stage) }
+        : { ...s, bg: null, mask: null },
+    );
+    const graph = sectionStageGraph({
+      src: lv,
+      out: staged,
+      sections: sectionAssets,
+      startInputIndex: 1 + magnifies.length + (bakeGraph.inputCount || 0),
+      output,
+      reel: { width, height },
+      fps: FPS,
+    });
+    sectionInputs = graph.inputs;
+    sectionInputCount = graph.inputCount;
+    filter.push(...graph.filter);
+  } else if (placed) {
     const assets = frameAssets(video, {
       width: output.width,
       height: output.height,
@@ -170,7 +218,8 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   }
   lv = staged;
   if (!cardsOnReel) {
-    bakeGraph = bakeAt(lv, 1 + magnifies.length + (frameInputs.length ? 2 : 0));
+    const lead = useSections ? sectionInputCount : frameInputs.length ? 2 : 0;
+    bakeGraph = bakeAt(lv, 1 + magnifies.length + lead);
     if (bakeGraph.inputCount) filter.push(...bakeGraph.filter);
     lv = bakeGraph.outLabel;
   }
@@ -215,6 +264,7 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
         filter,
         lensInputs,
         ...(frameInputs.length ? { frameInputs } : {}),
+        ...(sectionInputs.length ? { sectionInputs } : {}),
       })
     )
     .digest('hex')
@@ -232,7 +282,9 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
       ? `${zoomPlan.shots.length - (zoomPlan.manual || 0)} auto + ${zoomPlan.manual || 0} manual zoom${zoomPlan.shots.length === 1 ? '' : 's'}`
       : '',
     camera.zoom !== 'off' && !zoomPlan.targets ? 'auto zoom needs a new recording (no pointer marks)' : '',
-    placed && (stage.mode === 'device' || camera.frame !== 'inset')
+    useSections
+      ? `${layoutPack.sections.filter((s) => s.custom).length} section layout${layoutPack.sections.filter((s) => s.custom).length === 1 ? '' : 's'}`
+      : placed && (stage.mode === 'device' || camera.frame !== 'inset')
       ? `${reel.cssW}×${reel.cssH} capture on a ${stage.w}×${stage.h} ${stage.mode} stage in ${output.width}×${output.height}`
       : camera.frame === 'inset'
         ? `inset frame (${camera.background}, ${camera.padding}, ${camera.corners}, ${camera.shadow} shadow)`
@@ -249,9 +301,11 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
   }
 
   console.log(`» live · Cleaning ${mmss(liveSec)} of recording · ${what}`);
+  if (useSections) await rasterLayoutPngs(sectionAssets, output);
+  const stageInputs = useSections ? sectionInputs : frameInputs;
   const cleanArgs = [
     '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', LIVE, ...lensInputs, ...(cardsOnReel ? [...cardInputs, ...frameInputs] : [...frameInputs, ...cardInputs]),
+    '-i', LIVE, ...lensInputs, ...(cardsOnReel ? [...cardInputs, ...stageInputs] : [...stageInputs, ...cardInputs]),
     '-filter_complex', filter.join(';'),
     '-map', '[v]',
     '-r', String(FPS),

@@ -41,6 +41,10 @@ export const handlers = [
   http.get('/api/video/:slug', ({ params }) =>
     HttpResponse.json(makeVideo({ slug: String(params.slug) })),
   ),
+  http.get('/api/video/:slug/freshness', ({ params }) => {
+    const v = makeVideo({ slug: String(params.slug) });
+    return HttpResponse.json({ freshness: v.freshness, hasDelivery: v.hasDelivery, recordFailure: v.recordFailure });
+  }),
   http.get('/api/video/:slug/captions', () => HttpResponse.json({ clips: [] })),
   http.get('/api/video/:slug/scenes', ({ params }) =>
     HttpResponse.json({ scenes: makeVideo({ slug: String(params.slug) }).scenes }),

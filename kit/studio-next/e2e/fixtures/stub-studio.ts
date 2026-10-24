@@ -59,6 +59,14 @@ const routes: Route[] = [
   { method: 'GET', pattern: /^\/api\/brands$/, handle: () => ({ brands: [] }) },
   { method: 'GET', pattern: /^\/api\/video\/([^/]+)\/script$/, handle: () => makeScript() },
   { method: 'GET', pattern: /^\/api\/video\/([^/]+)\/captions$/, handle: () => ({ clips: [] }) },
+  {
+    method: 'GET',
+    pattern: /^\/api\/video\/([^/]+)\/freshness$/,
+    handle: () => {
+      const v = makeVideo();
+      return { freshness: v.freshness, hasDelivery: v.hasDelivery, recordFailure: v.recordFailure };
+    },
+  },
   { method: 'GET', pattern: /^\/api\/video\/([^/]+)\/plates$/, handle: () => ({ plates: [] }) },
   {
     method: 'GET',

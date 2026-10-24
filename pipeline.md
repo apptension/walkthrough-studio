@@ -35,6 +35,7 @@
 | `kit/lib/editDeck.mjs`         | The edit deck (`video.config.json → edit`: speed ramps, manual zooms, zoom-free windows, pinned joins) and plate `style` variables — validation, the recording→clean time map, the `setpts` speed graph, the `STYLE_GROUPS` catalog and the `<style data-plate-style>` injection |
 | `kit/studio/editor.js`         | Studio Editor mode: one playback engine over the whole cut (plates stepped on their own clock, `live.mp4` with simulated speed/zoom, transitions drawn between layers), the unified timeline (clips, join markers, speed and zoom rows, drag to select / move / retime, undo), text mode, and the Inspector (plate text / look / style variables / joins; recording speed / zoom / joins / cursor & pace) |
 | `kit/lib/camera.mjs`           | Auto zoom planner (`planZooms`) and its per-frame scale/crop graph, inset frame geometry, background and rounded mask (cached in `out/camera/`)                                       |
+| `kit/lib/layout.mjs`           | Per-section stage layouts (`edit.layouts`): placement and size between chapter marks, optional side text, shared `templates/stage-backdrop.html` for the Editor and the master     |
 | `kit/lib/cursor.mjs`           | Presentation cursor (arrow / dot, sizes, eased arc glide played in-page, arrow → pointing-hand morph with a push-down on clicks) and keystroke keycaps                                |
 | `kit/lib/exports.mjs`          | Format presets (square, vertical, lite 720p, GIF teaser) built from the master into `exports/`                                                                                       |
 | `kit/lib/produce.mjs`          | Single concat encode (deflash + lenses + fades) + chapters → `<slug>.mp4`, `produce-meta.json`                                                                                      |
@@ -336,7 +337,10 @@ the centre is clamped so the crop never leaves the frame. `ctx.zoom(locator)` em
 even when automatic click zoom is off; nearby automatic shots yield to it. Shots never overlap a chapter card,
 caption or lens. The inset frame overlays the take at tight (95%), balanced (90%) or roomy (82%) scale, with square,
 soft (22 px) or round (42 px) corners and off/soft/deep shadow, on a looped background PNG (gradient from the color
-scale plus accent glow) through a cached `geq` rounded mask. The cleaned reel's cache stamp includes camera inputs
+scale plus accent glow) through a cached `geq` rounded mask. A per-section layout (`edit.layouts`, `kit/lib/layout.mjs`)
+replaces that single frame: each stretch between chapter marks is fill, centre, left, right, top, or bottom, at
+small, medium, or large, with an optional text panel. The Editor and the master both paint
+`templates/stage-backdrop.html`. The cleaned reel's cache stamp includes camera inputs
 only when they are set, so a video with camera off keeps its cache.
 
 **Capture polish.** The page-side arrow/dot cursor owns its own compositor animation, click ripple and 1.5 s idle

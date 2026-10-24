@@ -40,12 +40,22 @@ describe('ChromeHeader markup', () => {
   it('renders the legacy header before boot', () => {
     render(<ChromeHeader />);
     expect(document.querySelector('header.chrome .chrome-brand')).toHaveAttribute('title', 'Walkthrough Studio');
+    expect(document.querySelector('header.chrome .chrome-main .chrome-nav')).not.toBeNull();
+    const sequence = document.querySelector('header.chrome .chrome-sequence');
+    expect(sequence).toHaveAttribute('aria-label', 'Current sequence');
+    expect(sequence?.contains($('slugSelect'))).toBe(true);
+    expect(sequence?.contains($('btnProjectSettings'))).toBe(true);
+    expect(sequence?.contains($('btnBranch'))).toBe(true);
+    expect(sequence?.contains($('btnNewVideo'))).toBe(false);
     expect($('brandMark')).toHaveAttribute('width', '48');
     expect($('slugSelect')).toBeEmptyDOMElement();
     expect($('btnProjectSettings')).toHaveAttribute('hidden');
-    expect($('statusLine')).not.toHaveAttribute('data-kind');
-    expect($('statusText')).toHaveTextContent('Loading…');
+    expect($('btnNewVideo').querySelector('.btn-label')).toHaveTextContent('New video');
+    expect($('btnBranch').querySelector('.btn-label')).toHaveTextContent('Branch');
+    expect(document.getElementById('statusLine')).toBeNull();
+    expect($('renderCluster')).toHaveAttribute('data-kind', 'idle');
     expect($('btnMakeLabel')).toHaveTextContent('Render');
+    expect($('btnMakeLabel')).toHaveClass('btn-label');
     expect($('queueBadge')).toHaveAttribute('hidden');
     expect($('btnCommand')).toHaveAttribute('aria-label', 'Open command menu');
     expect($('btnHelp')).toHaveTextContent('?');
@@ -159,14 +169,14 @@ describe('buttons', () => {
     const video = makeVideo({ freshness: { needsRecord: true } });
     act(() =>
       desk.set({
+        video,
         action: decideAction(video),
-        status: { kind: 'warn', text: 'Needs re-record' },
         queue: queued(2),
         busy: { btnMake: true, btnExport: true },
       }),
     );
-    expect($('statusLine')).toHaveAttribute('data-kind', 'warn');
-    expect($('statusText')).toHaveTextContent('Needs re-record');
+    expect($('renderCluster')).toHaveAttribute('data-tone', 'warn');
+    expect(document.querySelector('.render-fresh-label')).toHaveTextContent('Needs re-record');
     expect($('btnMakeLabel')).toHaveTextContent('Re-record');
     expect($('queueBadge')).not.toHaveAttribute('hidden');
     expect($('queueBadge')).toHaveTextContent('2');
@@ -174,6 +184,14 @@ describe('buttons', () => {
     expect($('btnMake')).toBeDisabled();
     expect($('btnExport')).toBeDisabled();
     expect($('btnSnapshot')).not.toBeDisabled();
+  });
+
+  it('has one status surface — the Render cluster', () => {
+    render(<ChromeHeader />);
+    const stale = makeVideo({ hasDelivery: true, freshness: { stale: true } });
+    act(() => desk.set({ video: stale, action: decideAction(stale) }));
+    expect(document.querySelectorAll('.chrome-status')).toHaveLength(0);
+    expect(document.querySelector('.render-fresh-label')).toHaveTextContent('Out of date');
   });
 });
 
@@ -195,7 +213,9 @@ describe('agent chrome', () => {
     const btn = document.querySelector('[data-agent="claude"]') as HTMLElement;
     fireEvent.pointerOver(btn);
     expect($('agentTip')).not.toHaveAttribute('hidden');
-    expect($('agentTip').textContent).toBe('Claude Code\nNot installed\nInstall from claude.ai/code, then run claude → /login.');
+    expect($('agentTip').textContent).toBe(
+      'Claude CodeNot installedInstall from claude.ai/code, then run: claude /login',
+    );
     fireEvent.pointerOut(btn, { relatedTarget: document.body });
     expect($('agentTip')).toHaveAttribute('hidden');
     fireEvent.focus(btn);

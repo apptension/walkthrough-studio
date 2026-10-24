@@ -280,7 +280,8 @@ describe('stageHint', () => {
     });
     const hint = stageHint(stages(video, NOW));
     expect(hint.tone).toBe('warn');
-    expect(hint.text).toContain('sources changed since the last render');
+    expect(hint.text).toBe('Sources changed since the last render. Use Render to catch up.');
+    expect(hint.badge).toBe(OUT_OF_DATE);
   });
 
   it('asks for script approval first', () => {

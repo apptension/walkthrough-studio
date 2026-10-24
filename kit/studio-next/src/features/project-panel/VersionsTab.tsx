@@ -69,7 +69,7 @@ export function VersionsBody() {
           </p>
         </div>
         <button type="button" id="btnSnapshotSide" className="btn tiny icon-text" title="Save a named version" onClick={() => void snapshotVersion()}>
-          <Icon name="ui-plus-fill" size={12} /> Save version
+          <Icon name="ui-version" size={12} /> Save version
         </button>
       </div>
       <label className="versions-filter tog compact">

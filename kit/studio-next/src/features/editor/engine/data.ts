@@ -106,6 +106,7 @@ export const snapshotDeck = (): DeckEdit => {
       transitions: d.transitions || {},
       audio: d.audio || null,
       cards: d.cards || [],
+      layouts: d.layouts || [],
       order: d.order || [],
       omit: d.omit || [],
       trims: d.trims || [],

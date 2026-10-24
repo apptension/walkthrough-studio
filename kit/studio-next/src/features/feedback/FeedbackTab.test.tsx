@@ -10,6 +10,7 @@ import { makeJob, makeScene, makeVideo } from '@/test/factories';
 import { server } from '@/test/msw/server';
 
 import type * as JobsModule from '@/desk/jobs';
+import type * as CriticModule from '@/features/review/critic';
 
 import { FeedbackTab } from './FeedbackTab';
 import { inferPlateIdFromFeedback, runImproveJob, startImprove } from './improve';
@@ -22,7 +23,10 @@ vi.mock('@/desk/jobs', async (importOriginal) => ({
   showActivityDock: vi.fn(),
 }));
 
-vi.mock('@/features/review/critic', () => ({ runCriticFromStudio: vi.fn(() => Promise.resolve()) }));
+vi.mock('@/features/review/critic', async (importOriginal) => {
+  const actual = await importOriginal<typeof CriticModule>();
+  return { ...actual, runCriticFromStudio: vi.fn(() => Promise.resolve()) };
+});
 
 const $ = (id: string) => {
   const el = document.getElementById(id);
@@ -62,6 +66,40 @@ describe('FeedbackTab markup', () => {
     render(<FeedbackTab />);
     expect($('criticHint')).not.toHaveAttribute('hidden');
     expect($('criticLink')).toHaveAttribute('href', '/media/demo/critic.html');
+    expect($('btnCriticFill')).toHaveAttribute('hidden');
+  });
+
+  it('fills the director note from critic findings', async () => {
+    desk.set({
+      video: makeVideo({
+        criticUrl: '/media/demo/critic.html',
+        critic: {
+          findings: [
+            { severity: 'high', message: '', target: 'narration:2', persona: 'skeptic', issue: 'Vague claim', suggestion: 'Name a number' },
+            { severity: 'low', message: '', target: 'intro.copy', persona: 'buyer', issue: 'Wordy', suggestion: 'Trim' },
+          ],
+          agent: { summary: 'The cut sells the shift but undersells proof.', score: 64, strengths: [] },
+          generatedAt: '2026-10-20T09:00:00.000Z',
+          purpose: 'launch',
+          high: 1,
+          stale: false,
+        },
+      }),
+    });
+    render(<FeedbackTab />);
+    expect($('btnCriticFill')).not.toHaveAttribute('hidden');
+    fireEvent.click($('btnCriticFill'));
+    const note = ($('improveNote') as HTMLTextAreaElement).value;
+    expect(note).toContain('undersells proof');
+    expect(note).toContain('Vague claim');
+    expect(note).toContain('Name a number');
+    expect($('btnImprove')).toHaveTextContent('Apply 2 critic findings');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement).toBe($('improveNote'));
+    fireEvent.change($('improveNote'), { target: { value: `${note}\nAlso calm the open.` } });
+    expect($('btnImprove')).toHaveTextContent('Apply with smart scope');
   });
 });
 

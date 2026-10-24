@@ -6,27 +6,19 @@ import { cn } from '@/lib/cn';
 import { readRailCollapsed, writeRailCollapsed } from './railCollapse';
 import { SessionDecide } from './SessionDecide';
 import { SessionProgress } from './SessionProgress';
-import { useSession } from './session';
+import { toggleProposalWork, useSession } from './session';
 import { useFeedbackBridge } from './useFeedbackBridge';
 
 /**
  * `#sessionRail`: fixed at the bottom of the tools panel — the live agent/job and the decide
- * actions. Collapses like the right-rail `PanelSection`s (remembered in localStorage), but the
- * Log toggle and raw log stay reachable either way — collapsing only folds the status card, not
- * your way back to the last logs.
+ * actions. One chevron folds the run: outside a decision it collapses the card (remembered in
+ * localStorage); while deciding it reveals the run under the decision, closed by default.
  */
 export function SessionRail() {
   useFeedbackBridge();
   const railRef = useRef<HTMLDivElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
+  const foldRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(readRailCollapsed);
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      writeRailCollapsed(next);
-      return next;
-    });
-  };
   const { running, done, failed, decisionMode, showWork } = useSession(
     useShallow((s) => ({
       running: s.running,
@@ -36,6 +28,21 @@ export function SessionRail() {
       showWork: s.showWork,
     })),
   );
+  const open = decisionMode ? showWork : !collapsed;
+
+  const toggle = () => {
+    if (decisionMode) {
+      if (toggleProposalWork()) {
+        requestAnimationFrame(() => foldRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      }
+      return;
+    }
+    setCollapsed((prev) => {
+      writeRailCollapsed(!prev);
+      return !prev;
+    });
+  };
+
   return (
     <div
       ref={railRef}
@@ -47,12 +54,13 @@ export function SessionRail() {
         failed && 'is-failed',
         decisionMode && 'decision-mode',
         showWork && 'show-work',
-        collapsed && 'is-collapsed',
+        !open && 'is-collapsed',
       )}
       aria-live="polite"
     >
-      <SessionDecide railRef={railRef} progressRef={progressRef} />
-      <SessionProgress ref={progressRef} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+      <SessionProgress foldRef={foldRef} open={open} onToggle={toggle}>
+        <SessionDecide railRef={railRef} />
+      </SessionProgress>
     </div>
   );
 }

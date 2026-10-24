@@ -35,6 +35,7 @@ describe('StageBar', () => {
     const nav = document.getElementById('stageBar');
     expect(nav).toHaveClass('stage-bar');
     expect(nav).toHaveAttribute('aria-label', 'Production stages');
+    expect(nav).toHaveAttribute('hidden');
     expect([...document.querySelectorAll('.pstage')].map((b) => (b as HTMLElement).dataset.stage)).toEqual([...STAGE_ORDER]);
     for (const key of STAGE_ORDER) expect(document.querySelector(`[data-stage-meta="${key}"]`)).toHaveTextContent('—');
     expect(stageBtn('brief')).not.toHaveAttribute('aria-current');
@@ -50,6 +51,19 @@ describe('StageBar', () => {
       expect(stageBtn(key)).toHaveAttribute('aria-current', stageBtn(key).classList.contains('current') ? 'step' : 'false');
     }
     expect(document.getElementById('stageHint')).toHaveClass('stage-hint');
+  });
+
+  it('shows the Out of date badge beside the stage hint copy', () => {
+    act(() => desk.set({ video: makeVideo({ freshness: { stale: true }, hasDelivery: true }) }));
+    render(<StageBar />);
+    const hint = document.getElementById('stageHint');
+    expect(hint).not.toHaveAttribute('hidden');
+    expect(hint?.querySelector('.stage-hint-text')).toHaveTextContent(
+      'Sources changed since the last render. Use Render to catch up.',
+    );
+    const badge = hint?.querySelector('.stage-status-badge');
+    expect(badge).toHaveAttribute('data-kind', 'warn');
+    expect(badge).toHaveTextContent('Out of date');
   });
 
   it('opens the sheets a stage owns', () => {

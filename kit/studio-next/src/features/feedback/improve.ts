@@ -51,6 +51,11 @@ export function resetImproveTarget(): void {
   desk.set((s) => ({ improve: { ...s.improve, ...IMPROVE_DEFAULT } }));
 }
 
+/** Labels set by “Use critic findings” — revert when the note is edited. */
+export function isCriticFillLabel(label: string): boolean {
+  return /^Apply( \d+)? critic findings?$/.test(label.trim());
+}
+
 export function startImprove(goal = 'full'): void {
   const target = desk.get().improve;
   const note = (target.note || '').trim();
@@ -225,7 +230,6 @@ export async function runImproveJob(item: QueueItem, { signal }: { signal?: Abor
       ],
     });
     setApprovePlateVisible(Boolean(targetId && plate));
-    setStatus('warn', 'Preview ready — approve to render');
     toast('Changes ready to review', labels.join(' · '));
   } catch (err) {
     setThinkStep('html');

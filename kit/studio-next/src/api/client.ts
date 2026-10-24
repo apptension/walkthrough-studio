@@ -47,6 +47,15 @@ function withQuery(path: string, query: RequestOptions['query']): string {
   return qs ? `${path}${path.includes('?') ? '&' : '?'}${qs}` : path;
 }
 
+type MutationListener = (url: string) => void;
+const mutationListeners = new Set<MutationListener>();
+
+/** Called with the URL after every successful POST / PUT / DELETE. Returns the unsubscribe. */
+export function onMutation(fn: MutationListener): () => void {
+  mutationListeners.add(fn);
+  return () => mutationListeners.delete(fn);
+}
+
 /**
  * The legacy `api()` helper threw `new Error(data.error || res.statusText)`.
  * This keeps that message but wraps it so callers can branch on status without
@@ -82,6 +91,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new ApiError(message || `Request failed (${response.status})`, response.status, url);
   }
 
+  if (method !== 'GET') for (const fn of mutationListeners) fn(url);
   return data as T;
 }
 

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0-beta.3 — 2026-10-24
+
+Each chapter can place the recording in the frame, and the header says whether the master is current. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.3 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio --v2
+```
+
+Upgrade from 1.0.0-beta.2:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.3
+./studio --v2
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio --v2` rebuilds the desk when its sources change.
+
+### Section layouts
+
+- Each stretch between chapters can place the recording in the delivered frame: Fill, Centre, Left, Right, Top, or Bottom, at small, medium, or large. A section you leave alone keeps the video's camera default.
+- Left, right, top, and bottom can show a brand text panel beside the recording. The title and body start from the chapter's own words.
+- The Editor stage and the master paint that backdrop from the same HTML template, so the preview matches the render.
+- When a section leaves the default frame, chapter and caption cards cover the whole output. A chapter whose title is already the side text is not painted onto the picture again.
+
+### Render status
+
+- Render folds out into one status chip in the header. It shows a running job, a short notice when a step finishes, a review waiting on you, or why the cut is behind: not rendered yet, needs a re-record, a plate check, or which sources changed.
+- The chip stays current after every save, when you come back to the tab, and on a slow poll. Nothing else in the desk writes its own "changed, render when ready" line.
+
+### Review and jobs
+
+- **Use critic findings** pastes the critic's summary and the highest-severity findings into the Feedback note. Edit it, then Apply. The critic still never edits your sources.
+- **Stop** waits until the cancelled job has actually exited before the next step can use the same output files, so a quick re-click no longer fails because the lock is still held.
+- Stopping a recording clears the live preview at once, so a poll already in flight cannot put the frozen frame back.
+
 ## 1.0.0-beta.2 — 2026-10-23
 
 The desk is rebuilt in React and TypeScript and is now the default. Pin this tag. `main` is the development line.

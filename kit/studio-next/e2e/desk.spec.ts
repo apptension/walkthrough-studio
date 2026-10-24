@@ -17,9 +17,9 @@ test('opens the first project and names it in the URL', async ({ page }) => {
   await expect(page).toHaveURL(/slug=demo/);
   await expect(page).toHaveTitle(/^Walkthrough Studio · /);
   await expect(page.locator('#slugSelect')).toHaveValue('demo');
-  await expect(page.locator('#stageBar')).toBeVisible();
+  await expect(page.locator('#stageBar')).toBeHidden();
   await expect(page.locator('#projectPanel')).toBeVisible();
-  await expect(page.locator('#statusText')).not.toHaveText('Loading…');
+  await expect(page.locator('#renderCluster')).toBeVisible();
 });
 
 test('moves between the left panel tabs', async ({ page }) => {
