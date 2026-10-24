@@ -6,6 +6,7 @@ import { StreamHost } from '@/features/feedback/StreamHost';
 import { useBusy } from '@/features/tools-panel/busy';
 import { cn } from '@/lib/cn';
 import { PanelSection } from '@/ui/PanelSection';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { Zen } from '@/ui/Zen';
 
@@ -167,15 +168,14 @@ function CriticFindingCard({ finding, index }: { finding: CriticFinding; index: 
             rule
           </span>
         ) : null}
-        <button
-          type="button"
+        <NeonButton
           className="btn primary critic-fix"
           data-critic-fix={index}
           title="Send this finding to the agent as a director note"
           onClick={() => fixFindingWithAi(finding)}
         >
           Fix with AI
-        </button>
+        </NeonButton>
       </div>
       {finding.issue ? <p className="critic-issue">{finding.issue}</p> : null}
       {finding.suggestion ? <p className="critic-suggest">{finding.suggestion}</p> : null}
@@ -237,8 +237,7 @@ function CriticActions({ critic, url }: { critic: Critic | null; url: string | n
   const stale = Boolean(critic?.stale);
   return (
     <div className={cn('critic-actions', empty && 'is-hero')}>
-      <button
-        type="button"
+      <NeonButton
         id="btnCriticRun"
         className={cn('btn', (empty || stale) && 'primary', 'critic-run', running && 'busy')}
         disabled={running}
@@ -247,7 +246,7 @@ function CriticActions({ critic, url }: { critic: Critic | null; url: string | n
       >
         <Icon name="loupe" size={14} />
         {running ? 'Reviewing…' : stale ? 'Run critic again' : 'Run critic'}
-      </button>
+      </NeonButton>
       <div className="critic-actions-secondary">
         <button
           type="button"

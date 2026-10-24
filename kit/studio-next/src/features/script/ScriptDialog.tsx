@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { scriptApproveLabel } from '@/logic/scriptApproval';
 import { SCENARIO_EDITABLE_NOTE } from '@/logic/scriptSections';
@@ -240,15 +241,14 @@ function ScriptFoot() {
           <kbd>⌘</kbd>
           <kbd>↵</kbd> saves line
         </span>{' '}
-        <button
-          type="button"
+        <NeonButton
           id="btnScriptApprove"
           className="btn primary"
           disabled={Boolean(script) && (drafting || r.effective === 'approved')}
           onClick={() => void approveScript()}
         >
           {script ? scriptApproveLabel(r.effective) : 'Approve and close'}
-        </button>
+        </NeonButton>
       </div>
     </footer>
   );

@@ -14,6 +14,8 @@ export const endpoints = {
   captureOptions: '/api/capture/options',
   briefDraft: '/api/brief/draft',
   agentPreference: '/api/agent/preference',
+  agentModels: '/api/agent/models',
+  agentModel: '/api/agent/model',
 
   jobs: '/api/jobs',
   job: (id: string) => `/api/jobs/${encodeURIComponent(id)}`,
@@ -55,6 +57,8 @@ export const endpoints = {
   run: (slug: string) => `${video(slug)}/run`,
   improve: (slug: string) => `${video(slug)}/improve`,
   draftProject: (slug: string) => `${video(slug)}/draft-project`,
+  brandDraft: (slug: string) => `${video(slug)}/brand-draft`,
+  exploreFeed: (slug: string) => `${video(slug)}/explore-feed`,
   draftChanges: (slug: string) => `${video(slug)}/draft/changes`,
   draftApprove: (slug: string) => `${video(slug)}/draft/approve`,
   draftDiscard: (slug: string) => `${video(slug)}/draft/discard`,

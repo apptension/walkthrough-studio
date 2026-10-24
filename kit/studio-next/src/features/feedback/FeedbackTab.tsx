@@ -6,6 +6,7 @@ import { clearQcPending } from '@/features/review/qc';
 import { useBusy } from '@/features/tools-panel/busy';
 import { directorNoteForCritic } from '@/logic/criticFindings';
 import { HelpTip } from '@/ui/HelpTip';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon, SecIcon } from '@/ui/icons';
 import { cn } from '@/lib/cn';
 
@@ -86,8 +87,7 @@ function ImproveButton() {
   const label = useDesk((s) => s.improve.label);
   const busy = useBusy('btnImprove');
   return (
-    <button
-      type="button"
+    <NeonButton
       id="btnImprove"
       className={cn('btn primary block feedback-apply', busy && 'busy')}
       disabled={busy}
@@ -96,7 +96,7 @@ function ImproveButton() {
       onClick={() => startImprove('full')}
     >
       {label}
-    </button>
+    </NeonButton>
   );
 }
 

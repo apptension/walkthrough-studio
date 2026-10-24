@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { closeSheet, useSheetDialog } from '@/features/stages/sheetDialog';
 
@@ -158,9 +159,9 @@ export function BranchDialog() {
         <button type="button" className="btn ghost" data-close="" onClick={() => closeSheet('branch')}>
           Cancel
         </button>{' '}
-        <button type="button" id="btnBranchCreate" className="btn primary" disabled={creating} onClick={() => void createBranch()}>
+        <NeonButton id="btnBranchCreate" className="btn primary" disabled={creating} onClick={() => void createBranch()}>
           Create branch
-        </button>
+        </NeonButton>
       </footer>
     </dialog>
   );

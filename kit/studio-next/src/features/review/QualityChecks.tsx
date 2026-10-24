@@ -4,6 +4,7 @@ import type { Qc, QcFinding } from '@/api/types';
 import { useDesk } from '@/desk/store';
 import { cn } from '@/lib/cn';
 import { listedQcFindings, qcFindingKey } from '@/logic/qcFindings';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { PanelSection } from '@/ui/PanelSection';
 import { Zen } from '@/ui/Zen';
@@ -52,8 +53,7 @@ function QcToolbar({ selected, total }: { selected: number; total: number }) {
         </span>
       </label>
       <div className="qc-actions">
-        <button
-          type="button"
+        <NeonButton
           id="btnQcApplySelected"
           className={cn('btn primary qc-apply', !selected && 'is-idle')}
           disabled={!selected}
@@ -61,7 +61,7 @@ function QcToolbar({ selected, total }: { selected: number; total: number }) {
         >
           <Icon name="check" size={13} />
           Apply selected
-        </button>
+        </NeonButton>
         <button type="button" id="btnQcApplyAll" className="btn qc-apply-all" onClick={() => applyQcWithAi('all')}>
           Apply all
         </button>

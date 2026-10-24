@@ -23,8 +23,10 @@ import { logoTileTone } from './logoTone.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
 import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } from './encode.mjs';
 import { brandCssVars, emphasize, esc } from './text.mjs';
+import { copyContextFor, normalizeCopy, normalizePlateCopy, normalizeTitle } from './copyCase.mjs';
 import { injectStyle, patchStyle } from './editDeck.mjs';
 import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { normalizeLayout, resolveLayout } from './plateLayouts.mjs';
 
 /** Attribute-safe raw source for Studio inline edit (newlines → &#10;). */
 const escAttr = (s) => esc(s).replace(/\n/g, '&#10;');
@@ -284,12 +286,25 @@ function openSub(text, start = 3.95, step = 0.11) {
     .join('');
 }
 
+/** Open-plate title choreography per layout: when the title starts, its stagger, sub start, sizes (2 lines / 3+). */
+const OPEN_TIMING = {
+  classic: { title: 3.42, lineStep: 0.16, wordStep: 0.05, sub: 3.95, size: [96, 78] },
+  split: { title: 1.55, lineStep: 0.16, wordStep: 0.06, sub: 2.25, size: [92, 74] },
+  kinetic: { title: 0.5, lineStep: 0.34, wordStep: 0.12, sub: 2.55, size: [168, 128] },
+  mesh: { title: 1.85, lineStep: 0.18, wordStep: 0.06, sub: 2.5, size: [108, 86] },
+  device: { title: 3.05, lineStep: 0.14, wordStep: 0.05, sub: 3.55, size: [84, 68] },
+};
+const CLOSE_TITLE_AT = { classic: 0.4, split: 0.45, cards: 0.35, finale: 1.75 };
+
+/** Template file for an open/close layout — the classic composition keeps the original file. */
+const layoutTemplate = (kind, layout) => (layout === 'classic' ? `${kind}.html` : `${kind}-${layout}.html`);
+
 function stepsHtml(steps) {
   const n = steps.length;
   const span = n > 1 ? 0.8 / (n - 1) : 0;
   return steps
     .map(
-      (s, i) => `<div class="step" style="--s: ${(1.2 + i * span).toFixed(2)}s">
+      (s, i) => `<div class="step" style="--s: ${(1.2 + i * span).toFixed(2)}s; --i: ${i}">
           <div class="dot">${i + 1}</div>
           <div class="step-label" data-edit="steps.${i}.label" data-edit-raw="${escAttr(s.label)}">${emphasize(s.label)}</div>
           ${s.note ? `<div class="step-note" data-edit="steps.${i}.note" data-edit-raw="${escAttr(s.note)}">${emphasize(s.note)}</div>` : ''}
@@ -348,7 +363,7 @@ function featuresItems(items) {
       const row = Math.floor(i / cols);
       const col = i % cols;
       const delay = 0.72 + row * 0.28 + col * 0.1;
-      return `<div class="card" style="--s: ${delay.toFixed(2)}s">
+      return `<div class="card" style="--s: ${delay.toFixed(2)}s; --i: ${i}">
           ${iconHtml(icon)}
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
           <div class="label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -369,7 +384,7 @@ function statsItems(items, brand) {
       // Count-up (lib/countUp.mjs) runs on the plate clock; opt out per item with count: false.
       const count =
         it.count === false ? '' : ` data-count data-count-start="${(s + 0.25).toFixed(2)}" data-count-dur="1.3"`;
-      return `<div class="stat" style="--s: ${s.toFixed(2)}s">
+      return `<div class="stat" style="--s: ${s.toFixed(2)}s; --i: ${i}">
           ${
             logo
               ? `<div class="badge" data-tone="${logo.tone}"><img src="${logo.src}" alt="" /></div>`
@@ -816,6 +831,14 @@ function statementSize(list) {
   return 60;
 }
 
+/** Ghost ribbons behind a marquee statement: the line's words, repeated past the frame width. */
+function marqueeRibbons(list) {
+  const words = list.join(' ').replace(/\*/g, '').trim();
+  const run = Array.from({ length: 6 }, () => `<span>${esc(words)}</span><i></i>`).join('');
+  return `<div class="ribbon r1" aria-hidden="true"><div class="track">${run}${run}</div></div>
+      <div class="ribbon r2" aria-hidden="true"><div class="track">${run}${run}</div></div>`;
+}
+
 /** Process steps: ghost numeral + rail that draws down to the next step. */
 function processItems(items) {
   const n = items.length;
@@ -1038,6 +1061,7 @@ function buildInterstitial(video, it, paths, common) {
   if (!PLATE_TYPES.has(it.type)) {
     throw new Error(`Unknown interstitial type "${it.type}" (use ${INTERSTITIAL_TYPES.join('|')})`);
   }
+  it = normalizePlateCopy(it, copyContextFor(video));
   const dest = paths.interstitial[it.id];
   const tpl = readFileSync(join(TEMPLATES, `${it.type}.html`), 'utf8');
   const brand = video.brand;
@@ -1048,7 +1072,14 @@ function buildInterstitial(video, it, paths, common) {
     EYEBROW: emphasize(it.eyebrow || fallback),
     EYEBROW_RAW: escAttr(it.eyebrow || fallback),
   });
-  const write = (values) => writePlateHtml(dest.html, fill(tpl, { ...plateCommon, ...values }), plateBrand, plateStyle(it, it.id), outputFrame(video.config));
+  let layout;
+  try {
+    layout = resolveLayout(it.type, normalizeLayout(it.type, it.layout));
+  } catch (err) {
+    throw new Error(`interstitial "${it.id}": ${err.message}`);
+  }
+  const write = (values) =>
+    writePlateHtml(dest.html, fill(tpl, { ...plateCommon, LAYOUT: layout || 'default', ...values }), plateBrand, plateStyle(it, it.id), outputFrame(video.config));
 
   if (it.type === 'features') {
     const items = it.items || [];
@@ -1216,13 +1247,14 @@ function buildInterstitial(video, it, paths, common) {
     if (!lines.length || lines.length > 3 || chars < 4 || chars > 140) {
       throw new Error(`statement plate "${it.id}" needs 1–3 title lines, 4–140 characters in all (got ${lines.length} line(s), ${chars})`);
     }
-    const st = statementLines(lines, { reveal: motion.titleReveal });
+    const st = statementLines(lines, layout === 'kinetic' ? { reveal: motion.titleReveal, start: 0.36, lineStep: 0.3, wordStep: 0.11 } : { reveal: motion.titleReveal });
     write({
       ...eyebrow('The point'),
       ...titleEditFields(lines, { asLines: true }),
       TITLE_LINES: st.html,
-      TITLE_SIZE: statementSize(lines),
+      TITLE_SIZE: layout === 'kinetic' ? Math.round(statementSize(lines) * 1.18) : statementSize(lines),
       T_SUB: Math.min(2.6, st.end + 0.1).toFixed(2),
+      MARQUEE: layout === 'marquee' ? marqueeRibbons(lines) : '',
       SUB: emphasize(it.sub || it.body || ''),
       SUB_RAW: escAttr(it.sub || it.body || ''),
     });
@@ -1351,22 +1383,27 @@ export function buildPlates(video) {
     TITLE_REVEAL: brandMotion.titleReveal,
   };
 
-  const open = config.open || {};
-  const openLines = Array.isArray(open.title) ? open.title : [open.title || config.title];
+  const copy = copyContextFor(video);
+  const open = normalizePlateCopy(config.open || {}, copy);
+  const openLines = Array.isArray(open.title) ? open.title : [open.title || normalizeTitle(config.title, copy)];
   const openEyebrow = open.eyebrow || 'Product walkthrough';
   const openSubRaw = open.sub || '';
   const { motion: openMotion, plateBrand: openBrand, ...openCommon } = interstitialBrandVars(common, brand, open);
+  const openLayout = resolveLayout('open', normalizeLayout('open', open.layout));
+  const ot = OPEN_TIMING[openLayout];
   writePlateHtml(
     paths.open.html,
-    fill(readFileSync(join(TEMPLATES, 'open.html'), 'utf8'), {
+    fill(readFileSync(join(TEMPLATES, layoutTemplate('open', openLayout)), 'utf8'), {
       ...openCommon,
+      LAYOUT: openLayout,
       EYEBROW: emphasize(openEyebrow),
       EYEBROW_RAW: escAttr(openEyebrow),
-      TITLE: openTitleLines(openLines, { reveal: openMotion.titleReveal }),
+      TITLE: openTitleLines(openLines, { reveal: openMotion.titleReveal, start: ot.title, lineStep: ot.lineStep, wordStep: ot.wordStep }),
+      T_TITLE: `${ot.title.toFixed(2)}s`,
       ...titleEditFields(openLines, { asLines: true }),
-      TITLE_SIZE: openLines.length > 2 ? 78 : 96,
+      TITLE_SIZE: openLines.length > 2 ? ot.size[1] : ot.size[0],
       TITLE_LINES: openLines.length,
-      SUB: openSub(openSubRaw),
+      SUB: openSub(openSubRaw, ot.sub),
       SUB_RAW: escAttr(openSubRaw),
     }),
     openBrand,
@@ -1374,20 +1411,24 @@ export function buildPlates(video) {
     outputFrame(config)
   );
 
-  const close = config.close || {};
+  const close = normalizePlateCopy(config.close || {}, copy);
   const steps = close.steps || [];
   if (steps.length < 2 || steps.length > 4) {
     throw new Error(`close.steps needs 2–4 entries (got ${steps.length}) — they summarise the video`);
   }
   const closeTitle = close.title || [];
-  const platform = close.tagline ?? brand.platform ?? '';
+  const platform = close.tagline ?? normalizeCopy(brand.platform ?? '', 'label', copy);
   // Per-plate motion (energy / pushScale / timing) — same overlay path as interstitials.
   const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close);
+  const closeLayout = resolveLayout('close', normalizeLayout('close', close.layout));
+  const closeTitleAt = CLOSE_TITLE_AT[closeLayout];
   writePlateHtml(
     paths.close.html,
-    fill(readFileSync(join(TEMPLATES, 'close.html'), 'utf8'), {
+    fill(readFileSync(join(TEMPLATES, layoutTemplate('close', closeLayout)), 'utf8'), {
       ...closeCommon,
-      TITLE: titleLines(closeTitle, 0.4, 0.14, closeMotion.titleReveal),
+      LAYOUT: closeLayout,
+      T_TITLE: `${closeTitleAt.toFixed(2)}s`,
+      TITLE: titleLines(closeTitle, closeTitleAt, 0.14, closeMotion.titleReveal),
       TITLE_LINES: Array.isArray(closeTitle) ? closeTitle.length : 2,
       ...titleEditFields(closeTitle, { asLines: true }),
       STEPS: stepsHtml(steps),
@@ -1662,7 +1703,7 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
       const blackOutSec = cssSec('--black-out') ?? durationSec - 0.7;
       // Type probe at the settled frame: fitted sizes plus any copy that still clips or leaves the
       // frame. Reported as a soft QC note (the plate renders; the copy is too long).
-      const settledMs = Math.max(0, ((cssSec('--hold-from') ?? blackOutSec - 1.2) - 0.05) * 1000);
+      const settledMs = Math.max(0, ((cssSec('--hold-from') || blackOutSec - 1.2) - 0.05) * 1000);
       for (const a of document.getAnimations()) {
         a.pause();
         a.currentTime = settledMs;
@@ -1684,6 +1725,7 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
       const H = innerHeight;
       for (const el of document.querySelectorAll('body *')) {
         if (!Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+        if (el.closest('[aria-hidden="true"]')) continue;
         const cs = getComputedStyle(el);
         if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) < 0.05) continue;
         const r = el.getBoundingClientRect();

@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { shortHoldWarning } from '../studio/voiceHold.js';
 import { PLATE_CATALOG, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { cardCopyFixes, copyContext, copyCorpus, plateCopyFixes } from './copyCase.mjs';
 
 /** Matches narration.mjs guidance (~2.4 spoken words per second). */
 const WORDS_PER_SEC = 2.4;
@@ -315,6 +316,37 @@ function lintScene(scene) {
   const holdWarn = shortHoldWarning(scene.holdSec, scene.narrationSec);
   if (holdWarn) add('warn', holdWarn);
   return issues;
+}
+
+/**
+ * House copy-style fixes (casing, closing punctuation, typography) for every plate and card,
+ * keyed like the scenes. `fix` names the field and the suggested text.
+ */
+export function copyStyleFindings(video, calls = []) {
+  const cfg = video.config || {};
+  const ctx = copyContext({
+    brand: video.brand,
+    config: cfg,
+    corpus: [...copyCorpus(cfg), ...calls.flatMap((c) => [c.title, c.body].filter(Boolean))],
+  });
+  const out = [];
+  const add = (key, target, f) =>
+    out.push({
+      key,
+      message: `Copy style — ${f.field}: “${f.from}” → “${f.to}”${f.fixes?.length ? ` (${f.fixes.join(', ')})` : ''}`,
+      fix: { ...target, field: f.field, from: f.from, text: f.to, fixes: f.fixes || [] },
+    });
+  for (const id of ['open', 'close']) {
+    if (cfg[id]) for (const f of plateCopyFixes(cfg[id], ctx)) add(id, { plateId: id }, f);
+  }
+  for (const it of cfg.interstitials || []) {
+    for (const f of plateCopyFixes(it, ctx)) add(`plate:${it.id}`, { plateId: it.id }, f);
+  }
+  for (const call of calls) {
+    if (call.dynamic) continue;
+    for (const f of cardCopyFixes(call, ctx)) add(`${call.kind}:${call.title}`, { flowIndex: call.index }, f);
+  }
+  return out;
 }
 
 function plateOnScreen(it) {
@@ -772,6 +804,11 @@ export async function buildScript(video) {
     timingKind: 'plate',
     editable: { screen: true, steps: true, speed: true },
   });
+
+  for (const f of copyStyleFindings(video, calls)) {
+    const scene = scenes.find((s) => s.key === f.key);
+    if (scene) scene.issues.push({ level: 'info', message: f.message, fix: f.fix });
+  }
 
   const lint = [];
   for (const it of plates) {

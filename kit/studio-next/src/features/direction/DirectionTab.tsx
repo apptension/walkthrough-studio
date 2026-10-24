@@ -6,6 +6,7 @@ import { LiveCardsField } from './LiveCardsField';
 import { AtmosphereField, EffectsField, EnergyField } from './MotionFields';
 import { PaceSection } from './PaceSection';
 import { PlateBin } from './PlateBin';
+import { PlateLayoutsField } from './PlateLayoutsField';
 import { SizeSection } from './SizeSection';
 import { TransitionsField } from './TransitionsField';
 import { useDirectionSync } from './useDirectionSync';
@@ -27,13 +28,14 @@ export function DirectionTab() {
         id="motion"
         icon="motion"
         title="Motion & transitions"
-        help="Fine-tune energy, atmosphere, live cards, effects and transitions."
+        help="Fine-tune energy, atmosphere, live cards, effects, plate layouts and transitions."
         className="direction-advanced"
       >
         <EnergyField />
         <AtmosphereField />
         <LiveCardsField />
         <EffectsField />
+        <PlateLayoutsField />
         <TransitionsField />
       </PanelSection>
       <PlateBin />

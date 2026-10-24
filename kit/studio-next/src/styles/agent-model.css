@@ -1,0 +1,197 @@
+/* Agent model picker (#agentModelMenu). Kept out of studio.css, which mirrors the legacy stylesheet. */
+.agent-logo-btn[aria-expanded="true"] {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.agent-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 132px;
+  font: 600 11px/1 var(--font);
+  letter-spacing: -0.01em;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-logo-btn:hover .agent-model-chip,
+.agent-logo-btn[aria-expanded="true"] .agent-model-chip { color: var(--ink); }
+.agent-model-caret {
+  flex: 0 0 auto;
+  opacity: 0.6;
+  transition: transform .16s var(--ease-out);
+}
+.agent-logo-btn[aria-expanded="true"] .agent-model-caret { transform: rotate(180deg); }
+@media (max-width: 1180px) {
+  .agent-model-chip { max-width: 84px; }
+}
+
+.agent-model-menu {
+  position: fixed;
+  z-index: 130;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  transform-origin: top right;
+  animation: queue-menu-in 0.16s var(--ease-out) both;
+}
+.amm-head {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 2px 0;
+}
+.amm-logo {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+}
+.amm-title { display: grid; gap: 3px; min-width: 0; }
+.amm-title strong { font: 700 13px/1.15 var(--font); letter-spacing: -0.015em; color: var(--ink); }
+.amm-state { font: 600 11px/1.2 var(--font); color: var(--muted); }
+.amm-state.is-ok { color: var(--good); }
+.amm-state.is-warn { color: var(--warn); }
+.amm-icon-btn {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .14s, background .14s, border-color .14s;
+}
+.amm-icon-btn:hover:not(:disabled) { color: var(--ink); background: rgba(255, 255, 255, 0.05); border-color: var(--line); }
+.amm-icon-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+.amm-icon-btn:disabled { opacity: 0.35; cursor: default; }
+.amm-icon-btn[data-loading="1"] svg { animation: amm-spin 0.9s linear infinite; }
+@keyframes amm-spin { to { transform: rotate(360deg); } }
+.amm-note {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font: 500 11px/1.4 var(--font);
+  white-space: pre-line;
+  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 24%, transparent);
+}
+.amm-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--field-bg);
+  border: 1px solid var(--field-line);
+  transition: border-color .14s, background .14s;
+}
+.amm-search:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--field-bg-focus); }
+.amm-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 500 12px/1 var(--font);
+}
+.amm-search input::placeholder { color: var(--muted); }
+.amm-list {
+  min-height: 0;
+  max-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  scrollbar-width: thin;
+}
+.amm-group { display: grid; gap: 1px; }
+.amm-group + .amm-group { margin-top: 4px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.amm-group-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 3px 8px;
+  font: 650 9.5px/1.2 var(--font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--card-bg, #0f100f);
+}
+.amm-option {
+  display: grid;
+  grid-template-columns: 1fr 16px;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.amm-option[data-active="1"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.amm-option[aria-selected="true"] .amm-option-copy strong { color: var(--accent-text-hi, var(--ink)); }
+.amm-option[data-saving="1"] { opacity: 0.6; cursor: progress; }
+.amm-option-copy { display: grid; gap: 2px; min-width: 0; }
+.amm-option-copy strong {
+  font: 600 12px/1.2 var(--font);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.amm-option-copy span {
+  font: 500 10.5px/1.2 var(--mono);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.amm-option.is-custom .amm-option-copy strong { color: var(--accent-text, var(--ink)); }
+.amm-check { color: var(--accent); }
+.amm-skeleton {
+  display: block;
+  height: 34px;
+  margin: 1px 0;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.07), rgba(255,255,255,0.03)) 0 0 / 200% 100%;
+  animation: amm-shimmer 1.2s linear infinite;
+}
+@keyframes amm-shimmer { to { background-position: -200% 0; } }
+.amm-empty { margin: 0; padding: 14px 8px; text-align: center; font: 500 12px/1.4 var(--font); color: var(--muted); }
+.amm-foot {
+  margin: 0;
+  padding: 7px 2px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  font: 500 10.5px/1.35 var(--font);
+  color: var(--muted);
+}
+.amm-foot .is-warn { color: var(--warn); }
+@media (prefers-reduced-motion: reduce) {
+  .agent-model-menu, .amm-skeleton, .amm-icon-btn[data-loading="1"] svg { animation: none; }
+}

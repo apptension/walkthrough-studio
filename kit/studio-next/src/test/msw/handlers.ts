@@ -37,6 +37,9 @@ export const handlers = [
   ),
 
   http.get('/api/video/:slug/script', () => HttpResponse.json(makeScript())),
+  http.get('/api/video/:slug/explore-feed', () =>
+    HttpResponse.json({ startedAt: null, signedIn: false, current: null, screens: [], moves: [], notes: [], shots: 0, preview: null }),
+  ),
 
   http.get('/api/video/:slug', ({ params }) =>
     HttpResponse.json(makeVideo({ slug: String(params.slug) })),
@@ -86,6 +89,20 @@ export const handlers = [
   http.post('/api/video/:slug/deliverables/zip', () => HttpResponse.json({ ok: true })),
   http.post('/api/video/:slug/motion', () => HttpResponse.json({ ok: true })),
   http.post(endpoints.agentPreference, () => HttpResponse.json({ ok: true })),
+  http.get(endpoints.agentModels, ({ request }) =>
+    HttpResponse.json({
+      provider: new URL(request.url).searchParams.get('provider') ?? 'cursor',
+      current: null,
+      models: [
+        { id: '', label: 'Auto', family: 'default' },
+        { id: 'claude-opus-5-5-high', label: 'Claude Opus 5.5 1M High', family: 'claude' },
+        { id: 'gpt-5.3-codex', label: 'Codex 5.3', family: 'gpt' },
+      ],
+      source: 'cli',
+      fetchedAt: null,
+    }),
+  ),
+  http.post(endpoints.agentModel, () => HttpResponse.json({ ok: true, agentAuth: makeHealth().agentAuth })),
 
   http.put('/api/video/:slug/direction', () => HttpResponse.json({ ok: true })),
   http.put('/api/video/:slug/transitions', () => HttpResponse.json({ ok: true })),

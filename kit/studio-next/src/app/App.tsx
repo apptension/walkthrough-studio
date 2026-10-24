@@ -24,6 +24,7 @@ import { TimelineShell } from '@/features/timeline/TimelineShell';
 import { ToolsPanel } from '@/features/tools-panel/ToolsPanel';
 import { HelpPop } from '@/ui/HelpTip';
 import { Icon } from '@/ui/icons';
+import { bindNeonGlow } from '@/ui/neonFx';
 
 /**
  * A splitter. `wirePanelResize()` owns its behaviour and ARIA state; the tab shows
@@ -60,6 +61,7 @@ export function App() {
   const bootError = useDesk((s) => s.bootError);
   useEffect(() => wirePanelResize(), []);
   useEffect(() => watchFreshness(), []);
+  useEffect(() => bindNeonGlow(), []);
   useEffect(() => {
     void boot();
   }, []);

@@ -1,6 +1,7 @@
 import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { cardEditLandingEd, cardMarkInClip, cardMarkKey } from '@/logic/liveCardStage';
+import { neonFxHtml } from '@/ui/neonFx';
 
 import { select, showInspectorTab } from './edits';
 import { renderInspector, section } from './inspector';
@@ -559,7 +560,7 @@ export function paintTextMode(): void {
         : '';
     const editBtn =
       !editing && !dirty && onCard
-        ? `<button type="button" class="ed-pill-btn primary" data-text="edit-card" title="Edit ${kindLabel} copy on stage">${ICONS['plate']}<span>Edit copy</span></button>`
+        ? `<button type="button" class="ed-pill-btn primary" data-text="edit-card" title="Edit ${kindLabel} copy on stage">${neonFxHtml()}${ICONS['plate']}<span>Edit copy</span></button>`
         : '';
     const html = `${grip}<span class="ed-tb-badge">${badge}</span>${
       editing && fieldName ? `<span class="ed-tb-field">${escapeHtml(fieldName)}</span>` : ''
@@ -570,9 +571,9 @@ export function paintTextMode(): void {
         : ''
     }${editBtn}${
       dirty
-        ? `<span class="sp-sep" aria-hidden="true"></span><button type="button" class="ed-pill-btn" data-text="discard" title="Throw away unsaved copy">${ICONS['undo']}<span>Discard</span></button><button type="button" class="ed-pill-btn primary" data-text="save" title="Save the copy">${ICONS['check']}<span>Save</span></button>`
+        ? `<span class="sp-sep" aria-hidden="true"></span><button type="button" class="ed-pill-btn" data-text="discard" title="Throw away unsaved copy">${ICONS['undo']}<span>Discard</span></button><button type="button" class="ed-pill-btn primary" data-text="save" title="Save the copy">${neonFxHtml()}${ICONS['check']}<span>Save</span></button>`
         : ''
-    }${editing ? `<button type="button" class="ed-pill-btn primary" data-text="done" title="Done (Esc)">${ICONS['check']}<span>Done</span></button>` : ''}${close}`;
+    }${editing ? `<button type="button" class="ed-pill-btn primary" data-text="done" title="Done (Esc)">${neonFxHtml()}${ICONS['check']}<span>Done</span></button>` : ''}${close}`;
     // Avoid rewriting the tip on every paint (resize/scrub) — that flickers like a hide.
     if (bar.dataset['tbHtml'] !== html) {
       bar.dataset['tbHtml'] = html;

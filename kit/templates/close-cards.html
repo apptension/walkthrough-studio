@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Closing plate · dealt cards</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.2s;
+        --black-out: 5.5s;
+        --t-wipe-l: 2.35s;
+        --t-wipe-r: 2.45s;
+        --t-draw: 2.55s;
+        --t-word: 2.75s;
+        --t-trace: 2.3s;
+        --t-travel: 0.75s;
+        --t-sweep: 3.8s;
+        --x-title: 4.75s;
+        --x-steps: 4.85s;
+        --x-logo: 5.0s;
+        --n: {{STEP_COUNT}};
+        --mid: calc((var(--n) - 1) / 2);
+        --spread: calc(1500px / var(--n));
+        --close-logo: 1;
+        --close-logo-width: 480px;
+        --hold-from: 2.6s;
+        --hold-until: 3.85s;
+      }
+      /* Dealt cards: each step lands as a playing card in a fanned hand under the promise. */
+      .title-exit {
+        position: absolute; left: 0; right: 0; top: 11%; padding: 0 160px; text-align: center;
+        animation: exitUp 0.7s var(--x-title) var(--exit) forwards;
+      }
+      .title { font-size: 80px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04; }
+      .title .accent {
+        background: linear-gradient(92deg, var(--gold) 0%, var(--amber) 72%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .steps-exit {
+        position: absolute; left: 50%; top: 40%; width: 0; height: 330px;
+        animation: dealOut 0.7s var(--x-steps) var(--exit) forwards;
+      }
+      @keyframes dealOut { to { opacity: 0; transform: translateY(70px) scale(0.96); filter: blur(6px); } }
+      .steps { position: relative; height: 100%; animation: breathe 2.4s 2.3s var(--inout) both; }
+      @keyframes breathe { to { transform: translateY(-8px) scale(1.025); } }
+      .step {
+        --k: calc(var(--i) - var(--mid));
+        position: absolute; left: -210px; top: 0; width: 420px; min-height: 330px; box-sizing: border-box;
+        display: flex; flex-direction: column; justify-content: flex-end;
+        padding: 30px 32px 32px; border-radius: 28px; overflow: hidden;
+        background: linear-gradient(160deg, color-mix(in srgb, var(--surface) 84%, var(--gold)) 0%, var(--surface) 48%, color-mix(in srgb, var(--surface) 78%, var(--ink)) 100%);
+        border: 1px solid color-mix(in srgb, var(--gold) 26%, var(--surface));
+        box-shadow: 0 36px 80px color-mix(in srgb, var(--ink) 65%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent);
+        transform-origin: 50% 120%;
+        transform: translateX(calc(var(--k) * var(--spread))) translateY(calc(var(--k) * var(--k) * 16px)) rotate(calc(var(--k) * 4deg));
+        opacity: 0;
+        animation: deal 0.95s var(--s) var(--expo) both;
+      }
+      @keyframes deal {
+        0% { opacity: 0; transform: translateX(0) translateY(560px) rotate(calc(var(--k) * -16deg)) scale(0.9); }
+        35% { opacity: 1; }
+        100% { opacity: 1; transform: translateX(calc(var(--k) * var(--spread))) translateY(calc(var(--k) * var(--k) * 16px)) rotate(calc(var(--k) * 4deg)); }
+      }
+      .step::before {
+        content: ''; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%;
+        background: radial-gradient(circle, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%);
+      }
+      .dot {
+        position: absolute; left: 30px; top: 28px;
+        font-size: 64px; font-weight: 700; letter-spacing: -0.04em; line-height: 1;
+        background: linear-gradient(140deg, var(--gold), var(--amber));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .step-label { position: relative; font-size: 31px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+      .step-note { position: relative; margin-top: 10px; font-size: 19px; color: var(--muted); line-height: 1.4; }
+      .lockup-exit {
+        position: absolute; left: 50%; top: 79%;
+        width: min(calc(var(--close-logo-width, 480px) * 0.62), 300px);
+        margin-left: calc(min(calc(var(--close-logo-width, 480px) * 0.62), 300px) / -2);
+        opacity: var(--close-logo, 1);
+        animation: exitScale calc(0.75s * var(--close-logo, 1)) var(--x-logo) var(--exit) forwards;
+      }
+      .logo { filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent)); }
+      .platform {
+        margin: 16px -160px 0; text-align: center; white-space: nowrap;
+        font-size: 13px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
+        opacity: 0; animation: fadeUp 0.9s 3.2s var(--expo) both;
+      }
+      .bloom {
+        position: absolute; left: 50%; top: 56%; width: 1500px; height: 600px; margin: -300px 0 0 -750px; border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 12%, transparent), transparent 70%);
+        opacity: 0;
+        animation: fadeIn 1.4s 1s ease-out both, fadeOut 0.8s var(--x-logo) var(--exit) forwards;
+      }
+      html[data-frame='portrait'] .title-exit { top: 9%; padding: 0 72px; }
+      html[data-frame='portrait'] .title { font-size: 96px; }
+      html[data-frame='portrait'] .steps-exit { top: 26%; }
+      html[data-frame='portrait'] .step {
+        left: -400px; width: 800px; min-height: 0;
+        transform: translateY(calc(var(--i) * 200px)) rotate(calc(var(--k) * 1.5deg));
+        animation-name: dealTall;
+      }
+      @keyframes dealTall {
+        0% { opacity: 0; transform: translateY(calc(var(--i) * 200px + 500px)) rotate(calc(var(--k) * -6deg)); }
+        35% { opacity: 1; }
+        100% { opacity: 1; transform: translateY(calc(var(--i) * 200px)) rotate(calc(var(--k) * 1.5deg)); }
+      }
+      html[data-frame='portrait'] .dot { left: auto; right: 32px; }
+      html[data-frame='portrait'] .step-label { font-size: 38px; padding-right: 90px; }
+      html[data-frame='portrait'] .step-note { font-size: 24px; padding-right: 90px; }
+      html[data-frame='portrait'] .lockup-exit { top: 80%; }
+      html[data-frame='portrait'] .platform { font-size: 18px; white-space: normal; margin: 20px -60px 0; }
+    </style>
+  </head>
+  <body data-duration="6.2" data-layout="{{LAYOUT}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="title-exit">
+        <h2 class="title" data-fit="{{TITLE_LINES}}" data-fit-min="48" data-reveal="{{TITLE_REVEAL}}" style="--t: {{T_TITLE}}" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h2>
+      </div>
+      <div class="steps-exit">
+        <div class="steps">
+          {{STEPS}}
+        </div>
+      </div>
+      <div class="lockup-exit">
+        <div class="logo">{{LOGO}}</div>
+        <div class="platform" data-edit="tagline" data-edit-kind="text" data-edit-raw="{{PLATFORM_RAW}}">{{PLATFORM}}</div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

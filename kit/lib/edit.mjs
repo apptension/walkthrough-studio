@@ -24,6 +24,7 @@ import {
   applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentRepeats,
   applySegmentTrims,
   joinKey,
   liveTimeMap,
@@ -265,7 +266,8 @@ export function buildEditPlan(video) {
   // Editor timeline moves (`edit.cards`) shift chapter/caption marks before we split sections.
   const rawMarks = applyCardEdits(keyCardMarks(loadRawTimeline(video)), deck.cards);
   const timeline = remapTimeline(rawMarks, liveMap);
-  const chapters = timeline.filter((m) => m.kind === 'chapter');
+  // A duplicated chapter card shows again; it does not start a new section.
+  const chapters = timeline.filter((m) => m.kind === 'chapter' && !m.copyOf);
 
   const interstitials = [...(video.config.interstitials || [])].map((it) => {
     if (!it.id || !it.type || !it.before) {
@@ -350,6 +352,9 @@ export function buildEditPlan(video) {
       seg.id = `live-${Number(recStart).toFixed(2)}`;
     }
   }
+  const replayed = applySegmentRepeats(raw, deck.repeats);
+  raw.length = 0;
+  raw.push(...replayed);
 
   // The editor's sequence (edit.order) plays these same slices in a different order.
   // Overlapping joins. An outgoing plate transitions only once its exits are clear: when its clean
@@ -465,7 +470,7 @@ export function buildEditPlan(video) {
     closeDur: closeIsLast ? snap(total - closeAt) : closeSeg.dur,
     interstitials: segments
       .filter((s) => s.interstitial)
-      .map((s) => ({ ...interstitials.find((it) => it.id === s.id), at: s.at, dur: s.dur })),
+      .map((s) => ({ ...interstitials.find((it) => it.id === (s.repeatOf || s.id)), id: s.id, at: s.at, dur: s.dur })),
     timeline,
     transitions,
     /** The editor deck this plan honoured, plus the live↔clean clock. */

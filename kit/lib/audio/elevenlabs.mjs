@@ -96,10 +96,15 @@ export async function synthesize({ text, voice, outFile }) {
   return { alignment: data.alignment || null };
 }
 
-/** Music from a composition plan (music_v2_5) → mp3 file. */
-export async function composeMusic({ plan, model = 'music_v2_5', outFile, outputFormat = 'mp3_44100_128' }) {
+/**
+ * Music from a composition plan (music_v2_5) → mp3 file. One request holds ≤ 30 chunks of
+ * 3–120 s and ≤ 10 min in total; `seed` keeps the sections of a multi-request bed coherent.
+ */
+export async function composeMusic({ plan, model = 'music_v2_5', outFile, outputFormat = 'mp3_44100_128', seed = null }) {
   if (audioMode() !== 'live') return stubMusic({ plan, outFile });
-  const audio = await post(`/music?output_format=${outputFormat}`, { composition_plan: plan, model_id: model }, { binary: true, timeoutMs: MUSIC_TIMEOUT_MS });
+  const body = { composition_plan: plan, model_id: model };
+  if (Number.isInteger(seed)) body.seed = seed;
+  const audio = await post(`/music?output_format=${outputFormat}`, body, { binary: true, timeoutMs: MUSIC_TIMEOUT_MS });
   writeFileSync(outFile, audio);
   return {};
 }

@@ -246,7 +246,7 @@ export function plateTarget(config, plateId, { create = false } = {}) {
 
 /** The key the deck uses for a join; live slices collapse to `live` so the key survives re-records. */
 export function joinKey(prev, next) {
-  const id = (s) => (s.kind === 'live' ? 'live' : s.id);
+  const id = (s) => (s.kind === 'live' ? 'live' : s.repeatOf || s.id);
   return `${id(prev)}>${id(next)}`;
 }
 
@@ -471,12 +471,14 @@ export function applySegmentCuts(segments, cuts, map = null) {
       out.push(seg);
       continue;
     }
+    // A replay's pieces keep its `+n` so they never share an id with the source's pieces.
+    const again = seg.repeatOf ? String(seg.id).slice(String(seg.id).lastIndexOf('+')) : '';
     kept.forEach(([a, b], i) => {
       const start = r3(toClean(a));
       const end = r3(toClean(b));
       const piece = {
         ...seg,
-        id: `live-${a.toFixed(2)}`,
+        id: `live-${a.toFixed(2)}${again}`,
         recFrom: r3(a),
         recTo: r3(b),
         start,
@@ -605,6 +607,92 @@ export function applySegmentOmit(segments, omit) {
   return kept.length ? kept : segments;
 }
 
+/** `capabilities+2` → `{ of: 'capabilities', n: 2 }`; null for an id that is not a replay. */
+export function parseRepeatId(id) {
+  const m = String(id ?? '').match(/^([\w.:@-]{1,72})\+(\d{1,3})$/);
+  return m && Number(m[2]) >= 2 ? { of: m[1], n: Number(m[2]) } : null;
+}
+
+export const isRepeatId = (id) => parseRepeatId(id) != null;
+
+/** Section replays from the Editor's Duplicate: `<source id>+<n>`, each plays right after its source. */
+export function normalizeRepeats(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const id = String(raw ?? '').trim();
+    if (!parseRepeatId(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+/**
+ * Insert replays after their source segment (source ids the plan no longer has are dropped).
+ * A replay shares the source's footage or plate file, so zooms, cards and copy edits follow it.
+ */
+export function applySegmentRepeats(segments, repeats) {
+  const ids = normalizeRepeats(repeats);
+  if (!ids.length || !Array.isArray(segments) || !segments.length) return segments;
+  const bySource = new Map();
+  for (const id of ids) {
+    const { of, n } = parseRepeatId(id);
+    if (!bySource.has(of)) bySource.set(of, []);
+    bySource.get(of).push({ id, n });
+  }
+  const out = [];
+  for (const seg of segments) {
+    out.push(seg);
+    const copies = bySource.get(seg.id);
+    if (!copies || seg.repeatOf) continue;
+    for (const { id } of copies.sort((a, b) => a.n - b.n)) out.push({ ...seg, id, repeatOf: seg.id });
+  }
+  return out;
+}
+
+const plainLines = (title) => (Array.isArray(title) ? title : String(title ?? '').split('\n')).map((l) => String(l).trim()).filter(Boolean);
+
+/**
+ * The config row for a plate that was a replay of `sourceId` (id is set by the caller).
+ * Interstitials are copied as they are. The opening and the close have no interstitial
+ * twin, so the opening's title becomes a Statement and the close's steps a Process
+ * (a Statement when it has not 3–5 steps), anchored on the first / last chapter.
+ */
+export function detachedPlate(config, sourceId, marks = []) {
+  if (sourceId !== 'open' && sourceId !== 'close') {
+    const src = (config.interstitials || []).find((i) => i.id === sourceId);
+    if (!src) throw new Error(`No plate "${sourceId}" to copy`);
+    return structuredClone(src);
+  }
+  const chapters = (marks || []).filter((m) => m.kind === 'chapter' && m.label).sort((a, b) => a.t - b.t);
+  const anchor = sourceId === 'open' ? chapters[0] : chapters.at(-1);
+  if (!anchor) throw new Error('A plate of its own sits before a chapter, and this recording has none');
+  const src = config[sourceId] || {};
+  const lines = plainLines(src.title).slice(0, 3);
+  const title = lines.length ? lines : [String(config.title || anchor.label)];
+  const steps = Array.isArray(src.steps) ? src.steps : [];
+  if (sourceId === 'close' && steps.length >= 3 && steps.length <= 5) {
+    return {
+      type: 'process',
+      before: anchor.label,
+      title: title.join(' '),
+      ...(src.tagline ? { sub: src.tagline } : {}),
+      steps: steps.map((s) => ({ label: String(s.label || '').replace(/^\d+\.\s*/, ''), note: s.note || '' })),
+    };
+  }
+  const sub = sourceId === 'open' ? src.sub : src.tagline;
+  return {
+    type: 'statement',
+    before: anchor.label,
+    title,
+    ...(sub ? { sub } : {}),
+    ...(src.eyebrow ? { eyebrow: src.eyebrow } : {}),
+  };
+}
+
 /** Stable id for a recording chapter/caption mark (matches Studio timeline). */
 export function cardMarkKey(mark) {
   if (!mark) return '';
@@ -616,17 +704,32 @@ export function applyCardEdits(marks, cards = []) {
   if (!Array.isArray(marks)) return [];
   if (!cards?.length) return marks;
   const byKey = new Map(cards.map((c) => [c.key, c]));
-  return marks.map((m) => {
+  const place = (m, edit) => {
+    const next = { ...m };
+    if (edit.t != null && Number.isFinite(Number(edit.t))) next.t = Number(edit.t);
+    if (edit.dur != null && Number.isFinite(Number(edit.dur)) && Number(edit.dur) > 0) next.dur = Number(edit.dur);
+    return next;
+  };
+  const out = marks.map((m) => {
     if (m.kind !== 'chapter' && m.kind !== 'caption') return m;
     const key = m.key || cardMarkKey(m);
     const edit = byKey.get(key);
     if (!edit) return m.key ? m : { ...m, key };
-    const next = { ...m, key };
-    if (edit.t != null && Number.isFinite(Number(edit.t))) next.t = Number(edit.t);
-    if (edit.dur != null && Number.isFinite(Number(edit.dur)) && Number(edit.dur) > 0) next.dur = Number(edit.dur);
-    return next;
+    return place({ ...m, key }, edit);
   });
+  // Duplicated cards: the source card's copy and look again at their own time.
+  const copies = cards.filter((c) => c.copyOf);
+  if (!copies.length) return out;
+  const sources = new Map(out.filter((m) => (m.kind === 'chapter' || m.kind === 'caption') && m.key).map((m) => [m.key, m]));
+  for (const row of copies) {
+    const src = sources.get(row.copyOf);
+    if (!src || sources.has(row.key)) continue;
+    out.push(place({ ...src, key: row.key, copyOf: row.copyOf }, row));
+  }
+  return out.sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
 }
+
+export const isCardCopy = (m) => Boolean(m?.copyOf);
 
 /** Chapter/caption placement overrides from the Editor timeline (recording clock). */
 export function normalizeCards(list, { liveDur = Infinity } = {}) {
@@ -643,7 +746,9 @@ export function normalizeCards(list, { liveDur = Infinity } = {}) {
     if (raw.dur != null && Number.isFinite(Number(raw.dur)) && Number(raw.dur) > 0) {
       row.dur = r3(clamp(Number(raw.dur), 0.4, 30));
     }
-    if (row.t == null && row.dur == null) continue;
+    const copyOf = String(raw.copyOf || '').trim();
+    if (copyOf && copyOf.length <= 160 && copyOf !== key) row.copyOf = copyOf;
+    if (row.t == null && row.dur == null && !row.copyOf) continue;
     seen.add(key);
     out.push(row);
     if (out.length >= 80) break;
@@ -665,6 +770,7 @@ export function normalizeEdit(edit = {}, { liveDur = Infinity, width = CAPTURE.w
     layouts: normalizeLayouts(src.layouts),
     order: normalizeOrder(src.order),
     omit: normalizeOrder(src.omit),
+    repeats: normalizeRepeats(src.repeats),
     trims: normalizeTrims(src.trims),
     cuts: normalizeCuts(src.cuts, { liveDur }),
   };
@@ -683,6 +789,7 @@ export function isEmptyDeck(deck) {
       !deck.layouts?.length &&
       !deck.order?.length &&
       !deck.omit?.length &&
+      !deck.repeats?.length &&
       !deck.trims?.length &&
       !deck.cuts?.length &&
       isEmptyAudio(deck.audio))
@@ -693,7 +800,7 @@ export function isEmptyDeck(deck) {
 export function patchEdit(current = {}, patch = {}, opts = {}) {
   if (patch.reset) return normalizeEdit({}, opts);
   const merged = { ...(current || {}) };
-  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'layouts', 'order', 'omit', 'trims', 'cuts']) {
+  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'layouts', 'order', 'omit', 'repeats', 'trims', 'cuts']) {
     if (key in patch) merged[key] = patch[key] ?? (key === 'transitions' ? {} : []);
   }
   return normalizeEdit(merged, opts);
@@ -712,6 +819,7 @@ export function compactEdit(deck) {
   if (deck?.layouts?.length) out.layouts = deck.layouts;
   if (deck?.order?.length) out.order = deck.order;
   if (deck?.omit?.length) out.omit = deck.omit;
+  if (deck?.repeats?.length) out.repeats = deck.repeats;
   if (deck?.trims?.length) out.trims = deck.trims;
   if (deck?.cuts?.length) out.cuts = deck.cuts;
   const audio = compactAudio(deck?.audio);

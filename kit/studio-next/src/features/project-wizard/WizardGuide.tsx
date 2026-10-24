@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, enc } from '@/desk/api';
+import { NeonButton } from '@/ui/NeonButton';
 import { ACTIONS, STATE_COPY, clock, guideJourney, guideLive, guideStates, guideStatusLine, type GuideStatus } from '@/features/project-panel/guideModel';
 
 import { useWizardGuide } from './guideSession';
@@ -136,9 +137,9 @@ function WizardGuideLive({ slug, onState }: { slug: string; onState: (state: str
           }}
         >
           <input ref={inputRef} type="text" maxLength={60} placeholder="Chapter title — e.g. Plan the week (optional)" aria-label="Chapter title" autoComplete="off" />{' '}
-          <button type="button" className="btn primary" onClick={onMark}>
+          <NeonButton className="btn primary" onClick={onMark}>
             Add chapter
-          </button>{' '}
+          </NeonButton>{' '}
           <button type="button" className="btn ghost" data-guide-mark-cancel="" onClick={() => setMarking(false)}>
             Cancel
           </button>
@@ -148,9 +149,8 @@ function WizardGuideLive({ slug, onState }: { slug: string; onState: (state: str
         <>
           <div className="guide-actions">
             {actions.map(([a, label, cls]) => (
-              <button
+              <NeonButton
                 key={a}
-                type="button"
                 className={cls}
                 data-guide-action={a}
                 disabled={Boolean(pending)}
@@ -160,7 +160,7 @@ function WizardGuideLive({ slug, onState }: { slug: string; onState: (state: str
                 }}
               >
                 {label}
-              </button>
+              </NeonButton>
             ))}
           </div>
           <p className="guide-card-foot">

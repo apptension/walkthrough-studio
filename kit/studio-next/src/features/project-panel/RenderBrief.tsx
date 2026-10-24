@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { fmt } from '@/desk/format';
 import { requestMake } from '@/desk/jobs';
+import { useRenderStop } from '@/desk/renderStop';
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { firstShortHold } from '@/logic/voiceHold';
 
@@ -101,21 +103,22 @@ function VoiceHoldWarn() {
 
 function StartActions() {
   const view = useBrief();
-  const primaryBusy = useDesk((s) => Boolean(s.busy['btnActionPrimary']));
+  const { busy: primaryBusy, stopping: primaryStopping, stop } = useRenderStop('btnActionPrimary');
   const secondaryBusy = useDesk((s) => Boolean(s.busy['btnActionSecondary']));
   return (
     <div className="render-start-actions">
-      <button
-        type="button"
+      <NeonButton
         id="btnActionPrimary"
-        className={primaryBusy ? 'render-cta primary busy' : 'render-cta primary'}
+        className={primaryBusy ? 'render-cta primary is-stop' : 'render-cta primary'}
         hidden={view.primary.hidden}
         data-mode={view.primary.mode}
-        disabled={primaryBusy}
-        onClick={() => requestMake(view.primary.mode)}
+        title={primaryBusy ? 'Stop the running job and clear the queue' : undefined}
+        disabled={primaryStopping}
+        onClick={() => (primaryBusy ? stop() : requestMake(view.primary.mode))}
       >
-        <Icon name="ui-play-fill" size={14} /> <span className="cta-label">{view.primary.label}</span>
-      </button>{' '}
+        <Icon name={primaryBusy ? 'ui-stop' : 'ui-play-fill'} size={14} />{' '}
+        <span className="cta-label">{primaryBusy ? (primaryStopping ? 'Stopping…' : 'Stop') : view.primary.label}</span>
+      </NeonButton>{' '}
       <button
         type="button"
         id="btnActionSecondary"

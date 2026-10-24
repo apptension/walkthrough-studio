@@ -1,0 +1,38 @@
+/* Duplicated sections on the Editor timeline, and the inspector note about them. */
+
+.etl-clip.is-repeat {
+  border-style: dashed;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, color-mix(in srgb, var(--c) 36%, #1b1e1b) 0%, color-mix(in srgb, var(--c) 18%, #111311) 100%);
+}
+
+.ec-dup {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ec-dup svg {
+  width: 11px;
+  height: 11px;
+}
+
+.etl-clip.is-narrow .ec-dup {
+  display: none;
+}
+
+.ins-repeat {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--ink-dim) 45%, transparent);
+  border-radius: 10px;
+}
+
+.ins-repeat .ins-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}

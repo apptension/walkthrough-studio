@@ -24,6 +24,8 @@
  *                                          + guided-flow.mjs replay draft
  *   node cli.mjs adopt-take <slug>         keep your guided recording as the take → live.mp4 + timeline.json,
  *                                          guided-flow.mjs → flow.mjs (the old one kept as flow.before-take.mjs)
+ *   node cli.mjs check-flow <slug> [--json] prove flow.mjs / narration.mjs / video.config.json will record:
+ *                                          syntax + import, config, ctx API lint, titles ↔ narration, selectors
  *   node cli.mjs smoke <slug>              10s overlay + capture check on record.startUrl
  *   node cli.mjs record <slug> [--headed] [--pace calm|steady|brisk|quick|<0.6–2>] [--repair]
  *                                          run flow.mjs → live.mp4 + timeline.json (--pace: this take only;
@@ -50,8 +52,11 @@
  *                                          show or set scale, logo, focus, frame detail, cursor, keys and live pace
  *   node cli.mjs motion <slug> [--energy clear] [--atmosphere aurora] [--presence 0.6] [--speed 1]
  *                                [--reveal rise|cascade|wipe|focus|veil|ink|slit|iris|embers] [--depth flat|soft|deep] [--sheen on|off]
- *                                [--plate <id|open|close>] [--reset]
- *                                          show or set the video's plate motion; --plate writes a one-plate accent
+ *                                [--plate <id|open|close>] [--reset] [--plate <id|open|close> --layout <id|default>]
+ *                                          show or set the video's plate motion; --plate writes a one-plate accent,
+ *                                          --layout picks that plate's composition (split, kinetic, mesh, bento, …)
+ *   node cli.mjs rhythm <slug> [--apply]   draft rhythm lint (camera accents, captions, joins, layout repeats)
+ *                                          → draft-rhythm.md; --apply fills open layouts / look / joins / auto zoom
  *   node cli.mjs story <slug> [--purpose overview|feature|onboarding|launch|sales] [--check]
  *                                          show or set the story spine; --check runs the story critique now
  *   node cli.mjs edit <slug> [--speed from-to@rate]… [--zoom t+dur@zoom:x,y]… [--keep-whole from-to]… [--cut from-to]…
@@ -81,7 +86,7 @@
  *      no-credit plumbing check (macOS `say` + synthesized pad).
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { acquireOutputLock, stepResources } from './lib/outputLock.mjs';
 import { KIT, OUT_ROOT, TEMPLATES, VIDEOS, listVideos, loadVideo } from './lib/project.mjs';
@@ -368,6 +373,25 @@ async function main() {
     case 'browse-daemon': {
       const { runBrowseDaemon } = await import('./lib/browseSession.mjs');
       await runBrowseDaemon(loadVideo(slug), { url: opt('--url'), headed: flag('--headed') });
+      return;
+    }
+    case 'check-flow': {
+      if (!slug) throw new Error('Usage: node cli.mjs check-flow <slug> [--json]');
+      const dir = join(VIDEOS, slug);
+      if (!existsSync(dir)) throw new Error(`No video "${slug}" (${dir})`);
+      const { checkFlow, formatFlowCheck } = await import('./lib/flowCheck.mjs');
+      const result = await checkFlow({ slug, dir });
+      if (flag('--json')) console.log(JSON.stringify(result, null, 2));
+      else {
+        const report = formatFlowCheck(result, { maxWarnings: 40 });
+        if (report) console.log(report);
+        console.log(
+          result.ok
+            ? `✓ ${slug} · flow.mjs, narration.mjs and video.config.json pass${result.warnings.length ? ` (${result.warnings.length} warning(s))` : ''}`
+            : `✗ ${slug} · ${result.errors.length} problem(s) would break the take`
+        );
+      }
+      if (!result.ok) process.exitCode = 1;
       return;
     }
     case 'smoke': {
@@ -713,13 +737,17 @@ async function main() {
     }
     case 'motion': {
       const { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, motionOverrides, patchMotion, resolveMotion } = await import('./lib/plateMotion.mjs');
+      const { layoutIds, normalizeLayout, plateKind, resolveLayout } = await import('./lib/plateLayouts.mjs');
       if (!slug) {
         throw new Error(
           `Usage: motion <slug> [--energy calm|clear|punchy] [--atmosphere ${ATMOSPHERE_IDS.join('|')}]\n` +
             '       [--presence 0–1] [--speed 0.3–3] [--reveal rise|cascade|wipe|focus|veil|ink|slit|iris|embers] [--depth flat|soft|deep] [--sheen on|off]\n' +
-            '       [--plate <id|open|close>] [--reset]   (per-plate accent; --reset drops the override)'
+            '       [--plate <id|open|close>] [--reset]   (per-plate accent; --reset drops the override)\n' +
+            `       --plate open|close|<id> --layout <id|default>   (open: ${layoutIds('open').join('|')} · close: ${layoutIds('close').join('|')})`
         );
       }
+      const layoutArg = opt('--layout');
+      if (layoutArg && !opt('--plate')) throw new Error('--layout needs --plate open|close|<interstitial id>');
       const video = loadVideo(slug);
       const patch = {
         ...(opt('--energy') && { energy: opt('--energy') }),
@@ -739,15 +767,25 @@ async function main() {
             ? (cfg[plateId] = cfg[plateId] || {})
             : (cfg.interstitials || []).find((i) => i.id === plateId);
         if (!target) throw new Error(`No plate "${plateId}" in ${cfgPath}`);
+        const kind = plateKind(plateId, target);
+        if (layoutArg) {
+          const layout = normalizeLayout(kind, layoutArg === 'default' ? '' : layoutArg);
+          if (layout) target.layout = layout;
+          else delete target.layout;
+        }
         if (flag('--reset')) delete target.motion;
         else if (Object.keys(patch).length) {
           const next = patchMotion(target.motion || {}, patch);
           if (Object.keys(next).length) target.motion = next;
           else delete target.motion;
         }
-        if (flag('--reset') || Object.keys(patch).length) writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+        if (flag('--reset') || Object.keys(patch).length || layoutArg) writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
         const ov = motionOverrides(target.motion);
-        console.log(`${slug} · plate ${plateId}${ov.length ? ` overrides ${ov.map((k) => `${k}=${target.motion[k]}`).join(' ')}` : ' follows the video'}`);
+        const layout = resolveLayout(kind, target.layout);
+        console.log(
+          `${slug} · plate ${plateId}${layout ? ` · layout ${layout}` : ''}${ov.length ? ` overrides ${ov.map((k) => `${k}=${target.motion[k]}`).join(' ')}` : ' follows the video'}`
+        );
+        if (layoutArg) console.log('  plates rebuild on the next `plates` / `produce` run');
         return;
       }
       if (Object.keys(patch).length || flag('--reset')) {
@@ -764,6 +802,8 @@ async function main() {
       const accents = (cfg.interstitials || []).filter((i) => motionOverrides(i.motion).length);
       for (const id of ['open', 'close']) if (motionOverrides(cfg[id]?.motion).length) accents.push({ id, motion: cfg[id].motion });
       if (accents.length) console.log(`  accents     ${accents.map((i) => `${i.id} (${motionOverrides(i.motion).join(', ')})`).join(' · ')}`);
+      const mids = (cfg.interstitials || []).filter((i) => resolveLayout(i.type, i.layout)).map((i) => `${i.id}:${resolveLayout(i.type, i.layout)}`);
+      console.log(`  layouts     open ${resolveLayout('open', cfg.open?.layout)} · close ${resolveLayout('close', cfg.close?.layout)}${mids.length ? ` · ${mids.join(' ')}` : ''}`);
       if (Object.keys(patch).length) console.log(`  plates rebuild on the next \`plates\` / \`produce\` run`);
       return;
     }
@@ -1021,6 +1061,31 @@ async function main() {
         const added = applyPlateSuggestions(video, proposals);
         console.log(`✓ applied plates: ${added.join(', ') || '(none new)'}`);
       }
+      return;
+    }
+    case 'rhythm': {
+      if (!slug) throw new Error('Usage: rhythm <slug> [--apply]');
+      const video = loadVideo(slug);
+      const { analyzeRhythm, enrichDraft, rhythmReport } = await import('./lib/draftRhythm.mjs');
+      const { describeVariety } = await import('./lib/variety.mjs');
+      const flowPath = join(video.dir, 'flow.mjs');
+      const flowSource = existsSync(flowPath) ? readFileSync(flowPath, 'utf8') : '';
+      const cfgPath = join(video.dir, 'video.config.json');
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+      let report;
+      if (flag('--apply')) {
+        const r = enrichDraft(cfg, { slug, brand: video.brand, flowSource });
+        if (r.applied.length) writeFileSync(cfgPath, JSON.stringify(r.config, null, 2) + '\n');
+        console.log(`variety  ${describeVariety(r.pick)}`);
+        report = r.report;
+      } else {
+        report = rhythmReport(analyzeRhythm({ flowSource, config: cfg, brand: video.brand }), { slug });
+      }
+      console.log(report);
+      mkdirSync(video.out, { recursive: true });
+      const out = join(video.out, 'draft-rhythm.md');
+      writeFileSync(out, report);
+      console.log(`✓ ${out}`);
       return;
     }
     case 'all': {

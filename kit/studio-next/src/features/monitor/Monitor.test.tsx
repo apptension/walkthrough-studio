@@ -32,6 +32,7 @@ vi.mock('@/desk/monitor', async (importOriginal) => ({
 vi.mock('@/desk/jobs', async (importOriginal) => ({
   ...(await importOriginal<typeof JobsModule>()),
   requestMake: vi.fn(),
+  stopAllWork: vi.fn(),
 }));
 
 const $ = (id: string) => {
@@ -346,8 +347,9 @@ describe('players and Program overlays', () => {
     await userEvent.click($('btnNoVideoSecondary'));
     expect(requestMake).toHaveBeenCalledWith('full');
     act(() => desk.set({ busy: { btnNoVideoPrimary: true } }));
-    expect($('btnNoVideoPrimary')).toBeDisabled();
-    expect($('btnNoVideoPrimary')).toHaveClass('busy');
+    expect($('btnNoVideoPrimary')).not.toBeDisabled();
+    expect($('btnNoVideoPrimary')).toHaveClass('is-stop');
+    expect($('btnNoVideoPrimary')?.querySelector('.cta-label')).toHaveTextContent('Stop');
   });
 
   it('shows the cue under the playhead when CC is on', () => {

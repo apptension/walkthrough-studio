@@ -70,7 +70,11 @@ export function planCardBakes(timeline, cards) {
   const out = [];
   for (const m of timeline || []) {
     if (!isCardMark(m)) continue;
-    const card = byKey.size ? byKey.get(m.key || cardMarkKey(m)) || null : legacyPick(m);
+    const card = m.copyOf
+      ? byKey.get(m.copyOf) || byKind[m.kind].find((c) => c.label === m.label) || null
+      : byKey.size
+        ? byKey.get(m.key || cardMarkKey(m)) || null
+        : legacyPick(m);
     if (!card) continue;
     out.push({
       kind: m.kind,

@@ -1,5 +1,6 @@
 import { bridges } from '@/desk/bridge';
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 import { askAiForCurrentScene, editCurrentPlate, openMotionForCurrentScene } from './engine/plate';
@@ -29,8 +30,7 @@ export function SceneBar() {
         </div>
       </div>
       <div className="scene-actions">
-        <button
-          type="button"
+        <NeonButton
           id="btnEditScene"
           className={view.editPrimary ? 'btn primary compact icon-text' : 'btn compact icon-text'}
           disabled={view.editDisabled}
@@ -38,7 +38,7 @@ export function SceneBar() {
           onClick={() => void editCurrentPlate()}
         >
           <Icon name="ui-pencil" size={12} /> <span id="btnEditSceneLabel">{view.editLabel}</span>
-        </button>{' '}
+        </NeonButton>{' '}
         <button
           type="button"
           id="btnAskAiScene"

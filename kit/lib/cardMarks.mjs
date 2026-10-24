@@ -62,7 +62,7 @@ export function loadCardMarks(video, { liveDur = Infinity } = {}) {
 export function pairCallsToMarks(calls, marks) {
   const out = new Map();
   for (const kind of CARD_KINDS) {
-    const pool = (marks || []).filter((m) => m.kind === kind).sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
+    const pool = (marks || []).filter((m) => m.kind === kind && !m.copyOf).sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
     const taken = new Set();
     const free = () => pool.filter((m) => !taken.has(m));
     for (const call of calls || []) {

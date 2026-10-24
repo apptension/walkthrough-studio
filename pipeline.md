@@ -222,6 +222,13 @@ kills ffmpeg if a frame fails. Studio surfaces plate QC on the Render bay and pl
 **Critic / suggest-plates:** `lib/critic.mjs` + `lib/suggestPlates.mjs` — see SKILL workflow. Both read
 the story spine (`lib/narrative.mjs`); the critic report carries `purpose` and a "Story spine" section.
 
+**Layouts / variety / rhythm:** `lib/plateLayouts.mjs` is the `layout` catalog (open/close variants are
+`templates/open-<id>.html` / `close-<id>.html`; interstitial variants are `body[data-layout]` blocks in the
+type's template). `lib/variety.mjs` makes a deterministic pick (layouts, look, joins) from slug + title;
+`lib/draftRhythm.mjs` lints the flow for accent gaps, caption density and monotone joins, and
+`enrichDraft` fills only unset choices. Studio runs it after a `draft` agent job (writes
+`draft-rhythm.md`); `cli.mjs rhythm <slug> [--apply]` does the same by hand.
+
 **Type-fit probe:** `renderOne` seeks to the settled frame before encoding and records every `data-fit`
 element's fitted size (`typeFit.fitted[] {el, px, base, atFloor}`) plus anything that still clips
 (`typeFit.clipped[]`) in `.render.json`. Clips print `» plate · … · type · N element(s) clip — shorten the
@@ -509,13 +516,19 @@ real pointer along the same path; Direction can choose Guided lens, static Spotl
 - `POST /v1/music?output_format=mp3_44100_128` with `model_id: music_v2_5` and a `composition_plan`
   (`chunks[].{text, duration_ms 3000–120000, positive_styles, negative_styles, context_adherence}`; ≤ 30 chunks, ≤ 10 min).
   `force_instrumental` exists only in prompt mode, so every chunk carries `instrumental` / `no vocals` in its styles.
-- `music.mjs` builds the plan from `produce-meta.json`: intro = open plate + 2 s, bed split into ≤ 110 s sections, outro =
-  close plate + 2 s, plus a 1 s tail; the result is longer than the picture and trimmed in the mix, never stretched.
-  $0.15 / generated minute.
-- **Composed once.** A re-take with the same music style reuses `music/music.mp3` when the length changed by ≤ 50 %:
-  the mix cuts (shorter take) or repeats (longer take) the difference at the middle of the demo bed with a 2 s
-  equal-power crossfade, where the music sits ducked, so the intro and outro stay locked to the plates. A style change
-  or `music --force` recomposes.
+- `music.mjs` builds the plan from `produce-meta.json`: total = picture + 10 % headroom (4–15 s) rounded up to a 5 s
+  bucket (`musicTargetSec`); intro = open plate + 1.5 s, outro = close plate + 2.5 s (starts 1.5 s before the close
+  plate), the headroom sits in the bed, split into ≤ 110 s sections. The result is longer than the picture and trimmed
+  in the mix, never stretched. A bed over 10 min is composed in several requests (`planRequests`, same styles and
+  seed, each later part 4 s longer) joined with 4 s equal-power crossfades. $0.15 / generated minute.
+- **Composed once.** A re-take with the same music style reuses `music/music.mp3` while it still reaches past the
+  new picture and is ≤ 1.5 × its target (`musicReuse`); a shorter cached bed is recomposed, never looped
+  (offline it is kept with a ⚠). The mix (`musicFit`) trims the excess at the middle of the demo bed with a 2 s
+  equal-power crossfade, where the music sits ducked, so the outro stays on the close plate. A bed that is still short
+  (an upload, offline) has one passage repeated there with a 4 s crossfade (whole bars when the styles name a BPM);
+  more than one repeat needs the desk's Loop to fill, otherwise the tail fades and stays silent. Every repeat or
+  shortfall prints ⚠, lands in `audio-meta.json → musicFit / warnings`, and `validate` reports it. A style change or
+  `music --force` recomposes.
 
 ### Mix (ffmpeg)
 

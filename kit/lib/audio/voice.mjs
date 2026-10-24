@@ -254,7 +254,7 @@ export async function buildVoice(video, { force = false } = {}) {
 
   // Interstitial plate narration (keyed by plate id or on-screen title)
   for (const seg of segments) {
-    if (seg.kind === 'plate' && seg.interstitial) {
+    if (seg.kind === 'plate' && seg.interstitial && !seg.repeatOf) {
       const raw = plateLines[seg.id] ?? narration.lines[seg.title] ?? narration.lines[seg.id];
       if (raw !== undefined) {
         const inDur = seg.transitionIn?.dur || 0;
@@ -272,13 +272,13 @@ export async function buildVoice(video, { force = false } = {}) {
 
   const used = new Set(slots.filter((s) => s.kind === 'interstitial').map((s) => s.key));
   timeline.forEach((mark, i) => {
-    if (mark.kind !== 'caption' && mark.kind !== 'chapter') return;
+    if ((mark.kind !== 'caption' && mark.kind !== 'chapter') || mark.copyOf) return;
     const raw = narration.lines[mark.label];
     if (raw === undefined) return;
     used.add(mark.label);
     const next = timeline
       .slice(i + 1)
-      .find((m) => ((m.kind === 'caption' || m.kind === 'chapter') && narration.lines[m.label] !== undefined) || m.id === 'end');
+      .find((m) => ((m.kind === 'caption' || m.kind === 'chapter') && !m.copyOf && narration.lines[m.label] !== undefined) || m.id === 'end');
     const markAt = liveToDelivery(mark.t);
     const windowEnd = liveToDelivery(next ? next.t : dLive);
     slots.push({
@@ -480,6 +480,34 @@ export async function addAdlibLine(video, { text = '', at = 0, key = null } = {}
   meta.generatedAt = new Date().toISOString();
   writeFileSync(metaPath, JSON.stringify(meta, null, 2));
   return { key: id, start, text: spoken };
+}
+
+/**
+ * A second copy of a spoken line at `at` (delivery seconds), as its own ad-lib. It plays the
+ * source's audio as recorded, so it is heard straight away; Regenerate on it speaks it afresh.
+ */
+export async function duplicateVoiceLine(video, sourceKey, { at = 0 } = {}) {
+  const metaPath = voiceMetaPath(video);
+  const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : null;
+  const src = (meta?.clips || []).find((c) => c.key === sourceKey);
+  if (!src) throw new Error(`No voice line "${sourceKey}" to duplicate`);
+  const created = await addAdlibLine(video, { text: src.text || '', at });
+  const after = JSON.parse(readFileSync(metaPath, 'utf8'));
+  const clip = after.clips.find((c) => c.key === created.key);
+  const plays = Number(src.duration) || 0;
+  Object.assign(clip, {
+    end: Number((created.start + plays).toFixed(3)),
+    duration: Number(plays.toFixed(3)),
+    full: Number(src.full) || plays,
+    ...(src.speed != null ? { speed: src.speed } : {}),
+    file: src.file || '',
+    ...(src.source ? { source: src.source } : {}),
+    copyOf: sourceKey,
+    notes: ['duplicated in the Editor'],
+  });
+  after.generatedAt = new Date().toISOString();
+  writeFileSync(metaPath, JSON.stringify(after, null, 2));
+  return { ...created, source: src };
 }
 
 /**

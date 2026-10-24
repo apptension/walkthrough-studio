@@ -4,10 +4,12 @@ import { desk } from '@/desk/store';
 import { cardMarkDuration, cardMarkKey } from '@/logic/liveCardStage';
 import { lensLoupe, lensZoomCeiling } from '@/logic/livePreview';
 import { narratorKeyNote } from '@/logic/narratorNote';
+import { neonFxHtml } from '@/ui/neonFx';
 import { paintRanges } from '@/ui/rangeFill';
 import { helpLabel, helpState, helpTips } from '@/ui/helpStore';
 
 import { deckLens, selectedShot } from './aim';
+import { canDuplicate } from './duplicate';
 import { sectionForClip } from './layoutPreview';
 import { wireInspector } from './inspectorWire';
 import { lensItems, selectedLens, shotKey } from './seq';
@@ -16,7 +18,7 @@ import { audioDesk, deckEdit, ed, htmlPlates, slug } from './state';
 import { renderPlateFields } from './text';
 import { plateInfo } from './timeline';
 import type { Clip, DeckPlate, NarratorVoice, PlateRow, Selection } from './types';
-import { $, CUT_ICON, ICONS, LENS_PRESETS, PLATE_ICON, SPEED_PRESETS, T_GLYPH, ZEN_ART, ZOOM_PRESETS, clamp, errMessage, escapeHtml, fmtRate, fmtT, r3 } from './util';
+import { $, CUT_ICON, DUP_ICON, ICONS, LENS_PRESETS, PLATE_ICON, SPEED_PRESETS, T_GLYPH, ZEN_ART, ZOOM_PRESETS, clamp, errMessage, escapeHtml, fmtRate, fmtT, r3 } from './util';
 
 const PLACE_HELP =
   'Drag the block to reorder. Use the trash or ⌫ to pull it out of the cut — restore it anytime from the empty inspector.';
@@ -220,12 +222,22 @@ export function renderCardSel(s: Selection): string {
   const [lo, hi] = ed.deck?.ranges?.cardDur || [0.4, 30];
   const t = Number(s.markT ?? mark?.t ?? 0);
   return (
-    head(ICONS['plate'] ?? '', slot === 'chapter' ? 'plate' : 'live', mark?.label || kind, `${kind} card · ${fmtT(t)} · ${dur.toFixed(1)}s`) +
+    head(
+      ICONS['plate'] ?? '',
+      slot === 'chapter' ? 'plate' : 'live',
+      mark?.label || kind,
+      `${kind} card${mark?.copyOf ? ' · duplicate' : ''} · ${fmtT(t)} · ${dur.toFixed(1)}s`,
+      mark?.copyOf ? removeBtn() : '',
+    ) +
     section(
       'plate',
       'Card',
-      `<button type="button" class="ins-btn wide primary" data-edit-card="${escapeHtml(s.cardId || '')}" data-mark-t="${t}" data-mark-key="${escapeHtml(s.key || mark?.key || '')}">${ICONS['plate']}<span>Edit ${slot} copy</span></button>
-        <p class="ins-note subtle">Or double-click the block · click text on the stage · tip’s <b>Edit copy</b>. Drag the tip if it covers the words.</p>`,
+      `<button type="button" class="ins-btn wide primary" data-edit-card="${escapeHtml(s.cardId || '')}" data-mark-t="${t}" data-mark-key="${escapeHtml(s.key || mark?.key || '')}">${neonFxHtml()}${ICONS['plate']}<span>Edit ${slot} copy</span></button>
+        <p class="ins-note subtle">${
+          mark?.copyOf
+            ? `A duplicate shows the same card again — its words and look change with the original. Move or retime it freely.`
+            : `Or double-click the block · click text on the stage · tip’s <b>Edit copy</b>. Drag the tip if it covers the words.`
+        }</p>`,
     ) +
     section(
       'live',
@@ -306,7 +318,26 @@ function wireInsHelp(root: HTMLElement): void {
 }
 
 export const head = (icon: string, kind: string, title: string, sub: string, actions = ''): string =>
-  `<div class="ins-head ${kind}"><span class="ins-ico">${icon}</span><div><strong>${escapeHtml(title)}</strong><em>${sub}</em></div>${actions}</div>`;
+  `<div class="ins-head ${kind}"><span class="ins-ico">${icon}</span><div><strong>${escapeHtml(title)}</strong><em>${sub}</em></div>${dupBtn()}${actions}</div>`;
+
+function dupBtn(): string {
+  const dup = canDuplicate();
+  return dup.ok ? `<button type="button" class="ins-icon" data-act="duplicate" title="${escapeHtml(dup.label)} (⌘D)" aria-label="${escapeHtml(dup.label)}">${DUP_ICON}</button>` : '';
+}
+
+/** A plate replay shares the source's file — say so, and offer to split it off. */
+function repeatNote(c: Clip): string {
+  if (!c.repeatOf) return '';
+  if (c.kind === 'live') {
+    return `<div class="ins-repeat"><p class="ins-note">${DUP_ICON}<span>Replays this stretch of the recording — its zooms, magnifiers and cards come along. Trim it on its own; delete removes only the replay.</span></p></div>`;
+  }
+  const src = ed.seq.find((x) => x.id === c.repeatOf || (x.kind === 'plate' && x.plateId === c.plateId && !x.repeatOf));
+  return `<div class="ins-repeat"><p class="ins-note">${DUP_ICON}<span>Plays ${escapeHtml(src?.title || 'this plate')} again — copy and style edits change both.</span></p>${
+    c.kind === 'plate'
+      ? `<button type="button" class="ins-btn wide" data-act="detach-plate" title="Give this copy its own words and look">${ICONS['plate']}Make it its own plate</button>`
+      : ''
+  }</div>`;
+}
 
 export function renderEmpty(): string {
   const omitted = ed.deck?.omitted || [];
@@ -332,7 +363,7 @@ export function renderEmpty(): string {
         <li>${ICONS['mic']}<span><b>A voice line or the music</b> — move it, set its level, shape the master</span></li>
       </ul>
       ${renderAddVoice()}
-      <p class="ins-keys"><kbd>Space</kbd> play · <kbd>⌫</kbd> remove section or effect · <kbd>R</kbd> replay · <kbd>S</kbd> speed · <kbd>Z</kbd> zoom · <kbd>M</kbd> magnify · <kbd>C</kbd> cut · <kbd>⌘Z</kbd> undo</p>
+      <p class="ins-keys"><kbd>Space</kbd> play · <kbd>⌫</kbd> remove section or effect · <kbd>R</kbd> replay · <kbd>S</kbd> speed · <kbd>Z</kbd> zoom · <kbd>M</kbd> magnify · <kbd>C</kbd> cut · <kbd>⌘D</kbd> duplicate · <kbd>⌘Z</kbd> undo</p>
       ${restore}</div>`;
 }
 
@@ -419,6 +450,7 @@ export function renderPlate(c: Clip): string {
   const styleCount = Object.keys(info?.style || {}).length;
   return (
     head(ICONS[PLATE_ICON[c.plateId || ''] || 'plate'] ?? '', 'plate', c.title, `${escapeHtml(info?.type || c.type || 'plate')} · ${c.dur.toFixed(1)}s`, clipRemoveBtn(c)) +
+    repeatNote(c) +
     placeSection(c) +
     (missing
       ? `<p class="ins-note">${ICONS['warn']} No preview for this plate yet — run Preview plates or Render.</p>`
@@ -450,7 +482,18 @@ export function renderLook(info: DeckPlate | null): string {
       .map((v) => `<option value="${v}" ${current === v ? 'selected' : ''}>${escapeHtml(labels[v] || v)}</option>`)
       .join('')}</select>`;
   const row = (label: string, control: string) => `<label class="ins-row"><span>${label}</span>${control}</label>`;
+  const kind = info?.id === 'open' || info?.id === 'close' ? info.id : info?.type || '';
+  const layouts = desk.get().video?.motionOptions?.layouts?.[kind] || [];
+  const layout = info?.layout || layouts[0]?.id;
   return (
+    (layouts.length > 1
+      ? row(
+          'Layout',
+          `<select class="ins-select" data-plate-layout aria-label="Plate layout">${layouts
+            .map((l) => `<option value="${l.id}" title="${escapeHtml(l.hint)}" ${l.id === layout ? 'selected' : ''}>${escapeHtml(l.label)}</option>`)
+            .join('')}</select>`,
+        )
+      : '') +
     row('Background', sel('atmosphere', o.atmospheres, o.atmosphereLabels, m['atmosphere'])) +
     row('Title reveal', sel('titleReveal', o.titleReveals, o.titleRevealLabels, m['titleReveal'])) +
     row('Depth', sel('depth', o.depths, {}, m['depth'])) +
@@ -614,6 +657,7 @@ export function renderLive(c: Clip): string {
       `Recording · ${c.dur.toFixed(1)}s${Math.abs(c.dur - recLen) > 0.05 ? ` <s>${recLen.toFixed(1)}s</s>` : ''}`,
       clipRemoveBtn(c),
     ) +
+    repeatNote(c) +
     placeSection(c) +
     layoutSection(c) +
     trimSection +
@@ -693,7 +737,7 @@ export function renderZoom(): string {
         'zoom',
         'Zoom',
         `<p class="ins-note">Added automatically where the pointer clicked. Take it over to aim, resize or retime it — or remove it to keep the whole screen.</p>
-          <button type="button" class="ins-btn wide primary" data-act="adopt">${ICONS['target']}Take over this zoom</button>`,
+          <button type="button" class="ins-btn wide primary" data-act="adopt">${neonFxHtml()}${ICONS['target']}Take over this zoom</button>`,
       ) +
       watchBtn()
     );
@@ -722,7 +766,7 @@ export function renderLens(): string {
       section(
         'lens',
         'Magnifier',
-        `<p class="ins-note">The recording asked for a loupe here; you switched it off, so the frame stays as it is.</p><button type="button" class="ins-btn wide primary" data-act="lens-on">${ICONS['lens']}Turn it back on</button>`,
+        `<p class="ins-note">The recording asked for a loupe here; you switched it off, so the frame stays as it is.</p><button type="button" class="ins-btn wide primary" data-act="lens-on">${neonFxHtml()}${ICONS['lens']}Turn it back on</button>`,
       )
     );
   }
@@ -733,7 +777,7 @@ export function renderLens(): string {
         'lens',
         'Magnifier',
         `<p class="ins-note">The flow asked for this loupe while recording${(l.path?.length ?? 0) > 1 ? ' and it follows the pointer' : ''}. Take it over to aim, resize or retime it — or remove it to keep the frame clean.</p>
-          <button type="button" class="ins-btn wide primary" data-act="adopt-lens">${ICONS['target']}Take over this magnifier</button>`,
+          <button type="button" class="ins-btn wide primary" data-act="adopt-lens">${neonFxHtml()}${ICONS['target']}Take over this magnifier</button>`,
       ) +
       watch
     );
@@ -838,7 +882,7 @@ export function renderVoice(): string {
       `<textarea class="ins-text" data-voice-text rows="3" maxlength="${textMax}" spellcheck="true" aria-label="What this line says" placeholder="What this line says">${escapeHtml(shown)}</textarea>
         ${rewritten ? `<p class="ins-note subtle">Written: “${escapeHtml(clip.written)}” <button type="button" class="ins-link" data-act="voice-text-written">use it</button></p>` : ''}
         <div class="ins-regen">
-          <button type="button" class="ins-btn primary${busy ? ' is-busy' : ''}" data-act="voice-regen" ${busy || recording ? 'disabled' : ''}>${ICONS['sparkle']}<span>${busy ? 'Speaking…' : 'Regenerate'}</span></button>
+          <button type="button" class="ins-btn primary${busy ? ' is-busy' : ''}" data-act="voice-regen" ${busy || recording ? 'disabled' : ''}>${neonFxHtml()}${ICONS['sparkle']}<span>${busy ? 'Speaking…' : 'Regenerate'}</span></button>
         </div>
         <div class="ins-pair voice-source">
           <button type="button" class="ins-btn" data-act="voice-upload" ${busy || recording ? 'disabled' : ''} title="Attach an MP3 as a new take">${ICONS['upload']}Upload MP3</button>
@@ -926,7 +970,7 @@ export function renderNarrator(): string {
         </div>
         ${sub ? `<p class="ins-note subtle">${escapeHtml(sub)}</p>` : ''}
         <div class="ins-pair">
-          <button type="button" class="ins-btn primary" data-act="narrator-use" ${(ed.narratorPick || n.voiceId) === n.voiceId ? 'disabled' : ''}>${ICONS['mic']}Use voice</button>
+          <button type="button" class="ins-btn primary" data-act="narrator-use" ${(ed.narratorPick || n.voiceId) === n.voiceId ? 'disabled' : ''}>${neonFxHtml()}${ICONS['mic']}Use voice</button>
           <button type="button" class="ins-btn ghost" data-act="narrator-brand" ${n.source === 'video' ? '' : 'disabled'}>Brand voice</button>
         </div>`;
   }
@@ -973,7 +1017,7 @@ export function renderMusic(): string {
         <textarea class="ins-text" data-music-prompt rows="2" maxlength="500" spellcheck="true" aria-label="Music prompt" placeholder="Describe the music — e.g. warm electric piano, soft pulse, optimistic SaaS underscore, no vocals">${escapeHtml(prompt)}</textarea>
         <div class="ins-pair voice-source">
           <button type="button" class="ins-btn" data-act="music-upload" ${busy ? 'disabled' : ''} title="Replace the bed with an uploaded MP3">${ICONS['upload']}Upload MP3</button>
-          <button type="button" class="ins-btn primary${busy ? ' is-busy' : ''}" data-act="music-compose" ${busy ? 'disabled' : ''} title="Compose a new bed sized to this cut from the prompt, then mix">${ICONS['sparkle']}<span>${busy ? 'Working…' : bed ? 'Compose to fit' : 'Compose music'}</span></button>
+          <button type="button" class="ins-btn primary${busy ? ' is-busy' : ''}" data-act="music-compose" ${busy ? 'disabled' : ''} title="Compose a new bed sized to this cut from the prompt, then mix">${neonFxHtml()}${ICONS['sparkle']}<span>${busy ? 'Working…' : bed ? 'Compose to fit' : 'Compose music'}</span></button>
         </div>
         ${short ? `<p class="ins-warn">${ICONS['warn']}The bed is ${shortBy.toFixed(0)}s shorter than this cut — loop it, upload a longer track, or compose to fit.</p>` : ''}`,
     ) +
@@ -1083,7 +1127,7 @@ export function renderRange(s: Selection): string {
     section(
       CUT_ICON,
       'Cut',
-      `<button type="button" class="ins-btn wide primary" data-range-cut>${CUT_ICON}Cut this stretch out</button><p class="ins-note subtle">Removes it from the recording. Playback skips it and the render closes the gap.</p>`,
+      `<button type="button" class="ins-btn wide primary" data-range-cut>${neonFxHtml()}${CUT_ICON}Cut this stretch out</button><p class="ins-note subtle">Removes it from the recording. Playback skips it and the render closes the gap.</p>`,
     ) +
     section('speed', 'Speed', `${segBtns('data-range-rate', [0.5, 0.75, 1.5, 2, 3], '', fmtRate)}<p class="ins-note subtle">Faster skips the slow parts; slower lets a detail breathe.</p>`) +
     section(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { api, enc } from '@/desk/api';
+import { NeonButton } from '@/ui/NeonButton';
 
 import { useBayCards } from './bayCards';
 import { ACTIONS, STATE_COPY, clock, guideJourney, guideLive, guideStates, guideStatusLine, type GuideStatus } from './guideModel';
@@ -143,9 +144,9 @@ function GuideCardLive({ slug, onState }: { slug: string; onState: (state: strin
             aria-label="Chapter title"
             autoComplete="off"
           />{' '}
-          <button type="submit" className="btn primary">
+          <NeonButton type="submit" className="btn primary">
             Add chapter
-          </button>{' '}
+          </NeonButton>{' '}
           <button type="button" className="btn ghost" data-guide-mark-cancel="" onClick={() => setMarking(false)}>
             Cancel
           </button>
@@ -155,9 +156,8 @@ function GuideCardLive({ slug, onState }: { slug: string; onState: (state: strin
         <>
           <div className="guide-actions">
             {actions.map(([a, label, cls]) => (
-              <button
+              <NeonButton
                 key={a}
-                type="button"
                 className={cls}
                 data-guide-action={a}
                 disabled={Boolean(pending)}
@@ -167,7 +167,7 @@ function GuideCardLive({ slug, onState }: { slug: string; onState: (state: strin
                 }}
               >
                 {label}
-              </button>
+              </NeonButton>
             ))}
           </div>
           <p className="guide-card-foot">

@@ -138,6 +138,7 @@ export async function resetVar(id: string, name: string): Promise<void> {
 export interface PlateApiResponse extends StyleResponse {
   motion?: Record<string, string | undefined>;
   overrides?: string[];
+  layout?: string | null;
   look?: Partial<ResolvedLook> & { vars?: Record<string, string> };
 }
 
@@ -155,7 +156,10 @@ export async function plateApi(
       if (path === 'motion') {
         info.motion = r.motion || {};
         info.overrides = r.overrides || [];
-      } else info.style = r.style || {};
+      } else {
+        info.style = r.style || {};
+        if (path === 'layout') info.layout = r.layout ?? null;
+      }
     }
     if (r.plates) setHtmlPlates(r.plates, { video: false });
     ed.dirtyRender = true;

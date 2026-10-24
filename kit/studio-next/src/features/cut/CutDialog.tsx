@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { reviewPill } from '@/features/stages/model';
 import { closeSheet, useSheetDialog } from '@/features/stages/sheetDialog';
@@ -72,15 +73,14 @@ function CutFoot({ approved }: { approved: boolean }) {
         >
           Request changes
         </button>{' '}
-        <button
-          type="button"
+        <NeonButton
           id="btnCutApprove"
           className="btn primary"
           disabled={approved || pending === 'approved'}
           onClick={() => void cutDecision('approved')}
         >
           Approve cut
-        </button>
+        </NeonButton>
       </div>
     </footer>
   );

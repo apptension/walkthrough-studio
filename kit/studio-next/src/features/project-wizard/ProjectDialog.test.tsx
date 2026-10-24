@@ -26,7 +26,12 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const field = <T extends HTMLElement>(name: string) => document.querySelector<T>(`#projectForm [name="${name}"]`) as T;
 const visibleStep = () => [...document.querySelectorAll<HTMLFieldSetElement>('fieldset[data-step]')].filter((f) => !f.hidden).map((f) => f.dataset.step);
 
-const BRANDS = { brands: [{ id: 'acme', name: 'Acme' }, { id: 'demo', name: 'Demo', placeholder: true }] };
+const BRANDS = {
+  brands: [
+    { id: 'acme', name: 'Acme', accent: '#ff3366', colors: { ink: '#101010', gold: '#ff3366', text: '#ffffff' }, font: 'Inter' },
+    { id: 'demo', name: 'Demo', placeholder: true },
+  ],
+};
 const OPTIONS = {
   options: [
     { id: 'desktop-fhd', label: 'Full HD · desktop', group: 'desktop', width: 1920, height: 1080, dpr: 1, reason: 'Matches your screen' },
@@ -148,6 +153,28 @@ describe('ProjectDialog — new video', () => {
     expect(field<HTMLTextAreaElement>('mustShow').placeholder).toContain('\nYou will show the actual journey in the browser.');
   });
 
+  it('starts fresh after the dialog is closed and opened again', async () => {
+    await openNew();
+    fireEvent.input(field('description'), { target: { value: 'Show new admins how to invite a teammate in about 8 minutes' } });
+    fireEvent.input(field('shortStartUrl'), { target: { value: 'https://app.acme.com' } });
+    fireEvent.click(document.querySelector('[data-full-brief]') as HTMLButtonElement);
+    fill('title', 'Invite a teammate');
+    fill('audience', 'New admins');
+    act(() => useWizard.setState({ lengthSec: 480 }));
+
+    act(() => openDialog('project', false));
+    await act(() => openProjectNew());
+
+    expect(visibleStep()).toEqual(['short']);
+    expect($('btnWizardNext')).toHaveTextContent('Draft the video');
+    expect(field<HTMLTextAreaElement>('description').value).toBe('');
+    expect(field<HTMLInputElement>('shortStartUrl').value).toBe('');
+    expect(field<HTMLInputElement>('title').value).toBe('');
+    expect(field<HTMLInputElement>('audience').value).toBe('');
+    expect(useWizard.getState().lengthSec).toBe(120);
+    expect(useWizard.getState().mode).toBe('short');
+  });
+
   it('jumps to a step from the nav, validating the steps before it', async () => {
     await openNew();
     fireEvent.click(document.querySelector('[data-full-brief]') as HTMLButtonElement);
@@ -175,3 +202,62 @@ describe('ProjectDialog — settings', () => {
     act(() => useWizard.setState({ settings: false, dialogTitle: 'New video', slugDisabled: false, mode: 'steps' }));
   });
 });
+
+describe('ProjectDialog — onboarding', () => {
+  const frames = () => new Promise((r) => setTimeout(r, 30));
+
+  it('reads the description live and fills it from an example', async () => {
+    await openNew();
+    const signals = () => [...document.querySelectorAll('.lp-signal.is-on')].map((s) => s.textContent);
+    expect(signals()).toEqual([]);
+    fireEvent.input(field('description'), { target: { value: 'Show new admins how to invite a teammate in 90 seconds, then the roles' } });
+    expect(signals()).toEqual(['For new admins', 'What to show', 'About 1.5 min', '2 moments']);
+
+    fireEvent.click(document.querySelector('.lp-example') as HTMLButtonElement);
+    expect(field<HTMLTextAreaElement>('description').value).toMatch(/^Show new admins how to invite a teammate/);
+    expect(document.activeElement).toBe(field('shortStartUrl'));
+
+    fireEvent.input(field('shortStartUrl'), { target: { value: 'https://app.acme.com/home' } });
+    expect(document.querySelector('.lp-host')).toHaveAttribute('title', 'app.acme.com');
+    expect(document.querySelector('.lp-packs')).toHaveTextContent('2 brand packs ready to reuse');
+  });
+
+  it('drafts with Cmd+Enter from the description', async () => {
+    await openNew();
+    fireEvent.keyDown(field('description'), { key: 'Enter', metaKey: true });
+    expect($('wizardError')).toHaveTextContent('Describe what to show, for whom, and about how long');
+  });
+
+  it('shows brand tiles over the select and a live title card beside the steps', async () => {
+    await openNew();
+    fireEvent.click(document.querySelector('[data-full-brief]') as HTMLButtonElement);
+    await act(frames);
+    const tiles = [...document.querySelectorAll<HTMLButtonElement>('.wz-brands .wz-brand:not(.wz-brand-new)')];
+    expect(tiles.map((t) => t.querySelector('strong')?.textContent)).toEqual(['Acme', 'Demo']);
+    expect(tiles[0]).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(tiles[1] as HTMLButtonElement);
+    await act(frames);
+    expect($<HTMLSelectElement>('wizardBrand').value).toBe('demo');
+    expect(tiles[1]).toHaveAttribute('aria-pressed', 'true');
+
+    expect(document.querySelector('.wzp-poster h4')).toHaveTextContent('Untitled video');
+    expect(document.querySelector('.wzp-meter')).toHaveTextContent('Next: Give it a title');
+    fill('title', 'Invite a teammate');
+    fill('audience', 'New admins');
+    await act(frames);
+    expect(document.querySelector('.wzp-poster h4')).toHaveTextContent('Invite a teammate');
+    expect(document.querySelector('.wzp-poster')).toHaveTextContent('For new admins');
+    expect(document.querySelector('.wzp-meter')).toHaveTextContent('Next: Name the outcome');
+
+    fireEvent.click(document.querySelector('input[name="purpose"][value="feature"]') as HTMLInputElement);
+    await act(frames);
+    expect([...document.querySelectorAll('.wzp-spine li')].map((l) => l.textContent)).toEqual(['Before', 'After', 'Bridge']);
+
+    fireEvent.click(document.querySelector('.wz-brand-new') as HTMLButtonElement);
+    await act(frames);
+    expect(document.querySelector<HTMLInputElement>('input[name="brandMode"][value="new"]')?.checked).toBe(true);
+    expect(document.querySelector('[data-brand="new"]')).not.toHaveAttribute('hidden');
+  });
+});
+

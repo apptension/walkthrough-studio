@@ -4,6 +4,8 @@
 //   await ask({ kind: 'choice', title, options, value })   → string | null  (option value)
 
 import { icon } from '@/ui/iconString';
+import { neonFxHtml } from '@/ui/neonFx';
+
 import { asText } from './text';
 
 const ICON = {
@@ -87,7 +89,7 @@ function mount(): HTMLDialogElement {
       <footer class="sheet-foot">
         <div class="sheet-actions">
           <button type="submit" class="btn ghost" id="askCancel" value="cancel">Cancel</button>
-          <button type="submit" class="btn primary" id="askOk" value="ok">Continue</button>
+          <button type="submit" class="btn primary" id="askOk" value="ok">${neonFxHtml()}Continue</button>
         </div>
       </footer>
     </form>`;

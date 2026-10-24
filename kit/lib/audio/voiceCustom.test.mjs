@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { addAdlibLine, cachedTakes, customTakePaths, hasCustomTake } from './voice.mjs';
+import { addAdlibLine, cachedTakes, customTakePaths, duplicateVoiceLine, hasCustomTake } from './voice.mjs';
 
 function fakeVideo() {
   const root = mkdtempSync(join(tmpdir(), 'wt-voice-'));
@@ -30,6 +30,32 @@ test('ad-lib lines land in voice.json with an absolute start', async () => {
     assert.equal(meta.clips[0].kind, 'adlib');
     assert.equal(meta.clips[0].start, 12.5);
     assert.equal(meta.clips[0].duration, 0);
+  } finally {
+    rmSync(video.root, { recursive: true, force: true });
+  }
+});
+
+test('a duplicated line is its own ad-lib that plays the source audio at the new time', async () => {
+  const video = fakeVideo();
+  try {
+    mkdirSync(join(video.out, 'voice'), { recursive: true });
+    const metaPath = join(video.out, 'voice', 'voice.json');
+    writeFileSync(
+      metaPath,
+      JSON.stringify({
+        clips: [{ key: 'intro', kind: 'intro', start: 1, end: 4, duration: 3, full: 3.4, speed: 1.05, take: 2, text: 'Meet the feed', file: '/cache/abc.wav', source: 'eleven' }],
+      })
+    );
+    const created = await duplicateVoiceLine(video, 'intro', { at: 9 });
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    const copy = meta.clips.find((c) => c.key === created.key);
+    assert.equal(meta.clips.length, 2);
+    assert.match(created.key, /^adlib-/);
+    assert.deepEqual(
+      { kind: copy.kind, start: copy.start, end: copy.end, duration: copy.duration, full: copy.full, file: copy.file, text: copy.text, copyOf: copy.copyOf },
+      { kind: 'adlib', start: 9, end: 12, duration: 3, full: 3.4, file: '/cache/abc.wav', text: 'Meet the feed', copyOf: 'intro' }
+    );
+    await assert.rejects(duplicateVoiceLine(video, 'missing', { at: 1 }), /No voice line/);
   } finally {
     rmSync(video.root, { recursive: true, force: true });
   }

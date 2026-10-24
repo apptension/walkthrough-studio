@@ -35,7 +35,6 @@
       }
       @keyframes barGrow { from { transform: scaleY(0); opacity: 0; } 30% { opacity: 1; } to { transform: scaleY(1); opacity: 1; } }
       .eyebrow {
-        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
         opacity: 0; animation: eyebrowIn 0.9s 0.18s var(--expo) both;
       }
       .title {
@@ -72,6 +71,65 @@
         opacity: 0;
         animation: markIn 0.85s calc(var(--t-sub) + 0.35s) var(--expo) both;
       }
+      /* Layout: kinetic — centred, oversized words slam in; streaks cross once behind them. */
+      body[data-layout='kinetic'] .compose { align-items: center; text-align: center; padding: 0 140px; }
+      body[data-layout='kinetic'] .bar { display: none; }
+      body[data-layout='kinetic'] .title { max-width: 1640px; font-weight: 700; letter-spacing: -0.06em; line-height: 0.96; }
+      body[data-layout='kinetic'] .title .mask.word .rise {
+        animation-name: slam; animation-duration: 0.85s; animation-timing-function: var(--expo); transform-origin: 50% 100%;
+      }
+      @keyframes slam {
+        0% { opacity: 0; transform: translateY(105%) scale(1.3) skewY(6deg); filter: blur(10px); }
+        55% { opacity: 1; filter: blur(0); }
+        100% { opacity: 1; transform: none; filter: none; }
+      }
+      body[data-layout='kinetic'] .rule { margin-inline: auto; width: 300px; background: linear-gradient(90deg, transparent, var(--gold), transparent); transform-origin: center; }
+      body[data-layout='kinetic'] .sub { margin-inline: auto; }
+      body[data-layout='kinetic'] .bloom { left: 50%; }
+      body[data-layout='kinetic'] .compose::before,
+      body[data-layout='kinetic'] .compose::after {
+        content: ''; position: absolute; left: 0; height: 2px; width: 900px; opacity: 0; pointer-events: none;
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold) 80%, transparent), transparent);
+        animation: streak 1.1s 0.25s var(--quint) both;
+      }
+      body[data-layout='kinetic'] .compose::before { top: 30%; }
+      body[data-layout='kinetic'] .compose::after { top: 70%; height: 1px; animation-delay: 0.45s; }
+      @keyframes streak {
+        0% { opacity: 0; transform: translateX(-900px); }
+        20% { opacity: 1; }
+        100% { opacity: 0; transform: translateX(2200px); }
+      }
+      /* Layout: marquee — outlined ribbons of the line scroll in opposite directions behind it. */
+      .ribbon { display: none; }
+      body[data-layout='marquee'] .ribbon {
+        display: block; position: absolute; left: -10%; right: -10%; z-index: 1; overflow: hidden; white-space: nowrap; pointer-events: none;
+        transform: rotate(-4deg);
+        opacity: 0;
+        animation: fadeIn 0.9s 0.1s ease-out both, fadeOut 0.7s 4.5s var(--exit) forwards;
+      }
+      body[data-layout='marquee'] .ribbon.r1 { top: 4%; }
+      body[data-layout='marquee'] .ribbon.r2 { bottom: 3%; }
+      body[data-layout='marquee'] .track {
+        display: inline-flex; align-items: center; gap: 56px;
+        font-size: 150px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1;
+        color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--gold) 24%, transparent);
+        animation: marqL 5.6s linear both;
+      }
+      body[data-layout='marquee'] .r2 .track { -webkit-text-stroke-color: color-mix(in srgb, var(--muted) 20%, transparent); animation-name: marqR; }
+      body[data-layout='marquee'] .track i {
+        flex: none; width: 22px; height: 22px; transform: rotate(45deg);
+        background: color-mix(in srgb, var(--gold) 30%, transparent);
+      }
+      @keyframes marqL { from { transform: translateX(0); } to { transform: translateX(-18%); } }
+      @keyframes marqR { from { transform: translateX(-26%); } to { transform: translateX(-8%); } }
+      body[data-layout='marquee'] .compose { z-index: 2; align-items: center; text-align: center; padding: 0 180px; }
+      body[data-layout='marquee'] .bar { display: none; }
+      body[data-layout='marquee'] .rule { margin-inline: auto; width: 260px; background: linear-gradient(90deg, transparent, var(--gold), transparent); transform-origin: center; }
+      body[data-layout='marquee'] .sub { margin-inline: auto; }
+      body[data-layout='marquee'] .bloom { left: 50%; }
+      html[data-frame='portrait'] body[data-layout='marquee'] .track { font-size: 120px; }
+      html[data-frame='portrait'] body[data-layout='kinetic'] .compose,
+      html[data-frame='portrait'] body[data-layout='marquee'] .compose { padding: 0 64px; }
       /* Vertical master */
       html[data-frame='portrait'] .compose { padding: 0 52px 0 88px; }
       html[data-frame='portrait'] .bar { left: 44px; height: 420px; margin-top: -210px; }
@@ -81,7 +139,7 @@
       html[data-frame='portrait'] .corner-logo { right: var(--mark-logo-x, 72px); bottom: var(--mark-logo-y, 120px); }
     </style>
   </head>
-  <body data-duration="5.6">
+  <body data-duration="5.6" data-layout="{{LAYOUT}}">
     <div class="stage">
       <div class="bg"></div>
       <div class="blob warm"></div>
@@ -89,6 +147,7 @@
       <div class="grid"></div>
       <div class="bloom"></div>
       <div class="flare" style="--t-flare: 1.1s"></div>
+      {{MARQUEE}}
       <div class="compose">
         <div class="bar" aria-hidden="true"></div>
         <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>

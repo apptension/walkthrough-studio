@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 import { closeProgramBuild, continueSignIn, dismissRecordFailure, fixRecordFailure, openBuildLog, openBuildShot } from './actions';
@@ -83,9 +84,9 @@ function SignInWait() {
       <p id="signInWaitNext">
         {shown?.next}
       </p>
-      <button type="button" id="signInContinue" className="btn primary" onClick={() => void continueSignIn()}>
+      <NeonButton id="signInContinue" className="btn primary" onClick={() => void continueSignIn()}>
         Continue
-      </button>
+      </NeonButton>
     </div>
   );
 }
@@ -122,9 +123,9 @@ function RecordFailurePanel() {
         </span>
       </figcaption>
       <div className="record-failure-actions">
-        <button type="button" id="recordFailureFix" className="btn primary compact" onClick={fixRecordFailure}>
+        <NeonButton id="recordFailureFix" className="btn primary compact" onClick={fixRecordFailure}>
           Fix with AI
-        </button>
+        </NeonButton>
         {' '}
         <button
           type="button"

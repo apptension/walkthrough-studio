@@ -7,8 +7,7 @@ import { PURPOSE_IDS, PURPOSES } from './narrative.mjs';
 import { PLATE_TYPE_IDS, plateTypeGuide } from './plateTypes.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
 import { BEAT_GUIDE } from './journeyBeats.mjs';
-
-export const BRIEF_LENGTHS = [60, 90, 120, 180];
+import { clampLengthSec } from './length.mjs';
 
 const str = (v, max = 400) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim().slice(0, max));
 const lines = (v, max = 12, chars = 240) =>
@@ -82,7 +81,7 @@ export function normalizeBriefDraft(raw, { brands = [], startUrl = '', language 
       notes: str(app.notes, 600),
     },
     story: {
-      lengthSec: BRIEF_LENGTHS.includes(lengthSec) ? lengthSec : 120,
+      lengthSec: clampLengthSec(lengthSec),
       tone: str(story.tone, 120),
       mustShow: lines(story.mustShow, 8, 400),
       keyMessages: lines(story.keyMessages, 6),
@@ -154,7 +153,7 @@ ${packs}
 Otherwise return mode "new" with the brand name and its marketing website (homepage, https://…). Derive the site from the description, the workspace (README links, package.json homepage) or the start URL's domain. Studio then opens that site AND the app's start URL in a browser to capture the logo, colours and type. For a localhost app with no public site, name the brand and leave url empty — the brand is read from the app itself.
 4. Pick the purpose from the story the description tells:
 ${purposeGuide}
-5. Pick the length (60, 90, 120 or 180 seconds) from any stated duration; otherwise from the number of beats (3–4 beats → 60–90, 5–6 → 120, more or a help video → 180).
+5. Pick the length in seconds from any stated duration ("a minute" → 60, "about 8 minutes" → 480, "90 seconds" → 90). Any length from 30 seconds to 60 minutes is allowed — a longer video just takes longer to render. When nothing is stated, estimate from the beats (3–4 beats → 60–90, 5–6 → 120, a full help video → 180 or more).
 6. Choose up to 4 brand plates that carry proof the screen alone cannot — only the kinds the description supports. Plate types (type — when: shape):
 ${plateTypeGuide()}
 
@@ -199,6 +198,7 @@ Write ONLY a JSON object with exactly this shape to the file ${outFile} (create 
 Rules:
 - Every field present; use "" or [] when the description gives nothing and discovery finds nothing. Never invent stats, quotes, logos, customer names, or credentials. Never output a password.
 - Write title, audience, outcome, tone, mustShow, keyMessages and notes in ${lang.name}. Keep product names, URLs, must-say lines, stats and quotes verbatim.
+- Beat titles in mustShow become on-screen chapter titles: sentence case, ≤5 words, no closing period, outcome or imperative first ("Book a teammate", not "Booking Of Teammates"); titles in one list share a shape. Never write ALL CAPS; keep acronyms and brand names as the product writes them (API, SSO, GitHub). The video title follows the same casing.
 - mustShow is the journey the agent will record. Fold chat noise (timestamps, author names, greetings) away; keep the intent. When the app source is in the workspace, read its routes, nav and button labels so every how-path names real labels.
 ${BEAT_GUIDE}
 - Do not create or edit any file other than ${outFile}. Do not run the recorder, the studio, or any build. Do not open browsers.`;

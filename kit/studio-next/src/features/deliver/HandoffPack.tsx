@@ -4,6 +4,7 @@ import type { Deliver } from '@/api/types';
 import { clockShort } from '@/desk/format';
 import { useDesk } from '@/desk/store';
 import { useBusy } from '@/features/tools-panel/busy';
+import { NeonFx } from '@/ui/NeonButton';
 import { PanelSection } from '@/ui/PanelSection';
 import { Zen } from '@/ui/Zen';
 import { cn } from '@/lib/cn';
@@ -58,6 +59,7 @@ function HandoffActions() {
         download={zip ? zip.download : ''}
         onClick={onZipClick}
       >
+        <NeonFx />
         Download zip
       </a>{' '}
       <button

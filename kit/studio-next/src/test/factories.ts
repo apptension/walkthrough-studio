@@ -14,6 +14,7 @@ import type {
   Version,
 } from '@/api/types';
 import type { ScriptPayload, ScriptScene } from '@/features/script/types';
+import type { BrandDraft } from '@/features/project-wizard/brandStudio';
 
 /**
  * Test data builders.
@@ -460,3 +461,43 @@ export function makeJob(overrides?: Partial<Job>): Job {
     ...overrides,
   };
 }
+
+/** `GET /api/video/:slug/brand-draft` mid-discovery: harvested, nothing authored yet. */
+export function makeBrandDraft(overrides?: Partial<BrandDraft>): BrandDraft {
+  return {
+    brand: 'acme',
+    name: 'Acme',
+    platform: 'Ship faster',
+    status: 'harvested',
+    placeholder: true,
+    ready: false,
+    issues: ['brand discovery has not produced a verified logo and palette'],
+    harvested: true,
+    site: { url: 'https://acme.test/', headline: 'Ship faster', sub: '' },
+    candidates: [
+      { file: '00-img.svg', kind: 'img', alt: 'Acme', w: 120, h: 30, href: 'https://acme.test/logo.svg' },
+      { file: '01-icon.png', kind: 'icon', alt: '', w: 0, h: 0, href: 'https://acme.test/favicon.png' },
+    ],
+    hints: ['#ff5500', '#2244aa'],
+    colors: {},
+    font: null,
+    lockup: null,
+    logoSource: null,
+    motionBrief: null,
+    choices: { colors: {}, logo: null },
+    ...overrides,
+  };
+}
+
+/** The same pack once the agent has authored and verified it. */
+export const READY_BRAND_DRAFT: Partial<BrandDraft> = {
+  status: 'ready',
+  placeholder: false,
+  ready: true,
+  issues: [],
+  colors: { ink: '#0a0a0a', surface: '#141414', gold: '#ff5500', amber: '#ffaa00', teal: '#2244aa' },
+  font: { family: 'Inter', css: 'https://fonts.googleapis.com/css2?family=Inter' },
+  lockup: { rev: 7, svg: true },
+  logoSource: 'https://acme.test/logo.svg',
+  motionBrief: { title: 'Motion brief — Acme', excerpt: 'Calm and precise.' },
+};

@@ -2,10 +2,12 @@ import { showRightTab } from '@/desk/panels';
 import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { clampZoomCenter } from '@/logic/zoomAim';
+import { neonFxHtml } from '@/ui/neonFx';
 
 import { paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
+import { dropRepeat } from './duplicate';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, recToEd, selectedLens } from './seq';
 import { renderFrame } from './stage';
@@ -114,6 +116,8 @@ export async function omitClip(id: string | null | undefined): Promise<Deck | nu
     toast('Keep at least one section', 'The cut needs something to play', 'warn');
     return null;
   }
+  const c = ed.seq.find((x) => x.id === id);
+  if (c?.repeatOf) return dropRepeat(c);
   const d = deckEdit();
   const omit = [...new Set([...(d.omit || []), id])];
   const order = (d.order || []).filter((x) => x !== id);
@@ -143,6 +147,14 @@ export async function removeSelected(): Promise<void> {
       const pick = curClip() || ed.seq[0] || null;
       select(pick ? { type: 'clip', id: pick.id } : null);
     }
+    return;
+  }
+  if (s.type === 'card') {
+    // Recorded cards stay (move or trim them); a duplicate goes.
+    if (!(d.cards || []).some((c) => c.key === s.key && c.copyOf)) return;
+    await postDeck({ cards: d.cards.filter((c) => c.key !== s.key) }, { hint: 'Duplicate card removed' });
+    const c = curClip();
+    select(c ? { type: 'clip', id: c.id } : null);
     return;
   }
   if (s.type === 'cut') {
@@ -283,8 +295,8 @@ export function paintStatus(): void {
   const mix = Boolean(ed.deck.audioStale);
   el.hidden = false;
   el.className = `ed-status${picture || mix ? ' is-stale' : ''}`;
-  const renderBtn = `<button type="button" class="ed-render" data-act="render" title="Render the video with these edits">${ICONS['render']}Render</button>`;
-  const mixBtn = `<button type="button" class="ed-render" data-act="mix" title="Mix voice and music with these levels">${ICONS['music']}Mix</button>`;
+  const renderBtn = `<button type="button" class="ed-render" data-act="render" title="Render the video with these edits">${neonFxHtml()}${ICONS['render']}Render</button>`;
+  const mixBtn = `<button type="button" class="ed-render" data-act="mix" title="Mix voice and music with these levels">${neonFxHtml()}${ICONS['music']}Mix</button>`;
   el.innerHTML = picture
     ? `<span class="ed-dot"></span><span class="ed-status-text">Not in the video yet</span>${renderBtn}${mix ? mixBtn : ''}`
     : mix

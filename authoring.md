@@ -163,6 +163,25 @@ social proof before close, visual change ~every 3–4s in live. Adjust from `cri
 **Layout:** every interstitial is a single centered composition that fills the 1080p frame —
 no empty lower third. Prefer 2-row logo walls, tall feature cards, and journey cards with min-height.
 
+**Plate layouts (`layout`):** the same copy can be staged several ways. Set `layout` on `open`,
+`close` or an interstitial; leave it out for the classic composition. Catalog in `kit/lib/plateLayouts.mjs`:
+
+| Plate | Layouts (first = default) |
+| ----- | ------------------------- |
+| `open` | `classic` · `split` (lockup on a brand panel, title beside) · `kinetic` (huge words slam in) · `mesh` (brand mesh irises open) · `device` (lockup on a screen that tilts up) |
+| `close` | `classic` · `split` (title + lockup left, steps stacked right) · `cards` (steps dealt as a fanned hand) · `finale` (hero lockup on a ray burst, steps as pills) |
+| `features` | `grid` · `bento` (hero tile + mosaic) · `stack` (fanned hand) · `carousel` (3D arc) |
+| `stats` | `row` · `burst` (each figure on a medallion with rays) |
+| `statement` | `editorial` · `kinetic` (centred slam) · `marquee` (outlined ribbons scroll behind) |
+| `callout` | `classic` · `split` (thesis slab left, bullets as chips right) |
+
+Pick per beat and never stage two plates alike back to back (a kinetic opener then a kinetic
+statement reads as one idea twice). After a first draft, Studio fills any layout, look or join the
+agent left open with a deterministic pick seeded by the slug and title (`kit/lib/variety.mjs`) and
+writes `draft-rhythm.md` — accent pacing, captions, joins and layout repeats (`kit/lib/draftRhythm.mjs`;
+`node cli.mjs rhythm <slug> [--apply]`). Studio: Direction → Plate layouts (open/close) and the plate
+inspector's Layout row; CLI: `motion <slug> --plate <id> --layout <id|default>`.
+
 ### Atmosphere and effects (`motion` tokens)
 
 Plates are brand-coloured at three levels: `brand.json → motion` (the pack default), `video.config.json →
@@ -224,11 +243,26 @@ sequence picker groups branches under the folder title.
 | `open.title`         | 2 lines, ≤ 4 words each; one `*accent*`           | `["Inviting people", "to your *workspace*"]`         |
 | `open.sub`           | 3 short outcomes joined by `·`; first in `*bold*` | `*One invite* · the access they need · in minutes`   |
 | Chapter title        | ≤ 5 words                                         | `Invite a teammate`                                  |
-| Chapter body         | 1 sentence, ≤ 10 words                            | `One person, one email — access in minutes`          |
+| Chapter body         | 1 sentence, ≤ 10 words                            | `One person, one email — access in minutes.`         |
 | Caption title        | ≤ 5 words, imperative or outcome                  | `Create user`, `Invitations created`                 |
 | Caption body         | 1 sentence, ≤ 14 words                            | `One action invites them with the access they need.` |
 | `close.title`        | 2 lines, punchy; one `*accent*`                   | `["Invite once.", "They're *in.*"]`                  |
 | `close.steps[].note` | ≤ 40 characters                                   | `Pick the access they need in one go`                |
+
+**House casing and punctuation** (`kit/lib/copyCase.mjs` applies it at render; Script lint and the critic
+show the rewrite for the source):
+
+- **Sentence case everywhere** — titles, eyebrows, labels, bodies, notes: capitalise the first word and proper
+  nouns only (`Plan the week`, not `Plan The Week`). Never type ALL CAPS: eyebrows and kickers are set in caps
+  by the template CSS (`.eyebrow` in `plates.css`, the card eyebrows in `overlays.css`).
+- **Names keep their own casing** — brand and product names from `brand.json` (`name`, `product`, `copyTerms`)
+  and `video.config.json → copyTerms`, acronyms (API, SSO, CRM, KPIs) and camelCase names (iPhone, GitHub).
+  Lowercase paths and commands (`./studio`, `kit/`) stay lowercase. Quotes, people and figures are never recased.
+- **Closing punctuation** — titles, eyebrows, labels and list items: no period (`?` and `!` stay). A staccato
+  title where every line ends in a period keeps them (`Invite once.` / `They're *in.*`); a `statement` title keeps
+  the author's punctuation. Bodies and captions are sentences and end in a period; notes in one list end alike.
+- **Typography** — curly quotes in the video's language, `…` not `...`, a spaced em dash ( — ) between clauses.
+  German keeps its capitalised nouns; Title Case detection is off there.
 
 `*text*` becomes the accent gradient in every plate field (titles, eyebrows, bodies, notes, values, pills,
 quotes, labels); in `open.sub` it becomes bold. In the Editor's **Edit text** mode fields render with the plate's
@@ -321,6 +355,7 @@ Use the map when drafting `flow.mjs`. Fill required fields with the suggested va
 | `pointer.moveTo(x, y)` / `pointer.position()`    | Move the presentation cursor to a point with the same eased glide clicks use (for hovering a chart or pointing at a value without acting on it)                                                                                        |
 | `zoom(locator, { holdMs=2200, level='bold', zoom, label })` | Author a post-production push-in around a DOM target without clicking it. `zoom` may be 1.1–2.2; otherwise `level` is subtle/bold. The flow holds while the shot is being shown.                                             |
 | `privacy.mask(locator, { label='Private' })`     | Cover a sensitive value before it reaches the screencast. Returns `{ clear() }`; keep the controller and clear it only when the value is no longer on screen. `privacy.clearAll()` removes every active mask.                         |
+| `optional(label, fn, { timeoutMs=8000 })`        | A step the story does not depend on (cookie banner, tip, a guessed selector). Its actions time out after `timeoutMs`; a miss logs `⚠ optional · … skipped` and the take continues. Story steps stay unguarded so a real break still fails. |
 
 Every press action (`click`, `dblclick`, `check`, `selectOption`, …) and typing action (`fill`, `pressSequentially`)
 writes a `click` or `type` mark with the target's centre to `timeline.json`. Auto zoom builds its shots from those marks,
@@ -380,6 +415,12 @@ Patterns that matter:
 - **Stray toasts**: the webapp's toaster is `[data-testid="toaster"]` with a "Dismiss notification" button (not `[toast-close]`). A page that throws a local-only error toast on mount (Integrations does) is best hidden with `page.addStyleTag` for that chapter, or dismissed before the caption.
 - **Freeze the code while recording**: a saved edit anywhere in `packages/webapp` makes Vite reload, and a half-saved import puts its red error overlay on screen. Record on a quiet tree, and check `03-live-first.jpg` for the overlay.
 - **Scoping card actions**: when several cards carry the same button, anchor on the record's name and walk up to the nearest ancestor that contains that button.
+
+Before recording, `node cli.mjs check-flow <slug>` proves the sources load: syntax and import of
+`flow.mjs` / `narration.mjs`, `video.config.json` shape, ctx members that do not exist, placeholder
+click→fill, resizing, titles without narration, and selectors the product map never saw. Studio runs
+the same check after every draft and sends the agent back (up to `WALKTHROUGH_DRAFT_REPAIRS`, default 2)
+while it fails.
 
 Debug with `node cli.mjs record <slug> --headed`. On failure the kit writes
 `error.png` and `error.txt` to the output folder.

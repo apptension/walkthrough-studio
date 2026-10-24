@@ -49,6 +49,7 @@ export function buildSeq(): void {
         recFrom: recFrom as number,
         recTo: recTo as number,
         join,
+        ...(s.repeatOf ? { repeatOf: s.repeatOf } : {}),
       });
     });
   } else {
@@ -107,7 +108,7 @@ export function projectAudio(): void {
   };
   const lineKeys = new Set(clips.filter((c) => c.kind === 'caption' || c.kind === 'chapter').map((c) => c.key));
   const marks = (ed.deck?.marks || [])
-    .filter((m) => (m.kind === 'chapter' || m.kind === 'caption') && m.label && lineKeys.has(m.label))
+    .filter((m) => (m.kind === 'chapter' || m.kind === 'caption') && !m.copyOf && m.label && lineKeys.has(m.label))
     .map((m) => ({ kind: m.kind, label: m.label, at: atRec(m.t) }))
     .filter((m): m is { kind: string | undefined; label: string | undefined; at: number } => m.at != null);
   const open = seq.find((c) => c.plateId === 'open');
@@ -117,7 +118,7 @@ export function projectAudio(): void {
     open: open ? { at: open.at, dur: open.dur } : null,
     close: close ? { at: close.at, dur: close.dur } : null,
     total: ed.total,
-    plates: seq.filter((c) => c.kind === 'plate' && c.plateId !== 'open' && c.plateId !== 'close').map((c) => ({ id: c.plateId ?? '', at: c.at, dur: c.dur, inDur: c.overlap })),
+    plates: seq.filter((c) => c.kind === 'plate' && !c.repeatOf && c.plateId !== 'open' && c.plateId !== 'close').map((c) => ({ id: c.plateId ?? '', at: c.at, dur: c.dur, inDur: c.overlap })),
     marks: marks.map((m) => ({ kind: m.kind ?? '', label: m.label ?? '', at: m.at })),
     liveEnd: lastLive ? lastLive.at + lastLive.dur : ed.total,
   };

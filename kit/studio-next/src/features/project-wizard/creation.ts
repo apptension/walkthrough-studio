@@ -55,6 +55,16 @@ export interface Artifact {
   fresh: boolean;
 }
 
+/** The brand the video is made in, once its foundation is verified. */
+export interface BrandIdentity {
+  name: string;
+  /** An `<img>`-safe lockup URL, or empty for a typeset wordmark. */
+  logo: string;
+  colors: Record<string, string>;
+  font: string;
+  fontCss: string;
+}
+
 export interface ScriptCard {
   meta: string;
   scenes: Array<{ kind: string; mark: string; title: string; line: string }>;
@@ -81,6 +91,9 @@ interface CreationState {
   preview: { src: string; hidden: boolean };
   swatches: string[];
   font: { text: string; hidden: boolean };
+  identity: BrandIdentity | null;
+  /** The video's working title, shown in the brand reveal. */
+  subject: string;
   /** `#wizardScript` — null while hidden. */
   script: ScriptCard | null;
 }
@@ -107,6 +120,8 @@ export const useCreation = create<CreationState>()(() => ({
   preview: { src: '', hidden: true },
   swatches: [],
   font: { text: '', hidden: true },
+  identity: null,
+  subject: '',
   script: null,
 }));
 
@@ -206,6 +221,7 @@ export const creation = {
         brandCardHidden: true,
         preview: { ...s.preview, hidden: true },
         font: { ...s.font, hidden: true },
+        identity: null,
       }));
       patchStages(() => ({ time: '' }));
       for (const id of [...selfPaced]) creation.renameStage(id);
@@ -243,6 +259,10 @@ export const creation = {
     if (!stage || !text) return;
     const at = stage;
     patchStages((id) => (id === at ? { note: text } : null));
+  },
+
+  subject(text: string): void {
+    view.setState({ subject: text.trim() });
   },
 
   artifact(key: string, info: { name: string; note?: string; kind?: string }): void {
@@ -290,17 +310,33 @@ export const creation = {
     if (changed) paintArtifacts();
   },
 
-  brand(slug: string, foundation: { colors?: Record<string, string | undefined>; logo?: string; font?: { family?: string } } | null | undefined): void {
+  brand(
+    slug: string,
+    foundation: { name?: string; colors?: Record<string, string | undefined>; logo?: string; font?: string | { family?: string }; fontCss?: string } | null | undefined,
+  ): void {
     const colors = foundation?.colors || {};
     swatches.clear();
     [colors.ink, colors.surface, colors.gold, colors.amber, colors.teal].filter((c): c is string => Boolean(c)).forEach((c) => swatches.add(c));
     paintSwatches();
-    if (foundation?.logo) {
-      view.setState({
-        preview: { src: `/api/video/${encodeURIComponent(slug)}/brand-file/${encodeURIComponent(foundation.logo)}?t=${Date.now()}`, hidden: false },
-      });
-    }
-    if (foundation?.font?.family) view.setState({ font: { text: foundation.font.family, hidden: false } });
+    const logo = foundation?.logo || '';
+    const v = Date.now();
+    const src = !logo
+      ? ''
+      : logo.endsWith('.html')
+        ? `/api/video/${encodeURIComponent(slug)}/brand-lockup?t=${v}`
+        : `/api/video/${encodeURIComponent(slug)}/brand-file/${encodeURIComponent(logo)}?t=${v}`;
+    if (src) view.setState({ preview: { src, hidden: false } });
+    const family = typeof foundation?.font === 'string' ? foundation.font : foundation?.font?.family || '';
+    if (family) view.setState({ font: { text: family, hidden: false } });
+    view.setState({
+      identity: {
+        name: foundation?.name || '',
+        logo: src,
+        colors: Object.fromEntries(Object.entries(colors).filter((e): e is [string, string] => Boolean(e[1]))),
+        font: family && family !== 'System' ? family : '',
+        fontCss: foundation?.fontCss || '',
+      },
+    });
   },
 
   /** The finished first script, summarised in place of the progress grid. */

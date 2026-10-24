@@ -133,7 +133,9 @@ QC report, and a flat `deliverables/` folder with README + manifest.
 sets the video's motion tokens; add `--plate <id|open|close>` for a per-plate accent, `--reset` to clear it.
 `node cli.mjs studio [slug]` opens **Walkthrough Studio** at `http://127.0.0.1:4747` — timeline seek,
 live captions overlay, chapter strip, QC panel, A/B version compare, handoff, motion, critic, and
-**Improve** jobs via Cursor CLI (`agent -p`). Shortcuts: Space, J/L, ←/→, C, R. The **Review** panel
+**Improve** jobs via Cursor CLI (`agent -p`) or Claude Code. Click a runner logo (top right) to pick its model — Cursor's
+list comes from `agent --list-models`, Claude Code offers its aliases, and any id can be typed; the choice is saved in
+`kit/.env` (`WALKTHROUGH_AGENT_MODEL_CURSOR` / `WALKTHROUGH_AGENT_MODEL_CLAUDE`) and used by every agent job. Shortcuts: Space, J/L, ←/→, C, R. The **Review** panel
 carries the story spine (purpose switch, beat coverage) and critic findings with one-click **Fix with
 AI**. The **Editor** mode (monitor tab) is the cut editor: one stage, one transport and one
 timeline. The timeline holds every clip (plates and recording slices, laid out with their transition overlaps), a

@@ -68,6 +68,20 @@ describe('planCardBakes', () => {
     assert.equal(bakeClipName(plans[0], 0), '000-caption-t8.00-d1.60.mov');
   });
 
+  test('a duplicated card bakes the source card again at its own time', () => {
+    const mark = { kind: 'chapter', t: 3, dur: 2, label: 'Meet the feed' };
+    const key = cardMarkKey(mark);
+    const marks = applyCardEdits([{ ...mark, key }], [{ key: `${key}#2`, copyOf: key, t: 20, dur: 1.5 }]);
+    const plans = planCardBakes(marks, [{ id: 'overlay:chapter:0', kind: 'chapter', label: 'Meet the feed', htmlPath: '/m.html', flowIndex: 0, markKey: key }]);
+    assert.deepEqual(
+      plans.map((p) => [p.cardId, p.t, p.dur]),
+      [
+        ['overlay:chapter:0', 3, 2],
+        ['overlay:chapter:0', 20, 1.5],
+      ]
+    );
+  });
+
   test('keyed cards pair by markKey and ignore label collisions', () => {
     const a = { kind: 'caption', t: 2, dur: 2, label: 'Scan the map' };
     const b = { kind: 'caption', t: 9, dur: 3, label: 'Scan the map' };

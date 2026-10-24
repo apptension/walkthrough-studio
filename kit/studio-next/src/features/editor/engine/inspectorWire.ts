@@ -25,6 +25,7 @@ import {
 } from './audio';
 import { requestMake, requestMusicFit, saveDirection } from './ctx';
 import { postDeck, refresh } from './data';
+import { detachPlate, duplicateSelected } from './duplicate';
 import { layoutRow, layoutText, sectionForClip, upsertLayout } from './layoutPreview';
 import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSelected, restoreOmitted, select, selectFx, toolLens, toolZoom } from './edits';
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
@@ -185,6 +186,11 @@ export function wireInspector(): void {
 
   on('input[type="range"]', 'input', (el) => paintRange(el));
   act('remove', removeSelected);
+  act('duplicate', duplicateSelected);
+  act('detach-plate', () => {
+    const c = selClip();
+    return c && detachPlate(c);
+  });
   on('[data-act="restore-omit"]', 'click', (el) => void restoreOmitted(el.dataset['omitId'] || ''));
   act('voice-mute', () => {
     const clip = (ed.deck?.audio?.voiceClips || []).find((c) => c.key === s?.key);
@@ -867,6 +873,7 @@ export function wireInspector(): void {
   if (!plateC) return;
   const id = plateC.plateId || '';
   on('[data-look]', 'change', (el) => void changeLook(id, { [el.dataset['look'] || '']: el.value === '' ? null : el.value }));
+  on('[data-plate-layout]', 'change', (el) => void plateApi(id, 'layout', { layout: el.value }, 'Layout updated'));
   act('look-reset', () => changeLook(id, { reset: true }));
   act('style-reset', async () => {
     await plateApi(id, 'style', { reset: true }, 'Back to the brand values');

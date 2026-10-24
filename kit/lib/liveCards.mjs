@@ -34,6 +34,7 @@ import { DELIVERY, outputFrame } from './format.mjs';
 import { TEMPLATES } from './project.mjs';
 import { parseFlowCalls } from './script.mjs';
 import { esc } from './text.mjs';
+import { copyContext, copyContextFor, copyCorpus, normalizeCopy } from './copyCase.mjs';
 
 /** Plate WebGL fields, plus the CSS-only blob wash. `none` is a flat brand field. */
 export const OVERLAY_ATMOSPHERES = Object.freeze([...ATMOSPHERE_IDS, 'blobs']);
@@ -598,6 +599,9 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
   const body = String(props.body || '');
   const flowIndex = props.flowIndex != null ? String(props.flowIndex) : '';
   const tpl = readFileSync(join(TEMPLATES, kind === 'caption' ? 'caption.html' : 'chapter.html'), 'utf8');
+  // Raw fields keep the authored text: flow titles are narration keys.
+  const copy = props.copy || copyContextFor({ brand });
+  const show = (s, role) => esc(normalizeCopy(s, role, copy));
 
   const backdrop = resolveBackdrop(slot, p);
   const common = {
@@ -611,16 +615,16 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
     BACKDROP: backdrop.color,
     NUM: chrome.num,
     NUM_RAW: escAttr(chrome.num),
-    KICKER: esc(chrome.kicker),
+    KICKER: show(chrome.kicker, 'eyebrow'),
     KICKER_RAW: escAttr(chrome.kicker),
-    TITLE: esc(title),
+    TITLE: show(title, 'title'),
     TITLE_RAW: escAttr(title),
     FLOW_INDEX: flowIndex,
   };
 
   if (kind === 'chapter') {
     const bodyBlock = body
-      ? `<p class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${esc(body)}</p>`
+      ? `<p class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${show(body, 'body')}</p>`
       : '';
     return fill(tpl, {
       ...common,
@@ -635,7 +639,7 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
 
   const chapterTitle = String(props.chapterTitle || 'Getting started');
   const bodyBlock = body
-    ? `<div class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${esc(body)}</div>`
+    ? `<div class="body" data-edit="body" data-edit-kind="text" data-edit-raw="${escAttr(body)}">${show(body, 'body')}</div>`
     : '';
   return fill(tpl, {
     ...common,
@@ -645,7 +649,7 @@ export function renderLiveCardHtml(brand, kind, props = {}) {
     CAP_MAX: slot.maxWidth,
     CAP_BOTTOM: slot.bottom,
     CAP_INSET: slot.inset,
-    EYEBROW: esc(chapterTitle),
+    EYEBROW: show(chapterTitle, 'eyebrow'),
     EYEBROW_RAW: escAttr(chapterTitle),
     WAVE_FIELD: waveFieldMarkup(p, `wtCapWave${chapterNo}${flowIndex}`, { rings: 7 }),
     BODY_BLOCK: bodyBlock,
@@ -701,6 +705,11 @@ export function buildLiveCards(video) {
   const cards = [];
   let chapterNo = 0;
   let chapterTitle = '';
+  const copy = copyContext({
+    brand: video.brand,
+    config: video.config,
+    corpus: [...copyCorpus(video.config), ...calls.flatMap((c) => [c.title, c.body].filter(Boolean))],
+  });
 
   for (const call of calls) {
     const isChapter = call.kind === 'chapter';
@@ -721,6 +730,7 @@ export function buildLiveCards(video) {
       flowIndex: call.index,
       ...(isChapter ? cardCopyFor(video, call.index) || {} : {}),
       frame,
+      copy,
     });
     const html = fill(shell, {
       LABEL: esc(call.title || id),

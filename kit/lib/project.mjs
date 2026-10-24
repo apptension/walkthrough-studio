@@ -110,6 +110,9 @@ export function listBrands() {
           id,
           name: b.name || id,
           accent: b.colors?.gold || null,
+          colors: { ink: b.colors?.ink || null, surface: b.colors?.surface || null, gold: b.colors?.gold || null, amber: b.colors?.amber || null, text: b.colors?.text || null },
+          font: b.font?.family || null,
+          platform: b.platform || null,
           url: b.sources?.marketing || null,
           placeholder: readiness.placeholder,
           ready: readiness.ready,
@@ -192,7 +195,10 @@ export function loadVideo(slug) {
   mkdirSync(out, { recursive: true });
   // Direction is local to this video. The shared brand pack remains the source of truth, while
   // authored surfaces can use a derived palette selected during pre-production.
-  const brand = applyDirection(loadBrand(config.brand), config);
+  // An uploaded logo lives in this video's uploads folder, not in the shared pack.
+  const pack = loadBrand(config.brand);
+  pack.uploadDir = join(dir, 'uploads');
+  const brand = applyDirection(pack, config);
   // Audio (narrator voice, music bed, mix levels): brand defaults, overridable per video under `audio`.
   const audio = deepMerge(brand.audio || {}, raw.audio || {});
   return { slug, dir, configPath, config, out, brand, audio };

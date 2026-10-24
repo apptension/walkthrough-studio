@@ -109,6 +109,7 @@ export const snapshotDeck = (): DeckEdit => {
       layouts: d.layouts || [],
       order: d.order || [],
       omit: d.omit || [],
+      repeats: d.repeats || [],
       trims: d.trims || [],
       cuts: d.cuts || [],
     }),

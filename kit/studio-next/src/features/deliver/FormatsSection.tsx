@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { PanelSection } from '@/ui/PanelSection';
 
 import { DEFAULT_EXPORT_PICK, exportFormats, setReelSafeArea } from './handoff';
@@ -83,15 +84,14 @@ export function FormatsSection() {
         />
       </label>
       <ExportPresets pick={pick} onPick={setPick} />
-      <button
-        type="button"
+      <NeonButton
         id="btnExportFormats"
         className="btn primary block"
         disabled={loaded && !deliveryUrl}
         onClick={() => exportFormats(pick)}
       >
         Export formats
-      </button>
+      </NeonButton>
       <ExportList />
     </PanelSection>
   );

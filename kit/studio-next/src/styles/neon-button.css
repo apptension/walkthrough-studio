@@ -1,0 +1,237 @@
+/* —— Neon fill ——
+   The Swap-button treatment (pinui): a vertical sheen over the straight-across brand gradient,
+   three screen-blended highlights drifting across, twinkling sparks, a glow that follows the
+   pointer, a press ripple. Corner radius is never set here — each button keeps its own
+   (`.btn` 8px, `.btn.tiny` 5px, `.render-cta` 9px, editor pills 999px). */
+:root {
+  --neon-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0) 46%, rgb(0 0 0 / 0.08));
+  --neon-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -1px 2px rgb(14 80 30 / 0.28),
+    0 3px 8px -4px rgb(66 242 114 / 0.45);
+  --neon-shadow-hot:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    inset 0 -1px 2px rgb(14 80 30 / 0.28),
+    0 4px 14px -5px rgb(66 242 114 / 0.6),
+    0 0 22px -8px rgb(255 254 37 / 0.45);
+}
+
+:is(.btn.primary, .render-cta.primary, .ed-pill-btn.primary, .ins-btn.primary, .ed-render, .neon-btn) {
+  --neon-mx: -200px;
+  --neon-my: -200px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--neon-sheen), var(--brand-fill);
+  box-shadow: var(--neon-shadow);
+}
+
+:is(.btn.primary, .render-cta.primary, .ed-pill-btn.primary, .ins-btn.primary, .ed-render, .neon-btn):hover:not(:disabled) {
+  background: var(--neon-sheen), var(--brand-fill-hot);
+  box-shadow: var(--neon-shadow-hot);
+}
+
+:is(.btn.primary, .render-cta.primary, .ed-pill-btn.primary, .ins-btn.primary, .ed-render, .neon-btn):disabled {
+  box-shadow: none;
+}
+
+/* These rules in studio.css beat a single class. Restate the neon shadow at the same weight. */
+.program-empty-actions .render-cta.primary { box-shadow: var(--neon-shadow); }
+.program-empty-actions .render-cta.primary:hover:not(:disabled) {
+  box-shadow: var(--neon-shadow-hot);
+  transform: translateY(-1px);
+}
+.direction-dock #btnApproveDirection { box-shadow: var(--neon-shadow); }
+.direction-dock #btnApproveDirection:hover:not(:disabled) { box-shadow: var(--neon-shadow-hot); }
+.critic-actions.is-hero .critic-run.primary,
+.critic-run.primary { box-shadow: var(--neon-shadow); }
+.critic-actions.is-hero .critic-run.primary:hover:not(:disabled),
+.critic-run.primary:hover:not(:disabled) { box-shadow: var(--neon-shadow-hot); }
+
+/* —— Stop state ——
+   Same construction as the brand fill (a bright lead, a saturated landing color that holds
+   the rounded end, dark ink), in a juicy heart red instead of the soft salmon --danger. */
+:root {
+  --neon-heart: #f6002d;
+  --neon-fill-stop: var(--neon-heart) linear-gradient(90deg, #ff1842 0%, #f6002d 34%, var(--neon-heart) 72%, var(--neon-heart) 100%) left center / calc(100% + 2px) 100% no-repeat;
+  --neon-fill-stop-hot: #ff1842 linear-gradient(90deg, #ff1842 0%, #e60c34 34%, #f6002d 72%, #f6002d 100%) left center / calc(100% + 2px) 100% no-repeat;
+  --neon-shadow-stop:
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 -1px 2px rgb(64 4 12 / 0.5),
+    0 4px 14px -3px rgb(120 8 20 / 0.9),
+    0 0 22px -2px rgb(72 4 12 / 0.8);
+  --neon-shadow-stop-hot:
+    inset 0 1px 0 rgb(255 255 255 / 0.48),
+    inset 0 -1px 2px rgb(64 4 12 / 0.5),
+    0 6px 18px -3px rgb(150 10 24 / 0.95),
+    0 0 28px -2px rgb(88 4 14 / 0.85);
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop {
+  background: var(--neon-sheen), var(--neon-fill-stop);
+  color: var(--on-accent);
+  box-shadow: var(--neon-shadow-stop);
+  animation: neon-stop-pulse 1.7s ease-in-out infinite;
+}
+/* The shared highlights are yellow-green. On a heart fill they would muddy toward peach. */
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop > .neon-btn__fx .neon-btn__blob:nth-child(1) {
+  background: radial-gradient(closest-side, rgb(255 228 234 / 0.95), transparent);
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop > .neon-btn__fx .neon-btn__blob:nth-child(2) {
+  background: radial-gradient(closest-side, rgb(255 176 192 / 0.85), transparent);
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop > .neon-btn__fx .neon-btn__blob:nth-child(3) {
+  background: radial-gradient(closest-side, rgb(255 206 216 / 0.75), transparent);
+}
+/* A blood halo instead of the white pointer glow, and only the first three sparks. */
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop > .neon-btn__fx .neon-btn__glow {
+  background: radial-gradient(110px circle at var(--neon-mx) var(--neon-my), rgb(110 8 18 / 0.55), transparent 70%);
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop .neon-btn__spark:nth-child(n + 7) {
+  display: none;
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop:hover:not(:disabled) {
+  background: var(--neon-sheen), var(--neon-fill-stop-hot);
+  box-shadow: var(--neon-shadow-stop-hot);
+  animation-play-state: paused;
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop:active:not(:disabled) { transform: scale(0.975); }
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop:disabled {
+  cursor: progress;
+  opacity: 0.85;
+  animation: none;
+  box-shadow: var(--neon-shadow-stop);
+}
+:is(.btn.primary, .render-cta.primary, .neon-btn).is-stop:focus-visible {
+  outline: 2px solid var(--neon-heart);
+  outline-offset: 2px;
+}
+@keyframes neon-stop-pulse {
+  0%, 100% { box-shadow: var(--neon-shadow-stop); }
+  50% { box-shadow: var(--neon-shadow-stop-hot); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.btn.primary, .render-cta.primary, .neon-btn).is-stop { animation: none; }
+}
+
+/* Standalone sizes. Only when `size` is passed — drop-in buttons do not get this class. */
+.neon-btn {
+  --neon-h: 34px;
+  --neon-px: 16px;
+  --neon-fs: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--neon-h);
+  padding: 0 var(--neon-px);
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--on-accent);
+  font: 700 var(--neon-fs) / 1 var(--font);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.neon-btn[data-size='xs'] { --neon-h: 22px; --neon-px: 9px; --neon-fs: 11px; gap: 5px; }
+.neon-btn[data-size='sm'] { --neon-h: 28px; --neon-px: 12px; --neon-fs: 12px; gap: 6px; }
+.neon-btn[data-size='lg'] { --neon-h: 46px; --neon-px: 22px; --neon-fs: 15px; gap: 8px; }
+.neon-btn.is-block { display: flex; width: 100%; }
+.neon-btn:not(:disabled):active { transform: scale(0.975); }
+.neon-btn:focus-visible { outline: 2px solid var(--brand-green); outline-offset: 2px; }
+
+/* Hidden until the host is a gradient button, so toggles can keep the node mounted. */
+.neon-btn__fx { display: none; }
+:is(.btn.primary, .render-cta.primary, .ed-pill-btn.primary, .ins-btn.primary, .ed-render, .neon-btn) > .neon-btn__fx {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.neon-btn__water { position: absolute; inset: 0; mix-blend-mode: screen; }
+.neon-btn__blob {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(8px);
+  animation: neon-drift var(--dur) ease-in-out var(--delay) infinite;
+}
+.btn.tiny > .neon-btn__fx .neon-btn__blob,
+.neon-btn[data-size='xs'] > .neon-btn__fx .neon-btn__blob { filter: blur(4px); }
+:is(.busy, .is-busy, .is-stop) > .neon-btn__fx .neon-btn__blob {
+  animation-duration: calc(var(--dur) / 3);
+  animation-delay: var(--busy-delay);
+}
+.neon-btn__spark {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0;
+  animation: neon-twinkle 2s ease-in-out infinite;
+}
+.btn.tiny > .neon-btn__fx .neon-btn__spark:nth-child(2n),
+.neon-btn[data-size='xs'] > .neon-btn__fx .neon-btn__spark:nth-child(2n) { display: none; }
+
+.neon-btn__glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(110px circle at var(--neon-mx) var(--neon-my), rgb(255 255 255 / 0.42), transparent 70%);
+  transition: opacity 0.3s var(--ease);
+}
+:is(.btn.primary, .render-cta.primary, .ed-pill-btn.primary, .ins-btn.primary, .ed-render, .neon-btn):hover:not(:disabled) > .neon-btn__fx .neon-btn__glow {
+  opacity: 1;
+}
+
+.neon-btn__ripple {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.6), rgb(255 255 255 / 0));
+  animation: neon-ripple 0.75s var(--ease-out) forwards;
+}
+
+/* Fix-with-AI is a solid green on purpose (AA on #0a0a0a), not the brand gradient. */
+.critic-item-head .btn.primary.critic-fix {
+  background: #42f272;
+  box-shadow: 0 8px 18px -12px rgb(66 242 114 / 0.85);
+}
+.critic-item-head .btn.primary.critic-fix:hover:not(:disabled) {
+  background: #42f272;
+  box-shadow: 0 8px 18px -12px rgb(66 242 114 / 0.85);
+  filter: brightness(1.05);
+}
+.critic-item-head .critic-fix > .neon-btn__fx { display: none; }
+
+/* Inspector regen ellipsizes every span. The effect layers are not labels. */
+.ins-regen .ins-btn.primary .neon-btn__fx,
+.ins-regen .ins-btn.primary .neon-btn__fx span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+@keyframes neon-drift { to { transform: translateX(480%); } }
+@keyframes neon-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  50% { opacity: 0.9; transform: scale(1.2); }
+}
+@keyframes neon-ripple {
+  from { transform: scale(0); opacity: 1; }
+  to { transform: scale(34); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neon-btn__blob,
+  .neon-btn__spark,
+  .neon-btn__ripple { animation: none; }
+  .neon-btn__spark,
+  .neon-btn__ripple { display: none; }
+  .neon-btn__blob { display: none; }
+  .neon-btn__blob:first-child { display: block; left: 30% !important; }
+}

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 
 import { requestMake } from '@/desk/jobs';
+import { useRenderStop } from '@/desk/renderStop';
 import { desk, useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 import { noVideoView } from './model';
@@ -16,7 +18,7 @@ const ICONS = ['empty-play', 'empty-stale', 'empty-capture'] as const;
 export function NoVideo() {
   const action = useDesk((s) => s.action);
   const show = useDesk((s) => s.video != null && !s.programLoaded && !(s.monitorMode === 'live' && s.live.src));
-  const busyPrimary = useDesk((s) => Boolean(s.busy['btnNoVideoPrimary']));
+  const { busy: busyPrimary, stopping: primaryStopping, stop } = useRenderStop('btnNoVideoPrimary');
   const busySecondary = useDesk((s) => Boolean(s.busy['btnNoVideoSecondary']));
   const view = useMemo(() => {
     if (!action) return null;
@@ -45,21 +47,21 @@ export function NoVideo() {
           {view?.reason ?? 'Render a sequence to watch the cut here.'}
         </p>
         <div className="program-empty-actions">
-          <button
-            type="button"
+          <NeonButton
             id="btnNoVideoPrimary"
-            className={busyPrimary ? 'render-cta primary busy' : 'render-cta primary'}
+            className={busyPrimary ? 'render-cta primary is-stop' : 'render-cta primary'}
             hidden={!primary}
-            disabled={busyPrimary}
+            title={busyPrimary ? 'Stop the running job and clear the queue' : undefined}
+            disabled={primaryStopping}
             {...(view?.primary ? { 'data-mode': view.primary.mode || 'quick' } : {})}
-            onClick={() => requestMake(view?.primary ? view.primary.mode || 'quick' : undefined)}
+            onClick={() => (busyPrimary ? stop() : requestMake(view?.primary ? view.primary.mode || 'quick' : undefined))}
           >
-            <Icon name="ui-play-fill" size={14} />
+            <Icon name={busyPrimary ? 'ui-stop' : 'ui-play-fill'} size={14} />
             {' '}
             <span className="cta-label">
-              {primary?.label || 'Render'}
+              {busyPrimary ? (primaryStopping ? 'Stopping…' : 'Stop') : (primary?.label || 'Render')}
             </span>
-          </button>
+          </NeonButton>
           {' '}
           <button
             type="button"

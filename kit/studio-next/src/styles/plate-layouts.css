@@ -1,0 +1,5 @@
+/* Plate layout picker. Kept out of studio.css, which mirrors the legacy stylesheet. */
+.layouts-field { margin-top: 14px; display: grid; gap: 8px; }
+.layout-group { display: grid; gap: 4px; }
+.layout-label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted, #8a948a); }
+.layouts-field .energy-row { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }

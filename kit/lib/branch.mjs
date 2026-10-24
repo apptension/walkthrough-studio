@@ -16,7 +16,8 @@ import { VIDEOS, listVideos, loadVideo, slugify } from './project.mjs';
 
 import { PLATE_TYPE_IDS as PLATE_TYPES } from './plateTypes.mjs';
 
-const LENGTHS = [60, 90, 120, 180];
+import { clampLengthSec } from './length.mjs';
+
 const COPY_FILES = ['video.config.json', 'brief.json', 'flow.mjs', 'narration.mjs', 'flow-analysis.md'];
 const COPY_DIRS = ['assets'];
 
@@ -191,7 +192,7 @@ export function suggestBranchIdeas(video) {
       mustShow: lines(partial.mustShow).slice(0, 6),
       keyMessages: lines(partial.keyMessages).slice(0, 5),
       mustSay: lines(partial.mustSay).slice(0, 4),
-      lengthSec: LENGTHS.includes(Number(partial.lengthSec)) ? Number(partial.lengthSec) : 90,
+      lengthSec: clampLengthSec(partial.lengthSec, 90),
       plates: (partial.plates || []).filter((p) => PLATE_TYPES.includes(p)).slice(0, 4),
       source: partial.source || 'heuristic',
     });
@@ -279,7 +280,7 @@ export function normalizeBranchIdeas(raw, sourceSlug) {
       mustShow: lines(item.mustShow).slice(0, 6),
       keyMessages: lines(item.keyMessages).slice(0, 5),
       mustSay: lines(item.mustSay).slice(0, 4),
-      lengthSec: LENGTHS.includes(Number(item.lengthSec)) ? Number(item.lengthSec) : 90,
+      lengthSec: clampLengthSec(item.lengthSec, 90),
       plates: (item.plates || []).filter((p) => PLATE_TYPES.includes(p)).slice(0, 4),
       source: item.source || 'agent',
     });

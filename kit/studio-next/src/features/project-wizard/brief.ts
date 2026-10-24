@@ -1,6 +1,7 @@
 import { revisePlan, stagesForReplan, type Brief as ReviseBrief, type ReplanStage } from '@/logic/briefRevise';
 import { sizeLine, type CaptureOption } from '@/logic/captureSize';
 import { resolveVideoLanguage, videoLanguage } from '@/logic/languages';
+import { clampLengthSec } from '@/logic/length';
 
 /**
  * The brief form's pure half (`validate`, `payload`, `renderSummary`,
@@ -125,7 +126,7 @@ export function payload(f: FormReader, { newProject, capture }: { newProject: bo
     capture: { mode: f.radio('captureMode') === 'guided' ? 'guided' : 'agent', ...(newProject && capture ? { size: capture } : {}) },
     ...(newProject ? { output: { format: f.val('outputFormat') === 'portrait' ? 'portrait' : 'landscape' } } : {}),
     story: {
-      lengthSec: Number(f.radio('lengthSec') || 120),
+      lengthSec: clampLengthSec(f.radio('lengthSec') || f.val('lengthSec')),
       tone: f.val('tone'),
       mustShow: f.val('mustShow'),
       keyMessages: f.val('keyMessages'),

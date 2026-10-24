@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chooseAgent, switchSequence } from '@/desk/boot';
@@ -10,14 +11,17 @@ import { desk, type QueueItem } from '@/desk/store';
 import { snapshotVersion } from '@/features/project-panel/versionActions';
 import { mountMark } from '@/logic/mark';
 import { makeHealth, makeIndex, makeVideo } from '@/test/factories';
+import { endpoints } from '@/test/msw/endpoints';
+import { server } from '@/test/msw/server';
 
 import { ChromeHeader } from './ChromeHeader';
 
 vi.mock('@/desk/boot', () => ({
   switchSequence: vi.fn(() => Promise.resolve(true)),
   chooseAgent: vi.fn(() => Promise.resolve()),
+  setAgentAuth: vi.fn((auth: unknown) => desk.set({ agentAuth: auth as never })),
 }));
-vi.mock('@/desk/jobs', () => ({ requestMake: vi.fn(), exportPack: vi.fn() }));
+vi.mock('@/desk/jobs', () => ({ requestMake: vi.fn(), exportPack: vi.fn(), stopAllWork: vi.fn() }));
 vi.mock('@/features/project-panel/versionActions', () => ({ snapshotVersion: vi.fn(() => Promise.resolve()) }));
 vi.mock('@/logic/mark', () => ({ mountMark: vi.fn(), getMarkMode: () => 'idle' }));
 
@@ -177,11 +181,11 @@ describe('buttons', () => {
     );
     expect($('renderCluster')).toHaveAttribute('data-tone', 'warn');
     expect(document.querySelector('.render-fresh-label')).toHaveTextContent('Needs re-record');
-    expect($('btnMakeLabel')).toHaveTextContent('Re-record');
+    expect($('btnMakeLabel')).toHaveTextContent('Stop');
     expect($('queueBadge')).not.toHaveAttribute('hidden');
     expect($('queueBadge')).toHaveTextContent('2');
-    expect($('btnMake')).toHaveClass('busy');
-    expect($('btnMake')).toBeDisabled();
+    expect($('btnMake')).toHaveClass('is-stop');
+    expect($('btnMake')).not.toBeDisabled();
     expect($('btnExport')).toBeDisabled();
     expect($('btnSnapshot')).not.toBeDisabled();
   });
@@ -224,40 +228,53 @@ describe('agent chrome', () => {
     expect($('agentTip')).toHaveAttribute('hidden');
   });
 
-  it('switches to a ready runner, and ignores the active or missing one', async () => {
+  it('opens the model picker for an installed runner and ignores a missing one', async () => {
     const health = makeHealth().agentAuth;
-    desk.set({
-      agentAuth: {
-        ...health,
-        provider: 'cursor',
-        preference: 'cursor',
-        runners: { ...health.runners, claude: { ...health.runners.claude, available: true, authenticated: true, soft: false } },
-      },
-    });
+    desk.set({ agentAuth: { ...health, runners: { ...health.runners, claude: { ...health.runners.claude, available: false } } } });
     render(<ChromeHeader />);
-    await userEvent.click(document.querySelector('[data-agent="cursor"]') as HTMLElement);
+    await userEvent.click(document.querySelector('[data-agent="claude"]') as HTMLElement);
+    expect(document.getElementById('agentModelMenu')).toBeNull();
+    const cursor = document.querySelector('[data-agent="cursor"]') as HTMLElement;
+    expect(cursor.querySelector('[data-agent-model]')).toHaveTextContent('Auto');
+    await userEvent.click(cursor);
+    expect(cursor).toHaveAttribute('aria-expanded', 'true');
+    const menu = await waitFor(() => $('agentModelMenu'));
+    await waitFor(() => expect(menu.querySelectorAll('[role="option"]')).toHaveLength(3));
+    expect(menu.querySelector('[role="option"][aria-selected="true"]')).toHaveTextContent('Auto');
+    await userEvent.keyboard('{Escape}');
+    expect(document.getElementById('agentModelMenu')).toBeNull();
     expect(chooseAgent).not.toHaveBeenCalled();
-    await userEvent.click(document.querySelector('[data-agent="claude"]') as HTMLElement);
-    expect(chooseAgent).toHaveBeenCalledWith('claude');
-    act(() => desk.set({ agentAuth: null }));
-    await userEvent.click(document.querySelector('[data-agent="claude"]') as HTMLElement);
-    expect(chooseAgent).toHaveBeenCalledTimes(1);
   });
 
-  it('disables both logos while the switch is in flight', async () => {
+  it('filters, picks a model with the keyboard and makes that runner active', async () => {
     const health = makeHealth().agentAuth;
-    desk.set({
-      agentAuth: { ...health, provider: 'cursor', runners: { ...health.runners, claude: { ...health.runners.claude, available: true, authenticated: true } } },
-    });
-    let done!: () => void;
-    vi.mocked(chooseAgent).mockImplementationOnce(() => new Promise<void>((r) => (done = r)));
+    let posted: unknown = null;
+    server.use(
+      http.post(endpoints.agentModel, async ({ request }) => {
+        posted = await request.json();
+        return HttpResponse.json({ ok: true, agentAuth: { ...health, models: { cursor: 'claude-opus-5-5-high' } } });
+      }),
+    );
+    desk.set({ agentAuth: health });
     render(<ChromeHeader />);
-    await userEvent.click(document.querySelector('[data-agent="claude"]') as HTMLElement);
-    for (const btn of document.querySelectorAll('#agentChrome [data-agent]')) expect(btn).toHaveAttribute('aria-disabled', 'true');
-    await act(async () => {
-      done();
-      await Promise.resolve();
-    });
-    expect(document.querySelector('[data-agent="claude"]')).toHaveAttribute('aria-disabled', 'false');
+    await userEvent.click(document.querySelector('[data-agent="cursor"]') as HTMLElement);
+    await waitFor(() => expect($('agentModelMenu').querySelectorAll('[role="option"]')).toHaveLength(3));
+    await userEvent.keyboard('opus');
+    expect($('agentModelMenu').querySelectorAll('[role="option"]')).toHaveLength(1);
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(document.getElementById('agentModelMenu')).toBeNull());
+    expect(posted).toEqual({ provider: 'cursor', model: 'claude-opus-5-5-high', use: true });
+    expect(document.querySelector('[data-agent-model="cursor"]')).toHaveTextContent('Claude Opus 5.5 1M High');
+  });
+
+  it('offers a typed id as a custom model', async () => {
+    desk.set({ agentAuth: makeHealth().agentAuth });
+    render(<ChromeHeader />);
+    await userEvent.click(document.querySelector('[data-agent="cursor"]') as HTMLElement);
+    await waitFor(() => expect($('agentModelMenu').querySelectorAll('[role="option"]')).toHaveLength(3));
+    await userEvent.keyboard('my-model-7');
+    const options = $('agentModelMenu').querySelectorAll('[role="option"]');
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent('Use “my-model-7”');
   });
 });

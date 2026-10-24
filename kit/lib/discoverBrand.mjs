@@ -349,7 +349,7 @@ export async function harvestBrandFromUrls({
   mkdirSync(candidatesDir, { recursive: true });
   // Drop previous authored outputs so the agent cannot treat a stale wordmark as done.
   if (force) {
-    for (const f of ['logo.html', 'logo-source.svg', 'motion-brief.md']) {
+    for (const f of ['logo.html', 'logo-source.svg', 'motion-brief.md', 'studio-choices.json', 'agent-lockup.html']) {
       try {
         rmSync(join(dir, f), { force: true });
       } catch {

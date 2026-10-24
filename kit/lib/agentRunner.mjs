@@ -14,6 +14,7 @@ import { releaseLocksForPid } from './outputLock.mjs';
 import { hasChildExited, killTree, terminate } from './processKill.mjs';
 import { readOverlayReport } from './overlayRetry.mjs';
 import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
+import { checkFlow, flowContractBlock, flowGateDecision, flowRepairLimit, flowRepairPrompt, formatIssue, recordingBaseline } from './flowCheck.mjs';
 import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
 import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
 import { promptLanguageLine } from './languages.mjs';
@@ -25,8 +26,12 @@ import { readBrowseMap, stopBrowseSession } from './browseSession.mjs';
 import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
 import { PLATE_TYPE_LIST, plateTypeGuide } from './plateTypes.mjs';
 import { BEAT_GUIDE } from './journeyBeats.mjs';
+import { COPY_STYLE_GUIDE } from './copyCase.mjs';
+import { draftCraftGuide, enrichDraft } from './draftRhythm.mjs';
+import { VOICE_CATALOG, enrichSound, soundGuide, toneBlock, toneProfile } from './soundCraft.mjs';
 import { describeJob } from '../studio/progress.js';
 import { DEFAULT_BRAND_AUDIO, harvestBrandFromUrls, slugifyBrand } from './discoverBrand.mjs';
+import { agentModel, agentModels, listAgentModels, modelArgs, setAgentModel } from './agentModels.mjs';
 
 const JOBS = new Map();
 
@@ -69,7 +74,7 @@ const RUNNERS = {
     label: 'Cursor agent',
     bin,
     args: (prompt, workspace, opts) => {
-      const a = ['-p', prompt, '--trust', '--workspace', workspace, '--output-format', 'stream-json', '--stream-partial-output'];
+      const a = ['-p', prompt, '--trust', '--workspace', workspace, '--output-format', 'stream-json', '--stream-partial-output', ...modelArgs('cursor')];
       if (opts.force) a.push('--force');
       return a;
     },
@@ -79,6 +84,7 @@ const RUNNERS = {
     label: 'Claude Code',
     bin,
     args: (prompt, workspace, opts) => [
+      ...modelArgs('claude'),
       '-p',
       prompt,
       '--output-format',
@@ -164,6 +170,18 @@ export function setAgentPreference(provider) {
   if (v !== 'cursor' && v !== 'claude') throw new Error('Agent preference must be "cursor" or "claude"');
   upsertDotEnv({ WALKTHROUGH_AGENT: v });
   return agentAuthStatus();
+}
+
+/** Persist a runner's model (and, with `use`, make that runner the active one). */
+export function chooseAgentModel(provider, model, { use = false } = {}) {
+  setAgentModel(provider, model);
+  return use ? setAgentPreference(provider) : agentAuthStatus();
+}
+
+/** Models for one runner; the Cursor list comes from its own CLI. */
+export function agentModelList(provider, { refresh = false } = {}) {
+  const bin = provider === 'cursor' ? findAgentBin() : findClaudeBin();
+  return listAgentModels(provider, { bin, refresh });
 }
 
 /** What the Studio API sends for a job: no process handle, stream flattened for the wire. */
@@ -328,6 +346,7 @@ export function agentAuthStatus() {
     runners,
     active,
     switchable: runners.cursor.available && runners.claude.available,
+    models: agentModels(),
     ready: Boolean(active && runnerReady(active) && !active.soft),
     tooltip: '',
     ...summarizeActive({ active, runners, preference, provider }),
@@ -361,6 +380,8 @@ export function buildPrompt(video, goal, extra = '', opts = {}) {
 
   const browse = `node ${join(KIT, 'cli.mjs')} browse ${video.slug}`;
   const briefPath = join(video.dir, 'brief.json');
+  const tone = videoTone(video);
+  const sound = soundGuide(tone, { brand: video.brand, slug: video.slug });
   const journeyMd = join(video.dir, 'explore-journey.md');
   const guidedMd = join(video.dir, 'guided-tour.md');
   const guidedJson = join(video.dir, 'guided-tour.json');
@@ -411,8 +432,11 @@ B. ${briefPath} — fill other story fields only where they are empty or vague a
 C. ${journeyMd} — your scouting report: every destination with one line on what it offers and how strong it is, why this order, what you rejected and why, and per beat the exact walk (labels, where they sit, the payoff move, real data names to use).
 Edit only ${briefPath} and ${journeyMd}. Do not edit flow.mjs, narration.mjs or video.config.json, and do not record or render — the planner writes the script from your journey next.`,
     narration: `Improve narration.mjs for "${video.slug}" so VO narrates why (not clicks), ≤28 words/line, leads the pointer, and matches chapter/caption titles. Read ${critic} if present. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration.`,
-    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table. Plate types you can swap to or add (type — when: shape):
+    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table.
+${COPY_STYLE_GUIDE}
+Plate types you can swap to or add (type — when: shape):
 ${plateTypeGuide()}
+${draftCraftGuide()}
 ${singlePlate}`,
     scene: `You are editing ONE scene (brand plate) in the walkthrough "${video.slug}". ${singlePlate}
 Read ${config}, ${brief}, and ${critic} if present.
@@ -424,6 +448,7 @@ If the note is about logo size, position or visibility:
 - orbit: style \`--orbit-logo\`, \`--orbit-logo-size\`, \`--orbit-center-scale\`
 
 For copy changes on open/close/interstitials, edit ${config}. For energy-only notes, set motion.energy to calm|clear|punchy.
+${COPY_STYLE_GUIDE}
 
 Do NOT edit kit/templates HTML files — Studio fills templates from config + brand motion and rebuilds live HTML for preview.
 Keep assets real; no invented quotes/logos.`,
@@ -438,14 +463,18 @@ Read ${brief}. Do not invent logos. Studio rebuilds plate HTML for live preview 
     }`,
     script: `Revise the SCRIPT of the walkthrough "${video.slug}" from the reviewer's notes below. The script is the story the viewer sees and hears, in order: open plate → chapters (flow.mjs chapter(title, body)) and steps (say(title, body)) with interstitial plates (video.config.json interstitials[], placed by "before": <chapter title>) → close plate. Spoken lines live in ${narration} (lines keyed by the exact chapter/say title, plates keyed by plate id, intro/outro).
 Read ${skillPath}/authoring.md, ${config}, ${narration}, ${flow}, and ${brief}.
-Rules: narration says why, not clicks; ≤28 words per line; on-screen titles ≤5 words, bodies ≤12 words; 4–7 chapters; keep narration keys and plate "before" values in sync with any renamed chapter/say titles. In flow.mjs change ONLY the string arguments of chapter()/say() and the order/presence of steps — keep selectors, waits and navigation working unless the note asks for a different journey. Plate copy goes in ${config}; never invent quotes, logos or stats.`,
+Rules: narration says why, not clicks; ≤28 words per line; on-screen titles ≤5 words, bodies ≤12 words; 4–7 chapters; keep narration keys and plate "before" values in sync with any renamed chapter/say titles. In flow.mjs change ONLY the string arguments of chapter()/say() and the order/presence of steps — keep selectors, waits and navigation working unless the note asks for a different journey. Plate copy goes in ${config}; never invent quotes, logos or stats.
+${COPY_STYLE_GUIDE}`,
     voice: `Improve voice and spoken delivery for "${video.slug}" without changing the shared brand pack.
 Read ${narration}, ${config}, ${brief}, and ${skillPath}/authoring.md.
 Edit only:
 - ${narration}: wording, per-line { text, speed } delivery, intro/outro and matching keys; ≤28 words per line.
-- ${config} → audio.voice: video-local voiceId/model/settings/speed only when the director asks for voice character or delivery.
+- ${config} → audio.voice: video-local voiceId/name/direction/settings only when the director asks for voice character or delivery.
+- ${config} → audio.music: video-local styles/negativeStyles/intro/bed/outro only when the director asks about the music.
 - ${config} → audio.mix: video-local voice/music balance only when the director asks about loudness or mix.
-Do not change plates, flow selectors, captured brand assets, or shared ${brand}.`,
+- ${config} → tone: when the note changes the voice's personality, update tone.words/persona/do/avoid so captions and plates follow.
+Do not change plates, flow selectors, captured brand assets, or shared ${brand}.
+${sound}`,
     'branch-ideas': `Propose BRANCH ideas for the walkthrough "${video.slug}" — focused feature videos spun from this overview.
 Read ${skillPath}/authoring.md, ${join(video.dir, 'brief.json')}, ${config}, ${flow}, ${narration}, and ${flowAnalysis} if present.
 Write ONLY ${join(video.dir, 'branch-ideas.json')} as JSON with this shape:
@@ -467,13 +496,14 @@ Write ONLY ${join(video.dir, 'branch-ideas.json')} as JSON with this shape:
     }
   ]
 }
-Rules: 5–8 ideas. Prefer real chapters / must-show beats / interstitial topics already in this project — not invented product areas. purpose is usually "feature" (sometimes "onboarding"). lengthSec 60|90|120. plates from ${PLATE_TYPE_LIST}. Do not edit other files. Do not record or render.`,
+Rules: 5–8 ideas. Prefer real chapters / must-show beats / interstitial topics already in this project — not invented product areas. purpose is usually "feature" (sometimes "onboarding"). lengthSec is seconds, usually 60–180. plates from ${PLATE_TYPE_LIST}. Do not edit other files. Do not record or render.`,
     branch: `Rewrite the BRANCHED walkthrough "${video.slug}" into a focused feature video. It was copied from an overview — the brief at ${join(video.dir, 'brief.json')} names the angle under branch.angle / story.mustShow.
 Read ${skillPath}/SKILL.md, ${skillPath}/authoring.md, ${join(video.dir, 'brief.json')}, ${config}, ${flow}, ${narration}, and ${flowAnalysis} if present.
 Keep brand, record.startUrl, env "$VAR" refs, and working Playwright patterns from the copied ${flow}. Drop off-angle chapters. Rewrite:
 1. ${config} — title, purpose feature, open/close, 1–3 interstitials for THIS feature (before: matching chapter titles).
 2. ${flow} — a shorter journey (3–5 chapter/say beats) that only covers the branch mustShow list, in order: chapter titles are the beat titles (before " — "), and each beat's "how:" path is the click/move sequence to script. Reuse selectors from the copy and flow-analysis; mark guesses // TODO(verify selector).
 3. ${narration} — intro/outro + keys matching the new chapter/say titles and plate ids; why-not-clicks, ≤28 words.
+${COPY_STYLE_GUIDE}
 Do not re-introduce the full overview. Do not record or render.`,
     draft: `Create the FIRST DRAFT of the walkthrough "${video.slug}" from the project brief at ${join(video.dir, 'brief.json')}. Read ${skillPath}/SKILL.md and ${skillPath}/authoring.md first, then the completed brand foundation: ${brand}, ${brief}, ${brandReport}, and ${brandLogo}.
 If ${flowAnalysis} exists, read it before writing flow.mjs — it is the live product map (explored routes when present, DOM controls, form fields with validation + suggested fill values, and WebGL/canvas pointer recipes). Prefer its Playwright hints, fill recipes (unique emails per run, env refs for login, pattern-safe values) and canvas drag/wheel snippets over guesses. When the analysis includes Explored routes / Must-show coverage / Recrafted journey, treat that as authoritative: write chapters only for beats the crawl reached (or the recrafted list). Do not invent screens the map did not find — adapt the story to the product that exists. Fill fields with ctx.typeInto(locator, value) or ctx.fillField(patterns, value) — never getByPlaceholder→click→fill (placeholders often clear on focus and hang capture). Prefer name= selectors from the analysis. Fill every required field the analysis lists before clicking submit; never invent login secrets or place real orders. When it flags WebGL, set record.deviceScaleFactor: 1, use frame() not focus() on large canvases, and drive the model with page.mouse + actions.hide()/show() rather than getByRole on missing DOM children.
@@ -483,10 +513,19 @@ ${guided ? `${guidedSource}\n${guidedCraft}\n` : ''}0. The journey. ${guided ? `
 ${BEAT_GUIDE}
 1. ${config} — title, audience, open (eyebrow, 2-line title with one *accent*, sub), close (title, 3 steps), 2–4 interstitials[] (pick the type that carries the fact — ${PLATE_TYPE_LIST}; see authoring.md for each shape and the type guide below) placed with "before": <chapter title>, record.startUrl, env (credentials as "$ENV_VAR" references only — never literal secrets). Apply capture tips from the flow analysis (e.g. deviceScaleFactor: 1 for WebGL).
 2. ${flow} — the live journey: 4–7 chapter() cards and say() captions that follow the "what to show" list from step 0 in order — chapter titles are the beat titles verbatim (the part before " — "), and each beat's how-path is the click/hover/type/drag sequence to script. Author every wait()/hold at steady pace — the video's direction.pace scales them, so never pad waits to slow the tour or trim them to speed it; wrap one routine stretch in pace('brisk') … pace() if it needs to move faster than the rest. Use robust Playwright selectors from the flow analysis (getByRole/getByLabel/getByText), preferring the hop/route that matches each chapter. For pointer-reactive canvases, use the analysis recipes (mouse drag/wheel on the canvas box). If the app source is in this workspace, read it to confirm labels and routes; otherwise mark guessed selectors with // TODO(verify selector) and keep each guessed step guarded (isVisible().catch(() => false))${guided ? ' — never steps the reviewer showed, which are required' : ''}. Never fill login email/password inside flow() — the kit signs in off camera (session + saved credentials) before the screencast starts; on-camera credential typing pollutes the take.
-3. ${narration} — intro, outro, one line per chapter/say title and per plate id; why-not-clicks, ≤28 words.
+3. ${narration} — intro, outro, one line per chapter/say title and per plate id; why-not-clicks, ≤28 words, in the voice and tone below.
+4. ${config} → tone, audio.voice and audio.music — the sound of THIS video, chosen to match the brand and the story:
+   - tone: { "words": [3–4 adjectives], "persona": "who is speaking", "do": [...], "avoid": [...] } — the one voice the captions, plates and narration share.
+   - audio.voice: { "name", "voiceId", "direction": "[short performance cue]", "settings": { stability, similarity_boost, style, use_speaker_boost, speed } } — a narrator from the catalog below whose character fits the tone and audience (keep the brand's own voice when the pack chose one).
+   - audio.music: { "styles", "negativeStyles", "intro", "bed", "outro" } — a composed bed in the brand's spirit: genre, 2–3 instruments, pulse, mood, one "<n> BPM", "instrumental"; the bed never competes with the voice.
+   Leave a field out and Studio fills it from the tone; never edit the shared ${brand}.
+${sound}
 Plate type guide (type — when: shape); vary the set, one proof plate at most per fact, never two of the same type back to back:
 ${plateTypeGuide()}
-Build the script on the story spine below: every beat lands in the place it names, in order. Only use proof (stats, quotes, logos) that the brief provides. Keep the brief's tone and must-say/avoid lists. Do not record or render — the reviewer approves the script in Studio first.`,
+${draftCraftGuide()}
+Build the script on the story spine below: every beat lands in the place it names, in order. Only use proof (stats, quotes, logos) that the brief provides. Keep the brief's tone and must-say/avoid lists.
+${COPY_STYLE_GUIDE}
+Do not record or render — the reviewer approves the script in Studio first.`,
     'guided-script': `The reviewer just showed a NEW tour of "${video.slug}" in a real browser. Rebuild the script around it, so the next bot recording follows their journey.
 ${guidedSource}
 Also read ${skillPath}/authoring.md, ${briefPath}, ${config}, ${flow} (the current script — reuse its working selectors, waits and helpers where the tour visits the same screens) and ${narration}.
@@ -577,8 +616,23 @@ Studio will inspect exactly which sources changed, present the relevant review s
   const storyGoals = new Set(['explore', 'draft', 'branch', 'script', 'narration', 'plates', 'critic', 'critic-review', 'full', 'guided-script', 'take-recraft', 'own-take']);
   const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video))) : '';
   const device = DEVICE_GOALS.has(goal) ? deviceLine(video.config) : '';
-  return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, device, spine, extra].filter(Boolean).join('\n\n').trim();
+  const contract = FLOW_CONTRACT_GOALS.has(goal) ? flowContractBlock({ kitDir: KIT, slug: video.slug }) : '';
+  const voiceAndTone = TONE_GOALS.has(goal) || !goals[goal] ? toneBlock(tone) : '';
+  return [promptLanguageLine(video.config?.language), goals[goal] || goals.full, contract, device, spine, voiceAndTone, extra].filter(Boolean).join('\n\n').trim();
 }
+
+/** Goals that write words the viewer reads or hears get the video's voice and tone. */
+const TONE_GOALS = new Set(['draft', 'branch', 'script', 'narration', 'plates', 'scene', 'voice', 'critic', 'critic-review', 'full', 'guided-script', 'take-recraft', 'own-take']);
+
+/** The video's tone profile (video tone → brief tone → brand tone → purpose). */
+export function videoTone(video) {
+  const brief = readBrief(video);
+  return toneProfile({ config: video.config || {}, brief, brand: video.brand || {}, purpose: resolvePurpose(video.config, brief) });
+}
+
+/** Goals that write flow.mjs get the generated ctx contract; the gated ones are checked before done. */
+const FLOW_CONTRACT_GOALS = new Set(['draft', 'branch', 'guided-script', 'capture-repair']);
+const FLOW_GATE_GOALS = new Set(['draft', 'branch', 'guided-script', 'script']);
 
 const DEVICE_GOALS = new Set(['explore', 'draft', 'branch', 'script', 'guided-script', 'take-recraft', 'own-take', 'capture-repair', 'full', 'plates', 'scene']);
 
@@ -771,7 +825,7 @@ function writePromptArtifacts(job, outDir, workspace) {
   );
   writeFileSync(
     runSh,
-    `#!/usr/bin/env bash\nset -euo pipefail\ncd ${JSON.stringify(workspace)}\nexec agent -p --trust --workspace ${JSON.stringify(workspace)} --output-format text "$(cat ${JSON.stringify(promptFile)})"\n`
+    `#!/usr/bin/env bash\nset -euo pipefail\ncd ${JSON.stringify(workspace)}\nexec agent -p --trust --workspace ${JSON.stringify(workspace)}${agentModel('cursor') ? ` --model ${JSON.stringify(agentModel('cursor'))}` : ''} --output-format text "$(cat ${JSON.stringify(promptFile)})"\n`
   );
   try {
     chmodSync(runSh, 0o755);
@@ -853,7 +907,97 @@ export function startImprove(video, goal, opts = {}) {
     prompt,
   });
   const outDir = join(video.out, 'studio-jobs');
-  return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve' });
+  const verify = FLOW_GATE_GOALS.has(resolvedGoal) && opts.verify !== false ? flowGate(video, job) : null;
+  const onDone = resolvedGoal === 'draft' ? (j) => enrichAfterDraft(video, j) : null;
+  return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve', verify, onDone });
+}
+
+/**
+ * After a first draft: fill the layout / look / join choices the agent left open with this video's
+ * deterministic variety pick and write draft-rhythm.md. Never fails the job.
+ */
+export function enrichAfterDraft(video, job) {
+  try {
+    const cfgPath = join(video.dir, 'video.config.json');
+    if (!existsSync(cfgPath)) return '';
+    const flowPath = join(video.dir, 'flow.mjs');
+    const r = enrichDraft(JSON.parse(readFileSync(cfgPath, 'utf8')), {
+      slug: video.slug,
+      brand: video.brand || {},
+      flowSource: existsSync(flowPath) ? readFileSync(flowPath, 'utf8') : '',
+    });
+    if (r.applied.length) writeFileSync(cfgPath, JSON.stringify(r.config, null, 2) + '\n');
+    mkdirSync(video.out, { recursive: true });
+    writeFileSync(join(video.out, 'draft-rhythm.md'), r.report);
+    const warns = r.rhythm.findings.filter((f) => f.severity === 'warn').length;
+    append(job, `✓ variety · ${r.applied.length ? `${r.applied.length} open choice(s) filled` : 'nothing left open'}${warns ? ` · ${warns} rhythm note(s) in draft-rhythm.md` : ''}`, { kind: 'system' });
+    enrichSoundAfterDraft(video, job, { config: r.config, energy: r.pick?.mood });
+  } catch (err) {
+    append(job, `⚠ variety · skipped: ${err.message || err}`, { kind: 'system' });
+  }
+  return '';
+}
+
+/** After a first draft: tone, narrator and music bed for this video, plus draft-sound.md. Never fails the job. */
+export function enrichSoundAfterDraft(video, job, { config = null, energy = null } = {}) {
+  try {
+    const cfgPath = join(video.dir, 'video.config.json');
+    const current = config || JSON.parse(readFileSync(cfgPath, 'utf8'));
+    const brief = readBrief(video);
+    const narrationPath = join(video.dir, 'narration.mjs');
+    const s = enrichSound(current, {
+      slug: video.slug,
+      brand: video.brand || {},
+      brief,
+      purpose: resolvePurpose(current, brief),
+      energy,
+      narrationSource: existsSync(narrationPath) ? readFileSync(narrationPath, 'utf8') : '',
+    });
+    if (s.applied.length) writeFileSync(cfgPath, JSON.stringify(s.config, null, 2) + '\n');
+    mkdirSync(video.out, { recursive: true });
+    writeFileSync(join(video.out, 'draft-sound.md'), s.report);
+    const voice = s.voice?.name || VOICE_CATALOG.find((v) => v.voiceId === s.voice?.voiceId)?.name || video.brand?.audio?.voice?.name || 'brand voice';
+    const tempo = (s.music?.styles || []).find((x) => /bpm/i.test(x));
+    const notes = s.audit.findings.filter((f) => f.severity === 'warn').length;
+    append(
+      job,
+      `✓ sound · ${s.profile.words.join(', ')} · narrator ${voice} · ${s.music?.styles?.[0] || 'brand bed'}${tempo ? ` at ${tempo}` : ''}${notes ? ` · ${notes} tone note(s) in draft-sound.md` : ''}`,
+      { kind: 'system' },
+    );
+    return s;
+  } catch (err) {
+    append(job, `⚠ sound · skipped: ${err.message || err}`, { kind: 'system' });
+    return null;
+  }
+}
+
+/**
+ * Post-agent gate for goals that write the script: check flow/narration/config, and on errors
+ * send the agent back with them (bounded by WALKTHROUGH_DRAFT_REPAIRS, default 2).
+ */
+function flowGate(video, job) {
+  const baseline = recordingBaseline(video.config);
+  const max = flowRepairLimit();
+  let round = 0;
+  return async () => {
+    const result = await checkFlow(video, { baseline });
+    job.flowCheck = { ok: result.ok, errors: result.errors.length, warnings: result.warnings.length, round };
+    for (const issue of [...result.errors, ...result.warnings.slice(0, 6)]) {
+      append(job, `${issue.level === 'error' ? '✗' : '⚠'} check · ${formatIssue(issue).slice(2)}`, { kind: issue.level === 'error' ? 'error' : 'system' });
+    }
+    const decision = flowGateDecision({ ok: result.ok, round, max });
+    if (decision.action === 'done') {
+      append(job, `✓ check · flow.mjs, narration.mjs and video.config.json pass${result.warnings.length ? ` (${result.warnings.length} warning(s))` : ''}`, { kind: 'system' });
+      return null;
+    }
+    if (decision.action === 'fail') {
+      return { failure: `The draft still fails the record check after ${max} repair(s): ${result.errors[0].message.split('\n')[0]}` };
+    }
+    round = decision.round;
+    job.activity = `Repairing the draft ${round}/${max}: ${result.errors.length} problem(s)`;
+    append(job, `» repair ${round}/${max} · ${result.errors.length} problem(s) would break the first take — asking the agent to fix them`, { activity: job.activity, kind: 'system' });
+    return { prompt: flowRepairPrompt({ video, result, round, max, skillPath: SKILL, kitDir: KIT }) };
+  };
 }
 
 const CRITIC_REVIEW_TIMEOUT_MS = Number(process.env.WALKTHROUGH_CRITIC_TIMEOUT_MS) || 10 * 60 * 1000;
@@ -932,7 +1076,7 @@ export function startExplore(video, { note = '', url = null } = {}) {
  * exit. `onDone(job, { code })` runs after a clean exit and may flip the job to failed by
  * returning a message. Shared by improve/draft jobs and the brief draft.
  */
-function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null, onClose = null } = {}) {
+function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null, onClose = null, verify = null } = {}) {
   mkdirSync(outDir, { recursive: true });
   const workspace = workspaceRoot();
   writePromptArtifacts(job, outDir, workspace);
@@ -966,8 +1110,10 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
   job.startedAt = new Date().toISOString();
   job.agent = runner.bin;
   job.provider = runner.provider;
+  job.requestedModel = agentModel(runner.provider);
   job.phase = 'starting';
-  append(job, `Launching ${runner.label}…`, { activity: `Launching ${runner.label}…`, kind: 'system' });
+  const launching = `Launching ${runner.label}${job.requestedModel ? ` · ${job.requestedModel}` : ''}…`;
+  append(job, launching, { activity: launching, kind: 'system' });
 
   const args = runner.args(prompt, workspace, { force });
   const child = spawn(runner.bin, args, {
@@ -1030,12 +1176,34 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
       }
       if (failure) ok = false;
     }
-    job.status = ok ? 'done' : 'failed';
-    job.phase = ok ? 'done' : 'failed';
-    job.activity = ok ? 'Finished' : failure || (job.result?.text ? tail(job.result.text) : `Failed (exit ${code})`);
-    if (!ok) job.message = job.activity;
-    append(job, ok ? '✓ agent finished' : `✗ ${failure || `agent exit ${code}`}`, { activity: job.activity, kind: ok ? 'system' : 'error' });
-    writeFileSync(join(outDir, `${job.id}.json`), JSON.stringify(jobView({ ...job, log: job.log.slice(-80) }), null, 2));
+    const settle = (ok, failure) => {
+      job.status = ok ? 'done' : 'failed';
+      job.phase = ok ? 'done' : 'failed';
+      job.finishedAt = new Date().toISOString();
+      job.activity = ok ? 'Finished' : failure || (job.result?.text ? tail(job.result.text) : `Failed (exit ${code})`);
+      if (!ok) job.message = job.activity;
+      append(job, ok ? '✓ agent finished' : `✗ ${failure || `agent exit ${code}`}`, { activity: job.activity, kind: ok ? 'system' : 'error' });
+      writeFileSync(join(outDir, `${job.id}.json`), JSON.stringify(jobView({ ...job, log: job.log.slice(-80) }), null, 2));
+    };
+    if (!ok || !verify) return settle(ok, failure);
+    // Stays 'running' while the gate checks the files, so pollers and waitForJob keep waiting.
+    job.phase = 'verifying';
+    job.activity = 'Checking the draft will record…';
+    append(job, `» check · ${job.activity}`, { activity: job.activity, kind: 'system' });
+    Promise.resolve()
+      .then(() => verify(job))
+      .then(
+        (next) => {
+          if (job.cancelRequested) return finalizeCancelled(job, outDir);
+          if (next?.prompt) {
+            job.result = null;
+            job.finishedAt = null;
+            return launchAgent(job, { prompt: next.prompt, outDir, force, retryLabel, timeoutMs, onDone, onClose, verify });
+          }
+          settle(!next?.failure, next?.failure || '');
+        },
+        (err) => settle(false, `Draft check crashed: ${err.message || err}`)
+      );
   });
   return job;
 }
@@ -1095,14 +1263,18 @@ Write ONLY into ${rel(brandDir)}/:
     "fontSource": "<css URL or note>"
   },
   "sources": { "marketing": "<url>", "app": "<url or null>", "logoSvg": "logo-source.svg", "logoNote": "<one line>" },
-  "audio": <copy the default audio object from the harvest stub brand.json unless the brand clearly needs a different voice>,
+  "tone": { "words": ["<3–4 adjectives read from how the site writes: e.g. confident, warm, plain-spoken>"], "persona": "<who speaks for this brand, one line>", "avoid": ["<words or habits the brand never uses>"] },
+  "audio": <the audio object below, with voice and music chosen for THIS brand's tone>,
   "motion": { "energy": "clear", "atmosphere": "<none|schedule|aurora|mesh|particles|grid|waves matching the product>" }
 }
-Default audio template (use unless you have a better brand-fit voice):
+Audio template — keep its shape and the mix, but choose the sound:
 ${exampleAudio}
+- voice: pick the narrator whose character matches tone.words (set name + voiceId; direction is a short bracketed cue like "[confident, calm product narration]"; add pronunciations for the brand and product names). Catalog (eleven_v4, every language):
+${VOICE_CATALOG.map((v) => `  ${v.name} ${v.voiceId} — ${v.gender}, ${v.accent}, ${v.note}`).join('\n')}
+- music: write the brand's sonic signature — genre, 2–3 instruments, pulse, mood, one "<n> BPM", "instrumental", room for the voice; negativeStyles keep vocals and lyrics out. A calm, premium brand wants space and felt piano; a bold, energetic one a brighter pulse.
 
 Rules for colors: plates are dark. Pick ink/surface as dark neutrals tinted by the brand; gold = primary accent from CTAs/brand samples (not washed-out grey); amber = a related gradient end; teal may stay a cool support if the brand has no better third. onAccent = readable text on gold.
-4. ${rel(motionBrief)} — living motion brief: audience${audience ? ` (hint: ${audience})` : ''}, product promise from the harvest, voice/tone, visual system table with the tokens you chose, plate palette guidance, motion language, audio bed, sources. Facts only — never invent metrics or client logos.
+4. ${rel(motionBrief)} — living motion brief: audience${audience ? ` (hint: ${audience})` : ''}, product promise from the harvest, voice/tone (the same words as brand.json → tone, with two example lines in that voice), visual system table with the tokens you chose, plate palette guidance, motion language, audio bed, sources. Facts only — never invent metrics or client logos.
 
 When you are done, brandReadiness must pass: placeholder false, logo.html present, all of ink/surface/gold/amber/teal as #RRGGBB, font.family + font.css set, discovery.status "ready", and motion-brief.md must exist.
 
@@ -1296,17 +1468,19 @@ function agentIsReady() {
 export function waitForJob(job) {
   if (!job || (job.status !== 'running' && job.status !== 'queued')) return Promise.resolve(job);
   return new Promise((resolve) => {
-    const child = job.child;
-    if (!child) {
+    const busy = () => job.status === 'running' || job.status === 'queued';
+    const poll = () => {
       const t = setInterval(() => {
-        if (job.status !== 'running' && job.status !== 'queued') {
+        if (!busy()) {
           clearInterval(t);
           resolve(job);
         }
       }, 200);
-      return;
-    }
-    child.once('close', () => resolve(job));
+    };
+    const child = job.child;
+    if (!child) return poll();
+    // A gated job stays running after the agent exits (check, then maybe a repair round).
+    child.once('close', () => setImmediate(() => (busy() ? poll() : resolve(job))));
   });
 }
 

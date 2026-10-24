@@ -6,7 +6,7 @@
  * A choice is stored on the video. The shared brand pack is never rewritten.
  * Live product UI is never graded.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import {
   BACKGROUNDS,
@@ -85,6 +85,8 @@ export function resolvePace(raw) {
 }
 
 const LOCKUP_EXT = new Set(['.html', '.svg', '.png', '.jpg', '.jpeg', '.webp']);
+const UPLOAD_EXT = new Set(['.svg', '.png', '.jpg', '.jpeg', '.webp']);
+const UPLOAD_MAX = 1_500_000;
 const KIT_TEAL = '#2dd4bf';
 
 const clampByte = (n) => Math.max(0, Math.min(255, Math.round(n)));
@@ -299,29 +301,90 @@ export function suggestScales(brand = {}) {
   }));
 }
 
+function lockupDirs(brand = {}) {
+  return [brand.uploadDir, brand.dir].filter((dir) => dir && existsSync(dir));
+}
+
+/** A lockup file in this video's uploads, or in the shared brand pack. */
+export function lockupPath(brand = {}, file) {
+  const safe = file && file === basename(file) && LOCKUP_EXT.has(extname(file).toLowerCase()) ? file : null;
+  if (!safe) return null;
+  for (const dir of lockupDirs(brand)) {
+    const path = join(dir, safe);
+    if (existsSync(path)) return path;
+  }
+  return null;
+}
+
 export function listLockups(brand = {}) {
-  if (!brand.dir || !existsSync(brand.dir)) return [];
-  const names = readdirSync(brand.dir).filter((name) => {
-    if (name.includes('..') || name !== basename(name)) return false;
-    if (!LOCKUP_EXT.has(extname(name).toLowerCase())) return false;
-    return name === 'logo.html' || /logo|mark/i.test(name);
-  });
-  const rank = (name) => (name === (brand.logo || 'logo.html') ? 0 : name.endsWith('.svg') ? 1 : 2);
+  const seen = new Set();
+  const names = [];
+  for (const dir of lockupDirs(brand)) {
+    for (const name of readdirSync(dir)) {
+      if (seen.has(name) || name.includes('..') || name !== basename(name)) continue;
+      if (!LOCKUP_EXT.has(extname(name).toLowerCase())) continue;
+      if (name !== 'logo.html' && !/logo|mark/i.test(name)) continue;
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  const rank = (name) => (name.startsWith('logo-upload') ? 0 : name === (brand.logo || 'logo.html') ? 1 : name.endsWith('.svg') ? 2 : 3);
   return names
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .slice(0, 8)
     .map((file) => ({
       file,
-      label: file === 'logo.html' ? 'Plate lockup' : file.replace(/\.[a-z]+$/i, '').replace(/[-_]/g, ' '),
+      label: file.startsWith('logo-upload') ? 'Uploaded' : file === 'logo.html' ? 'Plate lockup' : file.replace(/\.[a-z]+$/i, '').replace(/[-_]/g, ' '),
       kind: extname(file).slice(1),
     }));
 }
 
+/**
+ * Store one uploaded logo on this video (`brand.uploadDir`). Replaces the previous upload.
+ * The shared brand pack is left alone. Returns the filename Direction can select.
+ */
+export function saveUploadedLockup(brand = {}, { name, bytes } = {}) {
+  if (!brand.uploadDir) throw new Error('This video cannot store a logo yet');
+  const ext = extname(String(name || '')).toLowerCase();
+  if (!UPLOAD_EXT.has(ext)) throw new Error('Upload an SVG, PNG, JPEG, or WebP logo');
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
+  if (!buf.length) throw new Error('That file is empty');
+  if (buf.length > UPLOAD_MAX) throw new Error('Logo must be under 1.5 MB');
+  const problem = uploadProblem(ext, buf);
+  if (problem) throw new Error(problem);
+  mkdirSync(brand.uploadDir, { recursive: true });
+  const file = `logo-upload${ext}`;
+  writeFileSync(join(brand.uploadDir, file), buf);
+  for (const existing of readdirSync(brand.uploadDir)) {
+    if (/^logo-upload\./i.test(existing) && existing !== file) unlinkSync(join(brand.uploadDir, existing));
+  }
+  return file;
+}
+
+function uploadProblem(ext, buf) {
+  if (ext === '.png') {
+    return buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
+      ? null
+      : 'That file is not a PNG logo';
+  }
+  if (ext === '.jpg' || ext === '.jpeg') {
+    return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff ? null : 'That file is not a JPEG logo';
+  }
+  if (ext === '.webp') {
+    return buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP'
+      ? null
+      : 'That file is not a WebP logo';
+  }
+  const text = buf.toString('utf8');
+  if (!/<svg[\s>]/i.test(text)) return 'That file is not an SVG logo';
+  if (/<script\b|javascript:|on[a-z]+\s*=|<foreignObject/i.test(text)) return 'That SVG is not a plain logo';
+  return null;
+}
+
 export function lockupHtml(brand, file) {
-  const safe = file && file === basename(file) && LOCKUP_EXT.has(extname(file).toLowerCase()) ? file : null;
-  if (!safe || !brand.dir) return brand.logoHtml;
-  const path = join(brand.dir, safe);
-  if (!existsSync(path)) return brand.logoHtml;
+  const path = lockupPath(brand, file);
+  if (!path) return brand.logoHtml;
+  const safe = basename(path);
   const ext = extname(safe).toLowerCase();
   if (ext === '.html') return readFileSync(path, 'utf8');
   if (ext === '.svg') {

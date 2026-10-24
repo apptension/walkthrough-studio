@@ -165,6 +165,40 @@ export function pickTransition(style: string): void {
   saveTransitions({ style });
 }
 
+/* ———————————————————————————————————————————— plate layouts */
+
+interface LayoutResponse {
+  layout: string | null;
+  plates?: HtmlPlate[];
+}
+
+/** POST /plates/:id/layout, then show the rebuilt plate so the new composition is on screen. */
+export async function pickPlateLayout(plateId: string, layout: string): Promise<void> {
+  try {
+    const r = await api<LayoutResponse>(`/api/video/${encSlug()}/plates/${enc(plateId)}/layout`, {
+      method: 'POST',
+      body: { layout },
+    });
+    const v = desk.get().video;
+    if (v) {
+      const next = r.layout || layout;
+      patchVideo(
+        plateId === 'open' || plateId === 'close'
+          ? { plateLayouts: { ...(v.plateLayouts || { open: 'classic', close: 'classic' }), [plateId]: next } }
+          : { interstitials: v.interstitials.map((i) => (i.id === plateId ? { ...i, layout: next } : i)) },
+      );
+      if (r.plates) patchVideo({ htmlPlates: r.plates });
+    }
+    if (r.plates) renderHtmlPlatePicker(r.plates);
+    if (desk.get().activePlateId === plateId) await bridges.plate?.loadPlateFrame?.(plateId, { force: true });
+    else bridges.plate?.showPlateHtml(plateId);
+    if (bridges.editor?.active) await bridges.editor.refresh();
+    toast('Layout set', `${plateId} · ${r.layout || layout} — render plates to encode`, 'ok');
+  } catch (err) {
+    toast('Layout not saved', errMessage(err), 'err');
+  }
+}
+
 /* ———————————————————————————————————————————— live cards */
 
 export async function applyOverlaysLook(): Promise<void> {
@@ -267,6 +301,51 @@ export async function pickLogo(logo: string): Promise<void> {
   const r = await saveDirection({ logo }, { quiet: true });
   await syncEditorAfterDirection({ plates: true });
   toast('Logo set', r.direction.logo, 'ok');
+}
+
+const LOGO_EXT = new Set(['.svg', '.png', '.jpg', '.jpeg', '.webp']);
+const LOGO_MAX = 1_500_000;
+
+function readFileBytes(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read that logo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function fileBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+/** Upload a logo for this video and select it. The shared brand pack is unchanged. */
+export async function uploadLogo(file: File): Promise<void> {
+  const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+  if (!LOGO_EXT.has(ext)) {
+    toast('Logo not added', 'Use an SVG, PNG, JPEG, or WebP', 'err');
+    return;
+  }
+  if (file.size > LOGO_MAX) {
+    toast('Logo too large', 'Keep it under 1.5 MB', 'err');
+    return;
+  }
+  try {
+    const data = fileBase64(await readFileBytes(file));
+    const r = await api<DirectionResponse>(`/api/video/${encSlug()}/logo`, { method: 'POST', body: { name: file.name, data } });
+    patchVideo({ direction: r.direction, motion: r.motion, transitions: r.transitions });
+    renderDirection(r.direction);
+    await syncEditorAfterDirection({ plates: true });
+    toast('Logo set', 'Uploaded for this video', 'ok');
+  } catch (err) {
+    toast('Logo not added', errMessage(err), 'err');
+    throw err;
+  }
 }
 
 export function pickFocus(focus: string): void {
