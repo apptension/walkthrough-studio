@@ -1,6 +1,13 @@
 /** Compare two briefs and name the preparation that has to run again. Passwords are never part of the diff. */
 import { requireVideoLanguage } from './languages.js';
 
+/** Keep in step with kit/lib/length.mjs. Inlined so the studio page does not fetch a server module. */
+function clampLengthSec(value, fallback = 120) {
+  const n = Number(value);
+  const picked = Number.isFinite(n) && n > 0 ? n : fallback;
+  return Math.min(60 * 60, Math.max(30, Math.round(Number(picked) || fallback)));
+}
+
 const STORY = new Set([
   'title',
   'language',
@@ -193,7 +200,7 @@ export function nextBrief(current = {}, payload = {}) {
     audience: payload.audience ?? current.audience,
     outcome: payload.outcome ?? current.outcome,
     purpose: payload.purpose ?? current.purpose,
-    lengthSec: Number(story.lengthSec || current.lengthSec || 120),
+    lengthSec: clampLengthSec(story.lengthSec || current.lengthSec),
     tone: story.tone ?? current.tone,
     brand: brand.id
       ? { ...(current.brand || {}), id: brand.id, mode: brand.mode || 'existing', name: brand.name || current.brand?.name || null, url: brand.url || current.brand?.url || null }

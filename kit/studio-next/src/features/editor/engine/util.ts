@@ -16,6 +16,7 @@ export const LENS_PRESETS = [1.4, 1.8, 2.2];
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 export const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 export const CUT_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.35"/><circle cx="6" cy="17.5" r="2.35"/><path d="m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5"/></svg>`;
+export const DUP_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.2"/><path d="M15.5 8.5V6.2A2.2 2.2 0 0 0 13.3 4H6.2A2.2 2.2 0 0 0 4 6.2v7.1a2.2 2.2 0 0 0 2.2 2.2h2.3"/></svg>`;
 export const fmtRate = (r: number | string): string => `${Number(r).toFixed(2).replace(/\.?0+$/, '')}×`;
 
 /** Smootherstep — the stage's own transition preview curve (xfade dissolves use the same). */

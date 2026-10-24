@@ -87,6 +87,8 @@ export interface CardTiming {
   key: string;
   t: number;
   dur: number;
+  /** A duplicated card: the key of the card whose copy and look it shows. */
+  copyOf?: string;
 }
 
 export interface Trim {
@@ -109,6 +111,8 @@ export interface DeckEdit {
   layouts?: LayoutRow[];
   order: string[];
   omit: string[];
+  /** Duplicated sections, `<source id>+<n>`; each plays again right after its source. */
+  repeats?: string[];
   trims: Trim[];
   cuts: Span[];
 }
@@ -138,6 +142,7 @@ export interface DeckMark {
   dur?: number | null;
   label?: string;
   key?: string;
+  copyOf?: string;
   x?: number;
   y?: number;
 }
@@ -227,6 +232,8 @@ export interface DeckScene {
   cleanFrom?: number | null;
   cleanTo?: number | null;
   plateId?: string | null;
+  /** Set on a section the Editor duplicated (`edit.repeats`): the id it plays again. */
+  repeatOf?: string;
   htmlUrl?: string | null;
   mp4Url?: string | null;
 }
@@ -261,6 +268,7 @@ export interface DeckPlate {
   style?: Record<string, string>;
   motion?: Record<string, string | undefined>;
   overrides?: string[];
+  layout?: string | null;
   [key: string]: unknown;
 }
 
@@ -463,6 +471,7 @@ export interface Clip {
   recFrom: number;
   recTo: number;
   join: Join | null;
+  repeatOf?: string;
 }
 
 /** `ed.sel` — what the inspector shows. */

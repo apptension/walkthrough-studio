@@ -55,6 +55,28 @@ export interface AgentAuth {
   active: AgentRunner | null;
   available: boolean;
   switchable?: boolean;
+  /** Saved model id per runner; null means the CLI's own default. */
+  models?: Partial<Record<AgentProvider, string | null>>;
+}
+
+export type AgentModelFamily = 'default' | 'claude' | 'gpt' | 'gemini' | 'grok' | 'composer' | 'other';
+
+export interface AgentModel {
+  /** '' is the runner's default (Cursor "Auto", Claude Code's account default). */
+  id: string;
+  label: string;
+  family: AgentModelFamily;
+  note?: string;
+  custom?: boolean;
+}
+
+export interface AgentModelList {
+  provider: AgentProvider;
+  current: string | null;
+  models: AgentModel[];
+  source: 'cli' | 'aliases' | 'fallback';
+  fetchedAt: string | null;
+  error?: string;
 }
 
 export interface Health {
@@ -210,6 +232,8 @@ export interface BrandFoundation {
   name: string;
   platform: string;
   font: string;
+  /** An https web-font stylesheet for `font`, or empty. */
+  fontCss?: string;
   accent: string;
   logo: string;
   colors: Record<string, string>;
@@ -218,6 +242,35 @@ export interface BrandFoundation {
   issues: string[];
   discovery: { at?: string; url?: string } | null;
   lockups: Lockup[];
+}
+
+/* ----------------------------------------------------------------- explore */
+
+/** One screen the explore agent reached (`lib/exploreFeed.mjs`). */
+export interface ExploreScreen {
+  id: string;
+  label: string;
+  title: string;
+  url: string;
+  path: string;
+  dialog: string | null;
+  heading: string;
+  reachedBy: { from: string | null; action: string; label: string } | null;
+  controls: number;
+  tried: number;
+  shot: string | null;
+}
+
+/** `GET /api/video/:slug/explore-feed`. */
+export interface ExploreFeed {
+  startedAt: string | null;
+  signedIn: boolean;
+  current: string | null;
+  screens: ExploreScreen[];
+  moves: Array<{ at: string | null; from: string | null; action: string; label: string }>;
+  notes: Array<{ screen: string | null; text: string }>;
+  shots: number;
+  preview: string | null;
 }
 
 /* --------------------------------------------------------------- direction */
@@ -316,7 +369,15 @@ export interface MotionOptions {
   titleReveals: string[];
   titleRevealLabels: Record<string, string>;
   depths: string[];
+  /** Compositions per plate kind: `open`, `close` and interstitial types with more than one. */
+  layouts?: Record<string, LayoutOption[]>;
   lookVars: Record<string, Record<string, Record<string, string>>>;
+}
+
+export interface LayoutOption {
+  id: string;
+  label: string;
+  hint: string;
 }
 
 export interface Overlays {
@@ -626,7 +687,8 @@ export interface VideoSummary {
   script?: { scenes?: Array<{ holdSec?: number | null; narrationSec?: number | null }> } | null;
   brief: Brief | null;
   lineage: { parent?: string; children?: string[]; role?: string; folderId?: string; branchedFrom?: string } | null;
-  interstitials: Array<{ id: string; type: string; before: string; title: string; overrides: string[] }>;
+  interstitials: Array<{ id: string; type: string; before: string; title: string; overrides: string[]; layout?: string | null }>;
+  plateLayouts?: { open: string; close: string };
   plateAccents: Record<string, string[]>;
   plateStyles: Record<string, number>;
   editSummary: string;

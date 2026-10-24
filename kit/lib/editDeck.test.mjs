@@ -5,10 +5,14 @@ import {
   applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
+  applySegmentRepeats,
   applySegmentTrims,
   cardMarkKey,
   compactEdit,
   describeDeck,
+  detachedPlate,
+  isRepeatId,
+  parseRepeatId,
   editCameraMarks,
   injectStyle,
   joinKey,
@@ -127,6 +131,79 @@ test('a sequence order permutes the slices and stores only when it differs', () 
   assert.deepEqual(deck.order, ['open', 'close']);
   assert.deepEqual(compactEdit(deck).order, ['open', 'close']);
   assert.equal(compactEdit(patchEdit(deck, { order: [] })), undefined);
+});
+
+test('a duplicated section plays again right after its source, and its pieces keep their own ids', () => {
+  const segs = [
+    { id: 'open', kind: 'plate' },
+    { id: 'live-0.00', kind: 'live', recFrom: 0, recTo: 10, start: 0, end: 10 },
+    { id: 'capabilities', kind: 'plate' },
+    { id: 'close', kind: 'plate' },
+  ];
+  const deck = normalizeEdit({ repeats: ['capabilities+2', 'live-0.00+3', 'live-0.00+2', 'nope', 'x+1', 'capabilities+2'] });
+  assert.deepEqual(deck.repeats, ['capabilities+2', 'live-0.00+3', 'live-0.00+2']);
+  assert.deepEqual(compactEdit(deck).repeats, deck.repeats);
+  assert.equal(parseRepeatId('live-0.00+2').of, 'live-0.00');
+  assert.equal(isRepeatId('live-0.00'), false);
+  const out = applySegmentRepeats(segs, deck.repeats);
+  assert.deepEqual(out.map((s) => s.id), ['open', 'live-0.00', 'live-0.00+2', 'live-0.00+3', 'capabilities', 'capabilities+2', 'close']);
+  assert.equal(out[2].repeatOf, 'live-0.00');
+  assert.equal(out[2].recTo, 10);
+  // A plate replay shares the source's pinned transitions.
+  assert.equal(joinKey(out[4], out[5]), 'capabilities>capabilities');
+  // Order can move a replay; trims and cuts apply to it by its own id.
+  const moved = applySegmentOrder(out, ['open', 'capabilities+2', 'live-0.00', 'capabilities', 'close']);
+  assert.deepEqual(moved.map((s) => s.id).slice(0, 3), ['open', 'capabilities+2', 'live-0.00']);
+  const trimmed = applySegmentTrims(out, [{ id: 'live-0.00+2', trimStart: 4 }]);
+  assert.equal(trimmed[2].recFrom, 4);
+  assert.equal(trimmed[1].recFrom, 0);
+  const cut = applySegmentCuts(out, [{ from: 5, to: 6 }]);
+  const ids = cut.map((s) => s.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes('live-6.00+2') && ids.includes('live-6.00'));
+});
+
+test('a duplicated card shows the source card again at its own time', () => {
+  const mark = { kind: 'caption', t: 4, dur: 2, label: 'Pick a plan' };
+  const key = cardMarkKey(mark);
+  const cards = normalizeCards([{ key: `${key}#2`, copyOf: key, t: 12 }, { key: 'k', copyOf: 'k' }]);
+  assert.deepEqual(cards, [{ key: `${key}#2`, t: 12, copyOf: key }]);
+  const marks = applyCardEdits([{ ...mark, key }, { kind: 'click', t: 8 }], cards);
+  const copy = marks.find((m) => m.copyOf);
+  assert.deepEqual(
+    { t: copy.t, dur: copy.dur, label: copy.label, key: copy.key },
+    { t: 12, dur: 2, label: 'Pick a plan', key: `${key}#2` }
+  );
+  assert.deepEqual(marks.map((m) => m.t), [4, 8, 12]);
+  // A copy whose source is gone disappears with it.
+  assert.equal(applyCardEdits([{ kind: 'click', t: 1 }], cards).length, 1);
+});
+
+test('a plate replay made its own copies the plate, or turns a bookend into an interstitial', () => {
+  const config = {
+    title: 'Demo',
+    open: { eyebrow: 'How-to', title: ['Find the *right* stories', 'fast'], sub: 'Open the thread' },
+    close: { title: ['Right stories.'], steps: [{ label: '1. Open', note: 'a' }, { label: '2. Scout', note: 'b' }, { label: '3. Switch', note: 'c' }], tagline: 'Go' },
+    interstitials: [{ id: 'map', type: 'journey', before: 'Feed', steps: [{ label: 'A' }] }],
+  };
+  const marks = [{ kind: 'chapter', t: 2, label: 'Feed' }, { kind: 'chapter', t: 30, label: 'Ask' }];
+  const map = detachedPlate(config, 'map', marks);
+  assert.deepEqual(map, config.interstitials[0]);
+  assert.notEqual(map, config.interstitials[0]);
+  assert.deepEqual(detachedPlate(config, 'open', marks), {
+    type: 'statement',
+    before: 'Feed',
+    title: ['Find the *right* stories', 'fast'],
+    sub: 'Open the thread',
+    eyebrow: 'How-to',
+  });
+  const close = detachedPlate(config, 'close', marks);
+  assert.equal(close.type, 'process');
+  assert.equal(close.before, 'Ask');
+  assert.deepEqual(close.steps.map((s) => s.label), ['Open', 'Scout', 'Switch']);
+  assert.equal(detachedPlate({ ...config, close: { title: 'Bye' } }, 'close', marks).type, 'statement');
+  assert.throws(() => detachedPlate(config, 'open', []), /chapter/);
+  assert.throws(() => detachedPlate(config, 'nope', marks), /No plate/);
 });
 
 test('omit drops sections from the cut but never empties it', () => {

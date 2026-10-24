@@ -29,6 +29,21 @@
   margin: 0;
   padding: 0;
 }
+/* House kicker: copy is authored in sentence case (kit/lib/copyCase.mjs); the capitals and the
+   tracking come only from here, so every plate's eyebrow reads the same. */
+:root {
+  --eyebrow-size: 15px;
+  --eyebrow-weight: 600;
+  --eyebrow-track: 0.32em;
+}
+.eyebrow {
+  font-size: var(--eyebrow-size);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-track);
+  text-transform: uppercase;
+  font-feature-settings: 'case' 1;
+  color: var(--gold);
+}
 /* Vertical master canvas — kit/lib/format.mjs OUTPUT_FRAMES.portrait */
 html[data-frame='portrait'] {
   --wt-frame-w: 1080px;

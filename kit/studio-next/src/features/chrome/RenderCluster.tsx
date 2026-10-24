@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent,
 
 import { requestMake } from '@/desk/jobs';
 import { showRightTab } from '@/desk/panels';
+import { useRenderStop } from '@/desk/renderStop';
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 import {
@@ -83,30 +85,29 @@ function useChip(): ChipView {
 
 /** `#btnMake` — the label `renderActionCard` sets and the `updateQueueBadge` count. */
 function MakeButton({ describedBy }: { describedBy?: string }) {
-  const busy = useDesk((s) => Boolean(s.busy['btnMake']));
+  const { busy, stopping, stop } = useRenderStop('btnMake');
   const label = useDesk((s) => s.action?.makeLabel ?? 'Render');
   const queued = useDesk((s) => s.queue.length);
   return (
-    <button
-      type="button"
+    <NeonButton
       id="btnMake"
-      className={busy ? 'btn primary icon-text busy' : 'btn primary icon-text'}
-      title={describedBy ? undefined : 'Render / rebuild delivery'}
-      aria-label={label}
-      aria-describedby={describedBy}
-      disabled={busy}
-      onClick={() => requestMake()}
+      className={busy ? 'btn primary icon-text is-stop' : 'btn primary icon-text'}
+      title={busy ? 'Stop the running job and clear the queue' : describedBy ? undefined : 'Render / rebuild delivery'}
+      aria-label={busy ? (stopping ? 'Stopping' : 'Stop') : label}
+      aria-describedby={busy ? undefined : describedBy}
+      disabled={stopping}
+      onClick={() => (busy ? stop() : requestMake())}
     >
-      <Icon name="ui-play-fill" size={14} />
+      <Icon name={busy ? 'ui-stop' : 'ui-play-fill'} size={14} />
       {' '}
       <span id="btnMakeLabel" className="btn-label">
-        {label}
+        {busy ? (stopping ? 'Stopping…' : 'Stop') : label}
       </span>
       {' '}
       <span id="queueBadge" className="queue-badge" hidden={queued === 0}>
         {String(queued)}
       </span>
-    </button>
+    </NeonButton>
   );
 }
 

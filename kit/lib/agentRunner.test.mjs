@@ -36,6 +36,25 @@ test('draft and voice prompts write in the video language, and a missing languag
   assert.match(buildPrompt({ ...video, config: { purpose: 'overview' } }, 'script'), /^Video language: English \(en\)/);
 });
 
+test('writing prompts share the video’s tone, and the draft chooses the narrator and the bed', () => {
+  const video = {
+    slug: 'demo',
+    dir: '/tmp/walkthrough-tone-prompt',
+    out: '/tmp/walkthrough-tone-prompt',
+    config: { purpose: 'onboarding', tone: { words: ['warm', 'patient'], persona: 'a patient coach', do: [], avoid: [] } },
+    brand: { dir: '/tmp/walkthrough-tone-brand', motionBrief: 'motion-brief.md', logo: 'logo.html' },
+  };
+  const draft = buildPrompt(video, 'draft');
+  assert.match(draft, /Voice and tone — warm, patient/);
+  assert.match(draft, /Speak as a patient coach/);
+  assert.match(draft, /audio\.voice: \{ "name", "voiceId"/);
+  assert.match(draft, /Brian nPczCjzI2devNBz1zQrb/);
+  assert.match(draft, /negativeStyles/);
+  for (const goal of ['script', 'plates', 'narration', 'take-recraft']) assert.match(buildPrompt(video, goal), /Voice and tone — warm, patient/, goal);
+  assert.match(buildPrompt(video, 'voice'), /Sound — narrator and music bed/);
+  assert.doesNotMatch(buildPrompt(video, 'explore'), /Voice and tone/);
+});
+
 test('agentPreference reads WALKTHROUGH_AGENT', () => {
   const prev = process.env.WALKTHROUGH_AGENT;
   try {
@@ -121,6 +140,24 @@ test('a shown tour drives the draft; guided-script and take-recraft name their s
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('script-writing prompts carry the generated ctx contract and the self-check command', () => {
+  const video = {
+    slug: 'demo',
+    dir: '/tmp/walkthrough-contract-prompt',
+    out: '/tmp/walkthrough-contract-prompt',
+    config: { purpose: 'overview' },
+    brand: { dir: '/tmp/walkthrough-contract-brand', motionBrief: 'motion-brief.md', logo: 'logo.html' },
+  };
+  for (const goal of ['draft', 'branch', 'guided-script', 'capture-repair']) {
+    const prompt = buildPrompt(video, goal);
+    assert.match(prompt, /these are the ONLY ctx members/, goal);
+    assert.match(prompt, /typeInto\(locator, value/, goal);
+    assert.match(prompt, /optional\(label/, goal);
+    assert.match(prompt, /cli\.mjs check-flow demo/, goal);
+  }
+  assert.doesNotMatch(buildPrompt(video, 'narration'), /ONLY ctx members/);
 });
 
 test('agent prompts name the recording device and the video shape', async () => {

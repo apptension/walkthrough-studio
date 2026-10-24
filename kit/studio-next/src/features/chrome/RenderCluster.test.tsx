@@ -10,7 +10,7 @@ import { makeVideo } from '@/test/factories';
 import { RenderCluster } from './RenderCluster';
 import { NOTICE_MS } from './renderStatus';
 
-vi.mock('@/desk/jobs', () => ({ requestMake: vi.fn() }));
+vi.mock('@/desk/jobs', () => ({ requestMake: vi.fn(), stopAllWork: vi.fn() }));
 vi.mock('@/desk/panels', () => ({ showRightTab: vi.fn() }));
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;

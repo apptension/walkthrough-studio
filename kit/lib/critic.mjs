@@ -268,6 +268,27 @@ function critiqueTimeline(video) {
   return findings;
 }
 
+/** House copy style (sentence case, closing punctuation, typography) from the script's scene lint. */
+export function critiqueCopyStyle(scenes = []) {
+  const findings = [];
+  for (const scene of scenes) {
+    for (const issue of scene.issues || []) {
+      if (!issue.fix) continue;
+      const { plateId, flowIndex, field, from, text, fixes = [] } = issue.fix;
+      findings.push({
+        severity: 'low',
+        persona: 'skeptic',
+        action: 'change',
+        target: plateId ? `${plateId}.${field}` : `flow:${scene.title}.${field}`,
+        issue: `Off house copy style: “${from}”${fixes.length ? ` — ${fixes.join(', ')}` : ''}.`,
+        suggestion: text,
+        apply: { type: 'copy', plateId, flowIndex, field, text },
+      });
+    }
+  }
+  return findings;
+}
+
 function renderMarkdown(video, fingerprint, personas, findings, plateSuggest, purpose, samples = []) {
   const spine = PURPOSES[purpose];
   const byPersona = Object.fromEntries(PERSONAS.map((p) => [p.id, []]));
@@ -395,6 +416,7 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
     ...critiqueStructure(video, plateSuggest),
     ...critiqueTimeline(video),
     ...critiqueSpokenFrames(beats),
+    ...critiqueCopyStyle(scenes),
   ];
 
   const report = {

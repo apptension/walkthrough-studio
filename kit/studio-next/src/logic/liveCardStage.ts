@@ -11,6 +11,8 @@ export interface CardMark {
   dur?: number | null;
   label?: string;
   key?: string;
+  /** A duplicated card shows the card with this key. */
+  copyOf?: string;
 }
 
 export interface RecWindow {
@@ -123,7 +125,7 @@ export function resolveLiveCardFromPlates<P extends LiveCardPlate>(
   const kind = mark.kind === 'chapter' ? 'chapter' : 'caption';
   const list = (plates || []).filter((p) => p.liveCard && (p.kind === kind || p.type === kind));
   if (!list.length) return null;
-  const key = mark.key || cardMarkKey(mark);
+  const key = mark.copyOf || mark.key || cardMarkKey(mark);
   const byKey = list.find((p) => p.markKey && p.markKey === key);
   if (byKey) return byKey;
   // A keyed row that belongs to another mark must not be stolen by a label collision below.

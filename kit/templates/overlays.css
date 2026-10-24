@@ -492,8 +492,9 @@
   gap: 16px;
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.34em;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
+  font-feature-settings: 'case' 1;
   color: var(--wt-gold);
   opacity: 0;
   animation: wtFadeUp calc(0.75s * var(--wt-enter-scale, 1)) calc(0.22s - var(--el, 0s)) cubic-bezier(0.16, 1, 0.3, 1) both,
@@ -698,6 +699,7 @@ html[data-frame='portrait'] .wt-ch .content {
   font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
+  font-feature-settings: 'case' 1;
   color: var(--wt-gold);
   white-space: nowrap;
   overflow: hidden;

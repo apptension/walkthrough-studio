@@ -83,6 +83,15 @@ describe('payload', () => {
     expect(settings.capture).toEqual({ mode: 'agent' });
   });
 
+  it('keeps any length in minutes and caps an hour', () => {
+    const ten = payload(reader({ ...basics, lengthSec: '600' }), { newProject: true, capture: null });
+    expect(ten.story.lengthSec).toBe(600);
+    const huge = payload(reader({ ...basics, lengthSec: '99999' }), { newProject: true, capture: null });
+    expect(huge.story.lengthSec).toBe(3600);
+    const missing = payload(reader(basics), { newProject: true, capture: null });
+    expect(missing.story.lengthSec).toBe(120);
+  });
+
   it('sends the screen preset with its measured size', () => {
     expect(captureChoice(options, 'screen')).toEqual({ preset: 'screen', width: 2560, height: 1440, dpr: 2 });
     expect(captureChoice(options, 'missing')).toBeNull();

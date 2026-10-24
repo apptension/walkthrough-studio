@@ -5,6 +5,14 @@
  * never edit kit/studio/styles.css for next-only polish.
  */
 @import './studio.css';
+@import './brand-creator.css';
+@import './agent-model.css';
+@import './plate-layouts.css';
+@import './creation-theater.css';
+@import './wizard-onboarding.css';
+@import './direction-logo.css';
+@import './editor-duplicate.css';
+@import './neon-button.css';
 
 /* React mounts into #root; the legacy layout expects the chrome, stage bar and
    workspace to be direct flex children of <body>. */
@@ -575,7 +583,7 @@
 }
 
 .render-cluster:has(.render-fresh-chip[data-click='render']:hover) #btnMake:not(:disabled) {
-  background: var(--brand-fill-hot);
+  background: var(--neon-sheen), var(--brand-fill-hot);
 }
 
 /* —— Why it's out of date —— */

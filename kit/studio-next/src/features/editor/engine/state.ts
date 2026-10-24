@@ -278,6 +278,7 @@ export const deckEdit = (): DeckEdit =>
     layouts: [],
     order: [],
     omit: [],
+    repeats: [],
     trims: [],
     cuts: [],
   };

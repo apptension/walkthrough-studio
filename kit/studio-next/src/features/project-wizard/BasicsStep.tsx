@@ -1,7 +1,87 @@
-import { HelpTip } from '@/ui/HelpTip';
+import { useEffect, useRef, useState } from 'react';
 
+import { clampLengthSec, LENGTH_MAX_SEC, LENGTH_PRESETS } from '@/logic/length';
+import { HelpTip } from '@/ui/HelpTip';
+import { Icon } from '@/ui/icons';
+
+import { BrandPicker } from './BrandPicker';
+import { PURPOSES } from './briefSignals';
 import { LanguageField } from './LanguageField';
-import { useWizard } from './wizard';
+import { setLengthSec, useWizard } from './wizard';
+
+const PRESET_LABEL: Record<(typeof LENGTH_PRESETS)[number], string> = { 60: '1 min', 90: '1.5 min', 120: '2 min', 180: '3 min' };
+
+function minutesText(sec: number): string {
+  const min = Math.round((sec / 60) * 10) / 10;
+  return Number.isInteger(min) ? String(min) : min.toFixed(1);
+}
+
+/** Presets plus a minutes field. One checked radio carries the seconds, so the form still submits `lengthSec`. */
+function LengthField() {
+  const sec = useWizard((s) => s.lengthSec);
+  const field = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState(() => minutesText(sec));
+  const custom = !(LENGTH_PRESETS as readonly number[]).includes(sec);
+
+  useEffect(() => {
+    if (document.activeElement !== field.current) setText(minutesText(sec));
+  }, [sec]);
+
+  const write = (next: number) => {
+    setLengthSec(next);
+    setText(minutesText(clampLengthSec(next)));
+    document.getElementById('projectForm')?.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const commit = (raw: string) => {
+    const n = Number(raw.trim().replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) {
+      setText(minutesText(sec));
+      return;
+    }
+    write(Math.round(n * 60));
+  };
+
+  return (
+    <div className="wf wz-length-field">
+      <span className="field-label" id="lenLabel">
+        Length
+      </span>
+      <div className="wz-length">
+        <input type="radio" name="lengthSec" value={String(sec)} checked onChange={() => {}} aria-hidden="true" tabIndex={-1} />
+        <div className="seg wz-len" role="group" aria-labelledby="lenLabel">
+          {LENGTH_PRESETS.map((preset) => (
+            <button key={preset} type="button" className={sec === preset ? 'is-on' : undefined} aria-pressed={sec === preset} onClick={() => write(preset)}>
+              {PRESET_LABEL[preset]}
+            </button>
+          ))}
+        </div>
+        <label className={`wz-length-any${custom ? ' is-custom' : ''}`}>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0.5}
+            max={LENGTH_MAX_SEC / 60}
+            step={0.5}
+            ref={field}
+            aria-label="Length in minutes"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={(e) => commit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit(e.currentTarget.value);
+              }
+            }}
+          />
+          <span>min</span>
+        </label>
+      </div>
+      <small>Any length up to 60 min. A longer video takes longer to render.</small>
+    </div>
+  );
+}
 
 /** Step 1 · Basics — what the video is, who it is for, and its brand. */
 export function BasicsStep({ hidden, withLanguage }: { hidden: boolean; withLanguage: boolean }) {
@@ -68,78 +148,26 @@ export function BasicsStep({ hidden, withLanguage }: { hidden: boolean; withLang
           What the video is for
           <HelpTip text="Sets the story spine the agent writes to: Overview is Problem → Promise → Proof → Path → Payoff; Feature is Before → After → Bridge; Onboarding is Goal → Map → Steps → First win; Launch is Shift → What's new → Why now → Try it; Sales is Problem → Agitate → Solve → Prove → Ask. You can change it later in Review." label="What the video is for" />
         </span>
-        <div className="seg" role="radiogroup" aria-labelledby="purposeLabel">
-          <label title="Problem → Promise → Proof → Path → Payoff">
-            <input type="radio" name="purpose" value="overview" data-label="Product overview" defaultChecked />
-            <span>
-              Overview
-            </span>
-          </label>
-          {' '}
-          <label title="Before → After → Bridge">
-            <input type="radio" name="purpose" value="feature" data-label="Feature spotlight" />
-            <span>
-              Feature
-            </span>
-          </label>
-          {' '}
-          <label title="Goal → Map → Steps → First win">
-            <input type="radio" name="purpose" value="onboarding" data-label="Onboarding / how-to" />
-            <span>
-              Onboarding
-            </span>
-          </label>
-          {' '}
-          <label title="Shift → What's new → Why now → Try it">
-            <input type="radio" name="purpose" value="launch" data-label="Release / launch" />
-            <span>
-              Launch
-            </span>
-          </label>
-          {' '}
-          <label title="Problem → Agitate → Solve → Prove → Ask">
-            <input type="radio" name="purpose" value="sales" data-label="Sales demo" />
-            <span>
-              Sales demo
-            </span>
-          </label>
+        <div className="wz-purpose" role="radiogroup" aria-labelledby="purposeLabel">
+          {PURPOSES.map((p) => (
+            <label key={p.value} className="wz-pcard" title={p.spine.join(' → ')}>
+              <input type="radio" name="purpose" value={p.value} data-label={p.label} defaultChecked={p.value === 'overview'} />
+              <span className="wz-pcard-ico">
+                <Icon name={p.icon} size={14} />
+              </span>
+              <strong>{p.name}</strong>
+              <em>{p.blurb}</em>
+              <span className="wz-spine" aria-hidden="true">
+                {p.spine.map((beat) => (
+                  <i key={beat}>{beat}</i>
+                ))}
+              </span>
+            </label>
+          ))}
         </div>
       </div>
       <div className="wf-row">
-        <div className="wf">
-          <span className="field-label" id="lenLabel">
-            Length
-          </span>
-          <div className="seg" role="radiogroup" aria-labelledby="lenLabel">
-            <label>
-              <input type="radio" name="lengthSec" value="60" />
-              <span>
-                1 min
-              </span>
-            </label>
-            {' '}
-            <label>
-              <input type="radio" name="lengthSec" value="90" />
-              <span>
-                1.5 min
-              </span>
-            </label>
-            {' '}
-            <label>
-              <input type="radio" name="lengthSec" value="120" defaultChecked />
-              <span>
-                2 min
-              </span>
-            </label>
-            {' '}
-            <label>
-              <input type="radio" name="lengthSec" value="180" />
-              <span>
-                3 min
-              </span>
-            </label>
-          </div>
-        </div>
+        <LengthField />
         <label className="wf">
           <span className="field-label">
             Tone
@@ -179,7 +207,8 @@ export function BasicsStep({ hidden, withLanguage }: { hidden: boolean; withLang
         </div>
       </div>
       <div data-brand="existing" hidden={brandNew}>
-        <label className="wf">
+        <BrandPicker />
+        <label className="wf wz-sr">
           <span className="field-label">
             Brand
           </span>

@@ -97,7 +97,7 @@ test('an unknown or unready brand becomes a new brand with the marketing site; b
       purpose: 'nonsense',
       brand: { mode: 'existing', id: 'pending', name: 'Pending Co' },
       app: { marketingUrl: 'https://pending.co', loginRequired: false, email: 'leak@x.com' },
-      story: { lengthSec: 75 },
+      story: { lengthSec: 'soon' },
     },
     { brands, startUrl: 'https://app.pending.co', language: 'xx-not-a-language' }
   );
@@ -113,6 +113,12 @@ test('an unknown or unready brand becomes a new brand with the marketing site; b
 test('a ready pack is matched by name when the agent did not know its id', () => {
   const brief = normalizeBriefDraft({ title: 'X', brand: { mode: 'new', name: 'acme' } }, { brands, startUrl: 'https://acme.com' });
   assert.deepEqual(brief.brand, { mode: 'existing', id: 'acme' });
+});
+
+test('a stated length is kept and an absurd one is capped at an hour', () => {
+  assert.equal(normalizeBriefDraft({ story: { lengthSec: 75 } }).story.lengthSec, 75);
+  assert.equal(normalizeBriefDraft({ story: { lengthSec: 600 } }).story.lengthSec, 600);
+  assert.equal(normalizeBriefDraft({ story: { lengthSec: 99999 } }).story.lengthSec, 3600);
 });
 
 test('an empty object still yields a complete, form-ready shape', () => {

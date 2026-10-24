@@ -3,6 +3,7 @@ import { useEffect, type ChangeEvent } from 'react';
 import { useDesk } from '@/desk/store';
 
 import { FloatingCard } from '@/ui/FloatingCard';
+import { NeonButton } from '@/ui/NeonButton';
 
 import { accentOverrideCount, chrome, useEditorChrome, type AccentValues } from './engine/chrome';
 import { discardPlateCopyEdits, replayPlateButton, savePlateAccent, savePlateCopyEdits, togglePlateAccent } from './engine/plate';
@@ -182,8 +183,7 @@ export function PlateEditBar() {
           Discard
         </button>
         {' '}
-        <button
-          type="button"
+        <NeonButton
           id="btnPlateSaveCopy"
           className={saveBusy ? 'btn tiny primary busy' : 'btn tiny primary'}
           disabled={saveBusy || !dirty}
@@ -191,7 +191,7 @@ export function PlateEditBar() {
           onClick={() => void savePlateCopyEdits()}
         >
           Save
-        </button>
+        </NeonButton>
         {' '}
         <button type="button" id="btnPlateExit" className="btn tiny" title="Back to Program monitor" onClick={() => document.getElementById('modeProgram')?.click()}>
           Program

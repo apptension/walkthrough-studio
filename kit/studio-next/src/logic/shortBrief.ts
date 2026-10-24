@@ -1,5 +1,6 @@
 /** One description becomes an editable draft. Nothing here records. */
 
+import { lengthFromText } from './length';
 import { asText } from './text';
 
 /** An error that names the form field it belongs to. */
@@ -57,10 +58,7 @@ export function draftFromDescription({ description, startUrl }: { description?: 
   else if (/launch|release/i.test(text)) purpose = 'launch';
   else if (/sales|buyer/i.test(text)) purpose = 'sales';
   else if (/feature/i.test(text)) purpose = 'feature';
-  let lengthSec = 120;
-  if (/a minute|1 min|60 ?s(?:ec)?/i.test(text)) lengthSec = 60;
-  else if (/90|minute and a half/i.test(text)) lengthSec = 90;
-  else if (/3 min|three min/i.test(text)) lengthSec = 180;
+  const lengthSec = lengthFromText(text) ?? 120;
   const proof = /stat|percent|%/i.test(text) ? ['stats'] : /quote|customer said/i.test(text) ? ['quote'] : ['features'];
   return {
     title: firstChapter.split(/\s+/).slice(0, 8).join(' '),

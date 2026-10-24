@@ -1,11 +1,11 @@
-import { Fragment, useRef, type CSSProperties, type MouseEvent } from 'react';
+import { Fragment, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
 
 import type { Direction } from '@/api/types';
 import { useDesk } from '@/desk/store';
 import { renderKey } from '@/features/tools-panel/renderKey';
 import { Icon, SecIcon } from '@/ui/icons';
 
-import { pickFocus, pickLogo, pickPalette, setScaleColors } from './actions';
+import { pickFocus, pickLogo, pickPalette, setScaleColors, uploadLogo } from './actions';
 import { useNativeChange } from './useNativeChange';
 import { useDirectionView } from './view';
 
@@ -157,9 +157,22 @@ export function ColorScaleSection() {
 export function LogoSection() {
   const direction = useDirectionView((s) => s.direction);
   const slug = useDesk((s) => s.slug ?? '');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rev, setRev] = useState(0);
+  const [busy, setBusy] = useState(false);
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const btn = (e.target as Element).closest<HTMLElement>('[data-logo]');
     if (btn?.dataset.logo) quietly(pickLogo(btn.dataset.logo));
+  };
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || busy) return;
+    setBusy(true);
+    void uploadLogo(file)
+      .then(() => setRev(Date.now()))
+      .catch(() => {})
+      .finally(() => setBusy(false));
   };
   const lockups = direction?.lockups || [];
   return (
@@ -170,15 +183,14 @@ export function LogoSection() {
             <SecIcon name="logo" />
             Logo
           </strong>
-          <span>Captured lockups for this brand. The choice stays on this video.</span>
+          <span>Captured lockups for this brand, or upload a new one. The choice stays on this video.</span>
         </div>
       </div>
       <div className="logo-picks" id="logoGrid" role="radiogroup" aria-label="Logo lockup" onClick={onClick}>
-        {direction ? (
-          lockups.length ? (
-            lockups.map((lockup) => {
+        {direction
+          ? lockups.map((lockup) => {
               const on = lockup.file === direction.logo;
-              const src = `/api/video/${encodeURIComponent(slug)}/brand-file/${encodeURIComponent(lockup.file)}`;
+              const src = `/api/video/${encodeURIComponent(slug)}/brand-file/${encodeURIComponent(lockup.file)}${rev ? `?v=${rev}` : ''}`;
               return (
                 <button
                   key={lockup.file}
@@ -193,11 +205,29 @@ export function LogoSection() {
                 </button>
               );
             })
-          ) : (
-            <p className="meta">No captured logo in this brand pack.</p>
-          )
+          : null}
+        {direction && !lockups.length ? <p className="meta">No captured logo in this brand pack.</p> : null}
+        {direction ? (
+          <button
+            type="button"
+            className="logo-option logo-upload"
+            id="logoUploadBtn"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            <span className="logo-fallback">{busy ? '…' : 'New'}</span>
+            <strong>{busy ? 'Uploading' : 'Upload'}</strong>
+          </button>
         ) : null}
       </div>
+      <input
+        ref={fileRef}
+        id="logoUpload"
+        type="file"
+        accept="image/svg+xml,image/png,image/jpeg,image/webp,.svg,.png,.jpg,.jpeg,.webp"
+        hidden
+        onChange={onFile}
+      />
     </section>
   );
 }

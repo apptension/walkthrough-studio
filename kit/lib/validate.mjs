@@ -6,6 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { checkMusicCoverage } from './audio/coverage.mjs';
 import { scanFlashes } from './deflash.mjs';
 import { buildEditPlan } from './edit.mjs';
 import { masterQualityError } from './encode.mjs';
@@ -106,7 +107,14 @@ export function validate(video) {
     console.log('» flashes · No flashes');
     console.log('✓ no flashes in the delivered file');
   }
-  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ durationSec: dur, liveOffsetSec: dOpen, shots, flashes }, null, 2));
+  const music = checkMusicCoverage(video);
+  if (music.issues.length) {
+    console.log(`» music · ${music.issues.length} coverage issue(s)`);
+    for (const issue of music.issues) console.log(`⚠ ${issue}`);
+  } else if (music.checked) {
+    console.log('✓ music covers the picture without repeats');
+  }
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ durationSec: dur, liveOffsetSec: dOpen, shots, flashes, music: music.issues }, null, 2));
   const review = writeReview(video, meta, shots);
   console.log(`✓ ${shots.length} QC frames + contact sheet → ${dir}\n✓ review page → ${review}`);
   return { dir, sheet, review, shots };

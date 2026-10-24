@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Closing plate · split recap</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.2s;
+        --black-out: 5.5s;
+        --t-wipe-l: 1.75s;
+        --t-wipe-r: 1.85s;
+        --t-draw: 1.95s;
+        --t-word: 2.15s;
+        --t-trace: 1.7s;
+        --t-travel: 0.75s;
+        --t-sweep: 3.2s;
+        --x-title: 4.75s;
+        --x-steps: 4.87s;
+        --x-logo: 5.0s;
+        --n: {{STEP_COUNT}};
+        --close-logo: 1;
+        --close-logo-width: 480px;
+        --hold-from: 2.6s;
+        --hold-until: 3.85s;
+      }
+      /* Split recap: promise + mark on the left, the steps stack as cards on the right. */
+      .left {
+        position: absolute; left: 150px; top: 50%; width: 760px; transform: translateY(-50%);
+        display: flex; flex-direction: column; align-items: flex-start;
+      }
+      .title-exit { animation: exitUp 0.7s var(--x-title) var(--exit) forwards; }
+      .title { font-size: 80px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04; text-align: left; }
+      .title .accent {
+        background: linear-gradient(92deg, var(--gold) 0%, var(--amber) 72%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .rule {
+        margin: 40px 0 36px; width: 120px; height: 3px; border-radius: 2px;
+        background: linear-gradient(90deg, var(--gold), var(--amber));
+        transform: scaleX(0); transform-origin: left center;
+        animation: grow 0.8s 1.35s var(--expo) both, fadeOut 0.5s var(--x-title) var(--exit) forwards;
+      }
+      @keyframes grow { to { transform: scaleX(1); } }
+      .lockup-exit {
+        width: min(calc(var(--close-logo-width, 480px) * 0.8), 380px);
+        opacity: var(--close-logo, 1);
+        animation: exitScale calc(0.75s * var(--close-logo, 1)) var(--x-logo) var(--exit) forwards;
+        transform-origin: 0 50%;
+      }
+      .logo { filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent)); }
+      .platform {
+        margin-top: 18px; white-space: nowrap;
+        font-size: 13px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
+        opacity: 0; animation: fadeUp 0.9s 2.7s var(--expo) both;
+      }
+      .steps-exit {
+        position: absolute; left: 1000px; right: 140px; top: 50%; transform: translateY(-50%);
+        animation: exitUp 0.7s var(--x-steps) var(--exit) forwards;
+      }
+      .steps { position: relative; display: flex; flex-direction: column; gap: 20px; }
+      .rail {
+        position: absolute; left: 50px; top: 40px; bottom: 40px; width: 2px; z-index: 0;
+        background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--amber) 40%, transparent));
+        transform: scaleY(0); transform-origin: 50% 0;
+        animation: railIn 1.2s 1.1s var(--inout) both;
+      }
+      @keyframes railIn { to { transform: scaleY(1); } }
+      .step {
+        position: relative; z-index: 1;
+        display: grid; grid-template-columns: 56px 1fr; column-gap: 26px; align-items: center;
+        padding: 24px 30px 24px 22px; border-radius: 24px;
+        background: linear-gradient(120deg, color-mix(in srgb, var(--surface) 92%, var(--gold)) 0%, var(--surface) 60%);
+        border: 1px solid color-mix(in srgb, var(--gold) 20%, var(--surface));
+        box-shadow: 0 24px 60px color-mix(in srgb, var(--ink) 55%, transparent);
+        opacity: 0;
+        animation: cardIn 0.85s var(--s) var(--expo) both;
+      }
+      @keyframes cardIn {
+        from { opacity: 0; transform: translateX(90px); clip-path: inset(0 0 0 100% round 24px); }
+        to { opacity: 1; transform: none; clip-path: inset(0 0 0 0 round 24px); }
+      }
+      .dot {
+        grid-row: span 2; width: 56px; height: 56px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 20px; font-weight: 700; color: var(--on-accent);
+        background: linear-gradient(140deg, var(--gold), var(--amber));
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--amber) 14%, transparent);
+        animation: fxPop 0.6s calc(var(--s) + 0.15s) var(--pop) both;
+      }
+      .step-label { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+      .step-note { margin-top: 6px; font-size: 18px; color: var(--muted); line-height: 1.4; }
+      .bloom {
+        position: absolute; left: 10%; top: 50%; width: 1000px; height: 700px; margin-top: -350px; border-radius: 50%;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--gold) 13%, transparent), transparent 70%);
+        opacity: 0;
+        animation: fadeIn 1.4s 0.3s ease-out both, fadeOut 0.8s var(--x-logo) var(--exit) forwards;
+      }
+      html[data-frame='portrait'] .left { left: 72px; right: 72px; width: auto; top: 13%; transform: none; }
+      html[data-frame='portrait'] .title { font-size: 96px; }
+      html[data-frame='portrait'] .steps-exit { left: 72px; right: 72px; top: 54%; }
+      html[data-frame='portrait'] .step-label { font-size: 36px; }
+      html[data-frame='portrait'] .step-note { font-size: 24px; }
+      html[data-frame='portrait'] .lockup-exit { width: min(calc(var(--close-logo-width, 480px) * 0.9), 440px); }
+      html[data-frame='portrait'] .platform { font-size: 18px; white-space: normal; }
+    </style>
+  </head>
+  <body data-duration="6.2" data-layout="{{LAYOUT}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="bloom"></div>
+      <div class="left">
+        <div class="title-exit">
+          <h2 class="title" data-fit="{{TITLE_LINES}}" data-fit-min="48" data-reveal="{{TITLE_REVEAL}}" style="--t: {{T_TITLE}}" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h2>
+        </div>
+        <div class="rule"></div>
+        <div class="lockup-exit">
+          <div class="logo">{{LOGO}}</div>
+          <div class="platform" data-edit="tagline" data-edit-kind="text" data-edit-raw="{{PLATFORM_RAW}}">{{PLATFORM}}</div>
+        </div>
+      </div>
+      <div class="steps-exit">
+        <div class="steps">
+          <div class="rail"></div>
+          {{STEPS}}
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

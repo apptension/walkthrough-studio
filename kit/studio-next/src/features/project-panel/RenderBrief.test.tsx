@@ -9,7 +9,11 @@ import { makeFreshness, makeVideo } from '@/test/factories';
 
 import { RenderBrief, RenderElapsed } from './RenderBrief';
 
-vi.mock('@/desk/jobs', async (importOriginal) => ({ ...(await importOriginal<typeof JobsModule>()), requestMake: vi.fn() }));
+vi.mock('@/desk/jobs', async (importOriginal) => ({
+  ...(await importOriginal<typeof JobsModule>()),
+  requestMake: vi.fn(),
+  stopAllWork: vi.fn(),
+}));
 
 const $ = (id: string) => document.getElementById(id);
 
@@ -76,9 +80,26 @@ describe('RenderBrief', () => {
     expect($('renderStatusPill')).toHaveAttribute('class', 'render-pill run');
     expect($('renderHeadline')).toHaveTextContent('Rendering sequence');
     expect($('renderReason')).toHaveTextContent('Live log…');
-    expect($('btnActionPrimary')).toHaveAttribute('class', 'render-cta primary busy');
-    expect($('btnActionPrimary')).toBeDisabled();
+    expect($('btnActionPrimary')).toHaveAttribute('class', 'render-cta primary is-stop');
+    expect($('btnActionPrimary')).not.toBeDisabled();
+    expect($('btnActionPrimary')?.querySelector('.cta-label')).toHaveTextContent('Stop');
     expect($('recordChoice')?.hidden).toBe(true);
+  });
+
+  it('clicking the primary CTA while busy stops the job instead of starting another', async () => {
+    const jobs = await import('@/desk/jobs');
+    render(<RenderBrief />);
+    load();
+    act(() =>
+      desk.set({
+        jobBusy: true,
+        bay: { pillClass: 'render-pill run', pillText: 'Rendering', headline: 'Rendering sequence', reason: 'Live log…' },
+        busy: { btnActionPrimary: true },
+      }),
+    );
+    fireEvent.click($('btnActionPrimary') as HTMLElement);
+    expect(jobs.stopAllWork).toHaveBeenCalledWith({ reason: 'Stopped' });
+    expect(requestMake).not.toHaveBeenCalled();
   });
 
   it('warns when a line outlasts its hold', () => {

@@ -1,0 +1,15 @@
+/* Uploaded logo tile in Direction. The shared studio sheet stays untouched. */
+
+#logoGrid .logo-upload {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+#logoGrid .logo-upload:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+#logoUpload {
+  display: none;
+}

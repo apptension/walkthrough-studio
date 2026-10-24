@@ -88,6 +88,16 @@ test('no stray brand LOGO seat outside the lockup catalog (except logos wall / o
   for (const file of files) {
     const html = readFileSync(join(TEMPLATES, file), 'utf8');
     if (!html.includes('{{LOGO}}')) continue;
-    assert.ok(allowed.has(file), `${file} injects {{LOGO}} but is not in the lockup catalog`);
+    assert.ok(allowed.has(file) || /^(open|close)-[a-z]+\.html$/.test(file), `${file} injects {{LOGO}} but is not in the lockup catalog`);
+  }
+});
+
+test('open/close layout variants keep the lockup seat and its visibility var', () => {
+  for (const file of readdirSync(TEMPLATES).filter((f) => /^(open|close)-[a-z]+\.html$/.test(f))) {
+    const html = readFileSync(join(TEMPLATES, file), 'utf8');
+    const kind = file.split('-')[0];
+    assert.match(html, /class="lockup-exit"/, `${file} needs .lockup-exit`);
+    assert.match(html, new RegExp(`--${kind}-logo\\b`), `${file} must honour --${kind}-logo`);
+    assert.match(html, new RegExp(`--${kind}-logo-width`), `${file} must honour --${kind}-logo-width`);
   }
 });

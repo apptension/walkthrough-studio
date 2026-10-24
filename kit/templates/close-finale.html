@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Closing plate · finale</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.2s;
+        --black-out: 5.5s;
+        --t-wipe-l: 0.45s;
+        --t-wipe-r: 0.55s;
+        --t-draw: 0.6s;
+        --t-word: 0.8s;
+        --t-trace: 0.3s;
+        --t-travel: 0.85s;
+        --t-sweep: 1.75s;
+        --x-title: 4.75s;
+        --x-steps: 4.85s;
+        --x-logo: 5.0s;
+        --n: {{STEP_COUNT}};
+        --close-logo: 1;
+        --close-logo-width: 480px;
+        --hold-from: 3.3s;
+        --hold-until: 4.4s;
+      }
+      /* Finale: the mark takes the stage on a ray burst; the promise and steps sign off beneath. */
+      .burst {
+        position: absolute; left: 50%; top: 33%; width: 1700px; height: 1700px; margin: -850px 0 0 -850px; border-radius: 50%; z-index: 1;
+        background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--gold) 20%, transparent) 0deg 2.2deg, transparent 2.2deg 12deg);
+        -webkit-mask-image: radial-gradient(circle, transparent 12%, #000 22%, transparent 64%);
+        mask-image: radial-gradient(circle, transparent 12%, #000 22%, transparent 64%);
+        opacity: 0;
+        animation: burstIn 1.6s 0.15s var(--expo) both, spin var(--dur) linear both, fadeOut 0.8s var(--x-logo) var(--exit) forwards;
+      }
+      @keyframes burstIn { from { opacity: 0; scale: 0.25; } to { opacity: 1; scale: 1; } }
+      @keyframes spin { from { rotate: 0deg; } to { rotate: 28deg; } }
+      .halo {
+        position: absolute; left: 50%; top: 33%; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%; z-index: 1;
+        border: 2px solid color-mix(in srgb, var(--gold) 60%, transparent);
+        opacity: 0;
+        animation: halo 1.5s var(--d) var(--quint) both;
+      }
+      .halo.h1 { --d: 0.9s; }
+      .halo.h2 { --d: 1.4s; border-color: color-mix(in srgb, var(--amber) 50%, transparent); }
+      @keyframes halo {
+        0% { opacity: 0; transform: scale(0.5); }
+        25% { opacity: 1; }
+        100% { opacity: 0; transform: scale(1.9); }
+      }
+      .lockup-exit {
+        position: absolute; left: 50%; top: 33%; z-index: 2;
+        width: min(calc(var(--close-logo-width, 480px) * 1.35), 660px);
+        margin-left: calc(min(calc(var(--close-logo-width, 480px) * 1.35), 660px) / -2);
+        opacity: var(--close-logo, 1);
+        animation: exitScale calc(0.75s * var(--close-logo, 1)) var(--x-logo) var(--exit) forwards;
+      }
+      .lockup { transform: translateY(-50%); animation: heroSettle 1.2s 1.45s var(--inout) both; }
+      @keyframes heroSettle { from { transform: translateY(-50%) scale(1.08); } to { transform: translateY(-50%) scale(1); } }
+      .logo { filter: drop-shadow(0 20px 60px color-mix(in srgb, var(--amber) 32%, transparent)); }
+      .title-exit {
+        position: absolute; left: 0; right: 0; top: 53%; padding: 0 200px; text-align: center; z-index: 2;
+        animation: exitUp 0.7s var(--x-title) var(--exit) forwards;
+      }
+      .title { font-size: 64px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.06; }
+      .title .accent {
+        background: linear-gradient(92deg, var(--gold) 0%, var(--amber) 72%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .steps-exit {
+        position: absolute; left: 120px; right: 120px; top: 76%; z-index: 2;
+        animation: exitUp 0.7s var(--x-steps) var(--exit) forwards;
+      }
+      .steps { display: flex; justify-content: center; align-items: stretch; gap: 18px; }
+      .step {
+        display: grid; grid-template-columns: auto 1fr; column-gap: 14px; align-items: center;
+        max-width: 400px; padding: 14px 26px 14px 14px; border-radius: 22px;
+        background: linear-gradient(120deg, color-mix(in srgb, var(--surface) 90%, var(--gold)), var(--surface));
+        border: 1px solid color-mix(in srgb, var(--gold) 24%, var(--surface));
+        box-shadow: 0 18px 44px color-mix(in srgb, var(--ink) 55%, transparent);
+        opacity: 0;
+        animation: fxPop 0.7s calc(var(--s) + 1.25s) var(--pop) both;
+      }
+      .dot {
+        grid-row: span 2; width: 40px; height: 40px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 16px; font-weight: 700; color: var(--on-accent);
+        background: linear-gradient(140deg, var(--gold), var(--amber));
+      }
+      .step-label { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.2; }
+      .step-note { margin-top: 3px; font-size: 15px; color: var(--muted); line-height: 1.35; }
+      .platform {
+        position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; z-index: 2;
+        font-size: 13px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
+        opacity: 0; animation: fadeUp 0.9s 3.35s var(--expo) both, fadeOut 0.6s var(--x-steps) var(--exit) forwards;
+      }
+      html[data-frame='portrait'] .burst, html[data-frame='portrait'] .halo, html[data-frame='portrait'] .lockup-exit { top: 28%; }
+      html[data-frame='portrait'] .lockup-exit {
+        width: min(calc(var(--close-logo-width, 480px) * 1.5), 720px);
+        margin-left: calc(min(calc(var(--close-logo-width, 480px) * 1.5), 720px) / -2);
+      }
+      html[data-frame='portrait'] .title-exit { top: 45%; padding: 0 72px; }
+      html[data-frame='portrait'] .title { font-size: 84px; }
+      html[data-frame='portrait'] .steps-exit { left: 72px; right: 72px; top: 64%; }
+      html[data-frame='portrait'] .steps { flex-direction: column; align-items: stretch; }
+      html[data-frame='portrait'] .step { max-width: none; padding: 20px 30px 20px 20px; }
+      html[data-frame='portrait'] .dot { width: 56px; height: 56px; font-size: 22px; }
+      html[data-frame='portrait'] .step-label { font-size: 32px; }
+      html[data-frame='portrait'] .step-note { font-size: 22px; }
+      html[data-frame='portrait'] .platform { font-size: 18px; bottom: 4%; }
+    </style>
+  </head>
+  <body data-duration="6.2" data-layout="{{LAYOUT}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="burst"></div>
+      <div class="halo h1"></div>
+      <div class="halo h2"></div>
+      <div class="lockup-exit">
+        <div class="lockup">
+          <div class="logo">{{LOGO}}</div>
+        </div>
+      </div>
+      <div class="title-exit">
+        <h2 class="title" data-fit="{{TITLE_LINES}}" data-fit-min="44" data-reveal="{{TITLE_REVEAL}}" style="--t: {{T_TITLE}}" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h2>
+      </div>
+      <div class="steps-exit">
+        <div class="steps">
+          {{STEPS}}
+        </div>
+      </div>
+      <div class="platform" data-edit="tagline" data-edit-kind="text" data-edit-raw="{{PLATFORM_RAW}}">{{PLATFORM}}</div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

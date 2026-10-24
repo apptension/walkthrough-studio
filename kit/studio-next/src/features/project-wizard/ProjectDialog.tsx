@@ -5,6 +5,8 @@ import { closeSheet, useSheetDialog } from '@/features/stages/sheetDialog';
 
 import { AccessStep } from './AccessStep';
 import { BasicsStep } from './BasicsStep';
+import { BriefPreview } from './BriefPreview';
+import { captureBrief } from './briefSignals';
 import { PROJECT_DIALOG_SUB_NEW, PROJECT_DIALOG_SUB_SETTINGS, STEPS } from './brief';
 import { useCreation } from './creation';
 import { CreationView } from './CreationView';
@@ -25,6 +27,7 @@ import {
 } from './wizard';
 
 const STEP_LABELS = ['Basics', 'App access', 'Story', 'Proof', 'Review'] as const;
+const STEP_SUBS = ['What and for whom', 'Where it runs', 'What to show', 'Numbers and quotes', 'Check and create'] as const;
 
 function WizardSteps() {
   const hidden = useWizard((s) => s.stepsHidden);
@@ -38,9 +41,15 @@ function WizardSteps() {
               <b>
                 {i + 1}
               </b>
+              {i < step ? <Icon name="ui-check" size={11} className="ws-done" /> : null}
             </span>
-            <span className="ws-label">
-              {label}
+            <span className="ws-text">
+              <span className="ws-label">
+                {label}
+              </span>
+              <span className="ws-sub" aria-hidden="true">
+                {STEP_SUBS[i]}
+              </span>
             </span>
           </button>
         </li>
@@ -55,6 +64,8 @@ function WizardForm() {
   const step = useWizard((s) => s.step);
   const drafting = useWizard((s) => s.drafting);
   const error = useWizard((s) => s.error);
+  const formRev = useWizard((s) => s.formRev);
+  const creating = useCreation((s) => s.dialogCreating);
   const stepHidden = (n: number) => mode === 'short' || step !== n;
 
   // Native `change` (React's onChange fires per keystroke): the legacy form re-ran its conditionals on commit only.
@@ -63,16 +74,20 @@ function WizardForm() {
     if (!form) return;
     form.addEventListener('change', syncConditional);
     return () => form.removeEventListener('change', syncConditional);
-  }, []);
+  }, [formRev]);
 
   return (
     <form
+      key={formRev}
       ref={ref}
       id="projectForm"
       className={`sheet-body wizard-body${drafting ? ' is-drafting' : ''}`}
       noValidate
       data-mode={mode}
-      onInput={(e) => onFormInput(e.target)}
+      onInput={(e) => {
+        onFormInput(e.target);
+        captureBrief();
+      }}
       onClick={(e) => onFormClick(e.target as Element)}
       onKeyDown={(e) => onFormKeyDown(e.nativeEvent)}
       onSubmit={(e: FormEvent) => e.preventDefault()}
@@ -86,6 +101,7 @@ function WizardForm() {
       <StoryStep hidden={stepHidden(2)} />
       <ProofStep hidden={stepHidden(3)} />
       <ReviewStep hidden={stepHidden(STEPS - 1)} />
+      {mode === 'short' || creating ? null : <BriefPreview />}
       <CreationView />
     </form>
   );
@@ -98,6 +114,7 @@ export function ProjectDialog() {
   const title = useWizard((s) => s.dialogTitle);
   const settings = useWizard((s) => s.settings);
   const running = useWizard((s) => s.running);
+  const mode = useWizard((s) => s.mode);
   const creating = useCreation((s) => s.dialogCreating);
   const ready = useCreation((s) => s.dialogReady);
   const failed = useCreation((s) => s.dialogFailed);
@@ -108,6 +125,7 @@ export function ProjectDialog() {
 
   const cls = [
     'sheet-dialog wizard',
+    !creating && (mode === 'short' ? 'is-launch' : 'is-brief'),
     settings && 'is-project-settings',
     running && !failed && 'is-running',
     creating && 'is-creating',

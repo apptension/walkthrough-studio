@@ -12,6 +12,7 @@ import { hasStoredCredentials, maskCredentials, revisePlan, stagesForReplan, typ
 import { screenQuery } from '@/logic/captureSize';
 import { confirmGuidedFits, type GuidedFitApi } from '@/logic/guidedFit';
 import { resolveVideoLanguage } from '@/logic/languages';
+import { clampLengthSec } from '@/logic/length';
 import { draftFromDescription, type ShortBriefDraft } from '@/logic/shortBrief';
 import { openScript } from '@/features/script/sheet';
 import type { ScriptPayload } from '@/features/script/types';
@@ -35,7 +36,10 @@ import {
   type WizardCaptureOption,
   type WizardPayload,
 } from './brief';
+import { brandStudio } from './brandStudio';
+import { captureBrief } from './briefSignals';
 import { creation, useCreation, type CreateStage } from './creation';
+import { creationFeed } from './creationFeed';
 import { hideWizardGuide, showWizardGuide } from './guideSession';
 
 /**
@@ -54,6 +58,16 @@ export interface BrandOption {
   value: string;
   label: string;
   disabled?: boolean;
+}
+
+/** A brand pack as the New video tiles show it. */
+export interface BrandPack {
+  id: string;
+  name: string;
+  accent: string | null;
+  colors: Partial<Record<'ink' | 'surface' | 'gold' | 'amber' | 'text', string | null>>;
+  font: string | null;
+  placeholder: boolean;
 }
 
 interface WizardState {
@@ -79,9 +93,12 @@ interface WizardState {
   /** The job `#wizardStream` paints; null resets it. */
   streamJob: Job | null;
   brands: BrandOption[] | null;
+  brandPacks: BrandPack[];
   captureOptions: WizardCaptureOption[];
   captureHint: string;
   language: string;
+  /** Target length in seconds. The Basics control is controlled from this. */
+  lengthSec: number;
   languageFilter: string;
   slugDisabled: boolean;
   /** `syncConditional()` inputs. */
@@ -123,9 +140,11 @@ export const useWizard = createStore<WizardState>()(() => ({
   shortJob: null,
   streamJob: null,
   brands: null,
+  brandPacks: [],
   captureOptions: [],
   captureHint: 'Suggested from your screen and brief.',
   language: 'en',
+  lengthSec: 120,
   languageFilter: '',
   slugDisabled: false,
   brandNew: false,
@@ -215,8 +234,17 @@ function resetSelection(name: string): void {
 }
 
 function pick(name: string, value: string): void {
+  if (name === 'lengthSec') {
+    setLengthSec(value);
+    return;
+  }
   const el = form()?.querySelector<HTMLInputElement>(`input[name="${name}"][value="${CSS.escape(value)}"]`);
   if (el) el.checked = true;
+}
+
+/** Any duration, committed before the next form read so the preview and the payload agree. */
+export function setLengthSec(value: unknown): void {
+  commit({ lengthSec: clampLengthSec(value) });
 }
 
 function setLogin(on: boolean): void {
@@ -354,6 +382,7 @@ export function showStep(n: number, { focus = true } = {}): void {
     ...(step === 3 ? { stillBrand: stillBrand() } : {}),
   });
   clearError();
+  captureBrief();
   const f = form();
   if (f) f.scrollTop = 0;
   if (step === STEPS - 1) flushSync(renderSummary);
@@ -429,6 +458,7 @@ export function syncConditional(): void {
   const { step } = wiz.getState();
   if (step === 3) set({ stillBrand: stillBrand() });
   if (step === STEPS - 1) showStep(step, { focus: false });
+  captureBrief();
 }
 
 /* ---------- brief draft ---------- */
@@ -597,6 +627,7 @@ async function create(): Promise<void> {
   let brandName = '';
   try {
     const p = wizardPayload();
+    creation.subject(p.title || p.product || '');
     paintCreation(creationStage && creationStage !== 'ready' ? creationStage : 'project', created ? 'Resuming preparation…' : 'Pinning the brief and secure app references…');
     const r = created || (await api<ProjectCreated>('/api/projects', { method: 'POST', body: p }));
     if (!created) {
@@ -605,6 +636,7 @@ async function create(): Promise<void> {
       if (r.envVars?.length) creation.artifact('env', { name: 'kit/.env', note: `${r.envVars.length} credential refs`, kind: 'lock' });
     }
     created = r;
+    creationFeed.bind(r.slug, r.brand || '');
     ensureNotStopped();
     const draft = checked('runDraft');
     const brandRef = p.brand as { id?: string; url?: string };
@@ -620,15 +652,21 @@ async function create(): Promise<void> {
       const app = host(p.app.appUrl || p.app.startUrl);
       const where = app && app !== site ? `${site} and the app at ${app}` : site;
       paintCreation('brand', `Opening ${where} in a browser to capture the lockup, palette and type…`);
+      brandStudio.start(r.slug);
       const d = await api<Partial<DraftJob>>(`/api/video/${r.slug}/draft-project`, { method: 'POST', body: { step: 'discover' } });
       if (d.job?.status === 'needs-agent') throw new Error(d.job.message || 'Agent sign-in is required to discover the brand');
-      const discoverJob = await follow(d.job?.id || '', (job) => creation.stage('brand', job.activity || `Reading ${where}…`));
+      const discoverJob = await follow(d.job?.id || '', (job) => {
+        creation.stage('brand', job.activity || `Reading ${where}…`);
+        brandStudio.fromJob(job);
+      });
       ensureNotStopped();
       if (discoverJob?.status === 'needs-agent') throw new Error(discoverJob.message || 'Agent sign-in is required to discover the brand');
       if (discoverJob?.status === 'failed' || discoverJob?.status === 'cancelled') {
         throw new Error(discoverJob.message || discoverJob.activity || 'Brand discovery failed');
       }
+      await brandStudio.finish();
     } else {
+      brandStudio.keepFor(r.slug);
       creation.stage('brand', `Reusing the ${String(brandRef.id)} brand pack — no discovery needed`);
     }
     const prepared = await api<Pick<VideoSummary, 'brandFoundation'>>(`/api/video/${r.slug}`);
@@ -637,7 +675,7 @@ async function create(): Promise<void> {
     }
     created.needsDiscovery = false;
     brandName = prepared.brandFoundation.name;
-    creation.brand(r.slug, prepared.brandFoundation as Parameters<typeof creation.brand>[1]);
+    creation.brand(r.slug, prepared.brandFoundation);
     creation.note(`${brandName} lockup, palette and type verified`);
     await openVideo(r.slug);
     if (draft && p.capture.mode === 'guided') {
@@ -722,6 +760,7 @@ async function create(): Promise<void> {
       /* the summary card is a convenience; approval still works without it */
     }
     readySlug = r.slug;
+    creationFeed.acceptScript(script);
     creation.script(script, { brandName });
     if (!isOpen()) {
       // Prepared in the background: the desk shows the video; the Script stage asks for approval.
@@ -731,6 +770,7 @@ async function create(): Promise<void> {
   } catch (raw) {
     const msg = failureMessage(raw, stopRequested);
     creation.fail(msg);
+    brandStudio.fail(msg);
     set({ retryLabel: created ? 'Retry preparation' : 'Try again' });
     if (!isOpen()) {
       toast('New video needs attention', msg, 'ok');
@@ -743,9 +783,20 @@ async function create(): Promise<void> {
 }
 
 function resetForm(): void {
-  form()?.reset();
-  set({ language: 'en', languageFilter: '' });
-  wiz.setState((s) => ({ formRev: s.formRev + 1 }));
+  // Remount the form (its `key` is formRev) rather than form.reset(): a native reset
+  // leaves React's field tracker behind, and the next render puts the old values back.
+  commit({ language: 'en', languageFilter: '', lengthSec: 120, formRev: wiz.getState().formRev + 1 });
+  captureBrief();
+}
+
+/** A dismissed brief is not resumed. The next New video opens on an empty launchpad. */
+function freshLaunchpad(): void {
+  agentBrief = null;
+  settingsBrief = null;
+  resetForm();
+  showShort();
+  commit({ step: 0, settings: false, slugDisabled: false, dialogTitle: 'New video' });
+  syncConditional();
 }
 
 export function finishCreation(): void {
@@ -756,6 +807,8 @@ export function finishCreation(): void {
   creationStage = null;
   agentBrief = null;
   creation.reset();
+  creationFeed.reset();
+  brandStudio.reset();
   set({ streamJob: null });
   showStep(0);
 }
@@ -799,9 +852,21 @@ export async function reviewScriptFirst(): Promise<void> {
   void openScript();
 }
 
-/** Closing the Ready view with X leaves the video open on the desk; the Script stage asks for approval. */
+/**
+ * Closing the Ready view with X leaves the video open on the desk; the Script stage asks for approval.
+ * Closing anything else that is not still running discards the brief, so the next open starts fresh.
+ * A draft or a preparation that is still running stays, and reopening shows it.
+ */
 export function onDialogClosed(): void {
-  if (readySlug && !creating) finishCreation();
+  // The close event fires inside the dialog's layout effect. Defer so the reset is not a flushSync mid-render.
+  queueMicrotask(() => {
+    if (readySlug && !creating) {
+      finishCreation();
+      return;
+    }
+    if (wiz.getState().drafting || creating || useCreation.getState().dialogCreating) return;
+    freshLaunchpad();
+  });
 }
 
 /* ---------- settings replan ---------- */
@@ -841,6 +906,7 @@ export async function saveSettings(): Promise<void> {
     if (run.stages.length) {
       set({ running: true });
       creation.start({ resume: resuming });
+      creationFeed.bind(slug);
       for (const stage of REPLAN_ORDER) {
         if (!run.stages.includes(stage)) continue;
         ensureNotStopped();
@@ -870,6 +936,7 @@ export async function saveSettings(): Promise<void> {
     }
     replanRun = null;
     creation.reset();
+    creationFeed.reset();
     set({ streamJob: null });
     if (isOpen()) openDialog('project', false);
     commit({ slugDisabled: false, dialogTitle: 'New video', settings: false });
@@ -895,7 +962,10 @@ export async function saveSettings(): Promise<void> {
 
 /* ---------- opening ---------- */
 
-type BrandRow = { id: string; name: string; placeholder?: boolean };
+type BrandRow = { id: string; name: string; placeholder?: boolean; accent?: string | null; colors?: BrandPack['colors']; font?: string | null };
+
+const packsOf = (rows: BrandRow[]): BrandPack[] =>
+  rows.map((b) => ({ id: b.id, name: b.name, accent: b.accent || null, colors: b.colors || {}, font: b.font || null, placeholder: Boolean(b.placeholder) }));
 
 function fillFromBrief(brief: ReviseBrief, slug: string, freshness: VideoSummary['freshness'] | null = null): void {
   const fresh = freshness as unknown as Parameters<typeof maskCredentials>[1];
@@ -940,6 +1010,8 @@ function resetCreationIfStale(): void {
   creationStage = null;
   replanRun = null;
   creation.reset();
+  creationFeed.reset();
+  brandStudio.reset();
   set({ streamJob: null });
 }
 
@@ -961,6 +1033,7 @@ export async function openProjectSettings(video: VideoSummary | null | undefined
     const { brands } = await api<{ brands: BrandRow[] }>('/api/brands');
     commit({
       brands: brands.length ? brands.map((b) => ({ value: b.id, label: b.name })) : [{ value: '', label: 'No brand packs yet', disabled: true }],
+      brandPacks: packsOf(brands),
     });
     resetSelection('brandId');
   } catch {
@@ -991,22 +1064,25 @@ export async function openProjectNew(): Promise<void> {
     openDialog('project', true);
     return;
   }
-  commit({ slugDisabled: false, dialogTitle: 'New video', settings: false });
-  settingsBrief = null;
+  // A brief that finished while this dialog was closed is resumed below. Anything else starts blank.
+  const resume = agentBrief;
+  if (!resume) freshLaunchpad();
+  else commit({ slugDisabled: false, dialogTitle: 'New video', settings: false });
   try {
     const { brands } = await api<{ brands: BrandRow[] }>('/api/brands');
     commit({
       brands: brands.length
         ? brands.map((b) => ({ value: b.id, label: `${b.name}${b.placeholder ? ' (placeholder)' : ''}` }))
         : [{ value: '', label: 'No brand packs yet — discover one', disabled: true }],
+      brandPacks: packsOf(brands),
     });
   } catch {
-    commit({ brands: [{ value: '', label: 'Could not load brand packs', disabled: true }] });
+    commit({ brands: [{ value: '', label: 'Could not load brand packs', disabled: true }], brandPacks: [] });
   }
   resetSelection('brandId');
   // A brief the agent finished while the dialog was closed is still in the form: resume at Review.
-  if (agentBrief) {
-    if (agentBrief.brand?.mode === 'existing' && agentBrief.brand.id && control('brandId')) setField('brandId', agentBrief.brand.id);
+  if (resume) {
+    if (resume.brand?.mode === 'existing' && resume.brand.id && control('brandId')) setField('brandId', resume.brand.id);
     set({ step: 0 });
     goTo(STEPS - 1);
   } else showShort();

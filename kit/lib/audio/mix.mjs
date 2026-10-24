@@ -14,18 +14,84 @@ import { assertPlayable, extendPictureTail } from '../media.mjs';
 import { duration, finalPath, run } from '../produce.mjs';
 import { snapshotVersion } from '../versions.mjs';
 import { compactAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice } from './desk.mjs';
+import { musicBarSec, OUTRO_LEAD_SEC, planOutroAtSec } from './music.mjs';
 import { deliveryMuxFlags, mixEndSec } from '../../studio/voiceHold.js';
 
 const RAMP = 1.0; // seconds for the music to move between plate level and bed level
-const EDIT_XFADE = 2.0; // crossfade for a music edit that fits the track to a new take
+const TRIM_XFADE = 2.0; // crossfade for a music edit that shortens the track to a new take
+const REPEAT_XFADE = 4.0; // longer crossfade where a passage has to play twice
 const MAX_AUTO_HOLD_SEC = 6; // beyond this, a frozen tail would hide a real scripting problem
+const SHORT_TOLERANCE = 0.35;
 
-/** How many extra plays of a bed are needed to cover `totalSec` (0 when the bed is long enough). */
-export function musicLoopRepeats(musicDurSec, totalSec) {
-  const dur = Number(musicDurSec) || 0;
-  const total = Math.max(0, Number(totalSec) || 0);
-  if (dur < 0.05 || total <= dur + 0.35) return 0;
-  return Math.max(1, Math.ceil(total / dur) - 1);
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
+/**
+ * How the bed is cut to the picture: bed time `anchorAt` (the outro of a composed bed, the end
+ * of an upload) lands on picture time `anchorTo`. All edits share one point `cut` mid-demo, where
+ * the bed sits ducked: each join plays up to `cut`, then continues from `from` with an equal-power
+ * crossfade — forward for a trim, back for a repeat. Repeats keep whole bars when `barSec` is known.
+ * A repeat beyond one passage needs `loop`; otherwise the tail stays silent and is reported.
+ */
+export function musicFit({ musicDur, total, anchorAt = musicDur, anchorTo = total, bedStart = 0, bedLen = 0, loop = false, barSec = 0 }) {
+  const base = { kind: 'fit', musicSec: r3(musicDur), pictureSec: r3(total), joins: 0, cut: null, from: null, xfade: 0, repeatedSec: 0, shortfallSec: 0, warning: null };
+  const finish = (f) => {
+    const outLen = musicDur + f.joins * (f.cut - f.from - f.xfade);
+    const shortfallSec = r3(Math.max(0, total - outLen));
+    let warning = null;
+    if (f.kind === 'extend') {
+      warning = `⚠ music is ${(-shift).toFixed(1)}s short of the picture — ${(f.cut - f.from).toFixed(1)}s of the demo bed plays twice (${f.xfade}s equal-power crossfade at ${f.cut.toFixed(1)}s)`;
+    } else if (f.kind === 'loop') {
+      warning = `⚠ music looped — a ${(f.cut - f.from).toFixed(1)}s passage repeats ${f.joins}× to cover ${(-shift).toFixed(1)}s (${f.xfade}s equal-power crossfades at ${f.cut.toFixed(1)}s)`;
+    } else if (shortfallSec > SHORT_TOLERANCE) {
+      warning = `⚠ music ends ${shortfallSec.toFixed(1)}s before the picture — the tail is silent`;
+    }
+    return { ...f, cut: f.cut == null ? null : r3(f.cut), from: f.from == null ? null : r3(f.from), shortfallSec, warning };
+  };
+  const shift = anchorAt - anchorTo;
+  if (!(musicDur >= 0.05)) return finish({ ...base, kind: 'short' });
+  const hi = Math.max(1, Math.min(anchorAt, anchorTo) - 2);
+  const cut = Math.min(hi, Math.max(1, bedStart + bedLen * 0.45));
+  const floor = bedStart < cut - REPEAT_XFADE - 1 ? bedStart : cut * 0.4;
+  // Snap toward covering: trims skip whole bars rounded down, repeats replay whole bars rounded up.
+  const bars = (j, round) => (barSec > 0.5 ? round(j / barSec) * barSec : j);
+
+  if (shift >= TRIM_XFADE + 0.05) {
+    let skip = bars(shift - TRIM_XFADE, Math.floor);
+    if (skip < 0.05) skip = shift - TRIM_XFADE;
+    const from = Math.min(musicDur - 1, cut + skip);
+    return finish({ ...base, kind: 'trim', cut, from, joins: 1, xfade: TRIM_XFADE });
+  }
+  if (shift >= -0.05) return finish(base);
+
+  const extra = -shift;
+  const maxJump = cut - floor;
+  if (maxJump < REPEAT_XFADE + 1) return finish({ ...base, kind: 'short' });
+  const joins = Math.ceil(extra / (maxJump - REPEAT_XFADE));
+  if (joins > 1 && !loop) return finish({ ...base, kind: 'short' });
+  const need = REPEAT_XFADE + extra / joins;
+  let jump = bars(need, Math.ceil);
+  if (jump > maxJump) jump = need;
+  return finish({ ...base, kind: joins > 1 ? 'loop' : 'extend', cut, from: cut - jump, joins, xfade: REPEAT_XFADE, repeatedSec: r3(joins * jump) });
+}
+
+/** ffmpeg filters for a `musicFit` edit: [0, cut) · (joins−1) × [from, cut) · [from, end), crossfaded → `[label]`. */
+export function musicEditFilters(fit, { input, fmt, label = 'medit' }) {
+  if (!fit.joins) return [];
+  const n = fit.joins;
+  const cut = fit.cut.toFixed(3);
+  const from = fit.from.toFixed(3);
+  const filters = [`${input}${fmt},asplit=${n + 1}${Array.from({ length: n + 1 }, (_, i) => `[mp${i}]`).join('')}`];
+  for (let i = 0; i <= n; i++) {
+    const trim = i === 0 ? `atrim=0:${cut}` : i < n ? `atrim=${from}:${cut}` : `atrim=start=${from}`;
+    filters.push(`[mp${i}]${trim},asetpts=PTS-STARTPTS[mq${i}]`);
+  }
+  let prev = '[mq0]';
+  for (let i = 1; i <= n; i++) {
+    const out = i === n ? `[${label}]` : `[mx${i}]`;
+    filters.push(`${prev}[mq${i}]acrossfade=d=${fit.xfade}:c1=qsin:c2=qsin${out}`);
+    prev = out;
+  }
+  return filters;
 }
 
 function parseLoudnormJson(text) {
@@ -110,6 +176,7 @@ export function mixAudio(video, { out } = {}) {
   const { segments } = produceMeta;
   // The video stream is copied, so a broken picture would pass straight through.
   let total = assertPlayable(source, { label: 'delivery master' });
+  const plannedTotal = total;
   const duckWindows = liveWindowsFromMeta(produceMeta, video);
 
   const voicePath = join(video.out, 'voice', 'voice.json');
@@ -145,6 +212,8 @@ export function mixAudio(video, { out } = {}) {
 
   const inputs = [];
   const filters = [];
+  const warnings = [];
+  let musicFitResult = null;
   const sr = mix.sampleRate || 48000;
   const fmt = `aresample=${sr},aformat=sample_fmts=fltp:sample_rates=${sr}:channel_layouts=stereo`;
 
@@ -188,41 +257,43 @@ export function mixAudio(video, { out } = {}) {
     // Fit bed to delivery duration (open + live + interstitials + close). Never compare open+live alone —
     // that used to chop interstitial length off the bed and leave the outro silent.
     const musicDur = duration(musicWav);
-    const shortfall = total - musicDur;
-    if (shortfall > 0.35 && desk.music.loop) {
-      const repeats = musicLoopRepeats(musicDur, total);
-      const size = Math.max(1, Math.round(musicDur * sr));
-      filters.push(
-        `[${idx}:a]${fmt},aloop=loop=${repeats}:size=${size},atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS[mloop]`
-      );
-      src = '[mloop]';
-      console.log(`· music looped ×${repeats + 1} to cover the delivery (${musicDur.toFixed(1)}s → ${total.toFixed(1)}s)`);
-    } else if (shortfall > 0.35) {
-      console.log(
-        `⚠ music is ${shortfall.toFixed(1)}s short of the delivery (${musicDur.toFixed(1)}s vs ${total.toFixed(1)}s) — in the Editor: Loop to fill, or Compose to fit (node cli.mjs music ${video.slug} --force)`
-      );
-    } else if (shortfall < -0.05) {
-      // Track longer than the video: skip the excess mid-bed so intro/outro stay locked to plates.
-      const planPath = join(video.out, 'music', 'plan.json');
-      const composed = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')).segments : null;
-      const bedStart = (composed?.openSec || segments.openSec || 6) + (composed?.interstitialSec || segments.interstitialSec || 0);
-      const bedLen = Math.max(8, composed?.liveSec || segments.liveSec || 60);
-      const cut = bedStart + bedLen * 0.45;
-      const skip = -shortfall;
-      const s2 = cut + skip;
-      filters.push(
-        `[${idx}:a]${fmt},asplit=2[me1][me2]`,
-        `[me1]atrim=0:${cut.toFixed(3)},asetpts=PTS-STARTPTS[mc1]`,
-        `[me2]atrim=start=${s2.toFixed(3)},asetpts=PTS-STARTPTS[mc2]`,
-        `[mc1][mc2]acrossfade=d=${EDIT_XFADE}:c1=qsin:c2=qsin[medit]`
-      );
+    const planPath = join(video.out, 'music', 'plan.json');
+    const composedPlan = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')) : null;
+    const composed = composedPlan?.segments;
+    const bedStart = (composed?.openSec || segments.openSec || 6) + (composed?.interstitialSec || segments.interstitialSec || 0);
+    const bedLen = Math.max(8, composed?.liveSec || segments.liveSec || 60);
+    // A composed bed keeps its outro on the close plate; an upload keeps its ending on the last frame.
+    const closeNow = Number(segments.closeSec);
+    const anchored = composedPlan?.plan?.chunks?.length > 1 && Number.isFinite(closeNow);
+    const fit = musicFit({
+      musicDur,
+      total,
+      anchorAt: anchored ? (composedPlan.outroAtSec ?? planOutroAtSec(composedPlan.plan)) : musicDur,
+      anchorTo: anchored ? total - (closeNow + (total - plannedTotal)) - OUTRO_LEAD_SEC : total,
+      bedStart,
+      bedLen,
+      loop: desk.music.loop,
+      barSec: musicBarSec(video.audio.music || {}),
+    });
+    musicFitResult = fit;
+    const edit = musicEditFilters(fit, { input: `[${idx}:a]`, fmt });
+    if (edit.length) {
+      filters.push(...edit);
       src = '[medit]';
-      console.log(`· music trimmed ${skip.toFixed(2)}s at ${cut.toFixed(1)}s to fit delivery (${total.toFixed(1)}s)`);
     }
+    if (fit.kind === 'trim') console.log(`· music trimmed ${(fit.from - fit.cut - fit.xfade).toFixed(2)}s at ${fit.cut.toFixed(1)}s to fit delivery (${total.toFixed(1)}s)`);
+    if (fit.warning) {
+      const hint = fit.kind === 'short' && !desk.music.loop ? ' — Loop to fill in the Editor, or' : ' —';
+      warnings.push(`${fit.warning}${hint} Compose to fit: node cli.mjs music ${video.slug} --force`);
+      console.log(warnings.at(-1));
+    }
+    // A bed that runs out early still ends on a fade, never a hard stop.
+    const bedEnd = fit.musicSec + fit.joins * ((fit.cut ?? 0) - (fit.from ?? 0) - fit.xfade);
+    const earlyFade = fit.shortfallSec > SHORT_TOLERANCE && bedEnd > 3 ? `afade=t=out:st=${(bedEnd - 2.5).toFixed(3)}:d=2.5,` : '';
     const slipped = slip > 0.02 ? `adelay=${Math.round(slip * 1000)}|${Math.round(slip * 1000)},` : slip < -0.02 ? `atrim=start=${(-slip).toFixed(3)},asetpts=PTS-STARTPTS,` : '';
     const fadeInAt = Math.max(0, slip);
     filters.push(
-      `${src}${slipped}atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,apad,atrim=0:${total.toFixed(3)},` +
+      `${src}${earlyFade}${slipped}atrim=0:${total.toFixed(3)},asetpts=PTS-STARTPTS,apad,atrim=0:${total.toFixed(3)},` +
         (fadeIn > 0.02 ? `afade=t=in:st=${fadeInAt.toFixed(3)}:d=${fadeIn.toFixed(3)},` : '') +
         (desk.music.fadeOut > 0.02 ? `afade=t=out:st=${fadeOutAt.toFixed(3)}:d=${desk.music.fadeOut.toFixed(3)},` : '') +
         `volume='${musicGainExpr({ bedGain: gain, windows: duckWindows, rides: desk.music.rides, gainDb: desk.music.gainDb })}':eval=frame[mus]`
@@ -269,6 +340,8 @@ export function mixAudio(video, { out } = {}) {
     silent: SILENT,
     voiceClips: clips.length,
     music: Boolean(musicLabel),
+    musicFit: musicFitResult,
+    warnings,
     mode: voice?.mode || null,
     loudness: { input: measured, target: { lufs: mix.targetLufs, truePeakDb: mix.truePeakDb } },
     levels: { voiceLufs: mix.voiceLufs, plateLufs: mix.plateLufs, bedLufs: mix.bedLufs, duck: mix.duck },
@@ -276,7 +349,8 @@ export function mixAudio(video, { out } = {}) {
     generatedAt: new Date().toISOString(),
   };
   writeFileSync(join(video.out, 'audio-meta.json'), JSON.stringify(result, null, 2));
-  console.log(`» mix · Mixed · ${clips.length} narration lines${hasMusic ? ' · music bed' : ''}`);
+  const fitNote = { extend: ' · ⚠ music repeats a passage', loop: ' · ⚠ music looped', short: ' · ⚠ music short' }[musicFitResult?.kind] || (musicFitResult?.warning ? ' · ⚠ music short' : '');
+  console.log(`» mix · Mixed · ${clips.length} narration lines${hasMusic ? ' · music bed' : ''}${fitNote}`);
   console.log(`✓ ${FINAL}\n  ${clips.length} narration clip(s)${hasMusic ? ' + music bed' : ''} · master ${mix.targetLufs} LUFS / ${mix.truePeakDb} dBTP (pre-master measured ${parseFloat(measured.input_i).toFixed(1)} LUFS)`);
   if (!out) {
     try {

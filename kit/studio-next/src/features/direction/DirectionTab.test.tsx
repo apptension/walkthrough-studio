@@ -325,6 +325,42 @@ describe('direction picks', () => {
     expect(put).toEqual({ focus: 'ring' });
   });
 
+  it('uploads a new logo and selects it for this video', async () => {
+    let posted: { name?: string; data?: string } | undefined;
+    server.use(
+      http.post('/api/video/:slug/logo', async ({ request }) => {
+        posted = (await request.json()) as { name?: string; data?: string };
+        const d = direction({
+          logo: 'logo-upload.svg',
+          lockups: [
+            { file: 'logo-upload.svg', label: 'Uploaded', kind: 'svg' },
+            { file: 'logo.svg', label: 'Primary' },
+          ],
+        });
+        return HttpResponse.json({ direction: d, motion: makeMotion(), transitions: makeVideo().transitions });
+      }),
+    );
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    expect($('logoUploadBtn')).toHaveTextContent('Upload');
+    const file = new File(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], 'mark.svg', { type: 'image/svg+xml' });
+    fireEvent.change($('logoUpload'), { target: { files: [file] } });
+    await waitFor(() => expect(lastToast()?.title).toBe('Logo set'));
+    expect(lastToast()?.detail).toBe('Uploaded for this video');
+    expect(posted?.name).toBe('mark.svg');
+    expect(atob(posted?.data || '')).toContain('<svg');
+    expect(document.querySelector('[data-logo="logo-upload.svg"]')).toHaveAttribute('aria-checked', 'true');
+    expect(rebuild).toHaveBeenCalled();
+  });
+
+  it('refuses a logo that is not an image', async () => {
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    fireEvent.change($('logoUpload'), { target: { files: [new File(['hello'], 'notes.txt', { type: 'text/plain' })] } });
+    await waitFor(() => expect(lastToast()?.title).toBe('Logo not added'));
+    expect(lastToast()?.detail).toMatch(/SVG, PNG/);
+  });
+
   it('saves a cursor toggle and keeps it on screen', async () => {
     server.use(
       http.put('/api/video/:slug/direction', () => HttpResponse.json({ error: 'locked' }, { status: 409 })),

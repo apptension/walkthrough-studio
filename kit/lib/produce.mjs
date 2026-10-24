@@ -403,10 +403,10 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   const chapterMarks = [
     { title: labels.intro, start: 0 },
     ...plan.timeline
-      .filter((m) => m.kind === 'chapter')
+      .filter((m) => m.kind === 'chapter' && !m.copyOf)
       .map((m) => ({ title: m.label, start: plan.liveToDelivery(m.t) })),
     ...plan.segments
-      .filter((s) => s.interstitial)
+      .filter((s) => s.interstitial && !s.repeatOf)
       .map((s) => ({ title: s.title || s.id, start: s.at + (s.transitionIn?.dur || 0) / 2 })),
     { title: labels.summary, start: plan.total - plan.dClose },
   ].sort((a, b) => a.start - b.start);

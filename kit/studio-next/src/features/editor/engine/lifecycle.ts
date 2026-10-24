@@ -11,6 +11,7 @@ import { wireLensBox, wireZoomBox } from './aim';
 import { previewState } from './audio';
 import { requestAudio, requestMake } from './ctx';
 import { postDeck, redo, refresh, resetForProject, undo } from './data';
+import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { invalidatePlates, paintLookVars } from './look';
@@ -361,6 +362,7 @@ export function wireTimelineBar(signal: AbortSignal): void {
   on('etlAddZoom', 'click', () => void toolZoom(), signal);
   on('etlAddLens', 'click', () => void toolLens(), signal);
   on('etlAddVoice', 'click', () => void toolVoice(), signal);
+  on('etlDuplicate', 'click', () => void duplicateSelected(), signal);
   on('etlUndo', 'click', () => void undo(), signal);
   on('etlRedo', 'click', () => void redo(), signal);
   on('etlFit', 'click', () => setScale(1), signal);
@@ -380,6 +382,7 @@ export function wireTimelineBar(signal: AbortSignal): void {
       else if (b.dataset['rangeCut'] != null) void addCut(from, to);
       else if (b.dataset['rangeSkip'] != null)
         void postDeck({ zoomSkips: [...deckEdit().zoomSkips, { from, to }] }, { hint: 'No auto zoom in that stretch' }).then((r) => r && select(null));
+      else if (b.dataset['rangeDup'] != null) void duplicateSelected();
       else if (b.dataset['rangeClear'] != null) select(null);
     },
     signal,
@@ -409,6 +412,7 @@ export function wireKeys(signal: AbortSignal): void {
       let handled = true;
       if (mod && k === 'z') void (e.shiftKey ? redo : undo)();
       else if (mod && k === 'y') void redo();
+      else if (mod && k === 'd') void duplicateSelected();
       else if (mod) handled = false;
       else if (e.code === 'Space') toggle();
       else if (k === 'r') replayClip();

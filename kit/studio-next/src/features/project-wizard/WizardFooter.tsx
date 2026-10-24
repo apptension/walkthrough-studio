@@ -1,3 +1,4 @@
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 import { approveAndRender, back, editBrief, next, retry, reviewScriptFirst, stop, useWizard } from './wizard';
@@ -32,9 +33,9 @@ export function WizardFooter() {
         {stepMeta}
       </span>
       {' '}
-      <button type="button" id="btnWizardNext" className={`btn primary${nextBusy ? ' busy' : ''}`} disabled={nextDisabled} onClick={next}>
+      <NeonButton id="btnWizardNext" className={`btn primary${nextBusy ? ' busy' : ''}`} disabled={nextDisabled} onClick={next}>
         {nextLabel}
-      </button>
+      </NeonButton>
       {' '}
       <button type="button" id="btnCreationStop" className="btn ghost" data-creating-only="" disabled={stopDisabled} onClick={() => void stop()}>
         {stopLabel}
@@ -44,16 +45,15 @@ export function WizardFooter() {
         Edit brief
       </button>
       {' '}
-      <button type="button" id="btnCreationRetry" className="btn primary" data-failed-only="" onClick={retry}>
+      <NeonButton id="btnCreationRetry" className="btn primary" data-failed-only="" onClick={retry}>
         {retryLabel}
-      </button>
+      </NeonButton>
       {' '}
       <button type="button" id="btnCreationReview" className="btn ghost" data-ready-only="" disabled={reviewDisabled} onClick={() => void reviewScriptFirst()}>
         Review script first
       </button>
       {' '}
-      <button
-        type="button"
+      <NeonButton
         id="btnCreationRender"
         className={`btn primary${renderBusy ? ' busy' : ''}`}
         data-ready-only=""
@@ -61,7 +61,7 @@ export function WizardFooter() {
         onClick={() => void approveAndRender()}
       >
         Approve & render
-      </button>
+      </NeonButton>
     </footer>
   );
 }

@@ -130,6 +130,29 @@ test('the wizard recording size and video shape land in the config and brief', a
   assert.equal(brief.capture.size, 'iphone-15');
 });
 
+test('any target length is kept, and an absurd one is capped at an hour', () => {
+  const result = createProject({
+    title: 'Long tour',
+    audience: 'Admins',
+    brand: { mode: 'new', name: 'Longform', url: 'https://example.com' },
+    app: { startUrl: 'https://example.com' },
+    story: { mustShow: ['Home'], lengthSec: 600 },
+  });
+  const brief = JSON.parse(readFileSync(join(root, 'videos', result.slug, 'brief.json'), 'utf8'));
+  assert.equal(brief.lengthSec, 600);
+  assert.match(draftNote(brief), /Target length: ~600s/);
+
+  const huge = createProject({
+    title: 'Huge tour',
+    audience: 'Admins',
+    brand: { mode: 'new', name: 'Huge', url: 'https://example.com' },
+    app: { startUrl: 'https://example.com' },
+    story: { mustShow: ['Home'], lengthSec: 99999 },
+  });
+  const capped = JSON.parse(readFileSync(join(root, 'videos', huge.slug, 'brief.json'), 'utf8'));
+  assert.equal(capped.lengthSec, 3600);
+});
+
 test('a bad recording size is refused before any project files are written', async () => {
   const { existsSync } = await import('node:fs');
   assert.throws(

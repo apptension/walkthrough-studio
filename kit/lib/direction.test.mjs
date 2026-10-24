@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { applyDirection, resolveDirection } from './direction.mjs';
+import { applyDirection, listLockups, lockupHtml, patchDirection, resolveDirection, saveUploadedLockup } from './direction.mjs';
 import { TRANSITION_STYLES, transitionFor } from './edit.mjs';
 import { lensGeometry } from './lens.mjs';
 
@@ -66,6 +69,37 @@ test('directed transitions choose by editing intent', () => {
   assert.equal(transitionFor('iris', { kind: 'live' }, { kind: 'plate' }), 'iris');
   for (const [id, style] of Object.entries(TRANSITION_STYLES)) {
     if (id !== 'directed') assert.ok(style.xfade, `${id} needs an ffmpeg xfade`);
+  }
+});
+
+test('an uploaded logo stays on the video and can be selected', () => {
+  const uploadDir = mkdtempSync(join(tmpdir(), 'logo-up-'));
+  const dir = mkdtempSync(join(tmpdir(), 'logo-brand-'));
+  try {
+    writeFileSync(join(dir, 'logo.svg'), '<svg></svg>');
+    const brand = { dir, uploadDir, name: 'Acme', logo: 'logo.svg', logoHtml: '<div>old</div>' };
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
+    const file = saveUploadedLockup(brand, { name: 'Mark.PNG', bytes: png });
+    assert.equal(file, 'logo-upload.png');
+    const lockups = listLockups(brand);
+    assert.equal(lockups[0].label, 'Uploaded');
+    assert.ok(lockups.some((item) => item.file === 'logo.svg'));
+    assert.match(lockupHtml(brand, file), /^<img class="logo-img"/);
+    assert.equal(patchDirection({}, { logo: file }, brand).logo, file);
+    assert.throws(
+      () => saveUploadedLockup(brand, { name: 'x.svg', bytes: Buffer.from('<svg><script>alert(1)</script></svg>') }),
+      /plain logo/,
+    );
+    const next = saveUploadedLockup(brand, {
+      name: 'a.svg',
+      bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+    });
+    assert.equal(next, 'logo-upload.svg');
+    assert.equal(listLockups(brand).some((item) => item.file === 'logo-upload.png'), false);
+    assert.match(lockupHtml(brand, next), /class="logo-svg"/);
+  } finally {
+    rmSync(uploadDir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

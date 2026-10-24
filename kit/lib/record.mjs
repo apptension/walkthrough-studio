@@ -25,6 +25,7 @@ import { resolvePace } from "./direction.mjs";
 import { createFocus } from "./focus.mjs";
 import { typeInto, fillField } from "./form.mjs";
 import { makeNear, spot } from "./replayTarget.mjs";
+import { runOptional } from "./optionalStep.mjs";
 import { readGuidedTour, tourFallbacks } from "./guidedTour.mjs";
 import {
   captureProfile,
@@ -648,6 +649,9 @@ export async function recordLive(
     near: makeNear(tourFallbacks(readGuidedTour(video))),
     /** Where inside a live box to act for a captured target (pixel offset when the size matches). */
     spot,
+    /** A step the story does not depend on: short action timeout; a miss warns and the take goes on. */
+    optional: (label, fn, opts = {}) =>
+      runOptional({ page, label, fn, mark, ...opts }),
   };
   const locatorProto = Object.getPrototypeOf(page.locator("html"));
   focus.install(locatorProto, {

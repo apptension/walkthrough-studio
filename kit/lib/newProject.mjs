@@ -13,8 +13,7 @@ import { BRANDS, VIDEOS, brandReadiness, scaffoldVideo, slugify, upsertDotEnv } 
 
 import { PLATE_TYPE_IDS as PLATE_TYPES } from './plateTypes.mjs';
 import { applyCaptureSettings } from './captureSettings.mjs';
-
-const LENGTHS = [60, 90, 120, 180];
+import { clampLengthSec } from './length.mjs';
 
 const lines = (v) =>
   (Array.isArray(v) ? v : String(v || '').split('\n'))
@@ -141,7 +140,7 @@ export function createProject(input = {}) {
     audience: String(input.audience || '').trim(),
     outcome: String(input.outcome || '').trim(),
     purpose: PURPOSE_IDS.includes(input.purpose) ? input.purpose : resolvePurpose({ audience: input.audience }),
-    lengthSec: LENGTHS.includes(Number(story.lengthSec)) ? Number(story.lengthSec) : 120,
+    lengthSec: clampLengthSec(story.lengthSec),
     tone: String(story.tone || 'confident, warm, plain-spoken').trim(),
     brand: { id: brandId, mode: b.mode === 'new' ? 'new' : 'existing', name: b.name || null, url: b.url || null, appUrl: appUrl || startUrl || null },
     app: {

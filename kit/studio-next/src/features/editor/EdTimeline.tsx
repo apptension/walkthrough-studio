@@ -70,6 +70,13 @@ export function EdTimeline() {
           {' '}
           <span className="etl-sep" aria-hidden="true" />
           {' '}
+          <button type="button" id="etlDuplicate" className="etl-icon" title="Duplicate (⌘D)" aria-label="Duplicate" disabled>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.2" />
+              <path d="M15.5 8.5V6.2A2.2 2.2 0 0 0 13.3 4H6.2A2.2 2.2 0 0 0 4 6.2v7.1a2.2 2.2 0 0 0 2.2 2.2h2.3" />
+            </svg>
+          </button>
+          {' '}
           <button type="button" id="etlUndo" className="etl-icon" title="Undo (⌘Z)" aria-label="Undo" disabled>
             <Icon name="ui-undo" size={14} />
           </button>

@@ -5,6 +5,7 @@ import { useDesk } from '@/desk/store';
 import { approveMotion } from '@/features/feedback/proposal';
 import { useBusy } from '@/features/tools-panel/busy';
 import { cn } from '@/lib/cn';
+import { NeonButton } from '@/ui/NeonButton';
 
 import { applyMotion, approveDirection, previewPlates } from './actions';
 import { useDirectionView } from './view';
@@ -18,8 +19,7 @@ function ApproveDirectionButton() {
   const approved = Boolean(direction?.approvedAt);
   const disabled = busy || (approved && releasedFor !== direction);
   return (
-    <button
-      type="button"
+    <NeonButton
       id="btnApproveDirection"
       className={cn('btn primary', busy && 'busy')}
       disabled={disabled}
@@ -30,7 +30,7 @@ function ApproveDirectionButton() {
       }}
     >
       {approved ? 'Direction approved' : 'Approve direction'}
-    </button>
+    </NeonButton>
   );
 }
 

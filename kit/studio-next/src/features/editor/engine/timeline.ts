@@ -1,11 +1,12 @@
 import { cardMarkDuration, cardMarkKey } from '@/logic/liveCardStage';
 
+import { canDuplicate } from './duplicate';
 import { lensItems, recToEd, shotKey, visualSpan, curClip } from './seq';
 import { joinStyle, paintClipChip, resolveLiveCard } from './stage';
 import { audioDesk, deckEdit, ed, live } from './state';
 import { etlHeadWidth, paintHead } from './transport';
 import type { Clip, DeckMark, DeckPlate, PlateRow } from './types';
-import { $, CUT_ICON, ICONS, PLATE_ICON, T_GLYPH, escapeHtml, fmtRate, fmtRuler, fmtT, packLanes } from './util';
+import { $, CUT_ICON, DUP_ICON, ICONS, PLATE_ICON, T_GLYPH, escapeHtml, fmtRate, fmtRuler, fmtT, packLanes } from './util';
 
 /** The timeline renderer (ruler, clips, card rows, fx rows, cuts, audio rows) from `kit/studio/editor.js`. */
 
@@ -61,8 +62,9 @@ export function renderClipsTrack(): void {
     const info = c.kind === 'plate' ? plateInfo(c.plateId) : null;
     const styled = info && (Object.keys(info.style || {}).length || (info.overrides || []).length);
     const isSel = sel?.type === 'clip' && sel.id === c.id;
-    return `<div class="etl-clip ${c.kind}${isSel ? ' is-sel' : ''}${i === ed.cur ? ' is-cur' : ''}${w < 96 ? ' is-narrow' : ''}" data-i="${i}" data-id="${escapeHtml(c.id)}" style="left:${a * pps}px;width:${Math.max(2, w - 2)}px" title="${escapeHtml(`${c.title} · ${c.dur.toFixed(1)}s · drag to move`)}">
-        <span class="ec-ico">${icon}</span><span class="ec-t">${escapeHtml(c.title)}</span>${styled ? `<span class="ec-dot" title="Own style">${ICONS['palette']}</span>` : ''}<span class="ec-d">${c.dur.toFixed(1)}s</span>
+    const again = c.repeatOf ? ' · plays again' : '';
+    return `<div class="etl-clip ${c.kind}${c.repeatOf ? ' is-repeat' : ''}${isSel ? ' is-sel' : ''}${i === ed.cur ? ' is-cur' : ''}${w < 96 ? ' is-narrow' : ''}" data-i="${i}" data-id="${escapeHtml(c.id)}" style="left:${a * pps}px;width:${Math.max(2, w - 2)}px" title="${escapeHtml(`${c.title}${again} · ${c.dur.toFixed(1)}s · drag to move`)}">
+        <span class="ec-ico">${icon}</span><span class="ec-t">${escapeHtml(c.title)}</span>${c.repeatOf ? `<span class="ec-dup" title="Duplicate — plays this section again">${DUP_ICON}</span>` : ''}${styled ? `<span class="ec-dot" title="Own style">${ICONS['palette']}</span>` : ''}<span class="ec-d">${c.dur.toFixed(1)}s</span>
       </div>`;
   });
   const joins = ed.seq.slice(1).map((c) => {
@@ -121,25 +123,20 @@ export function renderCardTracks(): void {
   const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
   const paint = (kind: 'chapter' | 'caption', host: HTMLElement, head: HTMLElement | null) => {
     const marks = onLive ? (ed.deck?.marks || []).filter((m) => m.kind === kind && Number.isFinite(m.t)) : [];
-    const items = marks
-      .map((m): CardItem | null => {
-        const dur = cardMarkDuration(m);
-        const segs = fxSegments(m.t, m.t + dur);
-        if (!segs.length) return null;
-        const a = segs[0]!.a;
-        const b = segs[segs.length - 1]!.b;
-        return {
-          m,
-          t: m.t,
-          end: m.t + dur,
-          a,
-          b,
-          key: m.key || cardMarkKey(m),
-          card: resolveLiveCard(m),
-          dur,
-        };
-      })
-      .filter((it): it is CardItem => Boolean(it));
+    const items = marks.flatMap((m): CardItem[] => {
+      const dur = cardMarkDuration(m);
+      const card = resolveLiveCard(m);
+      return segmentRuns(fxSegments(m.t, m.t + dur)).map((run) => ({
+        m,
+        t: run[0]!.a,
+        end: run[run.length - 1]!.b,
+        a: run[0]!.a,
+        b: run[run.length - 1]!.b,
+        key: m.key || cardMarkKey(m),
+        card,
+        dur,
+      }));
+    });
     const carried = new Set((ed.deck?.layouts?.sections || []).filter((s) => s.textOn).map((s) => s.key));
     const packed = packLanes(items);
     const h = Math.max(CARD_LANE_H, packed.lanes * CARD_LANE_H + 4);
@@ -150,7 +147,7 @@ export function renderCardTracks(): void {
         const on = sel?.type === 'card' && sel.key === it.key;
         const onStage = kind === 'chapter' && carried.has(it.key);
         const label = it.m.label || kind;
-        const title = `${kind === 'chapter' ? 'Chapter' : 'Caption'} · ${label}${onStage ? ' · title sits beside the recording' : ''} · drag to move · edges trim · double-click to edit copy`;
+        const title = `${kind === 'chapter' ? 'Chapter' : 'Caption'} · ${label}${it.m.copyOf ? ' · duplicate' : ''}${onStage ? ' · title sits beside the recording' : ''} · drag to move · edges trim · double-click to edit copy`;
         const top = 3 + it.lane * CARD_LANE_H;
         return `<button type="button" class="ec-card ${kind}${on ? ' is-on' : ''}${onStage ? ' is-carried' : ''}" style="left:${it.a * pps}px;width:${Math.max(18, (it.b - it.a) * pps)}px;top:${top}px;height:${CARD_LANE_H - 6}px" data-mark-t="${it.m.t}" data-mark-dur="${it.dur}" data-mark-key="${escapeHtml(it.key)}" data-card-id="${escapeHtml(it.card?.id || '')}" data-card-kind="${kind}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i class="h l" data-edge="l"></i><span class="ec-card-t">${escapeHtml(label)}</span><i class="h r" data-edge="r"></i></button>`;
       })
@@ -203,6 +200,21 @@ export interface FxSegment {
 }
 
 /** Every place an effect (recording range) shows on the cut — split by the live clips it crosses. */
+/**
+ * Segments split where the cut jumps: a duplicated or reordered section shows the card again
+ * on its own, instead of one block stretched across everything in between.
+ */
+export function segmentRuns(segs: FxSegment[]): FxSegment[][] {
+  const runs: FxSegment[][] = [];
+  for (const s of segs) {
+    const run = runs[runs.length - 1];
+    const last = run?.[run.length - 1];
+    if (run && last && s.clip.i === last.clip.i + 1 && s.clip.recFrom >= last.clip.recTo - 0.05) run.push(s);
+    else runs.push([s]);
+  }
+  return runs;
+}
+
 export function fxSegments(from: number, to: number): FxSegment[] {
   const out: FxSegment[] = [];
   for (const c of ed.seq) {
@@ -486,6 +498,13 @@ export function paintTools(): void {
     cut.disabled = !onLive && ed.sel?.type !== 'range';
     cut.title = ed.sel?.type === 'range' ? 'Cut the selected stretch out of the recording (C)' : `Cut 2s from the playhead (C)${tip}`;
   }
+  const dupBtn = $<HTMLButtonElement>('etlDuplicate');
+  if (dupBtn) {
+    const dup = canDuplicate();
+    dupBtn.disabled = !dup.ok;
+    dupBtn.title = dup.ok ? `${dup.label} (⌘D)` : `Duplicate (⌘D) — ${dup.why || 'select something first'}`;
+    dupBtn.setAttribute('aria-label', dup.label);
+  }
   const undoBtn = $<HTMLButtonElement>('etlUndo');
   if (undoBtn) undoBtn.disabled = !ed.undo.length;
   const redoBtn = $<HTMLButtonElement>('etlRedo');
@@ -507,6 +526,7 @@ export function paintContext(): void {
         <button type="button" class="ctx-btn" data-range-lens title="Magnify a detail over this stretch">${ICONS['lens']}Magnify</button>
         <button type="button" class="ctx-btn cut" data-range-cut title="Remove this stretch from the recording">${CUT_ICON}Cut</button>
         <button type="button" class="ctx-btn" data-range-skip title="Keep the whole screen here — no auto zoom">${ICONS['noZoom']}No zoom</button>
+        <button type="button" class="ctx-btn" data-range-dup title="Play this stretch again after its section (⌘D)">${DUP_ICON}Duplicate</button>
         <button type="button" class="ctx-btn icon" data-range-clear title="Clear selection (Esc)">${ICONS['x']}</button>`;
     return;
   }

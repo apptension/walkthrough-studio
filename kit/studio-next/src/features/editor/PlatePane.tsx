@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import { runtime } from '@/desk/runtime';
 import { useDesk } from '@/desk/store';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 import { Scrubber } from '@/ui/Scrubber';
 
@@ -118,12 +119,12 @@ export function PlatePane() {
             </label>
           </div>
           <p className="sp-keys sp-foot" data-lens-hud-hint="" />
-          <button type="button" className="ed-pill-btn primary sp-wide" data-lens-hud-take="" hidden>
+          <NeonButton className="ed-pill-btn primary sp-wide" data-lens-hud-take="" hidden>
             <Icon name="target" size={13} />
             <span>
               Take over
             </span>
-          </button>
+          </NeonButton>
         </div>
       </div>
       <div id="edHud" className="ed-hud" aria-live="polite" />

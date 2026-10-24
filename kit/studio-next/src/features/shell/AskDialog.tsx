@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { useAsk, type PendingAsk } from '@/desk/ask';
+import { NeonButton } from '@/ui/NeonButton';
 import { Icon } from '@/ui/icons';
 
 function iconFor(p: PendingAsk): string {
@@ -149,9 +150,9 @@ export function AskDialog() {
             <button type="submit" className="btn ghost" id="askCancel" value="cancel">
               {p?.cancel ?? 'Cancel'}
             </button>
-            <button ref={okRef} type="submit" className={`btn ${warn ? 'warn' : 'primary'}`} id="askOk" value="ok">
+            <NeonButton ref={okRef} type="submit" className={`btn ${warn ? 'warn' : 'primary'}`} id="askOk" value="ok">
               {p?.ok ?? 'Continue'}
-            </button>
+            </NeonButton>
           </div>
         </footer>
       </form>
