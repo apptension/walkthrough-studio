@@ -300,6 +300,38 @@ export function ProofStep({ hidden }: { hidden: boolean }) {
           </span>
           <span className="pick-check" />
         </label>
+        {' '}
+        <label className="pick">
+          <input type="checkbox" name="plates" value="showcase" />
+          <span className="pick-still">
+            <PlateStill type="showcase" />
+          </span>
+          <span className="pick-copy">
+            <strong>
+              Showcase
+            </strong>
+            <em>
+              An interface shot in a device, zooming to the detail
+            </em>
+          </span>
+          <span className="pick-check" />
+        </label>
+        {' '}
+        <label className="pick">
+          <input type="checkbox" name="plates" value="bento" />
+          <span className="pick-still">
+            <PlateStill type="bento" />
+          </span>
+          <span className="pick-copy">
+            <strong>
+              Bento
+            </strong>
+            <em>
+              Editorial board — the interface, a number, a voice, the stack
+            </em>
+          </span>
+          <span className="pick-check" />
+        </label>
       </div>
       <label className="wf">
         <span className="field-label">

@@ -135,11 +135,8 @@ export function EdTimeline() {
               <div className="etl-head clips" title="Clips">
                 <Icon name="ui-film" size={13} />
               </div>
-              <div className="etl-head chapters" id="etlHeadChapters" title="Chapters">
+              <div className="etl-head chapters cards-head" id="etlHeadChapters" title="Cards · chapters and captions">
                 <Icon name="ui-chapters" size={12} />
-              </div>
-              <div className="etl-head captions" id="etlHeadCaptions" title="Captions">
-                <Icon name="ui-captions" size={12} />
               </div>
               <div className="etl-head speed" title="Speed">
                 <Icon name="ui-speed" size={12} />
@@ -160,8 +157,7 @@ export function EdTimeline() {
             <div id="etlCanvas" className="etl-canvas">
               <div id="etlRuler" className="etl-ruler" />
               <div id="etlClips" className="etl-track clips" />
-              <div id="etlChapters" className="etl-track fxrow cards chapters" data-empty="" />
-              <div id="etlCaptions" className="etl-track fxrow cards captions" data-empty="" />
+              <div id="etlChapters" className="etl-track fxrow cards chapters cards-all" data-empty="" />
               <div id="etlSpeed" className="etl-track fxrow speed" />
               <div id="etlZoom" className="etl-track fxrow zoom" />
               <div id="etlCuts" className="etl-track fxrow cut" />

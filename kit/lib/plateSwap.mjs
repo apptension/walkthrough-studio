@@ -36,6 +36,8 @@ const LIST_RANGE = {
   logos: [3, 10],
   orbit: [3, 8],
   pricing: [2, 3],
+  showcase: [0, 4],
+  bento: [0, 4],
 };
 
 const text = (v) => (v == null ? '' : String(v).trim());
@@ -98,6 +100,14 @@ export function platePoints(row = {}) {
   for (const side of ['left', 'right']) for (const it of row[side]?.items || []) push({ label: it });
   return pts;
 }
+
+/** Where converted callouts land on a shot: spread so no two pins overlap. */
+const SHOWCASE_PINS = [
+  { x: 28, y: 32 },
+  { x: 70, y: 46 },
+  { x: 36, y: 72 },
+  { x: 76, y: 78 },
+];
 
 function fill(points, seedRows, [min, max], map) {
   const rows = points.slice(0, max).map(map);
@@ -188,6 +198,24 @@ export function convertPlate(row, toType) {
     case 'statement':
       if (!text(row.sub) && pts[0]) out.sub = pts[0].note || pts[0].label;
       break;
+    case 'showcase': {
+      // The shot carries over from any plate that had one; up to four points become callout pins.
+      const shot = row.shot || row.asset || row.image;
+      if (shot) out.shot = shot;
+      if (sub) out.sub = sub;
+      if (pts.length) out.callouts = pts.slice(0, 4).map((p, i) => ({ label: clip(p.label, 28), ...SHOWCASE_PINS[i] }));
+      break;
+    }
+    case 'bento': {
+      const shot = row.shot || row.asset || row.image;
+      if (shot) out.shot = shot;
+      const first = row.stats?.[0] || (text(row.value) ? { value: row.value, label: row.unit || row.label || row.note } : null);
+      if (first) Object.assign(out, { value: text(first.value) || seed.value, label: text(first.label) || seed.label });
+      const q = row.quotes?.[0] || (text(row.quote) ? { quote: row.quote, author: row.author } : null);
+      if (q && text(q.quote).length <= 160) Object.assign(out, { quote: text(q.quote), author: text(q.author) || '' });
+      if (row.logos?.length) out.logos = row.logos.slice(0, 4).map((l) => ({ ...l }));
+      break;
+    }
     default:
       break;
   }
@@ -263,6 +291,7 @@ export function swapSummary(row, plateId = row?.id) {
 export const PLATE_SHELVES = Object.freeze([
   { id: 'story', label: 'Story', types: ['statement', 'callout', 'quote', 'compare'] },
   { id: 'product', label: 'Product', types: ['features', 'journey', 'process', 'checklist', 'faq', 'team'] },
+  { id: 'show', label: 'Show', types: ['showcase', 'bento'] },
   { id: 'proof', label: 'Proof', types: ['stats', 'kpi', 'metric', 'testimonials', 'logos', 'orbit'] },
   { id: 'plans', label: 'Plans', types: ['timeline', 'pricing'] },
 ]);

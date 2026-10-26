@@ -77,6 +77,43 @@
         margin-top: 14px; text-align: center;
         font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
       }
+      /* ——— Layout: marquee — two rows of tiles glide past each other, the head floats above ——— */
+      body[data-layout='marquee'] .compose { gap: 36px; padding: 64px 0; }
+      body[data-layout='marquee'] .wall { display: none; }
+      .mq { display: none; width: 100%; flex-direction: column; gap: 26px; overflow: hidden;
+        mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+        -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+      }
+      body[data-layout='marquee'] .mq { display: flex; }
+      .mq-row { display: flex; gap: 28px; width: max-content; opacity: 0; animation: fadeUp 0.9s var(--s) var(--expo) both, mqL 22s linear var(--s) infinite; }
+      .mq-row.rev { animation-name: fadeUp, mqR; }
+      .mq-row .logo-tile { width: 300px; flex: none; animation: none; opacity: 1; }
+      .mq-row .logo-tile .logo-frame { height: 132px; }
+      @keyframes mqL { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      @keyframes mqR { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+      /* ——— Layout: cloud — tiles float at different depths and drift like a mobile ——— */
+      body[data-layout='cloud'] .compose { justify-content: flex-start; padding-top: 72px; }
+      body[data-layout='cloud'] .wall { position: relative; flex: 1; max-width: 1560px; display: block; perspective: 1400px; }
+      body[data-layout='cloud'] .wall > .logo-tile {
+        position: absolute; left: var(--cx); top: var(--cy); width: 260px;
+        transform: translate(-50%, -50%) scale(var(--z, 1)); transform-origin: 50% 50%;
+        animation: cloudIn 1.1s var(--s) var(--expo) both, cloudDrift 6.4s calc(var(--s) + 0.8s) ease-in-out infinite alternate;
+        filter: blur(calc((1 - var(--z, 1)) * 2.6px));
+      }
+      body[data-layout='cloud'] .wall > .logo-tile .logo-frame { height: 120px; }
+      body[data-layout='cloud'] .wall > .logo-tile .logo-label { display: none; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(1) { --cx: 50%; --cy: 44%; --z: 1.18; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(2) { --cx: 22%; --cy: 30%; --z: 0.98; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(3) { --cx: 78%; --cy: 32%; --z: 1.02; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(4) { --cx: 30%; --cy: 74%; --z: 0.9; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(5) { --cx: 72%; --cy: 76%; --z: 0.94; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(6) { --cx: 10%; --cy: 56%; --z: 0.78; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(7) { --cx: 90%; --cy: 58%; --z: 0.8; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(8) { --cx: 50%; --cy: 88%; --z: 0.74; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(9) { --cx: 38%; --cy: 10%; --z: 0.7; }
+      body[data-layout='cloud'] .wall > .logo-tile:nth-child(10) { --cx: 64%; --cy: 8%; --z: 0.72; }
+      @keyframes cloudIn { from { opacity: 0; transform: translate(-50%, -30%) scale(calc(var(--z, 1) * 0.7)); } to { opacity: 1; transform: translate(-50%, -50%) scale(var(--z, 1)); } }
+      @keyframes cloudDrift { from { translate: 0 -8px; } to { translate: 0 10px; } }
       .bloom {
         position: absolute; left: 50%; top: 50%; width: 1200px; height: 560px; margin: -280px 0 0 -600px;
         border-radius: 50%;
@@ -85,7 +122,7 @@
       }
     </style>
   </head>
-  <body data-duration="5.4">
+  <body data-duration="5.4" data-layout="{{LAYOUT}}">
     <div class="stage">
       <div class="bg"></div>
       <div class="blob warm"></div>
@@ -99,6 +136,7 @@
           <p class="sub" data-edit="sub" data-edit-kind="text" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
         </div>
         <div class="wall">{{ITEMS}}</div>
+        {{MARQUEE}}
       </div>
       <div class="vignette"></div>
     </div>

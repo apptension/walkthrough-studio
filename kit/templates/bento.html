@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bento plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.4s;
+        --black-out: 5.8s;
+        --tile-in: var(--motion-enter, 0.9s);
+      }
+      /* ——— Mosaic: an editorial board — the interface, one number, one voice, the stack ——— */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 36px; padding: 60px 100px 56px;
+        animation: fadeOut 0.7s 5.35s var(--exit) forwards;
+      }
+      .head { text-align: center; max-width: 1200px; z-index: 2; }
+      .eyebrow { opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both; }
+      .title {
+        margin-top: 14px; font-size: 58px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .board {
+        width: 100%; max-width: 1640px; flex: 1; min-height: 0;
+        display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px;
+      }
+      .tile {
+        position: relative; border-radius: 28px; overflow: hidden; min-height: 0;
+        background: linear-gradient(160deg, color-mix(in srgb, var(--surface) 88%, var(--gold)) 0%, var(--surface) 46%, color-mix(in srgb, var(--surface) 84%, var(--ink)) 100%);
+        border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent);
+        box-shadow: 0 24px 60px color-mix(in srgb, var(--shade, var(--ink)) 50%, transparent), inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+        opacity: 0; transform-origin: 50% 60%;
+        animation: tileIn var(--tile-in) var(--s) var(--expo) both;
+        will-change: transform, opacity, clip-path;
+      }
+      @keyframes tileIn {
+        from { opacity: 0; transform: translateY(40px) scale(0.97); clip-path: inset(0 0 100% 0 round 28px); }
+        55% { opacity: 1; }
+        to { opacity: 1; transform: none; clip-path: inset(0 0 0 0 round 28px); }
+      }
+      /* Shot tile — the interface, slowly pushing toward its focus */
+      .tile.shot { grid-column: 1 / 3; grid-row: 1 / 3; padding: 0; }
+      .tile.shot .pic { position: absolute; inset: 0; transform-origin: 50% 35%; animation: shotPush 4.6s 1.6s var(--inout) both; }
+      @keyframes shotPush { to { transform: scale(1.1); } }
+      .tile.shot img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+      .tile.shot .fade {
+        position: absolute; inset: 0;
+        background: linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--ink) 78%, transparent) 100%);
+      }
+      .tile.shot .tag {
+        position: absolute; left: 28px; bottom: 26px; display: inline-flex; align-items: center; gap: 10px;
+        padding: 10px 16px; border-radius: 999px;
+        background: color-mix(in srgb, var(--ink) 70%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+        color: var(--text); font-size: 17px; font-weight: 600;
+        opacity: 0; animation: fadeUp 0.7s 1.35s var(--expo) both;
+      }
+      .tile.shot .tag i { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 28%, transparent); }
+      .tile.shot .tag:empty, .tile.shot .tag.is-empty { display: none; }
+      .mock {
+        position: absolute; inset: 0; padding: 24px; display: grid; grid-template-columns: 180px 1fr; gap: 18px;
+        background: radial-gradient(ellipse 70% 60% at 60% 30%, color-mix(in srgb, var(--gold) 10%, var(--surface)) 0%, transparent 70%), color-mix(in srgb, var(--surface) 92%, var(--ink));
+      }
+      .mock .side { display: grid; grid-auto-rows: 24px; gap: 12px; align-content: start; }
+      .mock i { display: block; border-radius: 7px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+      .mock .side i:first-child { width: 70%; background: color-mix(in srgb, var(--gold) 36%, transparent); }
+      .mock .main { display: grid; grid-template-rows: 48px 1fr; gap: 16px; }
+      .mock .main .cards { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; gap: 14px; }
+      .mock .main .cards i:first-child { background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 26%, transparent), color-mix(in srgb, var(--amber) 10%, transparent)); }
+      /* Number tile */
+      .tile.num { grid-column: 3 / 4; grid-row: 1 / 2; padding: 30px 32px; display: flex; flex-direction: column; justify-content: flex-end; }
+      .tile.num .value {
+        font-size: 92px; font-weight: 700; letter-spacing: -0.06em; line-height: 0.95;
+        background: linear-gradient(92deg, var(--gold) 0%, var(--amber) 80%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .tile.num .label { margin-top: 10px; font-size: 19px; font-weight: 600; color: var(--muted); letter-spacing: -0.01em; }
+      .tile.num::before {
+        content: ''; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%;
+        background: radial-gradient(circle, color-mix(in srgb, var(--gold) 28%, transparent), transparent 70%);
+      }
+      /* Quote tile */
+      .tile.quote { grid-column: 4 / 5; grid-row: 1 / 3; padding: 34px 32px; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
+      .tile.quote .mark { font-size: 86px; line-height: 0.6; color: var(--gold); font-weight: 700; opacity: 0.9; }
+      .tile.quote .q { font-size: 26px; font-weight: 500; line-height: 1.32; letter-spacing: -0.02em; text-wrap: pretty; }
+      .tile.quote .who { font-size: 15px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+      .tile.quote .who:empty { display: none; }
+      /* Logos tile */
+      .tile.logos { grid-column: 3 / 4; grid-row: 2 / 3; padding: 26px 28px; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
+      .tile.logos .eyebrow { font-size: 12px; letter-spacing: 0.26em; opacity: 1; animation: none; }
+      .tile.logos .strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .tile.logos .mini {
+        height: 70px; border-radius: 16px; display: grid; place-items: center; padding: 14px 18px;
+        opacity: 0; animation: fxPop 0.6s var(--s) var(--pop) both;
+      }
+      .tile.logos .mini[data-tone='light'] { background: linear-gradient(180deg, #fff, #f1f4ef); }
+      .tile.logos .mini[data-tone='dark'] { background: color-mix(in srgb, var(--surface) 70%, #000 14%); border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent); }
+      .tile.logos .mini img { max-width: 100%; max-height: 40px; object-fit: contain; }
+      .tile.logos .mini.is-empty { border: 1px dashed color-mix(in srgb, var(--muted) 35%, transparent); }
+      .tile.logos .mini.is-empty span { font-size: 13px; color: var(--muted); font-weight: 600; }
+      .board[data-logos='0'] .tile.logos { display: none; }
+      .board[data-logos='0'] .tile.num { grid-row: 1 / 3; justify-content: center; }
+      .board[data-logos='0'] .tile.num .value { font-size: 120px; }
+      /* ——— Layout: editorial — the head stands in the left column, the board fills the right ——— */
+      body[data-layout='editorial'] .compose { flex-direction: row; align-items: center; gap: 64px; padding: 80px 100px; }
+      body[data-layout='editorial'] .head { flex: 0 0 520px; text-align: left; }
+      body[data-layout='editorial'] .head .title { font-size: 62px; }
+      body[data-layout='editorial'] .board { height: 100%; grid-template-columns: repeat(3, 1fr); }
+      body[data-layout='editorial'] .tile.shot { grid-column: 1 / 3; grid-row: 1 / 2; }
+      body[data-layout='editorial'] .tile.num { grid-column: 3 / 4; grid-row: 1 / 2; }
+      body[data-layout='editorial'] .tile.quote { grid-column: 1 / 2; grid-row: 2 / 3; }
+      body[data-layout='editorial'] .tile.logos { grid-column: 2 / 4; grid-row: 2 / 3; }
+      body[data-layout='editorial'] .tile.logos .strip { grid-template-columns: repeat(4, 1fr); }
+      body[data-layout='editorial'] .board[data-logos='0'] .tile.quote { grid-column: 1 / 4; }
+      body[data-layout='editorial'] .board[data-logos='0'] .tile.num { grid-row: 1 / 2; }
+      body[data-layout='editorial'] .board[data-logos='0'] .tile.num .value { font-size: 92px; }
+      /* Vertical master */
+      html[data-frame='portrait'] .head { text-align: left; }
+      html[data-frame='portrait'] .board { grid-template-columns: repeat(2, 1fr); grid-template-rows: 520px 300px 300px; gap: 16px; }
+      html[data-frame='portrait'] .tile.shot { grid-column: 1 / 3; grid-row: 1 / 2; }
+      html[data-frame='portrait'] .tile.num { grid-column: 1 / 2; grid-row: 2 / 3; }
+      html[data-frame='portrait'] .tile.quote { grid-column: 2 / 3; grid-row: 2 / 4; }
+      html[data-frame='portrait'] .tile.logos { grid-column: 1 / 2; grid-row: 3 / 4; }
+    </style>
+  </head>
+  <body data-duration="6.4" data-layout="{{LAYOUT}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="38" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+        </div>
+        <div class="board" data-logos="{{LOGO_COUNT}}">
+          <div class="tile shot" style="--s: 0.55s" data-slot="shot" data-slot-kind="asset">
+            <div class="pic">{{SHOT}}</div>
+            <div class="fade"></div>
+            <div class="tag{{TAG_CLASS}}"><i></i><span data-edit="caption" data-edit-kind="text" data-edit-raw="{{CAPTION_RAW}}">{{CAPTION}}</span></div>
+          </div>
+          <div class="tile num" style="--s: 0.78s">
+            <div class="value" data-fit="1" data-fit-min="48" data-count data-count-start="1.1" data-count-dur="1.4" data-edit="value" data-edit-kind="text" data-edit-raw="{{VALUE_RAW}}">{{VALUE}}</div>
+            <div class="label" data-edit="label" data-edit-kind="text" data-edit-raw="{{LABEL_RAW}}">{{LABEL}}</div>
+          </div>
+          <div class="tile quote" style="--s: 0.96s">
+            <div class="mark" aria-hidden="true">“</div>
+            <div class="q" data-fit="4" data-fit-min="18" data-edit="quote" data-edit-kind="text" data-edit-raw="{{QUOTE_RAW}}">{{QUOTE}}</div>
+            <div class="who" data-edit="author" data-edit-kind="text" data-edit-raw="{{AUTHOR_RAW}}">{{AUTHOR}}</div>
+          </div>
+          <div class="tile logos" style="--s: 1.12s">
+            <div class="eyebrow">Works with</div>
+            <div class="strip">{{LOGOS}}</div>
+          </div>
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+  </body>
+</html>

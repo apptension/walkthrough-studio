@@ -103,7 +103,7 @@ test('variant templates follow the hard rules: no backdrop-filter, explicit exit
 
 test('layoutOptions and layoutGuide cover every kind', () => {
   const opts = layoutOptions();
-  assert.deepEqual(Object.keys(opts).sort(), ['callout', 'close', 'features', 'open', 'statement', 'stats']);
+  assert.deepEqual(Object.keys(opts).sort(), ['bento', 'callout', 'close', 'features', 'kpi', 'logos', 'open', 'showcase', 'statement', 'stats']);
   assert.ok(opts.open.every((o) => o.id && o.label && o.hint));
   const guide = layoutGuide();
   for (const kind of ['open.layout', 'close.layout', 'features interstitial.layout', 'statement interstitial.layout']) {

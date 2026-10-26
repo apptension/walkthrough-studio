@@ -14,6 +14,7 @@ import { postDeck, redo, refresh, resetForProject, undo, validateSelection } fro
 import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
+import { hoverContentSlot, moveContentSlot, openContentSlot, syncContentToField } from './plateContentPane';
 import { invalidatePlates, paintLookVars } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -250,7 +251,52 @@ export function wireStage(signal: AbortSignal): void {
     signal,
   );
   wireStagePanels(signal);
-  window.addEventListener('plate-selection', (e) => syncPlateField((e as CustomEvent<FieldDetail>).detail), { signal });
+  window.addEventListener(
+    'plate-selection',
+    (e) => {
+      const detail = (e as CustomEvent<FieldDetail>).detail;
+      syncPlateField(detail);
+      const c = curClip();
+      if (c?.kind === 'plate' && c.plateId) syncContentToField(c.plateId, detail?.path || null);
+    },
+    { signal },
+  );
+  // A logo, avatar, screenshot or whole tile on the stage: open its record in the Inspector.
+  window.addEventListener(
+    'plate-canvas-slot',
+    (e) => {
+      const slot = (e as CustomEvent<{ slot?: string } | null>).detail?.slot;
+      const c = curClip();
+      if (!slot || c?.kind !== 'plate' || !c.plateId) return;
+      showInspectorTab();
+      if (ed.insTab !== 'design') {
+        ed.insTab = 'design';
+        renderInspector();
+      }
+      openContentSlot(c.plateId, slot);
+    },
+    { signal },
+  );
+  // A pin dragged across the shot: its percentages land in the plate's config.
+  window.addEventListener(
+    'plate-canvas-slot-move',
+    (e) => {
+      const d = (e as CustomEvent<{ slot?: string; x?: number; y?: number } | null>).detail;
+      const c = curClip();
+      if (!d?.slot || c?.kind !== 'plate' || !c.plateId) return;
+      moveContentSlot(c.plateId, d.slot, { x: Number(d.x), y: Number(d.y) });
+    },
+    { signal },
+  );
+  window.addEventListener(
+    'plate-canvas-slot-hover',
+    (e) => {
+      const slot = (e as CustomEvent<{ slot?: string | null } | null>).detail?.slot ?? null;
+      const c = curClip();
+      if (c?.kind === 'plate' && c.plateId) hoverContentSlot(c.plateId, slot);
+    },
+    { signal },
+  );
   window.addEventListener(
     'plate-canvas-edit',
     (e) => {

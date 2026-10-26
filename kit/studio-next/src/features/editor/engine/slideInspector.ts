@@ -33,6 +33,7 @@ import { joinStyle, plateReady } from './stage';
 import { deckEdit, ed, type InspectorTab } from './state';
 import { lengthRange, paceLabel, paceMode, rateFrac, voiceFit, type PaceMode } from './platePace';
 import { renderPlateFields } from './text';
+import { renderPlateContent } from './plateContentPane';
 import { plateInfo } from './timeline';
 import type { Clip, DeckPlate, PlateTime } from './types';
 import { DUP_ICON, ICONS, PLATE_ICON, T_GLYPH, escapeHtml, fmtRate, fmtT, r3 } from './util';
@@ -265,6 +266,7 @@ function designPane(c: Clip): string {
   return (
     plateCard(c, info) +
     renderPlateFields(c.kind === 'plate' ? c.plateId : null) +
+    renderPlateContent(c) +
     (layouts ? section('motion', 'Layout', layouts) : '') +
     section('eye', 'Look', renderLookTiles(info), overrides ? `<button type="button" class="ins-link" data-act="look-reset">Use video look</button>` : '') +
     plateColorsSection(c, info) +

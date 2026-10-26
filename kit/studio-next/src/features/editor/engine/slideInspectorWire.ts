@@ -7,6 +7,7 @@ import { renderInspector } from './inspector';
 import { changeLook, commitHoverLook, endHoverLook, hoverLook, plateApi, previewRange } from './look';
 import { timingBar } from '@/ui/look/previews';
 import { wirePlateColors } from './plateColorsPane';
+import { wirePlateContent } from './plateContentPane';
 import { openAddLibrary, openSwapLibrary, revertPlate } from './plateLibrary';
 import { openPacePop, plateRow, rateFromFrac, refreshPacePop, savePlateTiming, setPaceMode, setPlateLength, setPlateRate, timingForLength } from './platePace';
 import { slidePalette } from './slideInspector';
@@ -84,6 +85,7 @@ export function wireSlideInspector(root: HTMLElement): void {
   const c = clip();
   if (c?.kind === 'plate') wirePlate(root, on, c);
   if (c?.kind === 'plate') wirePlateColors(root, c);
+  if (c?.kind === 'plate') wirePlateContent(root, c);
   paintAtmosphereThumbs(root, slidePalette(c));
 }
 

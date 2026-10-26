@@ -25,6 +25,8 @@ export const PLATE_TYPE_FALLBACK: ReadonlyArray<{ type: string; label: string; h
   { type: 'faq', label: 'FAQ', hint: 'Questions answered' },
   { type: 'pricing', label: 'Pricing', hint: 'Plans side by side' },
   { type: 'team', label: 'People', hint: 'Roles with avatars' },
+  { type: 'showcase', label: 'Showcase', hint: 'Interface shot with callouts' },
+  { type: 'bento', label: 'Bento', hint: 'Editorial board' },
 ];
 
 /** Row-editor placeholders by column; `<type>.<column>` wins over the plain column name. */

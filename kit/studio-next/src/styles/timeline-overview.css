@@ -288,6 +288,31 @@ body:not(.is-editor) #etlScroll:focus-visible { box-shadow: inset 0 0 0 2px colo
 }
 #etlCanvas.has-tip .etl-time { opacity: 0; }
 
+/* ─── One Cards row: chapters and captions share lanes, the tone tells them apart ─── */
+.etl-track.fxrow.cards.cards-all {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--etl-plate) 6%, transparent),
+    color-mix(in srgb, var(--etl-live) 4%, transparent)
+  );
+}
+.etl-head.chapters.cards-head {
+  color: color-mix(in srgb, var(--etl-plate) 72%, var(--etl-live));
+}
+.etl-track.cards-all .ec-card.caption {
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.etl-track.cards-all .ec-card.caption::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 70%, var(--c));
+  margin-right: 1px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .etl-reveal, .etl-tools > *, .etl-body, #edTimeline :is(.etl-track, .etl-head), .etl-context > .ctx-hint { transition: none !important; animation: none !important; }
 }

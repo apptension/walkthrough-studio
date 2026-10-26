@@ -371,6 +371,40 @@ body[data-motion="1"] .wt-ch .ghost[data-edit] {
   z-index: 1;
   pointer-events: auto;
 }
+/* Content slots: a whole tile (feature card, logo, stat, quote) or an image inside it. Hovering
+   lights it on the stage and its record in the Inspector; a click opens the record. */
+body[data-motion="1"] [data-slot] {
+  outline: 1.5px dashed transparent;
+  outline-offset: 6px;
+  border-radius: 14px;
+  transition: outline-color .14s ease, box-shadow .14s ease;
+}
+body[data-motion="1"] [data-slot]:hover,
+body[data-motion="1"] [data-slot].is-peek {
+  outline-color: rgba(255, 254, 37, 0.7);
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.0), 0 0 40px -10px rgba(255, 254, 37, 0.35);
+}
+body[data-motion="1"] [data-slot-kind="asset"] { cursor: pointer; position: relative; z-index: 5; }
+/* Pins drag across their surface (the surface only lends its box; the shot under it stays clickable). */
+body[data-motion="1"] [data-slot-drag="xy"] { cursor: grab; pointer-events: auto; touch-action: none; }
+body[data-motion="1"] [data-slot-drag="xy"].is-dragging { cursor: grabbing; animation-play-state: paused; outline-color: rgba(255, 254, 37, 0.9); }
+body[data-motion="1"] [data-slot-drag="xy"].is-dragging * { animation-play-state: paused; }
+body[data-motion="1"] [data-slot-kind="asset"].is-empty { display: none; }
+body[data-motion="1"] [data-slot-kind="asset"]:hover::before {
+  content: 'Swap image';
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font: 600 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+  color: #0a0a0a;
+  background: #fffe25;
+  white-space: nowrap;
+  pointer-events: none;
+}
 `;
 
 /** Parse a CSS time custom property (e.g. `--black-out: 5.7s`) from the plate document. */

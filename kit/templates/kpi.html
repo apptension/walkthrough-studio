@@ -83,6 +83,38 @@
       }
       .k-spark i:last-child { background: linear-gradient(180deg, var(--gold), var(--amber)); box-shadow: 0 0 14px color-mix(in srgb, var(--gold) 55%, transparent); }
       @keyframes sparkUp { from { transform: scaleY(0); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }
+      /* ——— Layout: ticker — the first figure becomes the hero, the rest stack beside it as a live ticker ——— */
+      body[data-layout='ticker'] .compose { flex-direction: row; align-items: stretch; gap: 48px; padding: 80px 110px; }
+      body[data-layout='ticker'] .head { text-align: left; flex: 0 0 440px; display: flex; flex-direction: column; justify-content: center; }
+      body[data-layout='ticker'] .head .title { font-size: 56px; }
+      body[data-layout='ticker'] .board, body[data-layout='ticker'] .board[data-n] {
+        max-width: none; flex: 1; grid-template-columns: 1.4fr 1fr; grid-template-rows: repeat(calc(var(--n) - 1), 1fr); gap: 16px;
+      }
+      body[data-layout='ticker'] .board .k-tile { min-height: 0; grid-column: auto; }
+      body[data-layout='ticker'] .board .k-tile:first-child {
+        grid-column: 1 / 2; grid-row: 1 / -1; padding: 40px 40px 34px;
+        background: linear-gradient(160deg, color-mix(in srgb, var(--surface) 80%, var(--gold)) 0%, color-mix(in srgb, var(--surface) 82%, transparent) 48%, color-mix(in srgb, var(--surface) 84%, var(--ink)) 100%);
+        border-color: color-mix(in srgb, var(--gold) 34%, transparent);
+      }
+      body[data-layout='ticker'] .board .k-tile:first-child .k-value { font-size: 148px; margin-top: auto; letter-spacing: -0.06em; }
+      body[data-layout='ticker'] .board .k-tile:first-child .k-note { font-size: 20px; }
+      body[data-layout='ticker'] .board .k-tile:first-child .k-spark { height: 120px; gap: 10px; }
+      body[data-layout='ticker'] .board .k-tile:first-child .k-spark i { height: calc(var(--h) * 100px); border-radius: 6px 6px 3px 3px; }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) {
+        grid-column: 2 / 3; flex-direction: row; align-items: center; gap: 18px; padding: 18px 24px;
+        --land: 0px; transform-origin: 0% 50%;
+        animation: tickIn var(--card-in) var(--s) var(--expo) both;
+      }
+      @keyframes tickIn { from { opacity: 0; transform: translateX(48px); clip-path: inset(0 0 0 100% round 24px); } to { opacity: 1; transform: none; clip-path: inset(0 0 0 0 round 24px); } }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-top { order: 2; flex: 1; flex-direction: column; align-items: flex-start; gap: 8px; }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-value, body[data-layout='ticker'] .board[data-n] .k-tile:not(:first-child) .k-value { order: 1; margin: 0; font-size: 54px; min-width: 150px; }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-note { display: none; }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-spark { order: 3; margin: 0; padding: 0; height: 48px; width: 110px; flex: none; }
+      body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-spark i { height: calc(var(--h) * 40px); }
+      html[data-frame='portrait'] body[data-layout='ticker'] .compose { flex-direction: column; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board, html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n] { grid-template-columns: 1fr; grid-template-rows: 1.6fr repeat(calc(var(--n) - 1), 1fr); }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child { grid-column: 1; grid-row: 1; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:not(:first-child) { grid-column: 1; }
       .bloom {
         position: absolute; left: 50%; top: 54%; width: 1500px; height: 700px; margin: -350px 0 0 -750px;
         border-radius: 50%;
@@ -91,7 +123,7 @@
       }
     </style>
   </head>
-  <body data-duration="6.2">
+  <body data-duration="6.2" data-layout="{{LAYOUT}}">
     <div class="stage">
       <div class="bg"></div>
       <div class="blob warm"></div>

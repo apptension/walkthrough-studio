@@ -61,6 +61,8 @@ const config = {
     { id: 'plans', type: 'pricing', before: 'x', title: 'Plans', tiers: [{ label: 'Starter', value: '$0', items: ['Core'] }, { label: 'Team', value: '$12', period: 'per user', badge: 'Popular', items: ['A', '*B*'] }, { label: 'Business', value: 'Custom' }] },
     { id: 'ask', type: 'faq', before: 'x', title: 'Before you ask', items: [{ label: 'Does it import?', note: 'Yes.' }, { label: 'How long?', note: 'An afternoon.' }] },
     { id: 'people', type: 'team', before: 'x', title: 'Who it is for', items: [{ label: 'Ana Ruiz', note: 'Lead' }, { label: 'Ops', asset: 'a.png' }, { label: 'Leadership' }] },
+    { id: 'show', type: 'showcase', before: 'x', title: 'See the *board*', shot: 'a.png', focus: 'right', caption: 'The planning board', callouts: [{ label: 'Capacity', x: 30, y: 34 }, { label: 'Rebalance', x: 70, y: 62 }] },
+    { id: 'glance', type: 'bento', before: 'x', title: 'At a glance', value: '94%', label: 'on plan', quote: 'We stopped double-booking.', author: 'Ana', logos: [{ asset: 'a.png', label: 'A' }, { label: 'Soon' }] },
   ],
 };
 writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(config));
@@ -72,14 +74,14 @@ const html = (id) => readFileSync(platePaths(loadVideo('probe')).interstitial[id
 test('all plate types build; new types fill every placeholder', () => {
   assert.deepEqual(
     [...INTERSTITIAL_TYPES],
-    ['features', 'journey', 'process', 'timeline', 'checklist', 'logos', 'orbit', 'testimonials', 'quote', 'stats', 'kpi', 'metric', 'callout', 'statement', 'compare', 'faq', 'pricing', 'team']
+    ['features', 'journey', 'process', 'timeline', 'checklist', 'logos', 'orbit', 'testimonials', 'quote', 'stats', 'kpi', 'metric', 'callout', 'statement', 'compare', 'faq', 'pricing', 'team', 'showcase', 'bento']
   );
   assert.deepEqual([...INTERSTITIAL_TYPES], PLATE_CATALOG.map((p) => p.type), 'builder and Studio catalog agree');
   for (const type of INTERSTITIAL_TYPES) {
     assert.ok(existsSync(join(TEMPLATES, `${type}.html`)), `template for ${type}`);
   }
   buildPlates(loadVideo('probe'));
-  for (const id of ['shift', 'hero', 'number', 'ring', 'proof', 'point', 'how', 'road', 'done', 'board', 'plans', 'ask', 'people']) {
+  for (const id of ['shift', 'hero', 'number', 'ring', 'proof', 'point', 'how', 'road', 'done', 'board', 'plans', 'ask', 'people', 'show', 'glance']) {
     assert.doesNotMatch(html(id), /\{\{[A-Z_]+\}\}/, `${id} has no unfilled placeholders`);
   }
 });
@@ -125,7 +127,7 @@ test('kpi, pricing, faq and team builders shape their content', () => {
   const plans = html('plans');
   assert.equal((plans.match(/class="pr-card"/g) || []).length, 2);
   assert.equal((plans.match(/class="pr-card featured"/g) || []).length, 1);
-  assert.match(plans, /class="pr-card featured" style="--s: 1\.18s"/, 'featured tier lands last');
+  assert.match(plans, /class="pr-card featured" data-slot="tiers\.1" style="--s: 1\.18s"/, 'featured tier lands last');
   assert.match(plans, /data-edit="tiers\.1\.badge"[^>]*>Popular</);
   assert.match(plans, /data-edit="tiers\.1\.items\.1"[^>]*><span class="accent">B<\/span></);
   assert.match(plans, /data-edit="tiers\.1\.period"[^>]*>per user</);

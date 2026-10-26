@@ -187,17 +187,22 @@ interface CardItem {
   dur: number;
 }
 
+/**
+ * Chapters and captions share one lane-packed "Cards" row: both are live cards drawn over the
+ * recording, differing only in tone and size. Overlapping cards fall into further lanes, so
+ * nothing is hidden, and a chapter and its caption read as one event instead of two rows.
+ */
 export function renderCardTracks(): void {
   const chEl = $('etlChapters');
-  const capEl = $('etlCaptions');
   const chHead = $('etlHeadChapters');
-  const capHead = $('etlHeadCaptions');
-  if (!chEl || !capEl) return;
+  if (!chEl) return;
   const pps = ed.pps;
   const sel = ed.sel;
   const onLive = live().exists && ed.seq.some((c) => c.kind === 'live');
-  const paint = (kind: 'chapter' | 'caption', host: HTMLElement, head: HTMLElement | null) => {
-    const marks = onLive ? (ed.deck?.marks || []).filter((m) => m.kind === kind && Number.isFinite(m.t)) : [];
+  const paint = (host: HTMLElement, head: HTMLElement | null) => {
+    const marks = onLive
+      ? (ed.deck?.marks || []).filter((m) => (m.kind === 'chapter' || m.kind === 'caption') && Number.isFinite(m.t))
+      : [];
     const items = marks.flatMap((m): CardItem[] => {
       const dur = cardMarkDuration(m);
       const card = resolveLiveCard(m);
@@ -226,6 +231,7 @@ export function renderCardTracks(): void {
     }
     setRow(host, packed.items
       .map((it) => {
+        const kind: 'chapter' | 'caption' = it.m.kind === 'caption' ? 'caption' : 'chapter';
         const on = sel?.type === 'card' && sel.key === it.key;
         const onStage = kind === 'chapter' && carried.has(it.key);
         const label = it.m.label || kind;
@@ -235,15 +241,9 @@ export function renderCardTracks(): void {
         return `<button type="button" class="ec-card ${kind}${on ? ' is-on' : ''}${onStage ? ' is-carried' : ''}${w < CARD_LABEL_MIN ? ' is-tight' : ''}" style="left:${it.a * pps}px;width:${w}px;top:${top}px;height:${laneH - 6}px" data-mark-t="${it.m.t}" data-mark-dur="${it.dur}" data-mark-key="${escapeHtml(it.key)}" data-card-id="${escapeHtml(it.card?.id || '')}" data-card-kind="${kind}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i class="h l" data-edge="l"></i><span class="ec-card-t">${escapeHtml(label)}</span><i class="h r" data-edge="r"></i></button>`;
       })
       .join(''));
-    host.dataset['empty'] =
-      onLive && !packed.items.length
-        ? kind === 'chapter'
-          ? 'Chapters · cards from the recording land here'
-          : 'Captions · lower-thirds from the recording land here'
-        : '';
+    host.dataset['empty'] = onLive && !packed.items.length ? 'Cards · chapters and captions over the recording land here' : '';
   };
-  paint('chapter', chEl, chHead);
-  paint('caption', capEl, capHead);
+  paint(chEl, chHead);
 }
 
 /** Where every brick sits on screen right now, transforms included, by clip id. */

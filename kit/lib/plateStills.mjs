@@ -63,6 +63,8 @@ export function previewPlate(type) {
     Object.assign(plate, { quote: 'We stopped double-booking people in the first week.', author: 'Ana Ruiz', role: 'COO · Studio North' });
   } else if (type === 'logos' || type === 'orbit') {
     plate.logos = MARKS.slice(0, type === 'orbit' ? 4 : 4);
+  } else if (type === 'bento') {
+    plate.logos = MARKS.slice(0, 4);
   }
   return plate;
 }

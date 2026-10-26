@@ -8,6 +8,7 @@ import { paintStatus, select } from './edits';
 import { renderInspector } from './inspector';
 import { reloadPlate } from './lifecycle';
 import { plateApi } from './look';
+import { dropPlateContent } from './plateContentPane';
 import { ed, setHtmlPlates, slug } from './state';
 import { clearClipFresh, flashHint, markClipFresh, plateInfo } from './timeline';
 import { seek } from './transport';
@@ -111,6 +112,7 @@ async function swapCall(plateId: string, body: Record<string, unknown>, hint: st
     const r = await api<Omit<Deck, 'plates'> & { plates?: PlateRow[]; warning?: string | null }>(`${base()}/plates/${encodeURIComponent(plateId)}/swap`, { method: 'POST', body });
     warnElsewhere(r);
     if (r.plates) setHtmlPlates(r.plates, { video: false });
+    dropPlateContent(plateId);
     await refresh();
     ed.dirtyRender = true;
     paintStatus();

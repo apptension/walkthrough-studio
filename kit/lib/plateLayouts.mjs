@@ -43,6 +43,24 @@ export const PLATE_LAYOUTS = Object.freeze({
     classic: { label: 'Panel', hint: 'One panel: thesis, body, bullets', moods: ['calm', 'clear'] },
     split: { label: 'Split', hint: 'Thesis left, bullets as chips on the right', moods: ['calm', 'clear', 'punchy'] },
   }),
+  logos: Object.freeze({
+    wall: { label: 'Wall', hint: 'Logo tiles in a count-aware grid', moods: ['calm', 'clear'] },
+    marquee: { label: 'Marquee', hint: 'Two rows of tiles glide past in opposite directions', moods: ['clear', 'punchy'] },
+    cloud: { label: 'Cloud', hint: 'Tiles float at different depths and drift', moods: ['calm', 'clear'] },
+  }),
+  kpi: Object.freeze({
+    board: { label: 'Board', hint: 'Dashboard tiles with sparklines', moods: ['calm', 'clear'] },
+    ticker: { label: 'Ticker', hint: 'One tall hero tile, the rest stacked as a ticker', moods: ['clear', 'punchy'] },
+  }),
+  showcase: Object.freeze({
+    device: { label: 'Device', hint: 'A browser frame tilts up, zooms to the focus', moods: ['calm', 'clear', 'punchy'] },
+    spotlight: { label: 'Spotlight', hint: 'The shot fills the frame; a veil parts around the focus', moods: ['calm', 'clear'] },
+    split: { label: 'Split', hint: 'Words left, the device swings in from the right', moods: ['clear', 'punchy'] },
+  }),
+  bento: Object.freeze({
+    mosaic: { label: 'Mosaic', hint: 'Title above a four-tile board', moods: ['calm', 'clear'] },
+    editorial: { label: 'Editorial', hint: 'Title in the left column, the board fills the right', moods: ['calm', 'clear', 'punchy'] },
+  }),
 });
 
 /** Layout table for `open`, `close` or an interstitial type; `null` when the kind has one composition. */

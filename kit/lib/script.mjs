@@ -572,6 +572,32 @@ export function scaffoldPlate(type, { before, title } = {}) {
           { label: 'Leadership', note: 'Reads the number, not the thread' },
         ],
       };
+    case 'showcase':
+      return {
+        ...base,
+        eyebrow: 'See it in action',
+        title: title || 'The week, on *one* screen',
+        sub: 'Grab a frame from the recording and point at what matters.',
+        shot: '',
+        focus: 'center',
+        callouts: [
+          { label: 'Live capacity', x: 30, y: 34 },
+          { label: 'One click to rebalance', x: 68, y: 62 },
+        ],
+      };
+    case 'bento':
+      return {
+        ...base,
+        eyebrow: 'At a glance',
+        title: title || 'Everything the team needs, *in view*',
+        shot: '',
+        caption: 'The planning board',
+        value: '94%',
+        label: 'of weeks shipped on plan',
+        quote: 'We stopped double-booking people in the first week.',
+        author: 'Ana Ruiz · COO',
+        logos: [],
+      };
     default:
       return base;
   }

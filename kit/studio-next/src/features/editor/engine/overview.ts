@@ -73,7 +73,7 @@ function dressOverview(): void {
     if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title);
     el.removeAttribute('title');
   }
-  const rows = ['etlChapters', 'etlCaptions', 'etlVoice'].reduce((sum, id) => {
+  const rows = ['etlChapters', 'etlVoice'].reduce((sum, id) => {
     const h = parseFloat($(id)?.style.height || '');
     return sum + (Number.isFinite(h) ? h : 24);
   }, 0);
@@ -112,7 +112,7 @@ function pointAt(clientX: number, free: boolean): Point {
   };
   ed.seq.forEach((c, i) => consider(visualSpan(i)[0], c.title));
   for (const el of document.querySelectorAll<HTMLElement>('#etlChapters .ec-card')) {
-    consider((parseFloat(el.style.left) || 0) / ed.pps, el.querySelector('.ec-card-t')?.textContent || 'Chapter');
+    consider((parseFloat(el.style.left) || 0) / ed.pps, el.querySelector('.ec-card-t')?.textContent || (el.dataset['cardKind'] === 'caption' ? 'Caption' : 'Chapter'));
   }
   const hit = best as { t: number; label: string } | null;
   return hit ? { t: hit.t, snap: hit.label } : { t, snap: null };

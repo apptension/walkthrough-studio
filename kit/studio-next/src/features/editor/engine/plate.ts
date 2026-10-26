@@ -659,9 +659,24 @@ function bindPlateCanvasPick(doc: Document | null | undefined): void {
     (e) => {
       if (doc.body.classList.contains('studio-edit')) return;
       if (doc.body.dataset['motion'] !== '1') return;
-      const el = (e.target as Element | null)?.closest?.<HTMLElement>('[data-edit]');
+      const target = e.target as Element | null;
+      const el = target?.closest?.<HTMLElement>('[data-edit]');
       const path = el?.dataset?.['edit'];
-      if (!path) return;
+      // Not on a word: a tile or an image slot opens its content record in the Inspector.
+      if (!path) {
+        const slotEl = target?.closest?.<HTMLElement>('[data-slot]');
+        const slot = slotEl?.dataset?.['slot'];
+        if (!slot) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const top = window.parent && window.parent !== window ? window.parent : window;
+        try {
+          top.dispatchEvent(new CustomEvent('plate-canvas-slot', { detail: { slot, kind: slotEl?.dataset?.['slotKind'] || 'record' } }));
+        } catch {
+          /* same-origin plates */
+        }
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const detail = { path };
@@ -680,6 +695,85 @@ function bindPlateCanvasPick(doc: Document | null | undefined): void {
     },
     true,
   );
+  // Hover → the Inspector lights the matching record (and the reverse happens from the pane).
+  let hovered: string | null = null;
+  const sendHover = (slot: string | null) => {
+    if (slot === hovered) return;
+    hovered = slot;
+    const top = window.parent && window.parent !== window ? window.parent : window;
+    try {
+      top.dispatchEvent(new CustomEvent('plate-canvas-slot-hover', { detail: { slot } }));
+    } catch {
+      /* same-origin plates */
+    }
+  };
+  doc.addEventListener(
+    'pointerover',
+    (e) => {
+      if (doc.body.dataset['motion'] !== '1' || doc.body.classList.contains('studio-edit')) return;
+      sendHover((e.target as Element | null)?.closest?.<HTMLElement>('[data-slot]')?.dataset?.['slot'] || null);
+    },
+    true,
+  );
+  doc.addEventListener('pointerleave', () => sendHover(null), true);
+  bindPlateSlotDrag(doc);
+}
+
+/**
+ * Pins and other `[data-slot-drag="xy"]` items move with the pointer across their
+ * `[data-drag-surface]`; on release the plate's config takes the new percentages. A press that
+ * never travels still opens the record (the pointerdown handler above fires first).
+ */
+function bindPlateSlotDrag(doc: Document): void {
+  let drag: { el: HTMLElement; slot: string; surface: DOMRect; sx: number; sy: number; moved: boolean; x: number; y: number } | null = null;
+  const pct = (v: number) => Math.max(0, Math.min(100, Math.round(v * 10) / 10));
+  doc.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (doc.body.dataset['motion'] !== '1' || doc.body.classList.contains('studio-edit')) return;
+      const el = (e.target as Element | null)?.closest?.<HTMLElement>('[data-slot-drag="xy"]');
+      const slot = el?.dataset?.['slot'];
+      const surface = el?.closest<HTMLElement>('[data-drag-surface]');
+      if (!el || !slot || !surface) return;
+      drag = { el, slot, surface: surface.getBoundingClientRect(), sx: e.clientX, sy: e.clientY, moved: false, x: 0, y: 0 };
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* older engines */
+      }
+    },
+    true,
+  );
+  doc.addEventListener(
+    'pointermove',
+    (e) => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+      drag.moved = true;
+      drag.el.classList.add('is-dragging');
+      drag.x = pct(((e.clientX - drag.surface.left) / Math.max(1, drag.surface.width)) * 100);
+      drag.y = pct(((e.clientY - drag.surface.top) / Math.max(1, drag.surface.height)) * 100);
+      drag.el.style.setProperty('--x', `${drag.x}%`);
+      drag.el.style.setProperty('--y', `${drag.y}%`);
+      drag.el.classList.toggle('flip', drag.x > 62);
+    },
+    true,
+  );
+  const finish = () => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    d.el.classList.remove('is-dragging');
+    if (!d.moved) return;
+    const top = window.parent && window.parent !== window ? window.parent : window;
+    try {
+      top.dispatchEvent(new CustomEvent('plate-canvas-slot-move', { detail: { slot: d.slot, x: d.x, y: d.y } }));
+    } catch {
+      /* same-origin plates */
+    }
+  };
+  doc.addEventListener('pointerup', finish, true);
+  doc.addEventListener('pointercancel', finish, true);
 }
 
 const fieldByPath = (doc: Document, path: string): HTMLElement | undefined =>

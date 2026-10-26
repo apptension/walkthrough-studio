@@ -156,6 +156,9 @@ import { plateMarks } from './plateFx.mjs';
 import { ATMOSPHERES, fieldShaderSource } from './atmosphere.mjs';
 import { plateStill } from './plateStills.mjs';
 import { plateLibrary, revertPlate, swapPlate, swapSummary, trackLayout } from './plateSwap.mjs';
+import { applyPlateContent, plateContent } from './plateSchema.mjs';
+import { ICONS } from './plateIcons.mjs';
+import { grabFrameAsset, listPlateAssets, plateAssetFile, savePlateAsset } from './plateAssets.mjs';
 import { brandDraftState, candidateFile, lockupImage, saveBrandChoices } from './brandDraft.mjs';
 import { exploreFeed } from './exploreFeed.mjs';
 import { savePlateCopy } from './plateCopy.mjs';
@@ -2288,6 +2291,95 @@ async function handleApi(req, res, url) {
     }
     if (plateId !== 'open' && plateId !== 'close') renderPlateSoon(slug, plateId);
     return json(res, 200, { ...rebuilt, ok: true, plateId, type: target.type || plateId, layout: target.layout || null, swap: swapSummary(target, plateId), ...(await editDeckFull(loadVideo(slug))) });
+  }
+
+  // ── Plate content: what the plate is made of beyond its words ───────────────────────────
+  // Schema + current values for the Inspector's Content pane (lists, assets, icons, numbers).
+  const plateContentRoute = rest.match(/^\/plates\/([^/]+)\/content$/);
+  if (plateContentRoute && req.method === 'GET') {
+    const plateId = decodeURIComponent(plateContentRoute[1]);
+    const row = plateTarget(video.config, plateId) || derivedPlateRow(video, plateId);
+    if (!row) return json(res, 404, { error: `Unknown plate "${plateId}"` });
+    const content = plateContent(row);
+    if (!content) return json(res, 200, { ok: true, plateId, type: row.type || plateId, schema: null, fields: {}, lists: {} });
+    return json(res, 200, { ok: true, plateId, type: row.type, ...content, assets: listPlateAssets(video) });
+  }
+  // Apply content ops (set / add / remove / move / duplicate). The plate is rebuilt in a scratch
+  // dir first, so a row that the builder would reject never lands in the config.
+  if (plateContentRoute && req.method === 'POST') {
+    const plateId = decodeURIComponent(plateContentRoute[1]);
+    const body = await readBody(req);
+    const ops = Array.isArray(body.ops) ? body.ops : body.op ? [body] : [];
+    if (!ops.length) return json(res, 400, { error: 'No content ops' });
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
+    if (!target) return json(res, 404, { error: `Unknown plate "${plateId}"` });
+    let changed;
+    try {
+      changed = applyPlateContent(target, ops).changed;
+      checkPlate(video.brand, target);
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+    snapshotSources(video);
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    let rebuilt;
+    try {
+      rebuilt = rebuildAround(slug, plateId);
+    } catch (err) {
+      return json(res, 500, { error: err.message || String(err) });
+    }
+    renderPlateSoon(slug, plateId);
+    const fresh = loadVideo(slug);
+    const row = plateTarget(fresh.config, plateId);
+    return json(res, 200, { ...rebuilt, ok: true, plateId, changed, ...(plateContent(row) || {}), ...(await editDeckFull(fresh)) });
+  }
+  // Upload an image for a plate (base64 JSON, like music and voice uploads). Returns the asset path.
+  const plateAssetRoute = rest.match(/^\/plates\/([^/]+)\/asset$/);
+  if (plateAssetRoute && req.method === 'POST') {
+    const body = await readBody(req);
+    try {
+      const saved = savePlateAsset(video, { name: body.name, data: body.data || body.image, mime: body.mime });
+      return json(res, 200, { ok: true, asset: saved.asset, bytes: saved.bytes, assets: listPlateAssets(video) });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+  }
+  // Grab an interface frame from the recording at `t` (live seconds) as a plate asset.
+  const plateGrabRoute = rest.match(/^\/plates\/([^/]+)\/grab$/);
+  if (plateGrabRoute && req.method === 'POST') {
+    const body = await readBody(req);
+    try {
+      const grabbed = grabFrameAsset(video, body.t);
+      return json(res, 200, { ok: true, asset: grabbed.asset, t: grabbed.t, assets: listPlateAssets(video) });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+  }
+  // One plate icon as a standalone SVG (the Inspector's icon picker shows the real glyphs).
+  const plateIconRoute = rest.match(/^\/plate-icon\/([^/]+)\.svg$/);
+  if (plateIconRoute && req.method === 'GET') {
+    const name = decodeURIComponent(plateIconRoute[1]);
+    const svg = ICONS[name];
+    if (!svg) return json(res, 404, { error: `No icon "${name}"` });
+    res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
+    res.end(svg.replace(/currentColor/g, '#e8ebe6').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+    return;
+  }
+  // Every image a plate can show, for the Inspector's asset shelf.
+  if (rest === '/plate-assets' && req.method === 'GET') {
+    return json(res, 200, { ok: true, assets: listPlateAssets(video) });
+  }
+  // The image behind an asset path, for thumbnails.
+  if (rest === '/plate-asset' && req.method === 'GET') {
+    const asset = url.searchParams.get('path') || '';
+    const file = plateAssetFile(video, asset);
+    if (!file) return json(res, 404, { error: `No asset "${asset}"` });
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif' }[extname(file).toLowerCase()] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'private, max-age=60' });
+    createReadStream(file).pipe(res);
+    return;
   }
 
   // A plate from the library joins the scenario (config row + narration slot) and lands in the

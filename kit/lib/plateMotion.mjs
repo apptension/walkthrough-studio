@@ -115,7 +115,7 @@ export function resolveMotion(brand) {
   };
 }
 
-const CORE_ATMOSPHERE_IDS = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves'];
+const CORE_ATMOSPHERE_IDS = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves', 'stagelight'];
 
 /** Short second line for Studio buttons and the CLI. Hints on the field stay the long form. */
 const PROMOTED_BLURBS = {
@@ -166,6 +166,7 @@ export const ATMOSPHERE_LABELS = {
   particles: 'Particles · bokeh dust',
   grid: 'Grid · perspective floor',
   waves: 'Waves · flow lines',
+  stagelight: 'Stage light · volumetric spots',
   ...Object.fromEntries(PROMOTED_FIELDS.map((f) => [f.id, `${f.label} · ${PROMOTED_BLURBS[f.id] || f.hint}`])),
 };
 

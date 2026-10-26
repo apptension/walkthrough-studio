@@ -37,6 +37,7 @@ const CORE_ATMOSPHERES = {
   particles: { label: 'Particles', hint: 'Parallax bokeh dust', opacity: 0.5 },
   grid: { label: 'Grid', hint: 'Perspective floor with a light pulse', opacity: 0.4 },
   waves: { label: 'Waves', hint: 'Topographic contour lines', opacity: 0.36 },
+  stagelight: { label: 'Stage light', hint: 'Volumetric spots over a hazy floor', opacity: 0.46 },
 };
 
 export const ATMOSPHERES = Object.freeze({
@@ -272,6 +273,44 @@ void main(){
   float fill = smoothstep(0.35, 0.8, n) * 0.08;
   float alpha = (line * 0.75 + major * 0.35 + fill) * vignette(p) * contentDim(uv) * uOpacity * uEnv;
   alpha = clamp(alpha, 0.0, 1.0);
+  gl_FragColor = vec4(col, alpha);
+}`,
+
+  // Two volumetric stage lights sweep slowly over a hazy floor — the bed for interface
+  // showcases and product reveals: the screen sits in the light, the edges fall away.
+  stagelight: `
+float cone(vec2 p, vec2 src, float ang, float width){
+  vec2 d = p - src;
+  float along = -d.y;
+  if (along <= 0.0) return 0.0;
+  vec2 dir = vec2(sin(ang), -cos(ang));
+  float side = abs(d.x * dir.y - d.y * dir.x) ;
+  float half_ = along * width;
+  float beam = 1.0 - smoothstep(half_ * 0.55, half_, side);
+  float fall = exp(-along * 1.35);
+  return beam * fall;
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float aspect = uRes.x / uRes.y;
+  vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+  float t = uTime * 0.18 * uDrift;
+  float haze = fbm(p * 1.8 + vec2(t * 0.35, -t * 0.2)) * 0.55 + 0.45;
+  float a1 = sin(t * 0.9) * 0.22 - 0.18;
+  float a2 = cos(t * 0.7 + 1.4) * 0.22 + 0.18;
+  float c1 = cone(p, vec2(-0.55 + sin(t * 0.5) * 0.1, 0.78), a1, 0.42);
+  float c2 = cone(p, vec2(0.55 + cos(t * 0.6) * 0.1, 0.78), a2, 0.42);
+  float c3 = cone(p, vec2(0.0, 0.92), sin(t * 0.4) * 0.08, 0.26) * 0.7;
+  vec3 col = uGold * c1 + uAmber * c2 + mix(uGold, uTeal, 0.4) * c3;
+  float light = (c1 + c2 + c3) * haze;
+  float floorY = -0.34;
+  float floor_ = exp(-abs(p.y - floorY) * 9.0) * smoothstep(1.3, 0.1, abs(p.x));
+  float ripple = 0.5 + 0.5 * sin(p.x * 9.0 + t * 3.0) * exp(-abs(p.y - floorY) * 20.0);
+  col += mix(uGold, uAmber, 0.5) * floor_ * (0.9 + 0.3 * ripple);
+  float alpha = light * 0.9 + floor_ * 0.55;
+  vec3 base = mix(uInk, uSurface, 0.4);
+  col = mix(base, col / max(alpha, 0.35), clamp(alpha, 0.0, 1.0));
+  alpha = clamp(alpha, 0.0, 1.0) * vignette(p * vec2(0.85, 1.0)) * contentDim(uv) * uOpacity * uEnv;
   gl_FragColor = vec4(col, alpha);
 }`,
 };

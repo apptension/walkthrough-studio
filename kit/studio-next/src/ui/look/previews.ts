@@ -77,6 +77,16 @@ const WIRES: Record<string, string> = {
   'statement:marquee': W(`${bar(-4, 8, 72, 6)}${bar(-12, 16, 80, 6, true)}${bar(-2, 24, 70, 6)}`),
   'callout:classic': W(`${box(8, 6, 40, 24, 's', 1.6)}<circle cx="34" cy="16" r="5" class="ring"/><rect x="40" y="20" width="18" height="9" rx="2" class="a"/>`),
   'callout:split': W(`${bar(4, 12, 20, 3)}${bar(4, 18, 16)}${box(28, 6, 32, 24, 's', 1.6)}<circle cx="44" cy="18" r="4.5" class="ring"/>`),
+  'logos:wall': W(`${[6, 26, 46].map((x) => box(x, 7, 12, 8)).join('')}${[16, 36].map((x) => box(x, 20, 12, 8, 's')).join('')}`),
+  'logos:marquee': W(`${[-4, 12, 28, 44, 60].map((x) => box(x, 7, 12, 8)).join('')}${[4, 20, 36, 52].map((x) => box(x, 20, 12, 8, 's')).join('')}`),
+  'logos:cloud': W(`${box(26, 12, 14, 10, 's')}${box(8, 6, 10, 7)}${box(46, 8, 10, 7)}${box(12, 24, 9, 6)}${box(44, 23, 9, 6)}`),
+  'kpi:board': W(`${[6, 26, 46].map((x) => `${box(x, 6, 16, 24)}${bar(x + 2, 14, 8, 4, true)}`).join('')}`),
+  'kpi:ticker': W(`${box(6, 4, 26, 28, 's')}${bar(10, 18, 14, 6, true)}${[4, 14, 24].map((y) => `${box(36, y, 22, 8)}${bar(38, y + 2.5, 6, 3, true)}`).join('')}`),
+  'showcase:device': W(`${bar(20, 3, 24, 2.6)}${box(12, 8, 40, 26, 'p', 1.6)}${box(14, 11, 36, 21, 's', 1)}<circle cx="38" cy="19" r="2.4" class="a"/>${bar(41, 17.8, 8, 2.4, true)}`),
+  'showcase:spotlight': W(`${box(0, 0, 64, 36, 's', 0)}<circle cx="40" cy="15" r="9" class="ring"/><circle cx="40" cy="15" r="2.2" class="a"/>${bar(6, 26, 22, 3)}${bar(6, 31, 14, 1.8)}`),
+  'showcase:split': W(`${bar(4, 12, 18, 3.4)}${bar(4, 18, 14)}${box(28, 5, 34, 26, 'p', 1.6)}${box(30, 8, 30, 21, 's', 1)}<circle cx="48" cy="18" r="2.2" class="a"/>`),
+  'bento:mosaic': W(`${bar(20, 3, 24, 2.6)}${box(6, 8, 26, 24, 's')}${box(34, 8, 11, 11)}${bar(36, 12, 7, 4, true)}${box(47, 8, 11, 24)}${box(34, 21, 11, 11)}`),
+  'bento:editorial': W(`${bar(4, 14, 16, 3.4)}${bar(4, 20, 12)}${box(24, 5, 22, 13, 's')}${box(48, 5, 10, 13)}${bar(50, 9, 6, 4, true)}${box(24, 20, 10, 11)}${box(36, 20, 22, 11)}`),
 };
 
 export function layoutWire(kind: string, id: string): string {
@@ -85,7 +95,7 @@ export function layoutWire(kind: string, id: string): string {
 
 // ─── Look previews ─────────────────────────────────────────────────────────────────────────
 /** The backgrounds every picker shows up front; the rest of the catalogue folds under "More". */
-export const CORE_ATMOSPHERES = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves'];
+export const CORE_ATMOSPHERES = ['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves', 'stagelight'];
 
 export function atmospherePreview(id: string): string {
   if (id === 'none') return `<span class="lk-atm is-none" aria-hidden="true"><i></i></span>`;

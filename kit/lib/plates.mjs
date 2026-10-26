@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DELIVERY, outputFrame } from './format.mjs';
 import { FPS } from './motion.mjs';
@@ -21,6 +21,7 @@ import { motionCssVars, resolveMotion, withMotion } from './plateMotion.mjs';
 import { revealMarkup } from './titleReveal.mjs';
 import { TEMPLATES, brandReadiness } from './project.mjs';
 import { logoTileTone } from './logoTone.mjs';
+import { ICONS, ICON_IDS } from './plateIcons.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
 import { withPlateColors } from './plateColors.mjs';
 import { carryFrameClock, plateBackdrop } from './plateCarry.mjs';
@@ -153,21 +154,7 @@ const MIME = {
   '.gif': 'image/gif',
 };
 
-/** Compact inline icons for feature / journey cards (stroke inherits currentColor). */
-const ICONS = {
-  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`,
-  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
-  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a3 3 0 0 1 0 5.74"/></svg>`,
-  leave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c-2.5 3-4 5.5-4 8a4 4 0 0 0 8 0c0-2.5-1.5-5-4-8z"/><path d="M8 20h8M10 20v1M14 20v1"/></svg>`,
-  chart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></svg>`,
-  spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.6 5.2L19 10l-5.4 1.8L12 17l-1.6-5.2L5 10l5.4-1.8L12 3z"/></svg>`,
-  filter: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"/></svg>`,
-  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 6.5l1.4 1.4M17.7 16.1l1.4 1.4M3 12h2M19 12h2M4.9 17.5l1.4-1.4M17.7 7.9l1.4-1.4"/></svg>`,
-  plug: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 7V3M15 7V3M8 7h8v4a4 4 0 0 1-4 4h0a4 4 0 0 1-4-4V7z"/><path d="M12 15v6"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
-  dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>`,
-  export: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>`,
-};
+export { ICONS, ICON_IDS };
 
 const fill = (tpl, values) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? '');
 
@@ -315,7 +302,7 @@ function stepsHtml(steps) {
   const span = n > 1 ? 0.8 / (n - 1) : 0;
   return steps
     .map(
-      (s, i) => `<div class="step" style="--s: ${(1.2 + i * span).toFixed(2)}s; --i: ${i}">
+      (s, i) => `<div class="step" data-slot="steps.${i}" style="--s: ${(1.2 + i * span).toFixed(2)}s; --i: ${i}">
           <div class="dot">${i + 1}</div>
           <div class="step-label" data-edit="steps.${i}.label" data-edit-raw="${escAttr(s.label)}">${emphasize(s.label)}</div>
           ${s.note ? `<div class="step-note" data-edit="steps.${i}.note" data-edit-raw="${escAttr(s.note)}">${emphasize(s.note)}</div>` : ''}
@@ -328,7 +315,10 @@ function resolveAssetPath(brand, asset) {
   if (!asset) return null;
   if (/^(data:|https?:|file:)/i.test(asset)) return null;
   const rel = asset.replace(/^\.?\/?assets\//, '');
+  // Video-local uploads (Inspector uploads and frame grabs) live beside the recording, not in the pack.
+  const videoDir = brand.uploadDir ? dirname(brand.uploadDir) : null;
   const candidates = [
+    ...(videoDir ? [join(videoDir, asset.replace(/^\.?\//, '')), join(videoDir, rel), join(brand.uploadDir, basename(rel))] : []),
     join(brand.dir, 'assets', rel),
     join(brand.dir, rel),
     join(brand.dir, 'assets', basename(rel)),
@@ -374,7 +364,7 @@ function featuresItems(items) {
       const row = Math.floor(i / cols);
       const col = i % cols;
       const delay = 0.72 + row * 0.28 + col * 0.1;
-      return `<div class="card" style="--s: ${delay.toFixed(2)}s; --i: ${i}">
+      return `<div class="card" data-slot="items.${i}" style="--s: ${delay.toFixed(2)}s; --i: ${i}">
           ${iconHtml(icon)}
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
           <div class="label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -395,11 +385,11 @@ function statsItems(items, brand) {
       // Count-up (lib/countUp.mjs) runs on the plate clock; opt out per item with count: false.
       const count =
         it.count === false ? '' : ` data-count data-count-start="${(s + 0.25).toFixed(2)}" data-count-dur="1.3"`;
-      return `<div class="stat" style="--s: ${s.toFixed(2)}s; --i: ${i}">
+      return `<div class="stat" data-slot="stats.${i}" style="--s: ${s.toFixed(2)}s; --i: ${i}">
           ${
             logo
-              ? `<div class="badge" data-tone="${logo.tone}"><img src="${logo.src}" alt="" /></div>`
-              : ''
+              ? `<div class="badge" data-tone="${logo.tone}" data-slot="stats.${i}.logo" data-slot-kind="asset"><img src="${logo.src}" alt="" /></div>`
+              : `<div class="badge is-empty" data-slot="stats.${i}.logo" data-slot-kind="asset" hidden></div>`
           }
           <div class="value" data-fit="1" data-fit-min="48" data-fit-group="stat-value"${count} data-edit="items.${i}.value" data-edit-raw="${escAttr(String(it.value))}">${emphasize(String(it.value))}</div>
           <div class="label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -454,7 +444,7 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
               .map((si) => `<span class="star" style="--si: ${(si * 0.045).toFixed(3)}s">★</span>`)
               .join('')}</div>`
           : '';
-        return `<div class="t-slot" data-wave="${wave + 1}" data-col="${col}" style="--s: ${enter.toFixed(2)}s; --hold: ${hold.toFixed(2)}s; --col: ${col}; --z: ${wave + 1}; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px">
+        return `<div class="t-slot" data-slot="quotes.${i}" data-wave="${wave + 1}" data-col="${col}" style="--s: ${enter.toFixed(2)}s; --hold: ${hold.toFixed(2)}s; --col: ${col}; --z: ${wave + 1}; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px">
           <div class="t-card">
             <div class="mark" aria-hidden="true">“</div>
             ${starsHtml}
@@ -562,7 +552,7 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
             }</div>`
           : '';
 
-      return `<div class="t-slot" data-wave="${wave}" style="--s: ${enter.toFixed(2)}s; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px; --xd: ${xd.toFixed(2)}s">
+      return `<div class="t-slot"${editable ? ` data-slot="quotes.${srcIndex}"` : ''} data-wave="${wave}" style="--s: ${enter.toFixed(2)}s; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px; --xd: ${xd.toFixed(2)}s">
           <div class="t-card">
             <div class="mark" aria-hidden="true">“</div>
             ${starsHtml}
@@ -592,13 +582,30 @@ function testimonialsCarouselDuration(count) {
   };
 }
 
-function logosItems(items, brand) {
+/** Marquee rows: even tiles glide left, odd tiles glide right; each row is doubled for a seamless loop. */
+function logosMarquee(rows) {
+  const strip = (html) => html.replace(/ data-slot="[^"]*" data-slot-kind="asset"/, '').replace('class="logo-tile"', 'class="logo-tile" aria-hidden="true"');
+  const lane = (tiles, rev, s) => {
+    if (!tiles.length) return '';
+    // One pass must outrun the frame (tiles are 300px + 28px gap) before it is doubled for the loop.
+    const passes = Math.max(1, Math.ceil(2100 / (tiles.length * 328)));
+    const ghosts = Array.from({ length: passes - 1 }, () => tiles.map((r) => strip(r.html)).join('\n          '));
+    const once = [tiles.map((r) => r.html).join('\n          '), ...ghosts].join('\n          ');
+    const twice = Array.from({ length: passes }, () => tiles.map((r) => strip(r.html)).join('\n          ')).join('\n          ');
+    return `<div class="mq-row${rev ? ' rev' : ''}" style="--s: ${s}s">${once}\n          ${twice}</div>`;
+  };
+  const even = rows.filter((_, i) => i % 2 === 0);
+  const odd = rows.filter((_, i) => i % 2 === 1);
+  return `<div class="mq" aria-label="logos">${lane(odd.length ? even : rows.slice(0, Math.ceil(rows.length / 2)), false, '0.55')}\n        ${lane(odd.length ? odd : rows.slice(Math.ceil(rows.length / 2)), true, '0.75')}</div>`;
+}
+
+function logoTiles(items, brand) {
   const n = items.length;
   const span = n > 1 ? 0.55 / (n - 1) : 0;
   const rows = items.map((it, i) => {
     const { src, tone, luma, source, label } = resolveLogoPresentation(brand, it);
     return {
-      html: `<div class="logo-tile" style="--s: ${(0.55 + i * span).toFixed(2)}s">
+      html: `<div class="logo-tile" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${(0.55 + i * span).toFixed(2)}s">
           <div class="logo-frame" data-tone="${tone}"><img src="${src}" alt="${esc(label)}" /></div>
           ${label ? `<div class="logo-label">${esc(label)}</div>` : ''}
         </div>`,
@@ -611,7 +618,7 @@ function logosItems(items, brand) {
   console.log(
     `  logo tones: ${rows.map((r) => `${r.label}=${r.tone}(${Math.round(r.luma)},${r.source})`).join(' · ')}`
   );
-  return rows.map((r) => r.html).join('\n        ');
+  return rows;
 }
 
 function journeyItems(items) {
@@ -620,7 +627,7 @@ function journeyItems(items) {
   return items
     .map((it, i) => {
       const icon = it.icon || ['dashboard', 'calendar', 'clock', 'chart', 'settings'][i] || 'spark';
-      return `<div class="j-step" style="--s: ${(0.7 + i * span).toFixed(2)}s">
+      return `<div class="j-step" data-slot="steps.${i}" style="--s: ${(0.7 + i * span).toFixed(2)}s">
           <div class="j-rail"><div class="j-dot">${i + 1}</div>${i < n - 1 ? '<div class="j-line"></div>' : ''}</div>
           <div class="j-body">
             ${iconHtml(icon)}
@@ -642,7 +649,7 @@ function compareItems(items, side, startSec) {
     .map((raw, i) => {
       const text = typeof raw === 'string' ? raw : raw.label;
       const t = (startSec + i * 0.13).toFixed(2);
-      return `<div class="item" style="--i: ${t}s">
+      return `<div class="item" data-slot="${side === 'before' ? 'left' : 'right'}.items.${i}" style="--i: ${t}s">
               <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${path}" pathLength="1"/></svg></div>
               <div data-edit="${side === 'before' ? 'left' : 'right'}.items.${i}" data-edit-raw="${escAttr(text)}">${emphasize(text)}</div>
             </div>`;
@@ -763,6 +770,7 @@ function orbitItems(items, brand) {
   const inner = items.slice(0, Math.min(4, items.length));
   const outer = items.slice(inner.length);
   const seat = (it, i, ring) => {
+    const idx = ring === 'inner' ? i : inner.length + i;
     const count = ring === 'inner' ? inner.length : outer.length;
     const r = ring === 'inner' ? 260 : 400;
     const offset = ring === 'inner' ? -90 + 180 / count : -90 + 180 / count + 30;
@@ -773,7 +781,7 @@ function orbitItems(items, brand) {
             <div class="o-spin">
               <div class="o-link"></div>
               <div class="o-arm"><div class="o-upright"><div class="o-counter">
-                <div class="o-tile" data-tone="${tone}"><img src="${src}" alt="${esc(label)}" /></div>
+                <div class="o-tile" data-tone="${tone}" data-slot="logos.${idx}" data-slot-kind="asset"><img src="${src}" alt="${esc(label)}" /></div>
               </div></div></div>
             </div>
           </div>`;
@@ -857,7 +865,7 @@ function processItems(items) {
   return items
     .map((it, i) => {
       const s = 0.85 + i * step;
-      return `<div class="p-step" style="--s: ${s.toFixed(2)}s">
+      return `<div class="p-step" data-slot="steps.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="p-num">
             <span class="p-ghost">${String(i + 1).padStart(2, '0')}</span>
             <span class="p-dot"></span>
@@ -886,7 +894,7 @@ function timelineItems(items) {
       const s = 0.9 + i * span;
       const date = it.date || it.when || '';
       const x = n > 1 ? i / (n - 1) : 0.5;
-      return `<div class="tl-stop ${i % 2 === 0 ? 'up' : 'down'}${i === nowIdx ? ' now' : ''}" style="--s: ${s.toFixed(2)}s; --x: ${x.toFixed(4)}">
+      return `<div class="tl-stop ${i % 2 === 0 ? 'up' : 'down'}${i === nowIdx ? ' now' : ''}" data-slot="steps.${i}" style="--s: ${s.toFixed(2)}s; --x: ${x.toFixed(4)}">
           <div class="tl-dot"><span></span></div>
           <div class="tl-card">
             ${date ? `<div class="tl-date" data-edit="steps.${i}.date" data-edit-raw="${escAttr(date)}">${emphasize(date)}</div>` : ''}
@@ -906,7 +914,7 @@ function checklistItems(items) {
   const html = items
     .map((it, i) => {
       const s = first + i * step;
-      return `<div class="ck-row" style="--s: ${s.toFixed(2)}s">
+      return `<div class="ck-row" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="ck-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CHECK_PATH}" pathLength="1"/></svg></div>
           <div class="ck-text">
             <div class="ck-label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -938,19 +946,22 @@ function kpiSpark(i, down, bars = 9) {
   }).join('');
 }
 
-function kpiItems(items) {
+function kpiItems(items, { layout = 'board' } = {}) {
   const n = items.length;
-  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  const ticker = layout === 'ticker';
+  const cols = ticker ? 1 : n <= 3 ? n : n === 4 ? 2 : 3;
   return items
     .map((it, i) => {
       const row = Math.floor(i / cols);
       const col = i % cols;
-      const s = 0.7 + row * 0.26 + col * 0.1;
+      const s = ticker ? 0.7 + i * 0.16 : 0.7 + row * 0.26 + col * 0.1;
+      // The ticker's hero figure sizes on its own; the stacked rows share one size.
+      const fit = ticker && i === 0 ? 'data-fit-min="72"' : `data-fit-min="40" data-fit-group="${ticker ? 'kpi-tick' : 'kpi-value'}"`;
       const value = String(it.value ?? '').trim();
       const delta = String(it.delta ?? it.trend ?? '').trim();
       const down = /^[-−▼↓]/.test(delta);
       const count = it.count === false ? '' : ` data-count data-count-start="${(s + 0.3).toFixed(2)}" data-count-dur="1.1"`;
-      return `<div class="k-tile" style="--s: ${s.toFixed(2)}s">
+      return `<div class="k-tile" data-slot="stats.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="k-top">
             <div class="k-label" data-edit="stats.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
             ${
@@ -959,7 +970,7 @@ function kpiItems(items) {
                 : ''
             }
           </div>
-          <div class="k-value" data-fit="1" data-fit-min="40" data-fit-group="kpi-value"${count} data-edit="stats.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</div>
+          <div class="k-value" data-fit="1" ${fit}${count} data-edit="stats.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</div>
           ${it.note ? `<div class="k-note" data-edit="stats.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
           <div class="k-spark" aria-hidden="true">${kpiSpark(i, down)}</div>
         </div>`;
@@ -993,7 +1004,7 @@ function pricingTiers(tiers) {
             </div>`;
       });
       const badge = featured ? t.badge || 'Most popular' : '';
-      return `<div class="pr-card${featured ? ' featured' : ''}" style="--s: ${s.toFixed(2)}s">
+      return `<div class="pr-card${featured ? ' featured' : ''}" data-slot="tiers.${i}" style="--s: ${s.toFixed(2)}s">
           ${badge ? `<div class="pr-badge" data-edit="tiers.${i}.badge" data-edit-raw="${escAttr(badge)}">${emphasize(badge)}</div>` : ''}
           <div class="pr-name" data-edit="tiers.${i}.label" data-edit-raw="${escAttr(t.label || '')}">${emphasize(t.label || '')}</div>
           <div class="pr-price">
@@ -1015,7 +1026,7 @@ function faqItems(items) {
       const s = 0.8 + i * step;
       const q = it.label || it.question || it.q || '';
       const a = it.note || it.answer || it.a || '';
-      return `<div class="fq" style="--s: ${s.toFixed(2)}s">
+      return `<div class="fq" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="fq-q">
             <span class="fq-mark" aria-hidden="true">?</span>
             <div class="fq-text" data-edit="items.${i}.label" data-edit-raw="${escAttr(q)}">${emphasize(q)}</div>
@@ -1039,8 +1050,8 @@ function teamItems(items, brand) {
       const photo = asset ? resolveLogoPresentation(brand, { ...it, asset }) : null;
       const name = it.label || it.name || '';
       const role = it.note || it.role || '';
-      return `<div class="tm-card" style="--s: ${s.toFixed(2)}s; --k: ${i % 3}">
-          <div class="tm-avatar${photo ? ' photo' : ''}" aria-hidden="true">${
+      return `<div class="tm-card" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s; --k: ${i % 3}">
+          <div class="tm-avatar${photo ? ' photo' : ''}" aria-hidden="true" data-slot="items.${i}.asset" data-slot-kind="asset">${
             photo ? `<img src="${photo.src}" alt="" />` : `<span>${esc(initials(name))}</span>`
           }</div>
           <div class="tm-name" data-edit="items.${i}.label" data-edit-raw="${escAttr(name)}">${emphasize(name)}</div>
@@ -1185,6 +1196,7 @@ function buildInterstitial(video, it, paths, common) {
     if (items.length < 3 || items.length > 10) {
       throw new Error(`logos plate "${it.id}" needs 3–10 logos (got ${items.length})`);
     }
+    const tiles = logoTiles(items, brand);
     write({
       ...eyebrow('Trusted by'),
       ...title(it.title),
@@ -1192,7 +1204,8 @@ function buildInterstitial(video, it, paths, common) {
       SUB_RAW: escAttr(it.sub || ''),
       ITEM_COUNT: items.length,
       LOGO_COLS: logoColumns(items.length),
-      ITEMS: logosItems(items, brand),
+      ITEMS: tiles.map((r) => r.html).join('\n        '),
+      MARQUEE: layout === 'marquee' ? logosMarquee(tiles) : '',
     });
   } else if (it.type === 'journey') {
     const items = it.steps || it.items || [];
@@ -1245,8 +1258,8 @@ function buildInterstitial(video, it, paths, common) {
         ? `<div class="stars" aria-hidden="true">${Array.from({ length: starCount }, (_, i) => `<span class="star" style="--si: ${(i * 0.06).toFixed(2)}s">★</span>`).join('')}</div>`
         : '',
       WHO_MARK: logo
-        ? `<div class="badge" data-tone="${logo.tone}"><img src="${logo.src}" alt="" /></div>`
-        : `<div class="avatar" aria-hidden="true">${esc(initials(it.author))}</div>`,
+        ? `<div class="badge" data-tone="${logo.tone}" data-slot="logo" data-slot-kind="asset"><img src="${logo.src}" alt="" /></div>`
+        : `<div class="avatar" aria-hidden="true" data-slot="logo" data-slot-kind="asset">${esc(initials(it.author))}</div>`,
       AUTHOR: emphasize(it.author || ''),
       AUTHOR_RAW: escAttr(it.author || ''),
       ROLE: emphasize([it.role, it.company].filter(Boolean).join(' · ')),
@@ -1349,7 +1362,7 @@ function buildInterstitial(video, it, paths, common) {
         throw new Error(`kpi plate "${it.id}": every tile needs a value and a label`);
       }
     }
-    write({ ...eyebrow('This quarter'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: kpiItems(items) });
+    write({ ...eyebrow('This quarter'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: kpiItems(items, { layout }) });
   } else if (it.type === 'pricing') {
     const tiers = it.tiers || it.plans || [];
     if (tiers.length < 2 || tiers.length > 3) {
@@ -1386,7 +1399,102 @@ function buildInterstitial(video, it, paths, common) {
       throw new Error(`team plate "${it.id}" needs 3–6 people (got ${items.length})`);
     }
     write({ ...eyebrow('Who it is for'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: teamItems(items, brand) });
+  } else if (it.type === 'showcase') {
+    const callouts = it.callouts || it.pins || [];
+    if (callouts.length > 4) throw new Error(`showcase plate "${it.id}" takes at most 4 callouts (got ${callouts.length})`);
+    for (const c of callouts) {
+      if (!String(c.label ?? '').trim()) throw new Error(`showcase plate "${it.id}": every callout needs a label`);
+    }
+    const focus = showcaseFocus(it);
+    write({
+      ...eyebrow('See it in action'),
+      ...title(it.title),
+      SUB: emphasize(it.sub || ''),
+      SUB_RAW: escAttr(it.sub || ''),
+      CAPTION: emphasize(it.caption || ''),
+      CAPTION_RAW: escAttr(it.caption || ''),
+      URL: esc(it.url || brand.site || brand.url || brand.name || ''),
+      FOCUS_X: focus.x,
+      FOCUS_Y: focus.y,
+      CALLOUT_COUNT: callouts.length,
+      SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
+      CALLOUTS: showcaseCallouts(callouts),
+    });
+  } else if (it.type === 'bento') {
+    const value = String(it.value ?? '').trim();
+    const label = String(it.label ?? '').trim();
+    if (!value || !label) throw new Error(`bento plate "${it.id}" needs a number (value) and its label`);
+    const logos = it.logos || [];
+    if (logos.length > 4) throw new Error(`bento plate "${it.id}" takes at most 4 logos (got ${logos.length})`);
+    const quote = String(it.quote || '').trim();
+    if (quote.length > 160) throw new Error(`bento plate "${it.id}": the quote takes at most 160 characters (got ${quote.length})`);
+    write({
+      ...eyebrow('At a glance'),
+      ...title(it.title),
+      VALUE: emphasize(value),
+      VALUE_RAW: escAttr(value),
+      LABEL: emphasize(label),
+      LABEL_RAW: escAttr(label),
+      QUOTE: emphasize(quote || 'Add a line from a customer, or leave it to the numbers.'),
+      QUOTE_RAW: escAttr(quote),
+      AUTHOR: emphasize(it.author || ''),
+      AUTHOR_RAW: escAttr(it.author || ''),
+      CAPTION: emphasize(it.caption || ''),
+      CAPTION_RAW: escAttr(it.caption || ''),
+      TAG_CLASS: String(it.caption || '').trim() ? '' : ' is-empty',
+      LOGO_COUNT: logos.length,
+      SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
+      LOGOS: bentoLogos(logos, brand),
+    });
   }
+}
+
+/* ——— Showcase and bento: interface shots with editorial framing ——— */
+
+const FOCUS_POINTS = { center: [50, 50], top: [50, 18], bottom: [50, 82], left: [22, 50], right: [78, 50] };
+
+/** Where the zoom-morph lands: a named point, or explicit `focusX`/`focusY` percentages. */
+function showcaseFocus(it) {
+  const pct = (v, fallback) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Math.round(Number(v)))) : fallback);
+  const named = FOCUS_POINTS[String(it.focus || '').toLowerCase()] || FOCUS_POINTS.center;
+  return { x: pct(it.focusX, named[0]), y: pct(it.focusY, named[1]) };
+}
+
+/** The screenshot — or a believable interface skeleton when none is set yet. */
+function shotMarkup(brand, asset) {
+  const src = asset ? resolveAssetUri(brand, asset) : '';
+  if (src) return `<img src="${src}" alt="" />`;
+  return `<div class="mock" aria-hidden="true">
+            <div class="side"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="main"><i class="bar"></i><div class="cards"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          </div>`;
+}
+
+function showcaseCallouts(items) {
+  return items
+    .map((c, i) => {
+      const x = Math.max(2, Math.min(98, Number(c.x) || 50));
+      const y = Math.max(2, Math.min(98, Number(c.y) || 50));
+      const flip = x > 62;
+      return `<div class="pin${flip ? ' flip' : ''}" data-slot="callouts.${i}" data-slot-drag="xy" style="--x: ${x}%; --y: ${y}%; --s: ${(2.35 + i * 0.42).toFixed(2)}s">
+            <span class="dot"></span>
+            <span class="tag" data-edit="callouts.${i}.label" data-edit-raw="${escAttr(c.label)}">${emphasize(c.label)}</span>
+          </div>`;
+    })
+    .join('\n          ');
+}
+
+function bentoLogos(items, brand) {
+  return items
+    .map((it, i) => {
+      const s = (1.35 + i * 0.12).toFixed(2);
+      if (!(it.asset || it.logo || it.src)) {
+        return `<div class="mini is-empty" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${s}s"><span>${esc(it.label || 'Logo')}</span></div>`;
+      }
+      const { src, tone, label } = resolveLogoPresentation(brand, it);
+      return `<div class="mini" data-tone="${tone}" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${s}s"><img src="${src}" alt="${esc(label)}" /></div>`;
+    })
+    .join('\n            ');
 }
 
 /**
