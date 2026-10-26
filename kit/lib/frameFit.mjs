@@ -151,6 +151,8 @@ export function frameFitRuntimeSource() {
   window.__fitFrame = function fitFrame() {
     const compose = document.querySelector('.stage .compose');
     if (!compose) return null;
+    // No frame to fit into: any plan would hit the 0.6 floor. Keep whatever fit the page has.
+    if (innerWidth < 2 || innerHeight < 2) return null;
     compose.style.scale = '';
     compose.style.translate = '';
     const pins = [...compose.querySelectorAll(PIN)];

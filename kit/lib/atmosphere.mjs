@@ -392,6 +392,13 @@ export function atmosphereSnippet(brand, opts = {}) {
   }
 
   let drawField = null;
+  // Presence/Speed are the only Studio Direction controls that are baked straight into the draw
+  // call rather than read from CSS — plain numbers so the encoder needs no runtime to resolve
+  // them. Studio's live preview overwrites these three before a frame changed on disk ever loads,
+  // so dragging a slider updates the field in place instead of waiting on a rebuild + reload.
+  let tuneOpacity = ${atmo.opacity.toFixed(3)};
+  let tuneSpeed = ${atmo.speed.toFixed(3)};
+  let tuneDrift = ${Number(atmo.drift).toFixed(3)};
   ${
     enabled
       ? `
@@ -460,14 +467,14 @@ export function atmosphereSnippet(brand, opts = {}) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
-      gl.uniform1f(U.uTime, bgSec * ${atmo.speed.toFixed(3)});
+      gl.uniform1f(U.uTime, bgSec * tuneSpeed);
       gl.uniform3fv(U.uGold, tint('--gold', ${vec3(gold)}));
       gl.uniform3fv(U.uAmber, tint('--amber', ${vec3(amber)}));
       gl.uniform3fv(U.uTeal, tint('--teal', ${vec3(teal)}));
       gl.uniform3fv(U.uInk, tint('--ink', ${vec3(ink)}));
       gl.uniform3fv(U.uSurface, tint('--surface', ${vec3(surface)}));
-      gl.uniform1f(U.uOpacity, ${atmo.opacity.toFixed(3)});
-      gl.uniform1f(U.uDrift, ${Number(atmo.drift).toFixed(3)});
+      gl.uniform1f(U.uOpacity, tuneOpacity);
+      gl.uniform1f(U.uDrift, tuneDrift);
       gl.uniform1f(U.uEnv, envelope(sec));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };
@@ -496,6 +503,14 @@ export function atmosphereSnippet(brand, opts = {}) {
     hook(fn) {
       hooks.push(fn);
       try { fn(clockMs()); } catch (e) { console.warn('[plate-hook]', e); }
+    },
+    /** Studio's Presence/Speed sliders: repaint this frame's field in place, no reload. */
+    tuneField(patch) {
+      if (!patch) return;
+      if (Number.isFinite(patch.opacity)) tuneOpacity = Math.max(0, Math.min(1, patch.opacity));
+      if (Number.isFinite(patch.speed)) tuneSpeed = Math.max(0.2, Math.min(2.5, patch.speed));
+      if (Number.isFinite(patch.drift)) tuneDrift = patch.drift;
+      render(clockMs());
     },
   };
   window.__plateField = window.__plateRuntime;

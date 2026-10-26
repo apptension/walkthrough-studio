@@ -72,7 +72,26 @@ export function typeFitRuntimeSource() {
     restore();
   }
   window.__fitType = async function fitType() {
+    // Images size the composition (the interface shot in a device): measuring before they land
+    // grows the frame to fill the gap they leave. The encoder fits after load; so does this.
+    if (document.readyState !== 'complete') await new Promise((r) => addEventListener('load', r, { once: true }));
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    // A page with no viewport (the editor's back frame while it loads off-stage) has nothing to
+    // measure: every line wraps per word and the frame is zero wide, so a fit here bakes floor
+    // sizes and the 0.6 composition shrink. Leave the page unfit and fit it the moment it is given
+    // a frame — whichever path brings it on stage.
+    if (innerWidth < 2 || innerHeight < 2) {
+      if (!window.__fitTypeWaiting) {
+        window.__fitTypeWaiting = true;
+        addEventListener('resize', function sized() {
+          if (innerWidth < 2 || innerHeight < 2) return;
+          removeEventListener('resize', sized);
+          window.__fitTypeWaiting = false;
+          window.__fitType();
+        });
+      }
+      return;
+    }
     // Outer elements first: a title that shrinks frees room for the copy below it.
     const groups = new Map();
     for (const el of document.querySelectorAll('[data-fit]')) {

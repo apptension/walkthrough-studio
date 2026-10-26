@@ -114,7 +114,7 @@ function AtmosphereSliders() {
             opacity: e.target.value,
             opacityOut: Number(e.target.value).toFixed(2),
           });
-          scheduleMotionLive();
+          scheduleMotionLive({ dragging: true });
         }}
       />
       <RangeRow
@@ -131,7 +131,7 @@ function AtmosphereSliders() {
             speed: e.target.value,
             speedOut: `${Number(e.target.value).toFixed(1)}×`,
           });
-          scheduleMotionLive();
+          scheduleMotionLive({ dragging: true });
         }}
       />
     </div>

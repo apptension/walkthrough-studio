@@ -4,6 +4,7 @@ import { bridges, type PlateBridge } from '@/desk/bridge';
 import { editorApi } from './lifecycle';
 import {
   approvePlateOnly,
+  applyRebuiltPlates,
   askAiForCurrentScene,
   discardPlateCopyEdits,
   editCurrentPlate,
@@ -24,6 +25,7 @@ import {
 
 export const plateBridge: PlateBridge = {
   rebuildPlateHtmlPreview: (opts) => rebuildPlateHtmlPreview(opts),
+  applyRebuiltPlates: (plates, opts) => applyRebuiltPlates(plates, opts),
   openPlateFromScene: (scene: Scene) => openPlateFromScene(scene),
   fitFhdPreview: () => fitFhdPreview(),
   ensureFhdFitObserver,

@@ -227,6 +227,8 @@ export interface Lens {
   rect: Rect;
   path?: LensPathPoint[] | null;
   zoom: number;
+  /** Magnification the render lands on after its whole-pixel crop — what the stage paints with. */
+  zoomExact?: number;
   diameter: number;
   S: number;
 }

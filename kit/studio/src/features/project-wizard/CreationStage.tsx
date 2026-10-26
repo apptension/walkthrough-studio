@@ -7,7 +7,7 @@ import { readableOn } from './brandStudio';
 import { useCreation, type BrandIdentity } from './creation';
 import { creationFeed, screenFor, useCreationFeed, type AgentAction, type StoryCard } from './creationFeed';
 import { useCountUp, useTypewriter } from './creationMotion';
-import { PlateStill } from './PlateStill';
+import { PlateStill, VideoPlateStill } from './PlateStill';
 
 const imgIn = (e: SyntheticEvent<HTMLImageElement>) => e.currentTarget.classList.add('is-in');
 const hostPath = (url: string) => {
@@ -248,7 +248,23 @@ export function ScoutView({ thought, live, preview }: { thought: string; live: b
 
 const KIND_TAG: Record<StoryCard['kind'], string> = { open: 'Opener', chapter: 'Chapter', plate: 'Plate', close: 'Closer' };
 
-const StoryCardView = memo(function StoryCardView({ card, screen, brand, index }: { card: StoryCard; screen?: ExploreScreen; brand: string; index: number }) {
+/** A card is a plate the project itself builds — so its still can be the real frame. */
+const videoPlateId = (card: StoryCard) => (card.kind === 'open' || card.kind === 'close' ? card.kind : card.kind === 'plate' ? card.key.replace(/^plate:/, '') : '');
+
+const StoryCardView = memo(function StoryCardView({
+  card,
+  screen,
+  brand,
+  slug,
+  index,
+}: {
+  card: StoryCard;
+  screen?: ExploreScreen;
+  brand: string;
+  slug: string;
+  index: number;
+}) {
+  const plateId = videoPlateId(card);
   return (
     <li className={`ct-card is-${card.kind}`} style={{ '--i': index } as CSSProperties}>
       <div className="ct-card-art">
@@ -258,6 +274,9 @@ const StoryCardView = memo(function StoryCardView({ card, screen, brand, index }
           ) : (
             <span className="ct-card-num">{card.n}</span>
           )
+        ) : plateId && slug ? (
+          // Re-fetched whenever the copy changes, so the board keeps up with the rewrite.
+          <VideoPlateStill slug={slug} plateId={plateId} rev={`${card.title}|${card.eyebrow}|${card.line}`} />
         ) : card.kind === 'plate' && card.plateType && brand ? (
           <PlateStill type={card.plateType} brand={brand} />
         ) : (
@@ -274,18 +293,25 @@ const StoryCardView = memo(function StoryCardView({ card, screen, brand, index }
   );
 });
 
-function GhostCards({ n }: { n: number }) {
+/**
+ * The scenes not written yet. They carry the screens exploration already captured, so the board
+ * reads as the moments being written up rather than as a row of empty boxes.
+ */
+function GhostCards({ n, shots }: { n: number; shots: readonly ExploreScreen[] }) {
   return (
     <>
-      {Array.from({ length: n }, (_, i) => (
-        <li key={`ghost${i}`} className="ct-card is-ghost" aria-hidden="true" style={{ '--i': i } as CSSProperties}>
-          <div className="ct-card-art" />
-          <div className="ct-card-body">
-            <span className="ct-skel" />
-            <span className="ct-skel is-short" />
-          </div>
-        </li>
-      ))}
+      {Array.from({ length: n }, (_, i) => {
+        const shot = shots[i]?.shot;
+        return (
+          <li key={`ghost${i}`} className="ct-card is-ghost" aria-hidden="true" style={{ '--i': i } as CSSProperties}>
+            <div className="ct-card-art">{shot ? <img src={shot} alt="" loading="lazy" decoding="async" onLoad={imgIn} /> : null}</div>
+            <div className="ct-card-body">
+              <span className="ct-skel" />
+              <span className="ct-skel is-short" />
+            </div>
+          </li>
+        );
+      })}
     </>
   );
 }
@@ -326,13 +352,19 @@ export function Storyboard({ live, id }: { live: boolean; id?: string }) {
   const story = useCreationFeed((s) => s.story);
   const screens = useCreationFeed((s) => s.explore?.screens);
   const brand = useCreationFeed((s) => s.brandId);
+  const slug = useCreationFeed((s) => s.slug);
   const shots = useMemo(() => screenFor(story, screens || NO_SCREENS), [story, screens]);
+  // Screens exploration found that no written card has claimed yet.
+  const ghostShots = useMemo(() => {
+    const taken = new Set([...shots.values()].map((s) => s.shot));
+    return (screens || NO_SCREENS).filter((s) => s.shot && !taken.has(s.shot));
+  }, [shots, screens]);
   return (
     <ol id={id} className={`ct-board${live ? ' is-live' : ''}`} aria-label="Storyboard">
       {story.map((c, i) => (
-        <StoryCardView key={c.key} card={c} screen={shots.get(c.key)} brand={brand} index={i} />
+        <StoryCardView key={c.key} card={c} screen={shots.get(c.key)} brand={brand} slug={slug} index={i} />
       ))}
-      {live ? <GhostCards n={story.length ? 1 : 4} /> : null}
+      {live ? <GhostCards n={story.length ? 1 : 4} shots={ghostShots} /> : null}
     </ol>
   );
 }

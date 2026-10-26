@@ -88,10 +88,12 @@ export function plateGlassReady(front: HTMLIFrameElement | null): boolean {
   const src = front?.getAttribute('src') || '';
   if (!frame || !src || !front) return false;
   // Slides lay out in viewport units: the mirror has to be the stage frame's size before it loads.
-  const w = `${front.offsetWidth}px`;
-  const h = `${front.offsetHeight}px`;
-  if (front.offsetWidth && frame.style.width !== w) frame.style.width = w;
-  if (front.offsetHeight && frame.style.height !== h) frame.style.height = h;
+  // Each `offsetWidth` is a layout read, and this runs every frame the glass is up, so the frame's
+  // box is measured once and both the test and the value come off that.
+  const fw = front.offsetWidth;
+  const fh = front.offsetHeight;
+  if (fw && frame.style.width !== `${fw}px`) frame.style.width = `${fw}px`;
+  if (fh && frame.style.height !== `${fh}px`) frame.style.height = `${fh}px`;
   if (src !== m.src) {
     load(frame, src);
     return false;

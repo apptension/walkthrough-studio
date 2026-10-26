@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
+import { PLATE_CATALOG } from './plateTypes.mjs';
 import {
   applyScriptStructure,
   commitFlowSource,
@@ -380,7 +381,7 @@ describe('plate CRUD', () => {
     assert.equal(cfg.interstitials[0].items.length, 2);
 
     const script = await buildScript({ ...video, config: cfg });
-    assert.equal(script.plateTypes.length, 20);
+    assert.equal(script.plateTypes.length, PLATE_CATALOG.length);
     const plate = script.scenes.find((s) => s.kind === 'plate');
     assert.equal(plate.plate.rows.length, 2);
     assert.equal(plate.editable.remove, true);

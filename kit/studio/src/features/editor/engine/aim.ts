@@ -15,7 +15,9 @@ import { $, LENS_PAD, clamp, lensCentre, loupeOrigin, r3 } from './util';
 
 /** Zoom aim box and magnifier aim box + HUD from `kit/studio/editor.js`. */
 
-const reducedMotion = (): boolean => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+// A MediaQueryList keeps itself current, so the query is asked once and read every frame after.
+const motionQuery = typeof window !== 'undefined' ? (window.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null) : null;
+const reducedMotion = (): boolean => Boolean(motionQuery?.matches);
 
 // ─── Zoom aim box (selected zoom shot, paused) ───────────────────────────────────────────
 export function selectedShot(): ZoomShot | null {
@@ -49,6 +51,16 @@ export function aimSpace(clip?: string | null): { width: number; height: number 
 }
 
 /**
+ * The overlay's own geometry, as last written.
+ *
+ * Both aim painters place the overlay every frame, so in a still frame this would rewrite the same
+ * three values 120 times a second. Each write dirties layout, and the next painter's
+ * `getBoundingClientRect` then has to rebuild it — so the repaint was paying for a reflow to learn
+ * what it had just been told. Writing only on a real change keeps layout clean between them.
+ */
+let aimPlaced: { el: HTMLElement; transform: string; width: string; height: string } | null = null;
+
+/**
  * Lay the aim overlay onto the surface that is on stage.
  *
  * Both boxes position themselves in percentages of their parent, so moving that parent onto the
@@ -60,9 +72,19 @@ export function placeStageAim(clip?: string | null): void {
   if (!aim || !surface) return;
   const host = aim.offsetParent?.getBoundingClientRect();
   const box = surface.getBoundingClientRect();
-  aim.style.transform = `translate(${Math.round(box.left - (host?.left ?? 0))}px, ${Math.round(box.top - (host?.top ?? 0))}px)`;
-  aim.style.width = `${Math.round(box.width)}px`;
-  aim.style.height = `${Math.round(box.height)}px`;
+  const next = {
+    el: aim,
+    transform: `translate(${Math.round(box.left - (host?.left ?? 0))}px, ${Math.round(box.top - (host?.top ?? 0))}px)`,
+    width: `${Math.round(box.width)}px`,
+    height: `${Math.round(box.height)}px`,
+  };
+  const was = aimPlaced;
+  // A fresh overlay element carries none of these inline, so its first placement always writes.
+  if (was && was.el === aim && was.transform === next.transform && was.width === next.width && was.height === next.height) return;
+  aimPlaced = next;
+  aim.style.transform = next.transform;
+  aim.style.width = next.width;
+  aim.style.height = next.height;
 }
 
 /** Where the playhead stands on whatever clock a mark is written in. */

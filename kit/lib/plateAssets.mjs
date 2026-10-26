@@ -4,7 +4,7 @@
  * config as `uploads/plates/<file>` so the pack stays clean and the video stays portable.
  */
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { basename, dirname, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 
@@ -62,7 +62,7 @@ function sniffExt(buf) {
  * Grab one frame of the recording at `t` seconds (program time of the live clip) as a PNG asset.
  * The grab is an interface screenshot: a Showcase or Bento plate morphs it on screen.
  */
-export function grabFrameAsset(video, t, { source } = {}) {
+export async function grabFrameAsset(video, t, { source } = {}) {
   const live = source || join(video.out, 'live.mp4');
   if (!existsSync(live)) throw new Error('No recording yet — record first, then grab a frame');
   const at = Math.max(0, Number(t) || 0);
@@ -71,13 +71,20 @@ export function grabFrameAsset(video, t, { source } = {}) {
   const file = `grab-${at.toFixed(2).replace('.', '-')}s.png`;
   const dest = join(dir, file);
   if (!existsSync(dest)) {
-    const result = spawnSync(
-      'ffmpeg',
-      ['-hide_banner', '-loglevel', 'error', '-y', '-ss', at.toFixed(3), '-i', live, '-frames:v', '1', dest],
-      { encoding: 'utf8' },
-    );
-    if (result.status !== 0 || !existsSync(dest)) {
-      throw new Error(`Could not grab a frame at ${at.toFixed(2)}s${result.stderr ? ` — ${result.stderr.trim().split('\n').pop()}` : ''}`);
+    // Awaited, not synchronous: the grab runs inside the Studio server, and decoding a frame out
+    // of a long take held every other request — including the editor's own polls — until it ended.
+    const stderr = await new Promise((resolve, reject) => {
+      execFile(
+        'ffmpeg',
+        ['-hide_banner', '-loglevel', 'error', '-y', '-ss', at.toFixed(3), '-i', live, '-frames:v', '1', dest],
+        { encoding: 'utf8' },
+        (err, _stdout, errOut) => (err ? reject(new Error(errOut || err.message)) : resolve(errOut)),
+      );
+    }).catch((err) => {
+      throw new Error(`Could not grab a frame at ${at.toFixed(2)}s${err.message ? ` — ${err.message.trim().split('\n').pop()}` : ''}`);
+    });
+    if (!existsSync(dest)) {
+      throw new Error(`Could not grab a frame at ${at.toFixed(2)}s${stderr ? ` — ${stderr.trim().split('\n').pop()}` : ''}`);
     }
   }
   return { asset: `uploads/plates/${file}`, t: at, file: dest };

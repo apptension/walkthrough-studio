@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { mp4Complete, plateCacheFresh, PLATE_RENDER_PIPELINE } from './plates.mjs';
+import { mergePlateRows, mp4Complete, plateCacheFresh, PLATE_RENDER_PIPELINE } from './plates.mjs';
 
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const box = (type, size = 8, declared = size) => {
@@ -46,6 +46,14 @@ test('plate cache stays fresh when video.config is newer than the mp4', () => {
   }
 });
 
+test('a saved chapter plate is not rendered a second time beside its derived row', () => {
+  const saved = { id: 'ch4-ask-hn', type: 'statement', title: 'Ask HN', chapter: 'chapter:1:Ask HN' };
+  const derived = { ...saved, liveAt: 45.6, hold: 4 };
+  const rows = mergePlateRows([saved, { id: 'map', type: 'statement', title: 'Map' }], [derived]);
+  assert.deepEqual(rows.map((r) => r.id), ['map', 'ch4-ask-hn']);
+  assert.equal(rows.find((r) => r.id === 'ch4-ask-hn').liveAt, 45.6);
+});
+
 test('an mp4 cut short is not whole, so its plate renders again', () => {
   const dir = mkdtempSync(join(tmpdir(), 'wt-plate-mp4-'));
   const file = (name, buf) => {
@@ -55,6 +63,8 @@ test('an mp4 cut short is not whole, so its plate renders again', () => {
   };
   try {
     assert.equal(mp4Complete(file('ok.mp4', wholeMp4())), true);
+    // Two encoders rewrote one file: the boxes still add up, but the index is unreadable.
+    assert.equal(mp4Complete(file('twomoov.mp4', Buffer.concat([box('ftyp', 16), box('moov', 12), box('moov', 12), box('mdat', 16)]))), false);
     // Encoder died before writing the index: mdat open-ended, no moov.
     assert.equal(mp4Complete(file('stub.mp4', Buffer.concat([box('ftyp', 32), box('free'), box('mdat', 8, 0)]))), false);
     // Copy truncated mid-file: the mdat claims more bytes than exist.

@@ -63,9 +63,21 @@ const config = {
     { id: 'people', type: 'team', before: 'x', title: 'Who it is for', items: [{ label: 'Ana Ruiz', note: 'Lead' }, { label: 'Ops', asset: 'a.png' }, { label: 'Leadership' }] },
     { id: 'show', type: 'showcase', before: 'x', title: 'See the *board*', shot: 'a.png', focus: 'right', caption: 'The planning board', callouts: [{ label: 'Capacity', x: 30, y: 34 }, { label: 'Rebalance', x: 70, y: 62 }] },
     { id: 'glance', type: 'bento', before: 'x', title: 'At a glance', value: '94%', label: 'on plan', quote: 'We stopped double-booking.', author: 'Ana', logos: [{ asset: 'a.png', label: 'A' }, { label: 'Soon' }] },
+    { id: 'mine', type: 'custom', before: 'x', title: 'Made *here*', sub: 'For this video only', items: [{ label: 'One', note: 'first' }, { value: '3×', label: 'Two' }] },
+    { id: 'owned', type: 'custom', before: 'x', template: 'spotlight', title: 'From this project' },
   ],
 };
 writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(config));
+
+// A layout this video owns, overriding the kit default for the plate that names it.
+mkdirSync(join(videoDir, 'templates'), { recursive: true });
+writeFileSync(
+  join(videoDir, 'templates', 'spotlight.html'),
+  '<!doctype html><html><head><link rel="stylesheet" href="{{FONT_CSS}}"><style>:root{ {{BRAND_VARS}} }</style></head>' +
+    '<body data-duration="5" data-layout="{{LAYOUT}}"><div class="stage"><div class="bg"></div><div class="compose">' +
+    '<h1 class="title spotlight-only" data-reveal="{{TITLE_REVEAL}}" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>' +
+    '<div class="items" data-n="{{ITEM_COUNT}}">{{ITEMS}}</div></div></div><div class="grain"></div><div class="black"></div></body></html>'
+);
 
 test.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -74,16 +86,39 @@ const html = (id) => readFileSync(platePaths(loadVideo('probe')).interstitial[id
 test('all plate types build; new types fill every placeholder', () => {
   assert.deepEqual(
     [...INTERSTITIAL_TYPES],
-    ['features', 'journey', 'process', 'timeline', 'checklist', 'logos', 'orbit', 'testimonials', 'quote', 'stats', 'kpi', 'metric', 'callout', 'statement', 'compare', 'faq', 'pricing', 'team', 'showcase', 'bento']
+    ['features', 'journey', 'process', 'timeline', 'checklist', 'logos', 'orbit', 'testimonials', 'quote', 'stats', 'kpi', 'metric', 'callout', 'statement', 'compare', 'faq', 'pricing', 'team', 'showcase', 'bento', 'custom']
   );
   assert.deepEqual([...INTERSTITIAL_TYPES], PLATE_CATALOG.map((p) => p.type), 'builder and Studio catalog agree');
   for (const type of INTERSTITIAL_TYPES) {
     assert.ok(existsSync(join(TEMPLATES, `${type}.html`)), `template for ${type}`);
   }
   buildPlates(loadVideo('probe'));
-  for (const id of ['shift', 'hero', 'number', 'ring', 'proof', 'point', 'how', 'road', 'done', 'board', 'plans', 'ask', 'people', 'show', 'glance']) {
+  for (const id of ['shift', 'hero', 'number', 'ring', 'proof', 'point', 'how', 'road', 'done', 'board', 'plans', 'ask', 'people', 'show', 'glance', 'mine', 'owned']) {
     assert.doesNotMatch(html(id), /\{\{[A-Z_]+\}\}/, `${id} has no unfilled placeholders`);
   }
+});
+
+test('a custom plate uses the kit default until this video owns a template', () => {
+  buildPlates(loadVideo('probe'));
+
+  const mine = html('mine');
+  assert.doesNotMatch(mine, /spotlight-only/, 'no template named → the kit default');
+  assert.match(mine, /data-edit="sub"[^>]*>For this video only\.</, 'copy case runs on a custom plate like any other');
+  assert.equal((mine.match(/class="item"/g) || []).length, 2, 'generic rows, one per item');
+  assert.match(mine, /data-edit="items\.0\.label" data-edit-raw="One"/, 'rows stay editable like every other plate');
+  assert.match(mine, /class="item-value"[^>]*data-edit="items\.1\.value"/, 'a row paints only the fields it set');
+
+  // Naming a template moves the plate onto markup that lives with the video, not the kit.
+  const owned = html('owned');
+  assert.match(owned, /spotlight-only/);
+  assert.match(owned, /data-edit="title"/, 'the project template keeps the edit contract');
+});
+
+test('a custom plate that names a template with no file says so', () => {
+  const broken = { ...config, interstitials: [{ id: 'gone', type: 'custom', before: 'x', template: 'missing', title: 'x' }] };
+  writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(broken));
+  assert.throws(() => buildPlates(loadVideo('probe')), /no template at .*missing\.html/);
+  writeFileSync(join(videoDir, 'video.config.json'), JSON.stringify(config));
 });
 
 test('statement, process, timeline and checklist builders shape their content', () => {

@@ -33,7 +33,10 @@ function useFeedPolling(stage: CreateStage, hidden: boolean, failed: boolean): v
       if (stage === 'draft') void creationFeed.pollScript();
     };
     tick();
-    const timer = setInterval(tick, stage === 'draft' ? 3500 : 2000);
+    // The storyboard now shows each scene as it is written rather than the finished script, so
+    // the draft poll has to be fast enough to feel like writing. `pollScript` drops a tick it is
+    // still busy with, so a slow read costs nothing beyond the one it skips.
+    const timer = setInterval(tick, 1500);
     return () => clearInterval(timer);
   }, [stage, hidden, failed]);
 }

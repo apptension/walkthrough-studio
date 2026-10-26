@@ -48,6 +48,7 @@ interface MotionBody {
 interface MotionResponse {
   motion: Motion;
   direction?: Direction;
+  plates?: HtmlPlate[];
 }
 
 interface DirectionResponse {
@@ -76,18 +77,22 @@ export function collectMotionBody(): MotionBody {
 export function paintMotionLiveOptimistic(motion: MotionBody): void {
   const table = desk.get().video?.motionOptions?.lookVars || {};
   const editor = bridges.editor;
-  if (!editor?.paintLookVars) return;
-  const vars: Record<string, string> = {};
-  const sheen = motion.sheen === false ? 'off' : 'on';
-  for (const [key, val] of [
-    ['energy', motion.energy],
-    ['depth', motion.depth],
-    ['sheen', sheen],
-    ['titleReveal', motion.titleReveal],
-  ] as const) {
-    Object.assign(vars, table[key]?.[val] || {});
+  if (editor?.paintLookVars) {
+    const vars: Record<string, string> = {};
+    const sheen = motion.sheen === false ? 'off' : 'on';
+    for (const [key, val] of [
+      ['energy', motion.energy],
+      ['depth', motion.depth],
+      ['sheen', sheen],
+      ['titleReveal', motion.titleReveal],
+    ] as const) {
+      Object.assign(vars, table[key]?.[val] || {});
+    }
+    editor.paintLookVars(vars, motion.titleReveal || null);
   }
-  editor.paintLookVars(vars, motion.titleReveal || null);
+  // Presence/Speed are plain numbers baked into the field's draw call, not CSS — the runtime's
+  // own tuneField repaints them in place so a slider drag never waits on a rebuild + reload.
+  editor?.tuneAtmosphere?.(motion.atmosphereOpacity, motion.atmosphereSpeed);
 }
 
 let motionLiveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -103,16 +108,26 @@ export function cancelMotionLive(): void {
  * Direction effects land on the Editor the moment they change: CSS picks paint at once, then a
  * debounced save rebuilds plate HTML (atmosphere, opacity, speed) and force-reloads the stage.
  */
-export function scheduleMotionLive(): void {
+export function scheduleMotionLive({ dragging = false }: { dragging?: boolean } = {}): void {
   desk.set({ motionApplied: false, platesPreviewed: false });
   paintMotionLiveOptimistic(collectMotionBody());
   clearTimeout(motionLiveTimer);
   const gen = ++motionLiveGen;
-  motionLiveTimer = setTimeout(() => void applyMotionLive(gen), 320);
+  // Saving rebuilds every plate's HTML and force-reloads the stage. A tile is one pick, so it
+  // can go almost at once; a slider emits a value per frame, and firing that rebuild between
+  // each pause is what made dragging Presence or Speed feel like the stage was fighting back.
+  // The optimistic CSS paint above is already showing the change either way.
+  motionLiveTimer = setTimeout(() => void applyMotionLive(gen), dragging ? 700 : 320);
 }
 
 export async function applyMotionLive(gen = motionLiveGen): Promise<void> {
   if (!desk.get().slug) return;
+  // Energy, depth, sheen, title reveal and the field's own Presence/Speed are already live on the
+  // stage from the optimistic paint above — only a genuinely new atmosphere pattern needs its
+  // WebGL field (and, for open/close/statement, its title markup) rebuilt and reloaded. Comparing
+  // the pattern that was active before this save to what the save resolves to catches exactly
+  // that case without reaching into the frame.
+  const prevAtmosphere = desk.get().video?.motion?.atmosphere;
   try {
     const r = await api<MotionResponse>(`/api/video/${encSlug()}/motion`, { method: 'POST', body: collectMotionBody() });
     if (gen !== motionLiveGen) return;
@@ -120,11 +135,9 @@ export async function applyMotionLive(gen = motionLiveGen): Promise<void> {
     patchVideo({ motion: r.motion, ...(r.direction ? { direction: r.direction } : {}) });
     renderEffects(r.motion);
     if (r.direction) renderDirection(r.direction);
-    const s = desk.get();
-    await bridges.plate?.rebuildPlateHtmlPreview({
-      selectFirst: false,
-      plateId: bridges.editor?.active ? null : s.activePlateId,
-    });
+    const needsReload = r.motion.atmosphere !== prevAtmosphere;
+    if (bridges.plate?.applyRebuiltPlates) bridges.plate.applyRebuiltPlates(r.plates || [], { reload: needsReload });
+    else await bridges.plate?.rebuildPlateHtmlPreview({ selectFirst: false, plateId: bridges.editor?.active ? null : desk.get().activePlateId });
     if (gen !== motionLiveGen) return;
     desk.set({ platesPreviewed: true });
   } catch (err) {

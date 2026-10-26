@@ -68,6 +68,22 @@ export function agentPreference() {
   return v === 'claude' || v === 'cursor' ? v : 'auto';
 }
 
+/**
+ * The shell Studio's prompts actually ask for.
+ *
+ * Every prompt is written against this list: the draft and script goals end with
+ * `node kit/cli.mjs check-flow …` (see `flowContract` in lib/flowCheck.mjs), explore runs
+ * `cli.mjs browse`, the critic probes takes with ffmpeg/ffprobe, and brand discovery curls the
+ * lockup it picked. When the harness does not hand those over, the agent is told mid-run that
+ * the command was rejected and writes the draft blind instead — the flow check never runs, the
+ * brand pack has no real logo, and the first script comes back on template copy.
+ *
+ * Claude takes an explicit prefix allowlist, which is the shape to prefer: these are the only
+ * binaries the agent may run. Cursor's CLI has no allowlist, so it gets `--force`.
+ */
+const SHELL_ALLOWLIST = ['node', 'ffmpeg', 'ffprobe', 'curl', 'mkdir', 'cp', 'mv', 'ls', 'cat', 'rg', 'sed', 'python3'];
+const CLAUDE_TOOLS = `Read Edit Write Glob Grep WebFetch ${SHELL_ALLOWLIST.map((bin) => `Bash(${bin}:*)`).join(' ')}`;
+
 const RUNNERS = {
   cursor: (bin) => ({
     provider: 'cursor',
@@ -96,7 +112,7 @@ const RUNNERS = {
       '--permission-mode',
       opts.force ? 'bypassPermissions' : 'acceptEdits',
       '--allowedTools',
-      'Read Edit Write Glob Grep Bash(node:*) Bash(ffprobe:*) Bash(curl:*) Bash(mkdir:*)',
+      CLAUDE_TOOLS,
     ],
   }),
 };
@@ -432,7 +448,7 @@ B. ${briefPath} — fill other story fields only where they are empty or vague a
 C. ${journeyMd} — your scouting report: every destination with one line on what it offers and how strong it is, why this order, what you rejected and why, and per beat the exact walk (labels, where they sit, the payoff move, real data names to use).
 Edit only ${briefPath} and ${journeyMd}. Do not edit flow.mjs, narration.mjs or video.config.json, and do not record or render — the planner writes the script from your journey next.`,
     narration: `Improve narration.mjs for "${video.slug}" so VO narrates why (not clicks), ≤28 words/line, leads the pointer, and matches chapter/caption titles. Read ${critic} if present. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration.`,
-    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit kit/templates HTML directly — templates are filled from config. Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table.
+    plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit the shared kit/templates HTML — they are filled from config, and a change there hits every video. A layout no type covers goes in videos/<slug>/templates (see the custom guide below). Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table.
 ${COPY_STYLE_GUIDE}
 Plate types you can swap to or add (type — when: shape):
 ${plateTypeGuide()}
@@ -450,7 +466,7 @@ If the note is about logo size, position or visibility:
 For copy changes on open/close/interstitials, edit ${config}. For energy-only notes, set motion.energy to calm|clear|punchy.
 ${COPY_STYLE_GUIDE}
 
-Do NOT edit kit/templates HTML files — Studio fills templates from config + brand motion and rebuilds live HTML for preview.
+Do NOT edit the shared kit/templates HTML — Studio fills them from config + brand motion. If this scene needs a layout no built-in type gives it, copy kit/templates/custom.html to videos/${video.slug}/templates/<name>.html, author it there, and set this plate to { "type": "custom", "template": "<name>" } — keeping every data-edit attribute and the .stage/.grain/.black scaffolding.
 Keep assets real; no invented quotes/logos.`,
     motion: `Tune the VIDEO-LOCAL brand direction for "${video.slug}". Never mutate the shared pack at ${brand}. Edit ${config} → direction:
 - colors (only captured/brand-derived roles), logo (only a real captured lockup), camera, cursor, keys
@@ -604,7 +620,7 @@ Scope rules:
 2. A note naming an exact plate, scene, narration key, timestamp or setting is surgical: change that target and only directly required synchronized references.
 3. Do not broaden a surgical request for opportunistic cleanup.
 4. Never mutate shared brand files (${brand}, ${brief}, ${brandLogo}); captured brand is source material, while per-video direction belongs in ${config}.
-5. Plate HTML is generated from config + kit/templates — never edit raw templates.
+5. Plate HTML is generated from config + kit/templates — never edit the shared templates. A layout no built-in type gives you is authored as a custom plate under videos/${video.slug}/templates, from kit/templates/custom.html.
 6. Keep proof factual; never invent quotes, logos, stats, credentials or product claims.
 
 If the note is about the logo on Introduction / Opening / open plate: edit ${config} → direction.motion openLogoWidth (smaller = smaller), openLogoTop (smaller % = higher), openLiftScale, openLiftY (more negative = rests higher).
@@ -816,16 +832,19 @@ function readCliAnswer({ prompt, secret }) {
   });
 }
 
-function writePromptArtifacts(job, outDir, workspace) {
+function writePromptArtifacts(job, outDir, workspace, { force = false } = {}) {
   const promptFile = join(outDir, `${job.id}.prompt.md`);
   const runSh = join(outDir, `${job.id}.run.sh`);
+  // The hand-run script has to carry the same permissions the job ran with, or re-running it
+  // reproduces the rejected-command fallback the author was trying to get past.
+  const forceArg = force ? ' --force' : '';
   writeFileSync(
     promptFile,
     `# Studio improve — ${job.goal} — ${job.slug}\n\n${job.prompt}\n\n---\n## Auth\n\nIf you see "Authentication required":\n\n\`\`\`bash\nagent login\n# or: export CURSOR_API_KEY=…  (also ok in kit/.env)\n\`\`\`\n\nThen re-run:\n\n\`\`\`bash\nbash ${runSh}\n\`\`\`\n\nOr paste this prompt into a Cursor Agent chat in the repo workspace.\n`
   );
   writeFileSync(
     runSh,
-    `#!/usr/bin/env bash\nset -euo pipefail\ncd ${JSON.stringify(workspace)}\nexec agent -p --trust --workspace ${JSON.stringify(workspace)}${agentModel('cursor') ? ` --model ${JSON.stringify(agentModel('cursor'))}` : ''} --output-format text "$(cat ${JSON.stringify(promptFile)})"\n`
+    `#!/usr/bin/env bash\nset -euo pipefail\ncd ${JSON.stringify(workspace)}\nexec agent -p --trust${forceArg} --workspace ${JSON.stringify(workspace)}${agentModel('cursor') ? ` --model ${JSON.stringify(agentModel('cursor'))}` : ''} --output-format text "$(cat ${JSON.stringify(promptFile)})"\n`
   );
   try {
     chmodSync(runSh, 0o755);
@@ -909,7 +928,11 @@ export function startImprove(video, goal, opts = {}) {
   const outDir = join(video.out, 'studio-jobs');
   const verify = FLOW_GATE_GOALS.has(resolvedGoal) && opts.verify !== false ? flowGate(video, job) : null;
   const onDone = resolvedGoal === 'draft' ? (j) => enrichAfterDraft(video, j) : null;
-  return launchAgent(job, { prompt, outDir, force: opts.force, retryLabel: 'Improve', verify, onDone });
+  // Every improve prompt ends on the flow contract, which tells the agent to run
+  // `node kit/cli.mjs check-flow <slug>` and fix what it prints. Launching without the shell the
+  // prompt asks for is how a draft comes back on template copy with a rejected command in the log.
+  const force = opts.force ?? true;
+  return launchAgent(job, { prompt, outDir, force, retryLabel: 'Improve', verify, onDone });
 }
 
 /**
@@ -1079,7 +1102,7 @@ export function startExplore(video, { note = '', url = null } = {}) {
 function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job', timeoutMs = 0, onDone = null, onClose = null, verify = null } = {}) {
   mkdirSync(outDir, { recursive: true });
   const workspace = workspaceRoot();
-  writePromptArtifacts(job, outDir, workspace);
+  writePromptArtifacts(job, outDir, workspace, { force });
 
   const auth = agentAuthStatus();
   job.agentStatus = auth;
@@ -1164,6 +1187,21 @@ function launchAgent(job, { prompt, outDir, force = false, retryLabel = 'the job
           ? `Claude Code is not signed in. Run \`claude\` then /login (or set ANTHROPIC_API_KEY in kit/.env), then retry — or paste ${job.promptFile} into a chat.`
           : `Authentication required. Run \`agent login\` (or set CURSOR_API_KEY in kit/.env), then: bash ${job.runScript} — or paste ${job.promptFile} into Cursor Agent chat.`
       );
+      return;
+    }
+    // The agent asked for a command the harness refused. It cannot retry past that, so it
+    // finished on a fallback. Run it again with the shell its prompt was written against,
+    // rather than keeping the weaker result.
+    if (job.stream?.denied && !force && !job.deniedRetry) {
+      job.deniedRetry = true;
+      job.result = null;
+      job.finishedAt = null;
+      append(job, 'A command was rejected — retrying with the shell this job needs…', {
+        activity: 'Retrying with full permissions…',
+        kind: 'system',
+      });
+      job.stream = createStream();
+      launchAgent(job, { prompt, outDir, force: true, retryLabel, timeoutMs, onDone, onClose, verify });
       return;
     }
     let ok = code === 0 && job.result?.ok !== false;

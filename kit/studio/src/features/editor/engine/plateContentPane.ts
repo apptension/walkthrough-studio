@@ -5,6 +5,7 @@ import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
 import { reloadPlate } from './lifecycle';
 import { plateDoc } from './look';
+import { paintPlateFieldValue } from './plate';
 import { ed, setHtmlPlates, slug } from './state';
 import { flashHint, plateInfo } from './timeline';
 import type { Clip, PlateRow } from './types';
@@ -312,8 +313,16 @@ export function renderPlateContent(c: Clip): string {
   return section('plate', 'Content', `${scalars ? `<div class="pcnt-scalars">${scalars}</div>` : ''}${lists}${hint}`);
 }
 
+/** Field kinds whose saved value the live plate can paint itself, no document reload needed. */
+const COPY_KINDS = new Set(['text', 'long', 'lines']);
+
 // ─── Save ──────────────────────────────────────────────────────────────────────────────────
-async function send(id: string, ops: ContentOp[], hint: string | null, { repaint = true } = {}): Promise<boolean> {
+async function send(
+  id: string,
+  ops: ContentOp[],
+  hint: string | null,
+  { repaint = true, paintLive = false }: { repaint?: boolean; paintLive?: boolean } = {},
+): Promise<boolean> {
   const gen = ++saveGen;
   try {
     const r = await api<PlateContentData>(platePath(id, 'content'), { method: 'POST', body: { ops } });
@@ -322,7 +331,18 @@ async function send(id: string, ops: ContentOp[], hint: string | null, { repaint
     if (r.plates) setHtmlPlates(r.plates, { video: false });
     ed.dirtyRender = true;
     paintStatus();
-    await reloadPlate(id);
+    // Copy the stage can show itself does not need the document reloaded under it. Anything
+    // structural (a row added, an asset swapped, a number that drives layout) still does.
+    const shown =
+      paintLive &&
+      ops.every(
+        (op) =>
+          op.op === 'set' &&
+          typeof op.path === 'string' &&
+          (op.value == null || typeof op.value === 'string' || typeof op.value === 'number') &&
+          paintPlateFieldValue(op.path, op.value),
+      );
+    if (!shown) await reloadPlate(id);
     if (hint) flashHint(hint);
     if (repaint && gen === saveGen) renderInspector();
     return true;
@@ -342,7 +362,7 @@ function setSoon(id: string, path: string, value: unknown, kind: string): void {
     path,
     setTimeout(() => {
       pending.delete(path);
-      void send(id, [{ op: 'set', path, value }], null, { repaint: kind === 'lines' });
+      void send(id, [{ op: 'set', path, value }], null, { repaint: kind === 'lines', paintLive: COPY_KINDS.has(kind) });
     }, 420),
   );
 }
@@ -551,8 +571,11 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     if (!t) return;
     clearTimeout(t);
     pending.delete(path);
-    const kind = el.dataset['cntKind'];
-    void send(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, { repaint: kind === 'lines' });
+    const kind = el.dataset['cntKind'] || 'text';
+    void send(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
+      repaint: kind === 'lines',
+      paintLive: COPY_KINDS.has(kind),
+    });
   });
   on('[data-cnt-star]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';

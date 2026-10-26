@@ -183,19 +183,30 @@ export function etlHeadWidth(scroll: HTMLElement | null): number {
   );
 }
 
+/** The clock reads to a tenth, so at 60fps five frames in six would reparse the same markup. */
+let clockShown: { el: HTMLElement; html: string } | null = null;
+
 export function paintHead(follow = false): void {
   const x = ed.t * ed.pps;
   const head = $('etlPlayhead');
+  const scroll = $('etlScroll');
+  // Measure before moving anything: a style write dirties layout, and reading it back in the same
+  // frame is what forces the browser to rebuild it mid-paint.
+  const view = scroll && head ? { left: scroll.scrollLeft, w: Math.max(80, scroll.clientWidth - etlHeadWidth(scroll)) } : null;
   if (head) head.style.transform = `translateX(${x}px)`;
   const clock = $('edClock');
-  if (clock) clock.innerHTML = `${fmtT(ed.t)} <span class="t-sep">/</span> ${fmtT(ed.total)}`;
+  if (clock) {
+    const html = `${fmtT(ed.t)} <span class="t-sep">/</span> ${fmtT(ed.total)}`;
+    if (clockShown?.el !== clock || clockShown.html !== html) {
+      clock.innerHTML = html;
+      clockShown = { el: clock, html };
+    }
+  }
   // The slide inspector's filmstrip carries the same playhead.
   const strip = document.querySelector<HTMLElement>('.sl-play');
   if (strip) strip.style.left = `${((Math.min(ed.t, ed.total) / Math.max(0.01, ed.total)) * 100).toFixed(2)}%`;
-  const scroll = $('etlScroll');
-  if (scroll && head) {
-    const left = scroll.scrollLeft;
-    const w = Math.max(80, scroll.clientWidth - etlHeadWidth(scroll));
+  if (scroll && head && view) {
+    const { left, w } = view;
     // Flip the time badge to the left when the pin is near the right edge of the viewport
     head.classList.toggle('is-flip', x > left + w - 96);
     if (follow && ed.playing) {

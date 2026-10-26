@@ -90,6 +90,23 @@ export function refresh(): Promise<Deck | null> {
   return trailing;
 }
 
+/**
+ * A deck's serialization, remembered against the deck itself.
+ *
+ * `ed.deck` is only ever replaced wholesale — every edit comes back from the server as a new
+ * object — so a string cached against one identity can never go stale. Without it, each read
+ * serialized the whole cut twice just to find the two halves matched, and a refresh while the
+ * editor sat idle paid for the drawn deck again on every poll.
+ */
+const deckJson = new WeakMap<Deck, string>();
+const serializeDeck = (deck: Deck): string => {
+  const was = deckJson.get(deck);
+  if (was !== undefined) return was;
+  const json = JSON.stringify(deck);
+  deckJson.set(deck, json);
+  return json;
+};
+
 async function fetchDeck(): Promise<Deck | null> {
   if (!slug()) return null;
   const want = slug();
@@ -101,7 +118,7 @@ async function fetchDeck(): Promise<Deck | null> {
     // An edit saved meanwhile returned a newer deck than this read.
     if (gen !== deckGen) return ed.deck;
     // Nothing moved on disk: keep the drawn timeline (and any morph playing across it) as it is.
-    if (ed.deck && ed.seq.length && JSON.stringify(deck) === JSON.stringify(ed.deck)) {
+    if (ed.deck && ed.seq.length && serializeDeck(deck) === serializeDeck(ed.deck)) {
       if (ed.active) {
         syncLiveSource();
         paintFrame();

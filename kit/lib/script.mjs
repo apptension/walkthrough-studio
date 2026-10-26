@@ -598,6 +598,16 @@ export function scaffoldPlate(type, { before, title } = {}) {
         author: 'Ana Ruiz · COO',
         logos: [],
       };
+    case 'custom':
+      return {
+        ...base,
+        title: title || 'A layout made for this moment',
+        sub: '',
+        body: '',
+        // Named, not written: the template is the agent's to author under videos/<slug>/templates.
+        template: '',
+        items: [],
+      };
     default:
       return base;
   }
