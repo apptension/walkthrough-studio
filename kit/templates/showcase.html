@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Showcase plate</title>
+    <link rel="stylesheet" href="{{FONT_CSS}}" />
+    <link rel="stylesheet" href="plates.css" />
+    <style>
+      :root {
+        {{BRAND_VARS}}
+        --dur: 6.6s;
+        --black-out: 6.0s;
+        --fx: {{FOCUS_X}}%;
+        --fy: {{FOCUS_Y}}%;
+        --n: {{CALLOUT_COUNT}};
+        --shot-in: var(--motion-enter, 0.9s);
+      }
+      /* ——— Device: an interface shot in a browser frame, tilted up into the light ——— */
+      .compose {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        gap: 34px; padding: 70px 120px 64px;
+        animation: fadeOut 0.7s 5.55s var(--exit) forwards;
+      }
+      .head { text-align: center; max-width: 1300px; z-index: 3; }
+      .eyebrow { opacity: 0; animation: fadeUp 0.75s 0.18s var(--expo) both; }
+      .title {
+        margin-top: 14px; font-size: 60px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.04;
+        opacity: 0; animation: fadeUp 0.9s 0.32s var(--expo) both;
+      }
+      .sub {
+        margin: 12px auto 0; max-width: 54ch; font-size: 20px; color: var(--muted); line-height: 1.4;
+        opacity: 0; animation: fadeUp 0.8s 0.48s var(--expo) both;
+      }
+      .sub:empty { display: none; }
+      .scene {
+        position: relative; flex: 1; width: 100%; max-width: 1560px; min-height: 0;
+        perspective: 2000px; perspective-origin: 50% 20%;
+      }
+      .device {
+        position: absolute; inset: 0 0 0 0; margin: 0 auto;
+        border-radius: 26px; padding: 12px;
+        background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 74%, var(--text)) 0%, color-mix(in srgb, var(--surface) 84%, var(--ink)) 100%);
+        box-shadow:
+          0 70px 150px color-mix(in srgb, var(--shade, var(--ink)) 82%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--gold) 28%, transparent),
+          inset 0 1px 0 color-mix(in srgb, var(--text) 30%, transparent);
+        transform-origin: 50% 100%;
+        opacity: 0;
+        animation: tiltUp 1.5s 0.42s var(--expo) both, settle 3.4s 2.1s var(--inout) both;
+        will-change: transform, opacity;
+      }
+      @keyframes tiltUp {
+        0% { opacity: 0; transform: translateY(260px) rotateX(58deg) scale(0.86); filter: blur(10px); }
+        35% { opacity: 1; filter: blur(0); }
+        100% { opacity: 1; transform: none; filter: none; }
+      }
+      /* The push: a slow lean toward the focus point once the frame has landed. */
+      @keyframes settle { to { transform: translateY(-6px) rotateX(2.5deg) scale(1.02); } }
+      .frame {
+        position: relative; width: 100%; height: 100%; border-radius: 16px; overflow: hidden;
+        background: color-mix(in srgb, var(--surface) 86%, var(--ink));
+        display: flex; flex-direction: column;
+      }
+      .chrome {
+        flex: none; height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 16px;
+        background: color-mix(in srgb, var(--surface) 70%, var(--ink));
+        border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+      }
+      .chrome i { width: 11px; height: 11px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, var(--surface)); }
+      .chrome i:first-child { background: color-mix(in srgb, var(--gold) 80%, var(--surface)); }
+      .chrome .url {
+        margin-left: 14px; flex: 1; height: 28px; border-radius: 8px;
+        background: color-mix(in srgb, var(--text) 6%, transparent);
+        display: flex; align-items: center; padding: 0 12px;
+        font-size: 16px; color: var(--muted); letter-spacing: 0.01em;
+        overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      }
+      .shot {
+        position: relative; flex: 1; min-height: 0; overflow: hidden;
+        transform-origin: var(--fx) var(--fy);
+        animation: zoomMorph 4.6s 1.7s var(--inout) both;
+      }
+      /* Zoom-morph: the shot pushes toward the focus so the viewer lands on the detail. */
+      @keyframes zoomMorph { to { transform: scale(1.14); } }
+      .shot img { width: 100%; height: 100%; object-fit: cover; object-position: var(--fx) var(--fy); display: block; }
+      /* No shot yet: a believable interface skeleton, so the plate always reads. */
+      .mock {
+        position: absolute; inset: 0; padding: 22px;
+        display: grid; grid-template-columns: 220px 1fr; gap: 18px;
+        background:
+          radial-gradient(ellipse 70% 60% at 60% 30%, color-mix(in srgb, var(--gold) 10%, var(--surface)) 0%, transparent 70%),
+          color-mix(in srgb, var(--surface) 92%, var(--ink));
+      }
+      .mock .side { display: grid; grid-auto-rows: 26px; gap: 12px; align-content: start; }
+      .mock .side i, .mock .main i { display: block; border-radius: 7px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+      .mock .side i:first-child { width: 70%; background: color-mix(in srgb, var(--gold) 36%, transparent); }
+      .mock .main { display: grid; grid-template-rows: 54px 1fr; gap: 18px; }
+      .mock .main .bar { display: block; border-radius: 10px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+      .mock .main .cards { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 16px; }
+      .mock .main .cards i { background: linear-gradient(160deg, color-mix(in srgb, var(--text) 8%, transparent), color-mix(in srgb, var(--text) 3%, transparent)); border: 1px solid color-mix(in srgb, var(--text) 7%, transparent); }
+      .mock .main .cards i:first-child { background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 26%, transparent), color-mix(in srgb, var(--amber) 10%, transparent)); }
+      .glare {
+        position: absolute; top: -40%; bottom: -40%; width: 26%; left: -40%; z-index: 6;
+        background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--text) 14%, transparent), transparent);
+        transform: skewX(-18deg); opacity: 0;
+        animation: glare 1.4s 1.75s var(--inout) both;
+        pointer-events: none;
+      }
+      @keyframes glare { 0% { opacity: 0; left: -40%; } 25% { opacity: 1; } 100% { opacity: 0; left: 120%; } }
+      /* Callouts: pins on the shot, each with a label that unfolds from the dot. */
+      /* Above the shot even when the Studio lifts image slots (z 5) for hover/pick. */
+      .callouts { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
+      .pin {
+        position: absolute; left: var(--x); top: var(--y);
+        display: flex; align-items: center; gap: 10px; transform: translate(-11px, -11px);
+        opacity: 0; animation: pinIn 0.7s var(--s) var(--pop) both;
+      }
+      .pin .dot {
+        width: 22px; height: 22px; border-radius: 50%; flex: none;
+        background: var(--gold);
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 28%, transparent), 0 8px 24px color-mix(in srgb, var(--gold) 40%, transparent);
+        animation: pinPulse 2.2s calc(var(--s) + 0.6s) ease-in-out infinite;
+      }
+      .pin .tag {
+        padding: 9px 16px; border-radius: 999px;
+        background: color-mix(in srgb, var(--ink) 88%, transparent);
+        border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+        color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap;
+        clip-path: inset(0 100% 0 0 round 999px);
+        animation: tagIn 0.6s calc(var(--s) + 0.22s) var(--expo) both;
+        box-shadow: 0 10px 30px color-mix(in srgb, var(--shade, var(--ink)) 50%, transparent);
+      }
+      .pin.flip { flex-direction: row-reverse; transform: translate(calc(-100% + 11px), -11px); }
+      .pin.flip .tag { clip-path: inset(0 0 0 100% round 999px); animation-name: tagInFlip; }
+      @keyframes pinIn { from { opacity: 0; transform: translate(-11px, -11px) scale(0.4); } to { opacity: 1; transform: translate(-11px, -11px) scale(1); } }
+      .pin.flip { animation-name: pinInFlip; }
+      @keyframes pinInFlip { from { opacity: 0; transform: translate(calc(-100% + 11px), -11px) scale(0.4); } to { opacity: 1; transform: translate(calc(-100% + 11px), -11px) scale(1); } }
+      @keyframes pinPulse { 0%, 100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 28%, transparent), 0 8px 24px color-mix(in srgb, var(--gold) 40%, transparent); } 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--gold) 12%, transparent), 0 8px 24px color-mix(in srgb, var(--gold) 40%, transparent); } }
+      @keyframes tagIn { to { clip-path: inset(0 0 0 0 round 999px); } }
+      @keyframes tagInFlip { to { clip-path: inset(0 0 0 0 round 999px); } }
+      .caption {
+        position: absolute; left: 50%; bottom: -46px; transform: translateX(-50%);
+        font-size: 16px; color: var(--muted); letter-spacing: 0.02em; white-space: nowrap;
+        opacity: 0; animation: fadeUp 0.7s 1.9s var(--expo) both;
+      }
+      .caption:empty { display: none; }
+      .floor {
+        position: absolute; left: 50%; bottom: 2%; width: 1400px; height: 220px; margin-left: -700px; border-radius: 50%; z-index: 1;
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--amber) 22%, transparent), transparent 70%);
+        opacity: 0; animation: fadeIn 1.2s 0.9s ease-out both, fadeOut 0.7s 5.55s var(--exit) forwards;
+      }
+      /* ——— Layout: spotlight — the shot fills the frame; a dark veil parts around the focus ——— */
+      body[data-layout='spotlight'] .compose { padding: 0; gap: 0; display: block; }
+      body[data-layout='spotlight'] .head {
+        position: absolute; left: 110px; bottom: 96px; max-width: 900px; text-align: left; z-index: 8;
+      }
+      body[data-layout='spotlight'] .head .title { font-size: 66px; text-shadow: 0 10px 40px color-mix(in srgb, var(--ink) 80%, transparent); }
+      body[data-layout='spotlight'] .head .sub { margin-left: 0; }
+      body[data-layout='spotlight'] .scene { position: absolute; inset: 0; max-width: none; perspective: none; }
+      body[data-layout='spotlight'] .device { inset: 0; border-radius: 0; padding: 0; background: none; box-shadow: none; animation: fadeIn 1.1s 0.1s ease-out both, spotPush 5.2s 0.6s var(--inout) both; transform-origin: var(--fx) var(--fy); }
+      @keyframes spotPush { from { transform: scale(1.02); } to { transform: scale(1.2); } }
+      body[data-layout='spotlight'] .frame { border-radius: 0; }
+      body[data-layout='spotlight'] .chrome { display: none; }
+      body[data-layout='spotlight'] .shot { animation: none; }
+      body[data-layout='spotlight'] .veil {
+        position: absolute; inset: 0; z-index: 6;
+        background: radial-gradient(ellipse 34% 34% at var(--fx) var(--fy), transparent 0%, color-mix(in srgb, var(--ink) 55%, transparent) 60%, color-mix(in srgb, var(--ink) 86%, transparent) 100%);
+        opacity: 0; animation: fadeIn 1.4s 1.2s ease-out both;
+      }
+      body[data-layout='spotlight'] .floor, body[data-layout='spotlight'] .caption, body[data-layout='spotlight'] .glare { display: none; }
+      /* ——— Layout: split — words on the left, the device drifts in from the right ——— */
+      body[data-layout='split'] .compose { flex-direction: row; align-items: center; gap: 72px; padding: 90px 110px; }
+      body[data-layout='split'] .head { flex: 0 0 560px; text-align: left; }
+      body[data-layout='split'] .head .title { font-size: 64px; }
+      body[data-layout='split'] .head .sub { margin-left: 0; }
+      body[data-layout='split'] .scene { height: 100%; perspective-origin: 0% 50%; }
+      body[data-layout='split'] .device { transform-origin: 0% 50%; animation: swingIn 1.5s 0.42s var(--expo) both, driftSplit 3.6s 2s var(--inout) both; }
+      @keyframes swingIn { 0% { opacity: 0; transform: translateX(220px) rotateY(-28deg) scale(0.92); filter: blur(8px); } 35% { opacity: 1; filter: blur(0); } 100% { opacity: 1; transform: rotateY(-8deg); filter: none; } }
+      @keyframes driftSplit { to { transform: rotateY(-4deg) translateX(-10px); } }
+      body[data-layout='split'] .caption { left: 0; transform: none; }
+      body[data-layout='split'] .floor { left: 62%; }
+      /* Vertical master */
+      html[data-frame='portrait'] .compose { padding: 110px 48px 140px; gap: 28px; }
+      html[data-frame='portrait'] .head { text-align: left; align-self: stretch; }
+      html[data-frame='portrait'] .scene { min-height: 900px; perspective-origin: 50% 0%; }
+      html[data-frame='portrait'] .chrome .url { display: none; }
+      html[data-frame='portrait'] .pin .tag { font-size: 20px; }
+      html[data-frame='portrait'] body[data-layout='split'] .compose { flex-direction: column; align-items: stretch; padding: 110px 48px 140px; gap: 36px; }
+      html[data-frame='portrait'] body[data-layout='split'] .head { flex: none; }
+      html[data-frame='portrait'] body[data-layout='split'] .head .title { font-size: 56px; }
+      html[data-frame='portrait'] body[data-layout='split'] .scene { flex: 1; height: auto; perspective-origin: 50% 0%; }
+      html[data-frame='portrait'] body[data-layout='split'] .device { transform-origin: 50% 0%; }
+      /* Spotlight bleeds on purpose: the frame-fit pass leaves it alone, a floor scrim carries the words. */
+      body[data-layout='spotlight'] .compose { --fill-mode: none; }
+      body[data-layout='spotlight'] .scene::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 52%; z-index: 6; pointer-events: none;
+        background: linear-gradient(0deg, color-mix(in srgb, var(--ink) 92%, transparent) 0%, color-mix(in srgb, var(--ink) 55%, transparent) 45%, transparent 100%);
+        opacity: 0; animation: fadeIn 1.2s 0.9s ease-out both;
+      }
+      body[data-layout='spotlight'] .head .sub { font-size: 22px; color: color-mix(in srgb, var(--text) 78%, var(--muted)); }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .head { left: 64px; right: 64px; bottom: 140px; max-width: none; }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .head .title { font-size: 58px; text-wrap: balance; }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .scene::after { height: 46%; }
+      /* Pins under the words: the head moves to the top and the scrim follows it. */
+      body[data-layout='spotlight'][data-head='top'] .head { top: 84px; bottom: auto; }
+      html[data-frame='portrait'] body[data-layout='spotlight'][data-head='top'] .head { top: 120px; }
+      body[data-layout='spotlight'][data-head='top'] .scene::after { top: 0; bottom: auto; background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 92%, transparent) 0%, color-mix(in srgb, var(--ink) 55%, transparent) 45%, transparent 100%); }
+    </style>
+  </head>
+  <body data-duration="6.6" data-layout="{{LAYOUT}}">
+    <div class="stage">
+      <div class="bg"></div>
+      <div class="blob warm"></div>
+      <div class="blob cool"></div>
+      <div class="grid"></div>
+      <div class="floor"></div>
+      <div class="compose">
+        <div class="head">
+          <div class="eyebrow" data-edit="eyebrow" data-edit-kind="text" data-edit-raw="{{EYEBROW_RAW}}">{{EYEBROW}}</div>
+          <h1 class="title" data-fit="2" data-fit-min="40" data-reveal="{{TITLE_REVEAL}}" style="--t: 0.32s" data-edit="title" data-edit-kind="{{TITLE_KIND}}" data-edit-raw="{{TITLE_RAW}}">{{TITLE}}</h1>
+          <p class="sub" data-edit="sub" data-edit-kind="text" data-edit-raw="{{SUB_RAW}}">{{SUB}}</p>
+        </div>
+        <div class="scene">
+          <div class="device">
+            <div class="frame">
+              <div class="chrome"><i></i><i></i><i></i><span class="url">{{URL}}</span></div>
+              <div class="shot" data-slot="shot" data-slot-kind="asset">{{SHOT}}</div>
+              <div class="veil"></div>
+              <div class="glare"></div>
+              <div class="callouts" data-drag-surface>{{CALLOUTS}}</div>
+            </div>
+          </div>
+          <div class="caption" data-edit="caption" data-edit-kind="text" data-edit-raw="{{CAPTION_RAW}}">{{CAPTION}}</div>
+        </div>
+      </div>
+      <div class="vignette"></div>
+    </div>
+    <div class="grain"></div>
+    <div class="black"></div>
+    <script>
+      (function placeSpotlightHead() {
+        if (document.body.dataset.layout !== 'spotlight') return;
+        const head = document.querySelector('.head');
+        if (!head) return;
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const h = head.getBoundingClientRect();
+        const pins = [...document.querySelectorAll('.pin')].map((p) => p.getBoundingClientRect());
+        if (!pins.some((p) => hit(h, p))) return;
+        document.body.dataset.head = 'top';
+        const top = head.getBoundingClientRect();
+        if (pins.filter((p) => hit(top, p)).length >= pins.filter((p) => hit(h, p)).length) delete document.body.dataset.head;
+      })();
+    </script>
+  </body>
+</html>

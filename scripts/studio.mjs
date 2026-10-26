@@ -2,13 +2,12 @@
 /**
  * One-command Walkthrough Studio: check toolchain → install if needed → launch → open browser.
  *
- *   ./studio --v2
+ *   ./studio
  *   ./studio walkthrough-studio
  *   ./studio --port 4750
  *   ./studio --no-open
  *   ./studio --dev
  *   ./studio --dev --ui-port 4758
- *   ./studio --legacy
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
@@ -29,13 +28,11 @@ import {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(ROOT, 'kit');
-const STUDIO_NEXT = join(KIT, 'studio-next');
+const DESK_DIR = join(KIT, 'studio');
 const MIN_NODE = [20, 0, 0];
 const MIN_NPM = [11, 17, 0];
 
 const { help, noOpen, dev, legacy, port, uiPort, openSlug } = parseStudioArgs(process.argv.slice(2));
-/** 'next' (the desk) or 'legacy' (the classic desk). A desk that cannot be prepared falls back to legacy. */
-let desk = legacy ? 'legacy' : 'next';
 
 const tty = Boolean(output.isTTY);
 const c = createTheme(
@@ -90,7 +87,6 @@ function note(msg, fix) {
 
 function banner() {
   const tags = [];
-  if (legacy) tags.push('classic');
   if (dev) tags.push('dev');
   write();
   write(
@@ -314,55 +310,45 @@ function ensureDeps() {
 }
 
 /**
- * Install and build the desk when its lockfile or sources changed. Any failure
- * falls back to the classic desk with a note, so ./studio still opens.
+ * Install and build the desk when its lockfile or sources changed.
+ * Returns false when the desk cannot be prepared. There is no second desk to open.
  */
 function prepareDesk() {
-  if (desk === 'legacy') {
-    row('desk', 'warn', 'classic  ·  --legacy');
-    note(
-      'The classic desk is retiring and will be removed in a later release',
-      'Run ./studio --v2 for the new desk. Tell us what is missing.'
-    );
-    return;
-  }
-  const fallBack = (detail, fix) => {
-    desk = 'legacy';
-    row('desk', 'warn', `classic  ·  ${detail}`);
-    note("The new desk couldn't be prepared, so Studio opened the classic desk", fix);
+  const fail = (detail, fix) => {
+    row('desk', 'bad', detail);
+    note('Studio needs the desk in kit/studio', fix);
+    return false;
   };
-  if (!existsSync(join(STUDIO_NEXT, 'package.json'))) {
-    fallBack('kit/studio-next missing', 'Re-clone, or git checkout kit/studio-next');
-    return;
+  if (!existsSync(join(DESK_DIR, 'package.json'))) {
+    return fail('kit/studio missing', 'Re-clone the repository');
   }
-  if (!depsFresh(STUDIO_NEXT)) {
+  if (!depsFresh(DESK_DIR)) {
     startSpinner('desk');
-    const installed = installDesk(STUDIO_NEXT);
+    const installed = installDesk(DESK_DIR);
     if (!installed.ok) {
-      stopSpinner('desk', 'warn', 'npm ci failed');
+      stopSpinner('desk', 'bad', 'npm ci failed');
       if (installed.detail) writeErr(`${c.soft}${installed.detail}${c.reset}`);
-      fallBack('packages missing', `From kit/studio-next/:  ${c.bold}npm ci${c.reset}  then run ./studio again`);
-      return;
+      return fail('packages missing', `From kit/studio/:  ${c.bold}npm ci${c.reset}  then run ./studio again`);
     }
     clearSpinner();
   }
   if (dev) {
     row('desk', 'ok', 'Vite dev server');
-    return;
+    return true;
   }
-  if (buildFresh(STUDIO_NEXT)) {
+  if (buildFresh(DESK_DIR)) {
     row('desk', 'ok', 'ready');
-    return;
+    return true;
   }
   startSpinner('desk');
-  const built = buildDesk(STUDIO_NEXT);
+  const built = buildDesk(DESK_DIR);
   if (!built.ok) {
-    stopSpinner('desk', 'warn', 'build failed');
+    stopSpinner('desk', 'bad', 'build failed');
     if (built.detail) writeErr(`${c.soft}${built.detail}${c.reset}`);
-    fallBack('build failed', `From kit/studio-next/:  ${c.bold}npm run build${c.reset}  to see the error`);
-    return;
+    return fail('build failed', `From kit/studio/:  ${c.bold}npm run build${c.reset}  to see the error`);
   }
   stopSpinner('desk', 'ok', 'built');
+  return true;
 }
 
 function ensureChromium() {
@@ -467,8 +453,7 @@ async function launch() {
   await launchStudio({
     port,
     uiPort,
-    desk,
-    studioNext: STUDIO_NEXT,
+    studioDir: DESK_DIR,
     dev,
     noOpen,
     openSlug,
@@ -492,21 +477,26 @@ async function launch() {
 }
 
 async function main() {
+  if (legacy) {
+    write(`${c.bad}The classic desk was removed in 1.0.0-beta.7.${c.reset}`);
+    write(`Run ${c.bold}./studio${c.reset}`);
+    process.exit(1);
+  }
   // Help
   if (help) {
     write(`
 ${studioBanner({ theme: c, version: VERSION, columns: output.columns || 80 })}
 
-  ${c.bold}./studio${c.reset} --v2                 the new desk: check, install if needed, open Studio
+  ${c.bold}./studio${c.reset}                       check, install if needed, open Studio
   ${c.bold}./studio${c.reset} <slug>               open a project
   ${c.bold}./studio${c.reset} --port 4750          use another port
   ${c.bold}./studio${c.reset} --no-open            start without opening a browser
   ${c.bold}./studio${c.reset} --dev                live log, desk hot reload, server restart
   ${c.bold}./studio${c.reset} --dev --ui-port 4758 dev desk on another port
-  ${c.bold}./studio${c.reset} --legacy             the classic desk (retiring)
+  ${c.bold}./studio${c.reset} --v2                 same as ./studio (kept so older notes still work)
 
-${c.soft}Studio serves the desk on --port (default 4747). ./studio --v2 installs the desk's${c.reset}
-${c.soft}packages and rebuilds it whenever kit/studio-next changes, so a git pull is enough.${c.reset}
+${c.soft}Studio serves the desk on --port (default 4747). ./studio installs the desk's${c.reset}
+${c.soft}packages and rebuilds it whenever kit/studio changes, so a git pull is enough.${c.reset}
 
 ${c.soft}Dev mode prints the server log and runs the desk on Vite (--ui-port, default 4748)${c.reset}
 ${c.soft}with hot reload. Saving kit/lib or kit/cli.mjs restarts the server.${c.reset}
@@ -563,7 +553,10 @@ ${c.soft}Requires Node 20+, npm 11.17+, ffmpeg/ffprobe. Checks Cursor CLI and Cl
     process.exit(1);
   }
 
-  prepareDesk();
+  if (!prepareDesk()) {
+    footerFail([`From kit/studio/:  ${c.bold}npm ci && npm run build${c.reset}`]);
+    process.exit(1);
+  }
   ensureEnv();
   agentCheck = await checkAgents();
 

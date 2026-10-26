@@ -31,10 +31,10 @@ People who need a tool to build walkthroughs of their products based on Cursor /
 | Text / muted | #f4f6f3 / #7f8880 | Plate type (`--ink` / `--muted`) |
 | On accent | #0a0a0a | Black type on the yellow→green chip, as on Studio buttons |
 
-These mirror `kit/studio/styles.css :root`. When the UI palette changes, re-sync `brand.json → colors` — a stale pack
+These mirror `kit/studio/src/styles/studio.css :root`. When the UI palette changes, re-sync `brand.json → colors` — a stale pack
 (the 2026-10-18 blue harvest) put off-brand blue on every plate.
 
-- **Logo:** official mark in `logo.html` / `logo-source.svg` — same Rams isometric capture deck as `kit/studio/logo.svg` (graphite chassis, olive accent). Never invent a substitute or a wordmark.
+- **Logo:** official mark in `logo.html` / `logo-source.svg` — same Rams isometric capture deck as `kit/studio/public/logo.svg` (graphite chassis, olive accent). Never invent a substitute or a wordmark.
 - **Logo on plates:** square mark on dark ink; center horizontally; open plate `openLogoWidth` ~340–380 px (~hero mark), then lift. Because the mark is **square**, `openLiftY` must stay mild (~−90 to −120) — wide-lockup values like −195 / −285 send a square mark off the top of the frame. Prefer `openLogoTop` ~50, `openLiftScale` ~0.52. Close smaller via template corner/lockup.
 - **Live reel:** true UI color — no grade. Focus ring uses the brand green.
 

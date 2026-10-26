@@ -11,8 +11,8 @@ import { join } from 'node:path';
 import { BT709_PARAMS, BT709_SCALE_OPTS } from './encode.mjs';
 import { run } from './media.mjs';
 import { blurWindows, blurredGraph, mergeWindows } from './motionBlur.mjs';
-import { clampZoomCenter } from '../studio/zoomAim.js';
-import { CURVE_IDS, DEFAULT_CURVE, DEFAULT_MOTION, MOTION_IDS, curveOf, motionScale, unitExpr } from '../studio/easing.js';
+import { clampZoomCenter } from './shared/zoomAim.js';
+import { CURVE_IDS, DEFAULT_CURVE, DEFAULT_MOTION, MOTION_IDS, curveOf, motionScale, unitExpr } from './shared/easing.js';
 
 export const ZOOM_LEVELS = Object.freeze({ off: 0, subtle: 1.3, bold: 1.65 });
 export const FRAME_STYLES = Object.freeze(['full', 'inset']);

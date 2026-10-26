@@ -56,6 +56,7 @@ export function isRegenerableRel(rel, { slug = 'video' } = {}) {
   if (/\.handoff\.zip$/i.test(base) || base.endsWith('-handoff.zip')) return true;
   if (rel.startsWith('slices/')) return true;
   if (rel.startsWith('plates/')) return true;
+  if (rel.startsWith('plates-carry/')) return true;
   if (rel.startsWith('overlays/')) return true;
   if (rel.startsWith('studio-jobs/')) return true;
   if (rel.startsWith('validate/') && /\.(png|jpg|jpeg|webp|mp4)$/i.test(base)) return true;

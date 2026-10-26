@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { insetGeometry, planZooms, zoomFilter, zoomTiming } from './camera.mjs';
 import { glidePath, keyLabel } from './cursor.mjs';
-import { CURVE_IDS, curveOf } from '../studio/easing.js';
+import { CURVE_IDS, curveOf } from './shared/easing.js';
 import { patchDirection, resolveDirection } from './direction.mjs';
 import { assertX264Args } from './encode.mjs';
 import { socialGeometry, teaserWindow, variantArgs } from './exports.mjs';

@@ -1,0 +1,89 @@
+/* The pane kit (`ui/pane`): what the React panels add to the slide inspector's vocabulary.
+   Tiles, tabs and sections themselves live in slide-inspector.css. */
+
+/* Display rules on these classes would otherwise beat the `hidden` attribute. */
+.sl-pane[hidden], .lk-sub[hidden], .ins-sec[hidden], .ins-quick[hidden], .pane-switch[hidden], .pane-ranges[hidden] { display: none; }
+
+/* A long title ellipsizes instead of pushing the actions out of the head. */
+.sl-head { grid-template-columns: minmax(0, 1fr); }
+
+/* —— Tabs: a dot when something inside is waiting —— */
+.sl-tab { position: relative; }
+.sl-tab-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--panel) 90%, #000);
+  animation: sl-dot-in .3s var(--ease-spring) both, sl-dot-pulse 2.4s ease-in-out .3s infinite;
+}
+.sl-tab.on .sl-tab-dot { box-shadow: 0 0 0 2px #fff; }
+@keyframes sl-dot-in { from { transform: scale(0); } }
+@keyframes sl-dot-pulse { 50% { opacity: .55; } }
+
+/* —— Tiles —— */
+.lk-grid.lk-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lk-detail {
+  margin-top: -3px;
+  padding: 0 2px;
+  font: 500 9.5px/1.1 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.lk-tile.on .lk-detail { color: var(--ink-dim); }
+.lk-tile:disabled { cursor: progress; opacity: .6; transform: none; box-shadow: none; }
+
+/* —— Sliders —— */
+.pane-ranges {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .02);
+}
+.var-row.pane-range { grid-template-columns: 62px minmax(0, 1fr) 40px; gap: 10px; padding: 0; }
+.pane-range label { font: 12px var(--font); color: var(--muted); }
+.pane-range output { font: 600 11px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* —— Switches —— */
+.pane-switches {
+  display: grid;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .02);
+}
+.pane-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.pane-switch:hover { background: rgba(255, 255, 255, .035); }
+.pane-switch-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pane-switch-copy b { display: inline-flex; align-items: center; gap: 4px; font: 600 12px/1.2 var(--font); color: var(--ink); }
+.pane-switch-copy em { font: normal 11px/1.3 var(--font); color: var(--muted); }
+.pane-switch .ins-switch { flex: none; }
+.ins-switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* —— Selects —— */
+.pane-selects { display: grid; gap: 6px; }
+.ins-row.pane-select { grid-template-columns: 82px minmax(0, 1fr); }
+.pane-select > span { display: inline-flex; align-items: center; gap: 4px; }
+.pane-select .ins-select { height: 28px; min-width: 0; }
+
+.ins-note[data-tone="warn"] { color: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sl-tab-dot { animation: none; }
+}

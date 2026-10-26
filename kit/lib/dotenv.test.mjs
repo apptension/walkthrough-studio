@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { audioMode } from './audio/elevenlabs.mjs';
 import { refreshDotEnv } from './dotenv.mjs';
-import { narratorKeyNote } from '../studio/narratorNote.js';
+import { narratorKeyNote } from './shared/narratorNote.js';
 
 test('a key added to the env file is used without a restart, and the shell still wins', () => {
   const previous = process.env.ELEVENLABS_API_KEY;

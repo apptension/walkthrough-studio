@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   applyCardEdits,
+  applyPlateTimes,
   applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
@@ -17,10 +18,14 @@ import {
   injectStyle,
   joinKey,
   liveTimeMap,
+  MIN_PLATE_KEEP,
   normalizeCards,
+  normalizePlateTimes,
   normalizeEdit,
   patchEdit,
   patchStyle,
+  platePlayback,
+  plateTimingFilter,
   rampConflicts,
   remapTimeline,
   resolveLenses,
@@ -187,6 +192,39 @@ test('a duplicated card shows the source card again at its own time', () => {
   assert.deepEqual(marks.map((m) => m.t), [4, 8, 12]);
   // A copy whose source is gone disappears with it.
   assert.equal(applyCardEdits([{ kind: 'click', t: 1 }], cards).length, 1);
+});
+
+test('a caption written in the Editor stands on its own, with no recorded mark behind it', () => {
+  const rows = normalizeCards(
+    [
+      { key: 'add:caption:30000', kind: 'caption', t: 30, dur: 2.6, label: '  Typed here  ', body: 'No re-record needed' },
+      // Copy wins over label: a duplicate shows its source's words, it does not carry its own.
+      { key: 'add:caption:x', copyOf: 'caption:4.000:Pick a plan', label: 'ignored' },
+      // Times are optional on an added card — it defaults to two seconds at the top.
+      { key: 'add:caption:bare', label: 'Bare' },
+    ],
+    { liveDur: 60 }
+  );
+  assert.deepEqual(rows[0], { key: 'add:caption:30000', t: 30, dur: 2.6, kind: 'caption', label: 'Typed here', body: 'No re-record needed' });
+  assert.equal(rows[1].label, undefined);
+  assert.deepEqual(rows[2], { key: 'add:caption:bare', t: 0, dur: 2, kind: 'caption', label: 'Bare' });
+
+  const marks = applyCardEdits([{ kind: 'caption', t: 4, dur: 2, label: 'Pick a plan' }], rows);
+  const added = marks.find((m) => m.key === 'add:caption:30000');
+  assert.deepEqual(added, { kind: 'caption', t: 30, dur: 2.6, label: 'Typed here', body: 'No re-record needed', key: 'add:caption:30000', added: true });
+  // It sorts into the recording by time, and a duplicate of a real card still works beside it.
+  assert.deepEqual(marks.map((m) => m.t), [0, 4, 4, 30]);
+});
+
+test('an added caption is not confused for an override of a recorded one', () => {
+  const mark = { kind: 'caption', t: 4, dur: 2, label: 'Pick a plan' };
+  const key = cardMarkKey(mark);
+  const rows = normalizeCards([{ key, t: 6, label: 'Renamed' }], {});
+  // The key names a real mark, so this is still a placement override — the label rides along
+  // but applyCardEdits leaves the recorded copy alone rather than minting a second card.
+  const marks = applyCardEdits([{ ...mark, key }], rows);
+  assert.equal(marks.length, 1);
+  assert.deepEqual({ t: marks[0].t, label: marks[0].label }, { t: 6, label: 'Pick a plan' });
 });
 
 test('a plate replay made its own copies the plate, or turns a bookend into an interstitial', () => {
@@ -420,4 +458,122 @@ test('lenses: recorded marks switch off by time, deck lenses render as magnify m
   assert.throws(() => normalizeEdit({ lenses: [{ t: 1, dur: 0.4, x: 1, y: 1 }] }), /at least/);
   assert.equal(compactEdit(patchEdit(deck, { lenses: [], lensOff: [] })), undefined);
   assert.equal(resolveLenses(timeline, normalizeEdit({})).length, 1);
+});
+
+test('normalizePlateTimes clamps values and drops identity rows', () => {
+  const rows = normalizePlateTimes([
+    { id: 'open', trimStart: 0.5, hold: 3, rate: 1.5 },
+    { id: 'open', hold: 9 },
+    { id: 'close', rate: 9, trimEnd: 99 },
+    { id: 'features' },
+    { id: 'bad id!' , hold: 1 },
+  ]);
+  assert.deepEqual(rows, [
+    { id: 'open', trimStart: 0.5, hold: 3, rate: 1.5 },
+    { id: 'close', trimEnd: 30, rate: 3 },
+  ]);
+});
+
+test('platePlayback maps the cut clock to the plate clock through trims, hold and rate', () => {
+  const pb = platePlayback({ trimStart: 1, hold: 2, rate: 2 }, 6, 5);
+  assert.equal(pb.from, 1);
+  assert.equal(pb.to, 6);
+  assert.equal(pb.holdAt, 5);
+  assert.equal(pb.head, 2);
+  assert.equal(pb.tail, 0.5);
+  assert.equal(pb.dur, 4.5);
+  assert.equal(pb.toSource(0), 1);
+  assert.equal(pb.toSource(1), 3);
+  assert.equal(pb.toSource(3), 5);
+  assert.equal(pb.toSource(4.25), 5.5);
+  assert.equal(pb.toOutput(5.5), 4.25);
+  assert.equal(platePlayback(null, 6, 5).identity, true);
+  assert.equal(platePlayback(null, 6, 5).dur, 6);
+});
+
+test('platePlayback keeps a minimum of the plate when trims overlap', () => {
+  const pb = platePlayback({ trimStart: 5, trimEnd: 5 }, 6);
+  assert.ok(pb.to - pb.from >= MIN_PLATE_KEEP - 1e-9);
+});
+
+test('plateTimingFilter splits around the held frame', () => {
+  const pb = platePlayback({ hold: 2 }, 6, 5);
+  const graph = plateTimingFilter('[0:v]', '[p0]', pb, 30);
+  assert.equal(graph.length, 4);
+  assert.match(graph[0], /^\[0:v\]split=2\[p0a\]\[p0b\]$/);
+  assert.match(graph[1], /trim=start=0\.0000:end=5\.0000.*tpad=stop_mode=clone:stop_duration=2\.0000\[p0h\]$/);
+  assert.match(graph[3], /concat=n=2:v=1:a=0,tpad=.*\[p0\]$/);
+  const plain = plateTimingFilter('[1:v]', '[p1]', platePlayback({ rate: 1.25 }, 6, 5), 30);
+  assert.equal(plain.length, 1);
+  assert.match(plain[0], /setpts=\(PTS-STARTPTS\)\/1\.2500/);
+});
+
+test('applyPlateTimes retimes plate segments and moves clearAt onto the cut clock', () => {
+  const segs = [
+    { kind: 'plate', id: 'open', dur: 6, clearAt: 5.9, holdAt: 5 },
+    { kind: 'live', id: 'live-0', dur: 10 },
+  ];
+  const out = applyPlateTimes(segs, [{ id: 'open', hold: 2 }]);
+  assert.equal(out[0].dur, 8);
+  assert.equal(out[0].naturalDur, 6);
+  assert.equal(out[0].clearAt, 7.9);
+  assert.deepEqual(out[0].timing, { trimStart: 0, trimEnd: 0, hold: 2, rate: 1, holdAt: 5, baseDur: 6 });
+  assert.equal(out[1], segs[1]);
+  assert.equal(applyPlateTimes(segs, []), segs);
+});
+
+test('plateTimes survive patch and compact, and describe the deck', () => {
+  const deck = patchEdit({}, { plateTimes: [{ id: 'close', hold: 4 }] });
+  assert.deepEqual(deck.plateTimes, [{ id: 'close', hold: 4 }]);
+  assert.deepEqual(compactEdit(deck).plateTimes, [{ id: 'close', hold: 4 }]);
+  assert.match(describeDeck(deck), /1 plate retimed/);
+});
+
+// ─── Plate marks (zoom / magnifier on a slide rather than the recording) ─────────────────
+
+test('a zoom carrying a clip is kept on the plate clock, in frame fractions', () => {
+  const deck = normalizeEdit({ zooms: [{ id: 'pz', clip: 'ch1-ask-hn', t: 1.2, dur: 3, zoom: 1.8, nx: 0.34, ny: 0.55 }] }, { liveDur: 0.5 });
+  const [z] = deck.zooms;
+  assert.equal(z.clip, 'ch1-ask-hn');
+  // A recording zoom would have been clamped to liveDur; a plate's own clock is its own.
+  assert.equal(z.t, 1.2);
+  assert.equal(z.dur, 3);
+  assert.equal(z.nx, 0.34);
+  assert.equal(z.ny, 0.55);
+  assert.equal(z.x, undefined);
+});
+
+test('plate marks are aimed inside the frame and given an id of their own', () => {
+  const deck = normalizeEdit({
+    zooms: [{ clip: 'open', t: 0.5, dur: 2, nx: 4, ny: -1 }],
+    lenses: [{ clip: 'open', t: 0.5, dur: 2 }],
+  });
+  assert.equal(deck.zooms[0].nx, 1);
+  assert.equal(deck.zooms[0].ny, 0);
+  assert.equal(deck.zooms[0].id, 'z-open-5');
+  assert.equal(deck.lenses[0].id, 'm-open-5');
+  // Defaults put the loupe in the middle of the frame at a readable size.
+  assert.deepEqual([deck.lenses[0].nx, deck.lenses[0].ny, deck.lenses[0].nw, deck.lenses[0].nh], [0.5, 0.5, 0.13, 0.055]);
+});
+
+test('a mark naming a clip never reaches the recording camera or loupe', () => {
+  const deck = normalizeEdit({
+    zooms: [{ id: 'live', t: 1, dur: 2, zoom: 1.6 }, { id: 'plate', clip: 'open', t: 1, dur: 2, zoom: 1.6 }],
+    lenses: [{ id: 'mlive', t: 1, dur: 2 }, { id: 'mplate', clip: 'open', t: 1, dur: 2 }],
+  });
+  assert.deepEqual(editCameraMarks(deck).filter((m) => m.kind === 'zoom').map((m) => m.id), ['live']);
+  assert.deepEqual(resolveLenses([], deck).map((l) => l.id), ['mlive']);
+  assert.deepEqual(withEditLenses([], deck).map((l) => l.id), ['mlive']);
+});
+
+test('a plate mark survives a round trip through the saved deck', () => {
+  const deck = normalizeEdit({ zooms: [{ id: 'pz', clip: 'open', t: 1, dur: 2, zoom: 1.5, nx: 0.2, ny: 0.8 }] });
+  assert.deepEqual(normalizeEdit(compactEdit(deck)).zooms, deck.zooms);
+});
+
+test('chapterCards names the chapters that stay overlay cards', () => {
+  const deck = normalizeEdit({ chapterCards: ['chapter:1.000:One', 'chapter:1.000:One', 42] });
+  assert.deepEqual(deck.chapterCards, ['chapter:1.000:One', '42']);
+  assert.deepEqual(compactEdit(deck).chapterCards, deck.chapterCards);
+  assert.deepEqual(patchEdit({}, { chapterCards: ['chapter:2.000:Two'] }).chapterCards, ['chapter:2.000:Two']);
 });

@@ -7,4 +7,4 @@ export {
   requireVideoLanguage,
   resolveVideoLanguage,
   videoLanguage,
-} from '../studio/languages.js';
+} from './shared/languages.js';

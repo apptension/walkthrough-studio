@@ -73,7 +73,9 @@
       .tm-role { margin-top: 8px; font-size: 17px; line-height: 1.4; color: var(--muted); max-width: 22ch; text-wrap: balance; opacity: 0; animation: fadeUp 0.7s calc(var(--s) + 0.5s) var(--expo) both; }
       .people[data-n="5"] .tm-avatar, .people[data-n="6"] .tm-avatar { width: 108px; height: 108px; font-size: 36px; }
       .people[data-n="5"] .tm-name, .people[data-n="6"] .tm-name { font-size: 23px; }
-      .people[data-n="6"] .tm-card { padding: 32px 16px 30px; }
+      .people[data-n="6"] { max-width: 1320px; grid-template-columns: repeat(3, 1fr); gap: 22px 24px; }
+      .people[data-n="6"] .tm-card { padding: 30px 22px 28px; }
+      .people[data-n="6"] .tm-name { margin-top: 20px; }
       .bloom {
         position: absolute; left: 50%; top: 54%; width: 1500px; height: 680px; margin: -340px 0 0 -750px;
         border-radius: 50%;

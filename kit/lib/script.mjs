@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { shortHoldWarning } from '../studio/voiceHold.js';
+import { shortHoldWarning } from './shared/voiceHold.js';
 import { PLATE_CATALOG, PLATE_TYPE_SET } from './plateTypes.mjs';
 import { cardCopyFixes, copyContext, copyCorpus, plateCopyFixes } from './copyCase.mjs';
 
@@ -436,6 +436,7 @@ export function scaffoldPlate(type, { before, title } = {}) {
         quotes: [
           { quote: 'Replace with a real customer quote.', author: 'Customer', role: 'Role' },
           { quote: 'Second real quote — keep it short.', author: 'Customer', role: 'Company' },
+          { quote: 'A third voice makes the flood read as a pattern.', author: 'Customer', role: 'Team lead' },
         ],
       };
     case 'stats':
@@ -570,6 +571,32 @@ export function scaffoldPlate(type, { before, title } = {}) {
           { label: 'Operations', note: 'Keeps the rules, answers once' },
           { label: 'Leadership', note: 'Reads the number, not the thread' },
         ],
+      };
+    case 'showcase':
+      return {
+        ...base,
+        eyebrow: 'See it in action',
+        title: title || 'The week, on *one* screen',
+        sub: 'Grab a frame from the recording and point at what matters.',
+        shot: '',
+        focus: 'center',
+        callouts: [
+          { label: 'Live capacity', x: 30, y: 34 },
+          { label: 'One click to rebalance', x: 68, y: 62 },
+        ],
+      };
+    case 'bento':
+      return {
+        ...base,
+        eyebrow: 'At a glance',
+        title: title || 'Everything the team needs, *in view*',
+        shot: '',
+        caption: 'The planning board',
+        value: '94%',
+        label: 'of weeks shipped on plan',
+        quote: 'We stopped double-booking people in the first week.',
+        author: 'Ana Ruiz · COO',
+        logos: [],
       };
     default:
       return base;

@@ -9,22 +9,22 @@ Thanks for helping improve Walkthrough Studio.
 # → desk with hot reload on http://127.0.0.1:4748/, server on :4747
 ```
 
-Kit source lives under `kit/`. The desk is the React and TypeScript app in `kit/studio-next/`. In dev mode it runs on Vite with hot reload and proxies the kit server. Saving `kit/lib/` or `kit/cli.mjs` restarts the server. Server logs stay in the terminal. A normal `./studio` serves the built desk from `kit/studio-next/dist` and rebuilds it when its sources change. Changing `scripts/studio.mjs` needs a new `./studio` process.
+Kit source lives under `kit/`. The desk is the React and TypeScript app in `kit/studio/`. In dev mode it runs on Vite with hot reload and proxies the kit server. Saving `kit/lib/` or `kit/cli.mjs` restarts the server. Server logs stay in the terminal. A normal `./studio` serves the built desk from `kit/studio/dist` and rebuilds it when its sources change. Changing `scripts/studio.mjs` needs a new `./studio` process.
 
-The desk has its own gate. Run it from `kit/studio-next/` before opening a PR that touches the desk (the test toolchain needs Node 20.19+):
+The desk has its own gate. Run it from `kit/studio/` before opening a PR that touches the desk (the test toolchain needs Node 20.19+):
 
 ```bash
 npm run verify     # typecheck → lint → test → build
 ```
 
-[kit/studio-next/README.md](kit/studio-next/README.md) covers the desk's layout, state, and conventions.
+[kit/studio/README.md](kit/studio/README.md) covers the desk's layout, state, and conventions.
 
-The classic desk in `kit/studio/` is retiring. `./studio --legacy` serves it, and `./studio --legacy --dev` reloads it on save. Don't build new features there. Some of its modules (`easing.js`, `copyEdit.js`, `briefRevise.js`, `shortBrief.js`, `voiceHold.js` and others) are shared with the engine, so they stay after the classic desk goes.
+Modules the engine and the desk share (`easing.js`, `copyEdit.js`, `briefRevise.js`, `shortBrief.js`, `voiceHold.js` and others) live in `kit/lib/shared/`.
 
 Kit tests run with Node's test runner from the repo root:
 
 ```bash
-node --test kit/lib/*.test.mjs kit/studio/*.test.js scripts/*.test.mjs
+node --test kit/lib/*.test.mjs kit/lib/shared/*.test.js scripts/*.test.mjs
 ```
 
 ```bash
@@ -52,7 +52,7 @@ Include:
 
 - OS and Node / npm / ffmpeg versions (`./studio` prints the check card)
 - The slug and command or Studio action that failed
-- Whether you were on the new desk or `--legacy`
+- `./studio` or `./studio --dev`
 - Relevant log lines (redact keys)
 
 ## License

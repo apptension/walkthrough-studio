@@ -10,7 +10,7 @@ import {
   toSource,
   toggleAccent,
   wordAt,
-} from '../studio/copyEdit.js';
+} from './shared/copyEdit.js';
 
 // ——— a DOM small enough to walk: text(), el(tag, class, ...kids) ———
 const text = (s) => ({ nodeType: 3, nodeValue: s });

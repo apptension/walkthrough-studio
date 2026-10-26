@@ -18,7 +18,7 @@ import {
   FRAME_STYLES,
   ZOOM_LEVELS,
 } from './camera.mjs';
-import { DEFAULT_CURVE, DEFAULT_MOTION } from '../studio/easing.js';
+import { DEFAULT_CURVE, DEFAULT_MOTION } from './shared/easing.js';
 import { CURSOR_SIZES, CURSOR_STYLES } from './cursor.mjs';
 import { sampleColors } from './logoTone.mjs';
 import { mergeMotion } from './plateMotion.mjs';

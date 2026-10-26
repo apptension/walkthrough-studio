@@ -32,7 +32,7 @@
 /* House kicker: copy is authored in sentence case (kit/lib/copyCase.mjs); the capitals and the
    tracking come only from here, so every plate's eyebrow reads the same. */
 :root {
-  --eyebrow-size: 15px;
+  --eyebrow-size: 16px;
   --eyebrow-weight: 600;
   --eyebrow-track: 0.32em;
 }
@@ -48,6 +48,7 @@
 html[data-frame='portrait'] {
   --wt-frame-w: 1080px;
   --wt-frame-h: 1920px;
+  --eyebrow-size: 17px;
 }
 /* Vertical videos are watched on phones: the composition lays out on a narrower virtual canvas
    and is zoomed up, so type reads at phone size. Templates stack their rows under this rule. */
@@ -310,17 +311,14 @@ body {
 }
 
 /*
-  Brand mark seat (features / quote / statement). Templates set position; these vars
-  drive size + show from the Editor "Brand mark" group. Entrance lands on --mark-logo
-  so hiding the mark never fights a keyframed opacity:1.
+  Brand mark seat (features / quote / statement). Each template sets the defaults on
+  :root, and the Editor writes the same variables there. They must not be restated on
+  .corner-logo — a value on the element beats :root, so the features mark kept a 72px
+  left inset and sat right of centre no matter what the slide saved.
+  Entrance lands on --mark-logo so hiding the mark never fights a keyframed opacity:1.
 */
 .corner-logo {
-  --mark-logo: 1;
-  --mark-logo-size: 30px;
-  --mark-logo-width: 180px;
-  --mark-logo-x: 72px;
-  --mark-logo-y: 48px;
-  width: var(--mark-logo-width);
+  width: var(--mark-logo-width, 180px);
   z-index: 2;
 }
 .corner-logo .logo svg,

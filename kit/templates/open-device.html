@@ -95,7 +95,7 @@
       .eyebrow-exit { --xe: 0.3s; }
       .eyebrow {
         display: flex; align-items: center; gap: 14px;
-        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        font-size: var(--eyebrow-size); font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
         opacity: 0;
         animation: eyebrowIn 0.95s var(--t-eyebrow) var(--expo) both;
       }
@@ -123,7 +123,7 @@
       html[data-frame='portrait'] .copy-exit { top: 44%; padding: 0 64px; }
       html[data-frame='portrait'] .title { font-size: calc({{TITLE_SIZE}}px * 0.86); text-wrap: balance; }
       html[data-frame='portrait'] .sub { font-size: 30px; max-width: none; }
-      html[data-frame='portrait'] .eyebrow { font-size: 20px; }
+      html[data-frame='portrait'] .eyebrow { font-size: 23px; }
       html[data-frame='portrait'] .floor { top: 70%; }
     </style>
   </head>

@@ -11,8 +11,9 @@
 import { chromium } from 'playwright';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DELIVERY, outputFrame } from './format.mjs';
 import { FPS } from './motion.mjs';
@@ -20,12 +21,16 @@ import { motionCssVars, resolveMotion, withMotion } from './plateMotion.mjs';
 import { revealMarkup } from './titleReveal.mjs';
 import { TEMPLATES, brandReadiness } from './project.mjs';
 import { logoTileTone } from './logoTone.mjs';
+import { ICONS, ICON_IDS } from './plateIcons.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
+import { withPlateColors } from './plateColors.mjs';
+import { carryFrameClock, plateBackdrop } from './plateCarry.mjs';
 import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } from './encode.mjs';
 import { brandCssVars, emphasize, esc } from './text.mjs';
 import { copyContextFor, normalizeCopy, normalizePlateCopy, normalizeTitle } from './copyCase.mjs';
-import { injectStyle, patchStyle } from './editDeck.mjs';
+import { injectStyle, patchStyle, platePlayback } from './editDeck.mjs';
 import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { videoChapterPlates } from './chapterPlates.mjs';
 import { normalizeLayout, resolveLayout } from './plateLayouts.mjs';
 
 /** Attribute-safe raw source for Studio inline edit (newlines → &#10;). */
@@ -149,21 +154,7 @@ const MIME = {
   '.gif': 'image/gif',
 };
 
-/** Compact inline icons for feature / journey cards (stroke inherits currentColor). */
-const ICONS = {
-  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`,
-  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
-  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a3 3 0 0 1 0 5.74"/></svg>`,
-  leave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c-2.5 3-4 5.5-4 8a4 4 0 0 0 8 0c0-2.5-1.5-5-4-8z"/><path d="M8 20h8M10 20v1M14 20v1"/></svg>`,
-  chart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></svg>`,
-  spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.6 5.2L19 10l-5.4 1.8L12 17l-1.6-5.2L5 10l5.4-1.8L12 3z"/></svg>`,
-  filter: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5z"/></svg>`,
-  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 6.5l1.4 1.4M17.7 16.1l1.4 1.4M3 12h2M19 12h2M4.9 17.5l1.4-1.4M17.7 7.9l1.4-1.4"/></svg>`,
-  plug: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 7V3M15 7V3M8 7h8v4a4 4 0 0 1-4 4h0a4 4 0 0 1-4-4V7z"/><path d="M12 15v6"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
-  dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>`,
-  export: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>`,
-};
+export { ICONS, ICON_IDS };
 
 const fill = (tpl, values) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? '');
 
@@ -172,11 +163,18 @@ const fill = (tpl, values) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] 
  * Merges onto brand motion so one plate can run punchy, flat or with its own title reveal
  * without changing the pack. Returns the fill values plus the resolved motion for builders.
  */
-function interstitialBrandVars(common, brand, it) {
+function plateLookBrand(brand, it, videoColors = null) {
   const overlay = it?.motion && typeof it.motion === 'object' ? it.motion : {};
   // Layout flags stay on the interstitial; only timing/energy tokens merge into brand motion.
   const { cascade: _cascade, carousel: _carousel, ...motionOverlay } = overlay;
-  const merged = withMotion(brand, motionOverlay);
+  // Background colours (video.config.plateColors, then the plate's own `colors`) recolour both the CSS and the field.
+  return { brand: withPlateColors(brand, videoColors, it?.colors), motionOverlay };
+}
+
+function interstitialBrandVars(common, brand, it, videoColors = null) {
+  const look = plateLookBrand(brand, it, videoColors);
+  brand = look.brand;
+  const merged = withMotion(brand, look.motionOverlay);
   const motion = resolveMotion(merged);
   return {
     ...common,
@@ -304,7 +302,7 @@ function stepsHtml(steps) {
   const span = n > 1 ? 0.8 / (n - 1) : 0;
   return steps
     .map(
-      (s, i) => `<div class="step" style="--s: ${(1.2 + i * span).toFixed(2)}s; --i: ${i}">
+      (s, i) => `<div class="step" data-slot="steps.${i}" style="--s: ${(1.2 + i * span).toFixed(2)}s; --i: ${i}">
           <div class="dot">${i + 1}</div>
           <div class="step-label" data-edit="steps.${i}.label" data-edit-raw="${escAttr(s.label)}">${emphasize(s.label)}</div>
           ${s.note ? `<div class="step-note" data-edit="steps.${i}.note" data-edit-raw="${escAttr(s.note)}">${emphasize(s.note)}</div>` : ''}
@@ -317,7 +315,10 @@ function resolveAssetPath(brand, asset) {
   if (!asset) return null;
   if (/^(data:|https?:|file:)/i.test(asset)) return null;
   const rel = asset.replace(/^\.?\/?assets\//, '');
+  // Video-local uploads (Inspector uploads and frame grabs) live beside the recording, not in the pack.
+  const videoDir = brand.uploadDir ? dirname(brand.uploadDir) : null;
   const candidates = [
+    ...(videoDir ? [join(videoDir, asset.replace(/^\.?\//, '')), join(videoDir, rel), join(brand.uploadDir, basename(rel))] : []),
     join(brand.dir, 'assets', rel),
     join(brand.dir, rel),
     join(brand.dir, 'assets', basename(rel)),
@@ -363,7 +364,7 @@ function featuresItems(items) {
       const row = Math.floor(i / cols);
       const col = i % cols;
       const delay = 0.72 + row * 0.28 + col * 0.1;
-      return `<div class="card" style="--s: ${delay.toFixed(2)}s; --i: ${i}">
+      return `<div class="card" data-slot="items.${i}" style="--s: ${delay.toFixed(2)}s; --i: ${i}">
           ${iconHtml(icon)}
           <div class="num">${String(i + 1).padStart(2, '0')}</div>
           <div class="label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -384,11 +385,11 @@ function statsItems(items, brand) {
       // Count-up (lib/countUp.mjs) runs on the plate clock; opt out per item with count: false.
       const count =
         it.count === false ? '' : ` data-count data-count-start="${(s + 0.25).toFixed(2)}" data-count-dur="1.3"`;
-      return `<div class="stat" style="--s: ${s.toFixed(2)}s; --i: ${i}">
+      return `<div class="stat" data-slot="stats.${i}" style="--s: ${s.toFixed(2)}s; --i: ${i}">
           ${
             logo
-              ? `<div class="badge" data-tone="${logo.tone}"><img src="${logo.src}" alt="" /></div>`
-              : ''
+              ? `<div class="badge" data-tone="${logo.tone}" data-slot="stats.${i}.logo" data-slot-kind="asset"><img src="${logo.src}" alt="" /></div>`
+              : `<div class="badge is-empty" data-slot="stats.${i}.logo" data-slot-kind="asset" hidden></div>`
           }
           <div class="value" data-fit="1" data-fit-min="48" data-fit-group="stat-value"${count} data-edit="items.${i}.value" data-edit-raw="${escAttr(String(it.value))}">${emphasize(String(it.value))}</div>
           <div class="label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -409,7 +410,7 @@ function calloutBullets(bullets = []) {
 
 /**
  * Build testimonial flood cards.
- * - `cascade`: 3 unique quotes → dual-wave of 6 slots (heroes dissolve, echoes rise).
+ * - `cascade`: 3 unique quotes → dual-wave of 6 slots (heroes hand their cells to the next quote).
  * - `carousel`: 6–16 unique quotes → 3-up waves that roll through (content-sized cards).
  */
 function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
@@ -443,7 +444,7 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
               .map((si) => `<span class="star" style="--si: ${(si * 0.045).toFixed(3)}s">★</span>`)
               .join('')}</div>`
           : '';
-        return `<div class="t-slot" data-wave="${wave + 1}" data-col="${col}" style="--s: ${enter.toFixed(2)}s; --hold: ${hold.toFixed(2)}s; --col: ${col}; --z: ${wave + 1}; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px">
+        return `<div class="t-slot" data-slot="quotes.${i}" data-wave="${wave + 1}" data-col="${col}" style="--s: ${enter.toFixed(2)}s; --hold: ${hold.toFixed(2)}s; --col: ${col}; --z: ${wave + 1}; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px">
           <div class="t-card">
             <div class="mark" aria-hidden="true">“</div>
             ${starsHtml}
@@ -514,16 +515,13 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
                       ? 17
                       : 15;
 
-      // Wave 1: hero row. Wave 2: lower row enters just after (dense flood from ~0.6s),
-      // then heroes dissolve mid-plate while echoes keep floating — no empty half-frame.
-      const enter =
-        wave === 1
-          ? 0.32 + index * span
-          : 0.62 + index * Math.min(0.14, span * 0.75);
+      // Wave 1: full-height heroes. Wave 2 takes over the same cells as each hero dissolves
+      // (testimonials.html cascade: 3.55s + xd), so the frame always holds three quotes.
+      const xd = (wave1Count - 1 - index) * 0.07;
+      const enter = wave === 1 ? 0.32 + index * span : 3.9 + xd;
       const rot = ((index % 5) - 2) * (wave === 1 ? 0.45 : 0.7);
       const amp = wave === 1 ? -(6 + (index % 3) * 2) : -(5 + ((index + 1) % 3) * 2);
       const dx = (index - 1) * (wave === 1 ? 4 : -5);
-      const xd = (wave1Count - 1 - index) * 0.07;
       const editable = wave === 1;
 
       const starsHtml = star
@@ -551,7 +549,7 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
             }</div>`
           : '';
 
-      return `<div class="t-slot" data-wave="${wave}" style="--s: ${enter.toFixed(2)}s; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px; --xd: ${xd.toFixed(2)}s">
+      return `<div class="t-slot"${editable ? ` data-slot="quotes.${srcIndex}"` : ''} data-wave="${wave}" style="--s: ${enter.toFixed(2)}s; --rot: ${rot.toFixed(2)}deg; --amp: ${amp}px; --dx: ${dx}px; --xd: ${xd.toFixed(2)}s">
           <div class="t-card">
             <div class="mark" aria-hidden="true">“</div>
             ${starsHtml}
@@ -581,13 +579,30 @@ function testimonialsCarouselDuration(count) {
   };
 }
 
-function logosItems(items, brand) {
+/** Marquee rows: even tiles glide left, odd tiles glide right; each row is doubled for a seamless loop. */
+function logosMarquee(rows) {
+  const strip = (html) => html.replace(/ data-slot="[^"]*" data-slot-kind="asset"/, '').replace('class="logo-tile"', 'class="logo-tile" aria-hidden="true"');
+  const lane = (tiles, rev, s) => {
+    if (!tiles.length) return '';
+    // One pass must outrun the frame (tiles are 300px + 28px gap) before it is doubled for the loop.
+    const passes = Math.max(1, Math.ceil(2100 / (tiles.length * 328)));
+    const ghosts = Array.from({ length: passes - 1 }, () => tiles.map((r) => strip(r.html)).join('\n          '));
+    const once = [tiles.map((r) => r.html).join('\n          '), ...ghosts].join('\n          ');
+    const twice = Array.from({ length: passes }, () => tiles.map((r) => strip(r.html)).join('\n          ')).join('\n          ');
+    return `<div class="mq-row${rev ? ' rev' : ''}" style="--s: ${s}s">${once}\n          ${twice}</div>`;
+  };
+  const even = rows.filter((_, i) => i % 2 === 0);
+  const odd = rows.filter((_, i) => i % 2 === 1);
+  return `<div class="mq" aria-label="logos">${lane(odd.length ? even : rows.slice(0, Math.ceil(rows.length / 2)), false, '0.55')}\n        ${lane(odd.length ? odd : rows.slice(Math.ceil(rows.length / 2)), true, '0.75')}</div>`;
+}
+
+function logoTiles(items, brand) {
   const n = items.length;
   const span = n > 1 ? 0.55 / (n - 1) : 0;
   const rows = items.map((it, i) => {
     const { src, tone, luma, source, label } = resolveLogoPresentation(brand, it);
     return {
-      html: `<div class="logo-tile" style="--s: ${(0.55 + i * span).toFixed(2)}s">
+      html: `<div class="logo-tile" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${(0.55 + i * span).toFixed(2)}s">
           <div class="logo-frame" data-tone="${tone}"><img src="${src}" alt="${esc(label)}" /></div>
           ${label ? `<div class="logo-label">${esc(label)}</div>` : ''}
         </div>`,
@@ -600,7 +615,7 @@ function logosItems(items, brand) {
   console.log(
     `  logo tones: ${rows.map((r) => `${r.label}=${r.tone}(${Math.round(r.luma)},${r.source})`).join(' · ')}`
   );
-  return rows.map((r) => r.html).join('\n        ');
+  return rows;
 }
 
 function journeyItems(items) {
@@ -609,7 +624,7 @@ function journeyItems(items) {
   return items
     .map((it, i) => {
       const icon = it.icon || ['dashboard', 'calendar', 'clock', 'chart', 'settings'][i] || 'spark';
-      return `<div class="j-step" style="--s: ${(0.7 + i * span).toFixed(2)}s">
+      return `<div class="j-step" data-slot="steps.${i}" style="--s: ${(0.7 + i * span).toFixed(2)}s">
           <div class="j-rail"><div class="j-dot">${i + 1}</div>${i < n - 1 ? '<div class="j-line"></div>' : ''}</div>
           <div class="j-body">
             ${iconHtml(icon)}
@@ -631,7 +646,7 @@ function compareItems(items, side, startSec) {
     .map((raw, i) => {
       const text = typeof raw === 'string' ? raw : raw.label;
       const t = (startSec + i * 0.13).toFixed(2);
-      return `<div class="item" style="--i: ${t}s">
+      return `<div class="item" data-slot="${side === 'before' ? 'left' : 'right'}.items.${i}" style="--i: ${t}s">
               <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${path}" pathLength="1"/></svg></div>
               <div data-edit="${side === 'before' ? 'left' : 'right'}.items.${i}" data-edit-raw="${escAttr(text)}">${emphasize(text)}</div>
             </div>`;
@@ -746,15 +761,22 @@ function metricProgress(it) {
 
 /**
  * Orbit seats: up to four marks on the inner ring, the rest on the outer ring, both evenly
- * spaced and offset so no tile sits straight above or below the lockup.
+ * spaced. Inner marks are offset so none sits straight above or below the lockup; outer marks
+ * start in the gaps between them, ahead by the drift, so the counter-rotating rings never cross
+ * two tiles over the plate (orbit.html --spin: 16deg per ring).
  */
+const ORBIT_DRIFT_DEG = 16;
+
 function orbitItems(items, brand) {
   const inner = items.slice(0, Math.min(4, items.length));
   const outer = items.slice(inner.length);
   const seat = (it, i, ring) => {
+    const idx = ring === 'inner' ? i : inner.length + i;
     const count = ring === 'inner' ? inner.length : outer.length;
-    const r = ring === 'inner' ? 260 : 400;
-    const offset = ring === 'inner' ? -90 + 180 / count : -90 + 180 / count + 30;
+    const r = ring === 'inner' ? 250 : 410;
+    const innerStep = 360 / Math.max(1, inner.length);
+    const innerOffset = -90 + innerStep / 2;
+    const offset = ring === 'inner' ? innerOffset : innerOffset + innerStep / 2 + ORBIT_DRIFT_DEG;
     const a = offset + (360 / count) * i;
     const { src, tone, label } = resolveLogoPresentation(brand, it);
     const s = (ring === 'inner' ? 0.95 : 1.25) + i * 0.11;
@@ -762,7 +784,7 @@ function orbitItems(items, brand) {
             <div class="o-spin">
               <div class="o-link"></div>
               <div class="o-arm"><div class="o-upright"><div class="o-counter">
-                <div class="o-tile" data-tone="${tone}"><img src="${src}" alt="${esc(label)}" /></div>
+                <div class="o-tile" data-tone="${tone}" data-slot="logos.${idx}" data-slot-kind="asset"><img src="${src}" alt="${esc(label)}" /></div>
               </div></div></div>
             </div>
           </div>`;
@@ -846,9 +868,9 @@ function processItems(items) {
   return items
     .map((it, i) => {
       const s = 0.85 + i * step;
-      return `<div class="p-step" style="--s: ${s.toFixed(2)}s">
+      return `<div class="p-step" data-slot="steps.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="p-num">
-            <span class="p-ghost">${String(i + 1).padStart(2, '0')}</span>
+            <span class="p-ghost" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
             <span class="p-dot"></span>
             ${i < n - 1 ? '<span class="p-rail"></span>' : ''}
           </div>
@@ -875,7 +897,7 @@ function timelineItems(items) {
       const s = 0.9 + i * span;
       const date = it.date || it.when || '';
       const x = n > 1 ? i / (n - 1) : 0.5;
-      return `<div class="tl-stop ${i % 2 === 0 ? 'up' : 'down'}${i === nowIdx ? ' now' : ''}" style="--s: ${s.toFixed(2)}s; --x: ${x.toFixed(4)}">
+      return `<div class="tl-stop ${i % 2 === 0 ? 'up' : 'down'}${i === nowIdx ? ' now' : ''}" data-slot="steps.${i}" style="--s: ${s.toFixed(2)}s; --x: ${x.toFixed(4)}">
           <div class="tl-dot"><span></span></div>
           <div class="tl-card">
             ${date ? `<div class="tl-date" data-edit="steps.${i}.date" data-edit-raw="${escAttr(date)}">${emphasize(date)}</div>` : ''}
@@ -895,7 +917,7 @@ function checklistItems(items) {
   const html = items
     .map((it, i) => {
       const s = first + i * step;
-      return `<div class="ck-row" style="--s: ${s.toFixed(2)}s">
+      return `<div class="ck-row" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="ck-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CHECK_PATH}" pathLength="1"/></svg></div>
           <div class="ck-text">
             <div class="ck-label" data-edit="items.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
@@ -927,19 +949,22 @@ function kpiSpark(i, down, bars = 9) {
   }).join('');
 }
 
-function kpiItems(items) {
+function kpiItems(items, { layout = 'board' } = {}) {
   const n = items.length;
-  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  const ticker = layout === 'ticker';
+  const cols = ticker ? 1 : n <= 3 ? n : n === 4 ? 2 : 3;
   return items
     .map((it, i) => {
       const row = Math.floor(i / cols);
       const col = i % cols;
-      const s = 0.7 + row * 0.26 + col * 0.1;
+      const s = ticker ? 0.7 + i * 0.16 : 0.7 + row * 0.26 + col * 0.1;
+      // The ticker's hero figure sizes on its own; the stacked rows share one size.
+      const fit = ticker && i === 0 ? 'data-fit-min="72"' : `data-fit-min="40" data-fit-group="${ticker ? 'kpi-tick' : 'kpi-value'}"`;
       const value = String(it.value ?? '').trim();
       const delta = String(it.delta ?? it.trend ?? '').trim();
       const down = /^[-−▼↓]/.test(delta);
       const count = it.count === false ? '' : ` data-count data-count-start="${(s + 0.3).toFixed(2)}" data-count-dur="1.1"`;
-      return `<div class="k-tile" style="--s: ${s.toFixed(2)}s">
+      return `<div class="k-tile" data-slot="stats.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="k-top">
             <div class="k-label" data-edit="stats.${i}.label" data-edit-raw="${escAttr(it.label)}">${emphasize(it.label)}</div>
             ${
@@ -948,7 +973,7 @@ function kpiItems(items) {
                 : ''
             }
           </div>
-          <div class="k-value" data-fit="1" data-fit-min="40" data-fit-group="kpi-value"${count} data-edit="stats.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</div>
+          <div class="k-value" data-fit="1" ${fit}${count} data-edit="stats.${i}.value" data-edit-raw="${escAttr(value)}">${emphasize(value)}</div>
           ${it.note ? `<div class="k-note" data-edit="stats.${i}.note" data-edit-raw="${escAttr(it.note)}">${emphasize(it.note)}</div>` : ''}
           <div class="k-spark" aria-hidden="true">${kpiSpark(i, down)}</div>
         </div>`;
@@ -982,7 +1007,7 @@ function pricingTiers(tiers) {
             </div>`;
       });
       const badge = featured ? t.badge || 'Most popular' : '';
-      return `<div class="pr-card${featured ? ' featured' : ''}" style="--s: ${s.toFixed(2)}s">
+      return `<div class="pr-card${featured ? ' featured' : ''}" data-slot="tiers.${i}" style="--s: ${s.toFixed(2)}s">
           ${badge ? `<div class="pr-badge" data-edit="tiers.${i}.badge" data-edit-raw="${escAttr(badge)}">${emphasize(badge)}</div>` : ''}
           <div class="pr-name" data-edit="tiers.${i}.label" data-edit-raw="${escAttr(t.label || '')}">${emphasize(t.label || '')}</div>
           <div class="pr-price">
@@ -1004,7 +1029,7 @@ function faqItems(items) {
       const s = 0.8 + i * step;
       const q = it.label || it.question || it.q || '';
       const a = it.note || it.answer || it.a || '';
-      return `<div class="fq" style="--s: ${s.toFixed(2)}s">
+      return `<div class="fq" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="fq-q">
             <span class="fq-mark" aria-hidden="true">?</span>
             <div class="fq-text" data-edit="items.${i}.label" data-edit-raw="${escAttr(q)}">${emphasize(q)}</div>
@@ -1028,8 +1053,8 @@ function teamItems(items, brand) {
       const photo = asset ? resolveLogoPresentation(brand, { ...it, asset }) : null;
       const name = it.label || it.name || '';
       const role = it.note || it.role || '';
-      return `<div class="tm-card" style="--s: ${s.toFixed(2)}s; --k: ${i % 3}">
-          <div class="tm-avatar${photo ? ' photo' : ''}" aria-hidden="true">${
+      return `<div class="tm-card" data-slot="items.${i}" style="--s: ${s.toFixed(2)}s; --k: ${i % 3}">
+          <div class="tm-avatar${photo ? ' photo' : ''}" aria-hidden="true" data-slot="items.${i}.asset" data-slot-kind="asset">${
             photo ? `<img src="${photo.src}" alt="" />` : `<span>${esc(initials(name))}</span>`
           }</div>
           <div class="tm-name" data-edit="items.${i}.label" data-edit-raw="${escAttr(name)}">${emphasize(name)}</div>
@@ -1039,14 +1064,50 @@ function teamItems(items, brand) {
     .join('\n        ');
 }
 
+/**
+ * Every plate the render pipeline draws besides open and close: the authored interstitials plus
+ * one plate per chapter mark (see chapterPlates.mjs). Authoring surfaces — the script sheet, the
+ * critic, the agent prompts — stay on `config.interstitials`, because a chapter plate is derived
+ * from the recording, not written by hand.
+ */
+export function plateRows(video) {
+  const authored = video.config?.interstitials || [];
+  let chapters = [];
+  try {
+    chapters = videoChapterPlates(video);
+  } catch {
+    /* no recording yet (or an unreadable timeline): only the authored plates exist */
+  }
+  const ids = new Set(authored.map((i) => i.id));
+  return [...authored, ...chapters.filter((c) => !ids.has(c.id) || c.chapter)];
+}
+
+/**
+ * The backdrop every plate paints (plateCarry.plateBackdrop), keyed by plate id. Two plates with
+ * the same `key` share one continuous background when they meet.
+ */
+export function plateBackdrops(video) {
+  const { config, brand } = video;
+  const out = {};
+  const add = (id, it) => {
+    const look = plateLookBrand(brand, it, config.plateColors);
+    out[id] = plateBackdrop(withMotion(look.brand, look.motionOverlay), plateStyle(it, id));
+  };
+  add('open', config.open || {});
+  add('close', config.close || {});
+  for (const it of plateRows(video)) if (it?.id) add(it.id, it);
+  return out;
+}
+
 export function platePaths(video) {
   const dir = join(video.out, 'plates');
   const interstitial = {};
-  for (const it of video.config.interstitials || []) {
+  for (const it of plateRows(video)) {
     interstitial[it.id] = {
       html: join(dir, `${it.id}.html`),
       mp4: join(video.out, `plate-${it.id}.mp4`),
       type: it.type,
+      ...(it.chapter ? { chapter: it.chapter } : {}),
     };
   }
   return {
@@ -1066,7 +1127,7 @@ function buildInterstitial(video, it, paths, common) {
   const tpl = readFileSync(join(TEMPLATES, `${it.type}.html`), 'utf8');
   const brand = video.brand;
   // Per-plate motion overlay (energy, depth, sheen, title reveal, atmosphere tuning).
-  const { motion, plateBrand, ...plateCommon } = interstitialBrandVars(common, brand, it);
+  const { motion, plateBrand, ...plateCommon } = interstitialBrandVars(common, brand, it, video.config?.plateColors);
   const title = (t) => titleEditFields(t || '', { reveal: motion.titleReveal });
   const eyebrow = (fallback) => ({
     EYEBROW: emphasize(it.eyebrow || fallback),
@@ -1112,7 +1173,7 @@ function buildInterstitial(video, it, paths, common) {
     } else if (items.length < 3 || items.length > 8) {
       throw new Error(`testimonials plate "${it.id}" needs 3–8 quotes (got ${items.length})`);
     }
-    // Dual-wave cascade: 3 real quotes → 6 slots (heroes dissolve, echoes rise below).
+    // Dual-wave cascade: 3 real quotes → 6 slots (each hero hands its cell to the next quote).
     // Opt out with motion.cascade === false; force with true when 4–5 quotes want denser feel.
     // Carousel wins over cascade when both are set.
     const cascade =
@@ -1138,6 +1199,7 @@ function buildInterstitial(video, it, paths, common) {
     if (items.length < 3 || items.length > 10) {
       throw new Error(`logos plate "${it.id}" needs 3–10 logos (got ${items.length})`);
     }
+    const tiles = logoTiles(items, brand);
     write({
       ...eyebrow('Trusted by'),
       ...title(it.title),
@@ -1145,7 +1207,8 @@ function buildInterstitial(video, it, paths, common) {
       SUB_RAW: escAttr(it.sub || ''),
       ITEM_COUNT: items.length,
       LOGO_COLS: logoColumns(items.length),
-      ITEMS: logosItems(items, brand),
+      ITEMS: tiles.map((r) => r.html).join('\n        '),
+      MARQUEE: layout === 'marquee' ? logosMarquee(tiles) : '',
     });
   } else if (it.type === 'journey') {
     const items = it.steps || it.items || [];
@@ -1198,8 +1261,8 @@ function buildInterstitial(video, it, paths, common) {
         ? `<div class="stars" aria-hidden="true">${Array.from({ length: starCount }, (_, i) => `<span class="star" style="--si: ${(i * 0.06).toFixed(2)}s">★</span>`).join('')}</div>`
         : '',
       WHO_MARK: logo
-        ? `<div class="badge" data-tone="${logo.tone}"><img src="${logo.src}" alt="" /></div>`
-        : `<div class="avatar" aria-hidden="true">${esc(initials(it.author))}</div>`,
+        ? `<div class="badge" data-tone="${logo.tone}" data-slot="logo" data-slot-kind="asset"><img src="${logo.src}" alt="" /></div>`
+        : `<div class="avatar" aria-hidden="true" data-slot="logo" data-slot-kind="asset">${esc(initials(it.author))}</div>`,
       AUTHOR: emphasize(it.author || ''),
       AUTHOR_RAW: escAttr(it.author || ''),
       ROLE: emphasize([it.role, it.company].filter(Boolean).join(' · ')),
@@ -1302,7 +1365,7 @@ function buildInterstitial(video, it, paths, common) {
         throw new Error(`kpi plate "${it.id}": every tile needs a value and a label`);
       }
     }
-    write({ ...eyebrow('This quarter'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: kpiItems(items) });
+    write({ ...eyebrow('This quarter'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: kpiItems(items, { layout }) });
   } else if (it.type === 'pricing') {
     const tiers = it.tiers || it.plans || [];
     if (tiers.length < 2 || tiers.length > 3) {
@@ -1339,7 +1402,102 @@ function buildInterstitial(video, it, paths, common) {
       throw new Error(`team plate "${it.id}" needs 3–6 people (got ${items.length})`);
     }
     write({ ...eyebrow('Who it is for'), ...title(it.title), ITEM_COUNT: items.length, ITEMS: teamItems(items, brand) });
+  } else if (it.type === 'showcase') {
+    const callouts = it.callouts || it.pins || [];
+    if (callouts.length > 4) throw new Error(`showcase plate "${it.id}" takes at most 4 callouts (got ${callouts.length})`);
+    for (const c of callouts) {
+      if (!String(c.label ?? '').trim()) throw new Error(`showcase plate "${it.id}": every callout needs a label`);
+    }
+    const focus = showcaseFocus(it);
+    write({
+      ...eyebrow('See it in action'),
+      ...title(it.title),
+      SUB: emphasize(it.sub || ''),
+      SUB_RAW: escAttr(it.sub || ''),
+      CAPTION: emphasize(it.caption || ''),
+      CAPTION_RAW: escAttr(it.caption || ''),
+      URL: esc(it.url || brand.site || brand.url || brand.name || ''),
+      FOCUS_X: focus.x,
+      FOCUS_Y: focus.y,
+      CALLOUT_COUNT: callouts.length,
+      SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
+      CALLOUTS: showcaseCallouts(callouts),
+    });
+  } else if (it.type === 'bento') {
+    const value = String(it.value ?? '').trim();
+    const label = String(it.label ?? '').trim();
+    if (!value || !label) throw new Error(`bento plate "${it.id}" needs a number (value) and its label`);
+    const logos = it.logos || [];
+    if (logos.length > 4) throw new Error(`bento plate "${it.id}" takes at most 4 logos (got ${logos.length})`);
+    const quote = String(it.quote || '').trim();
+    if (quote.length > 160) throw new Error(`bento plate "${it.id}": the quote takes at most 160 characters (got ${quote.length})`);
+    write({
+      ...eyebrow('At a glance'),
+      ...title(it.title),
+      VALUE: emphasize(value),
+      VALUE_RAW: escAttr(value),
+      LABEL: emphasize(label),
+      LABEL_RAW: escAttr(label),
+      QUOTE: emphasize(quote || 'Add a line from a customer, or leave it to the numbers.'),
+      QUOTE_RAW: escAttr(quote),
+      AUTHOR: emphasize(it.author || ''),
+      AUTHOR_RAW: escAttr(it.author || ''),
+      CAPTION: emphasize(it.caption || ''),
+      CAPTION_RAW: escAttr(it.caption || ''),
+      TAG_CLASS: String(it.caption || '').trim() ? '' : ' is-empty',
+      LOGO_COUNT: logos.length,
+      SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
+      LOGOS: bentoLogos(logos, brand),
+    });
   }
+}
+
+/* ——— Showcase and bento: interface shots with editorial framing ——— */
+
+const FOCUS_POINTS = { center: [50, 50], top: [50, 18], bottom: [50, 82], left: [22, 50], right: [78, 50] };
+
+/** Where the zoom-morph lands: a named point, or explicit `focusX`/`focusY` percentages. */
+function showcaseFocus(it) {
+  const pct = (v, fallback) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Math.round(Number(v)))) : fallback);
+  const named = FOCUS_POINTS[String(it.focus || '').toLowerCase()] || FOCUS_POINTS.center;
+  return { x: pct(it.focusX, named[0]), y: pct(it.focusY, named[1]) };
+}
+
+/** The screenshot — or a believable interface skeleton when none is set yet. */
+function shotMarkup(brand, asset) {
+  const src = asset ? resolveAssetUri(brand, asset) : '';
+  if (src) return `<img src="${src}" alt="" />`;
+  return `<div class="mock" aria-hidden="true">
+            <div class="side"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="main"><i class="bar"></i><div class="cards"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          </div>`;
+}
+
+function showcaseCallouts(items) {
+  return items
+    .map((c, i) => {
+      const x = Math.max(2, Math.min(98, Number(c.x) || 50));
+      const y = Math.max(2, Math.min(98, Number(c.y) || 50));
+      const flip = x > 62;
+      return `<div class="pin${flip ? ' flip' : ''}" data-slot="callouts.${i}" data-slot-drag="xy" style="--x: ${x}%; --y: ${y}%; --s: ${(2.35 + i * 0.42).toFixed(2)}s">
+            <span class="dot"></span>
+            <span class="tag" data-edit="callouts.${i}.label" data-edit-raw="${escAttr(c.label)}">${emphasize(c.label)}</span>
+          </div>`;
+    })
+    .join('\n          ');
+}
+
+function bentoLogos(items, brand) {
+  return items
+    .map((it, i) => {
+      const s = (1.35 + i * 0.12).toFixed(2);
+      if (!(it.asset || it.logo || it.src)) {
+        return `<div class="mini is-empty" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${s}s"><span>${esc(it.label || 'Logo')}</span></div>`;
+      }
+      const { src, tone, label } = resolveLogoPresentation(brand, it);
+      return `<div class="mini" data-tone="${tone}" data-slot="logos.${i}" data-slot-kind="asset" style="--s: ${s}s"><img src="${src}" alt="${esc(label)}" /></div>`;
+    })
+    .join('\n            ');
 }
 
 /**
@@ -1361,6 +1519,39 @@ export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY } = {}) 
   };
   buildInterstitial(video, it, paths, common);
   return paths.interstitial[it.id].html;
+}
+
+/**
+ * Throws the builder's own complaint when `row` would not make a plate (too few rows, a title
+ * too long…) — checked off to the side, so nothing in the video is touched.
+ */
+export function checkPlate(brand, row) {
+  const dir = mkdtempSync(join(tmpdir(), 'plate-check-'));
+  try {
+    writePreviewPlate(brand, { ...row, id: row.id || row.type }, dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Write one interstitial's HTML. A plate just swapped or added shows on the stage even while
+ * another plate in the video has a problem that stops the full rebuild.
+ */
+export function buildPlateHtml(video, plateId) {
+  const it = plateRows(video).find((r) => r.id === plateId);
+  if (!it) throw new Error(`No plate "${plateId}"`);
+  const paths = platePaths(video);
+  mkdirSync(paths.dir, { recursive: true });
+  copyFileSync(join(TEMPLATES, 'plates.css'), join(paths.dir, 'plates.css'));
+  const brandMotion = resolveMotion(video.brand);
+  buildInterstitial(video, it, paths, {
+    FONT_CSS: video.brand.font?.css || '',
+    BRAND_VARS: `${brandCssVars(video.brand)}\n      ${motionCssVars(video.brand)}`,
+    LOGO: video.brand.logoHtml || '',
+    TITLE_REVEAL: brandMotion.titleReveal,
+  });
+  return paths.interstitial[plateId].html;
 }
 
 /** Writes plate HTML for open, close, and every interstitial. */
@@ -1388,7 +1579,7 @@ export function buildPlates(video) {
   const openLines = Array.isArray(open.title) ? open.title : [open.title || normalizeTitle(config.title, copy)];
   const openEyebrow = open.eyebrow || 'Product walkthrough';
   const openSubRaw = open.sub || '';
-  const { motion: openMotion, plateBrand: openBrand, ...openCommon } = interstitialBrandVars(common, brand, open);
+  const { motion: openMotion, plateBrand: openBrand, ...openCommon } = interstitialBrandVars(common, brand, open, config.plateColors);
   const openLayout = resolveLayout('open', normalizeLayout('open', open.layout));
   const ot = OPEN_TIMING[openLayout];
   writePlateHtml(
@@ -1419,7 +1610,7 @@ export function buildPlates(video) {
   const closeTitle = close.title || [];
   const platform = close.tagline ?? normalizeCopy(brand.platform ?? '', 'label', copy);
   // Per-plate motion (energy / pushScale / timing) — same overlay path as interstitials.
-  const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close);
+  const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close, config.plateColors);
   const closeLayout = resolveLayout('close', normalizeLayout('close', close.layout));
   const closeTitleAt = CLOSE_TITLE_AT[closeLayout];
   writePlateHtml(
@@ -1441,7 +1632,7 @@ export function buildPlates(video) {
     outputFrame(config)
   );
 
-  for (const it of config.interstitials || []) {
+  for (const it of plateRows(video)) {
     if (!it.id || !/^[a-z0-9-]+$/.test(it.id)) throw new Error(`interstitial id must be kebab-case (got ${it.id})`);
     buildInterstitial(video, it, paths, common);
   }
@@ -1661,7 +1852,7 @@ function assessPlateQc({ frames, snapped, reused, holdFrom, holdUntil, maxStuckO
  * Every motion frame is captured unless inside a probed-stable settle-hold window.
  * Fails hard if capture looks stuck or under-snapped (Studio/CLI cannot cache a bad plate).
  */
-async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '', frame = DELIVERY) {
+async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '', frame = DELIVERY, carry = null) {
   const viewport = { width: frame.width, height: frame.height };
   const page = await browser.newPage({
     viewport,
@@ -1747,8 +1938,12 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
         typeFit,
       };
     }, brand.font.family);
-    durationSec = meta.durationSec;
+    durationSec = carry ? carry.clock.length / FPS : meta.durationSec;
     typeFit = meta.typeFit || typeFit;
+    if (carry) {
+      const armed = await page.evaluate((o) => Boolean(window.__plateCarry?.set(o)), { in: carry.in, out: carry.out });
+      if (!armed) throw new Error(`${basename(htmlPath)} has no background-continuity runtime — rebuild the plate HTML`);
+    }
     const requested = resolveHoldWindow(meta);
     const cdp = await page.context().newCDPSession(page);
     const snap = async () => {
@@ -1781,17 +1976,46 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
           .join('|');
       }, ms);
 
+    /**
+     * Continuous background: the copy on the plate's clock, the backdrop on the run's. The
+     * fingerprint covers the copy only — a slow backdrop drift can leave two frames
+     * pixel-identical without anything being stuck.
+     */
+    const setCarryTime = (contentMs, bgMs) =>
+      page.evaluate(
+        ([c, b]) => {
+          window.__plateCarry.seek(c, b);
+          const back = document.querySelector('.wt-backdrop');
+          const front = document.querySelector('.wt-frontdrop');
+          return document
+            .getAnimations()
+            .filter((a) => {
+              const t = a.effect?.target;
+              return !(t && ((back && back.contains(t)) || (front && front.contains(t))));
+            })
+            .map((a) => {
+              const timing = a.effect?.getComputedTiming?.() || {};
+              return `${Number(timing.progress ?? -1).toFixed(4)}:${timing.currentIteration ?? '-'}`;
+            })
+            .join('|');
+        },
+        [contentMs, bgMs]
+      );
+
     const liveField = await page.evaluate(() => {
       const field = document.querySelector('.plate-field')?.getAttribute('data-field') || '';
       return Boolean(field && field !== 'none');
     });
-    holdMeta = liveField
-      ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'live-field' }
-      : await probeHoldSafety(page, setTime, snap, requested);
+    holdMeta = carry
+      ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'carry' }
+      : liveField
+        ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'live-field' }
+        : await probeHoldSafety(page, setTime, snap, requested);
     holdFrom = holdMeta.holdFrom;
     holdUntil = holdMeta.holdUntil;
 
-    frames = Math.round(durationSec * FPS);
+    frames = carry ? carry.clock.length : Math.round(durationSec * FPS);
+    const stepTo = carry ? (f) => setCarryTime(carry.clock[f][0], carry.clock[f][1]) : (f) => setTime((f * 1000) / FPS);
     console.log(`» plate · ${label} · frame 0 of ${frames}`);
     let holdBuf = null;
     let prevSig = null;
@@ -1812,13 +2036,13 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
         await enc.write(holdBuf);
         reused += 1;
       } else {
-        let fp = await setTime((f * 1000) / FPS);
+        let fp = await stepTo(f);
         let buf = await snap();
         let sig = frameSig(buf);
         // Paint stall: animations advanced but pixels did not — retry once
         const paintStall = prevSig && sig === prevSig && prevFp && fp !== prevFp;
         if (paintStall) {
-          fp = await setTime((f * 1000) / FPS);
+          fp = await stepTo(f);
           buf = await snap();
           sig = frameSig(buf);
         }
@@ -1874,6 +2098,7 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
     hold: holdMeta,
     snapped,
     reused,
+    ...(carry ? { carry: carry.key } : {}),
     renderSec: Number(sec),
     qc,
     typeFit,
@@ -1907,6 +2132,37 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
   );
 }
 
+/**
+ * Whether an mp4 is whole: its top-level boxes add up to the file and one is the `moov` index.
+ * A write cut short leaves the media data without an index — unplayable, yet next to a sidecar
+ * that still says the render passed.
+ */
+export function mp4Complete(mp4Path) {
+  let fd;
+  try {
+    const size = statSync(mp4Path).size;
+    fd = openSync(mp4Path, 'r');
+    const head = Buffer.alloc(16);
+    let at = 0;
+    let moov = false;
+    while (at + 8 <= size) {
+      readSync(fd, head, 0, 16, at);
+      let len = head.readUInt32BE(0);
+      const type = head.toString('latin1', 4, 8);
+      if (len === 1) len = Number(head.readBigUInt64BE(8));
+      else if (len === 0) len = size - at;
+      if (len < 8) return false;
+      if (type === 'moov') moov = true;
+      at += len;
+    }
+    return moov && at === size;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 /** Read plate encode sidecar (pipeline, hold, QC). */
 export function readPlateRenderMeta(mp4Path) {
   const metaPath = mp4Path.replace(/\.mp4$/, '.render.json');
@@ -1927,6 +2183,7 @@ export function plateCacheFresh(mp4Path, htmlPath, { cssHash, raster, jpegQ } = 
   if (!existsSync(mp4Path) || !existsSync(htmlPath)) return false;
   const meta = readPlateRenderMeta(mp4Path);
   if (!meta) return false;
+  if (!mp4Complete(mp4Path)) return false;
   if (meta.pipeline !== RENDER_PIPELINE) return false;
   if (!meta.qc?.ok) return false;
   if (meta.htmlHash !== contentHash(readFileSync(htmlPath))) return false;
@@ -1945,7 +2202,16 @@ function expectedRaster() {
 
 /** Renders plates whose sources changed (or all with force). */
 export async function renderPlates(video, { force = false, only } = {}) {
-  const paths = buildPlates(video);
+  let paths;
+  try {
+    paths = buildPlates(video);
+  } catch (err) {
+    // Asked for one plate: another plate's problem shouldn't stop it rendering.
+    if (!only?.startsWith('plate:')) throw err;
+    console.warn(`· ${err.message || err} — rendering ${only.slice('plate:'.length)} on its own`);
+    buildPlateHtml(video, only.slice('plate:'.length));
+    paths = platePaths(video);
+  }
   try {
     const { buildLiveCards } = await import('./liveCards.mjs');
     const live = buildLiveCards(video);
@@ -1962,7 +2228,7 @@ export async function renderPlates(video, { force = false, only } = {}) {
     if (key === 'open') return plainTitle(video.config.open?.title) || 'Introduction';
     if (key === 'close') return plainTitle(video.config.close?.title) || 'Close';
     const id = key.slice('plate:'.length);
-    const it = (video.config.interstitials || []).find((x) => x.id === id);
+    const it = plateRows(video).find((x) => x.id === id);
     return plainTitle(it?.title) || plainTitle(it?.eyebrow) || id;
   };
   const jobs = [];
@@ -1977,9 +2243,9 @@ export async function renderPlates(video, { force = false, only } = {}) {
 
   consider('open', paths.open.html, paths.open.mp4);
   consider('close', paths.close.html, paths.close.mp4);
-  for (const it of video.config.interstitials || []) {
+  for (const it of plateRows(video)) {
     const dest = paths.interstitial[it.id];
-    consider(`plate:${it.id}`, dest.html, dest.mp4);
+    if (dest) consider(`plate:${it.id}`, dest.html, dest.mp4);
   }
 
   if (!jobs.length) {
@@ -2015,6 +2281,74 @@ export async function renderPlates(video, { force = false, only } = {}) {
     await browser.close();
   }
   return paths;
+}
+
+/**
+ * Plates inside a continuous-background run (plateCarry.markCarryRuns), drawn on two clocks at
+ * their planned length. Each segment's `file` moves to its carried render and `carryBaked` tells
+ * produce the retime and the pad are already in the frames. Cached on the plate HTML, the shared
+ * CSS and the exact clock, so an untouched run never redraws.
+ */
+export async function renderCarryPlates(video, segments, { force = false } = {}) {
+  const carried = (segments || []).filter((s) => s.kind === 'plate' && s.carry && s.file);
+  const dir = join(video.out, 'plates-carry');
+  if (!carried.length) {
+    rmSync(dir, { recursive: true, force: true });
+    return 0;
+  }
+  mkdirSync(dir, { recursive: true });
+  const paths = platePaths(video);
+  const cssHash = contentHash(readFileSync(join(TEMPLATES, 'plates.css'), 'utf8'));
+  const cacheOpts = { cssHash, raster: expectedRaster(), jpegQ: JPEG_Q };
+  const jobs = new Map();
+  const rows = [];
+  for (const seg of carried) {
+    const id = seg.repeatOf || seg.id;
+    const html = id === 'open' ? paths.open.html : id === 'close' ? paths.close.html : paths.interstitial[id]?.html;
+    if (!html || !existsSync(html)) continue;
+    const natural = Number(seg.timing?.baseDur ?? seg.baseDur) || seg.dur;
+    const playback = seg.timing ? platePlayback(seg.timing, seg.timing.baseDur, seg.timing.holdAt) : null;
+    const clock = carryFrameClock({ dur: seg.dur, bgAt: seg.carry.bgAt, fps: FPS, playback, baseDur: natural });
+    const key = contentHash(
+      JSON.stringify({
+        html: contentHash(readFileSync(html)),
+        cssHash,
+        pipeline: RENDER_PIPELINE,
+        in: seg.carry.in,
+        out: seg.carry.out,
+        clock,
+      })
+    );
+    const mp4 = join(dir, `${id}-${key}.mp4`);
+    rows.push({ seg, mp4 });
+    if (jobs.has(mp4)) continue;
+    const fresh = !force && plateCacheFresh(mp4, html, cacheOpts) && readPlateRenderMeta(mp4)?.carry === key;
+    jobs.set(mp4, { fresh, html, mp4, label: `${plainTitle(seg.title) || id} · continuous`, carry: { in: seg.carry.in, out: seg.carry.out, clock, key } });
+  }
+  const todo = [...jobs.values()].filter((j) => !j.fresh);
+  console.log(`» plates · Continuous background · ${rows.length} plate(s) · ${todo.length ? `drawing ${todo.length}` : 'every one already matches'}`);
+  if (todo.length) {
+    const browser = await chromium.launch({ headless: true, args: plateBrowserArgs() });
+    try {
+      const raster = await rasterBackend(browser);
+      const queue = [...todo];
+      const worker = async () => {
+        for (let j = queue.shift(); j; j = queue.shift()) {
+          await renderOne(browser, j.html, j.mp4, video.brand, j.label, raster, outputFrame(video.config), j.carry);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(PLATE_CONCURRENCY, todo.length) }, worker));
+    } finally {
+      await browser.close();
+    }
+  }
+  for (const { seg, mp4 } of rows) {
+    seg.file = mp4;
+    seg.carryBaked = true;
+  }
+  const keep = new Set([...jobs.keys()].flatMap((m) => [basename(m), basename(m).replace(/\.mp4$/, '.render.json')]));
+  for (const name of readdirSync(dir)) if (!keep.has(name)) rmSync(join(dir, name), { force: true });
+  return rows.length;
 }
 
 /** Plate mp4s the edit plan reads (open, close, every interstitial) that are not on disk. */

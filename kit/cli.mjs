@@ -77,8 +77,8 @@
  *                                          add --deliver to build captions + poster + handoff after validate
  *   node cli.mjs manual                    manuals/<set>.html from every video with a `manual` block
  *   node cli.mjs publish                   copy delivered lessons into the webapp Help Center (public/help + content json)
- *   node cli.mjs studio [slug] [--port N] [--dev] [--legacy]  local web panel: player, timeline, captions, QC, versions, critic, agent
- *                                                  (serves kit/studio-next/dist; --legacy, or no build yet, serves the classic kit/studio)
+ *   node cli.mjs studio [slug] [--port N] [--dev]  local web panel: player, timeline, captions, QC, versions, critic, agent
+ *                                                  (serves the desk from kit/studio/dist; ./studio builds it)
  *   node cli.mjs snapshot <slug> [--label] save a version (delivery + settings) under tmp/videos/<slug>/versions/
  *
  * Env: WALKTHROUGH_OUT (default <repo>/tmp/videos), WALKTHROUGH_VIDEOS, WALKTHROUGH_BRANDS.
@@ -189,7 +189,7 @@ async function main() {
         console.log(JSON.stringify({ title: current.title, audience: current.audience, purpose: current.purpose, startUrl: current.app?.startUrl }, null, 2));
         return;
       }
-      const { revisePlan, nextBrief } = await import('./studio/briefRevise.js');
+      const { revisePlan, nextBrief } = await import('./lib/shared/briefRevise.js');
       const { applyBriefRevision, saveSourceRevision } = await import('./lib/briefRevise.mjs');
       const plan = revisePlan(current, { ...current, ...patch, app: patch.app || current.app, story: current.story });
       if (!plan.changed.length) {
@@ -223,7 +223,7 @@ async function main() {
       let drafted = null;
       let title = opt('--title');
       if (description) {
-        const { draftFromDescription } = await import('./studio/shortBrief.js');
+        const { draftFromDescription } = await import('./lib/shared/shortBrief.js');
         drafted = draftFromDescription({ description, startUrl });
         if (drafted.records) throw new Error('A description draft must not record.');
         title = title || drafted.title;
@@ -232,7 +232,7 @@ async function main() {
       const cfgPath = join(dir, 'video.config.json');
       const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
       if (drafted) {
-        const { applyDraftToConfig } = await import('./studio/shortBrief.js');
+        const { applyDraftToConfig } = await import('./lib/shared/shortBrief.js');
         const next = applyCaptureSettings(applyDraftToConfig(cfg, drafted), sizing);
         if (purpose) next.purpose = purpose;
         writeFileSync(cfgPath, JSON.stringify(next, null, 2) + '\n');
@@ -1152,9 +1152,12 @@ async function main() {
       const portFlag = studioArgs.indexOf('--port');
       const port = Number(portFlag >= 0 ? studioArgs[portFlag + 1] : 4747) || 4747;
       const dev = studioArgs.includes('--dev') || process.env.WALKTHROUGH_DEV === '1';
-      const desk = studioArgs.includes('--legacy') ? 'legacy' : process.env.WALKTHROUGH_DESK;
+      if (studioArgs.includes('--legacy') || String(process.env.WALKTHROUGH_DESK || '').toLowerCase() === 'legacy') {
+        console.error('The classic desk was removed in 1.0.0-beta.7. Run: node cli.mjs studio');
+        process.exit(1);
+      }
       const openSlug = studioArgs.find((a, i) => !String(a).startsWith('-') && i !== portFlag + 1) || null;
-      await startStudio({ port, openSlug, dev, desk });
+      await startStudio({ port, openSlug, dev });
       // keep process alive
       await new Promise(() => {});
       return;

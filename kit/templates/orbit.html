@@ -44,7 +44,7 @@
       }
       .legend { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 10px 14px; max-width: 620px; }
       .legend span {
-        font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
+        font-size: 16px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
         padding: 8px 14px; border-radius: 999px;
         background: color-mix(in srgb, var(--surface) 80%, transparent);
         border: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
@@ -52,7 +52,7 @@
       }
       /* The orbit: centre lockup, two rings, tiles seated on the rings. */
       .orbit {
-        position: relative; width: 880px; height: 880px; margin: 0 auto; justify-self: center;
+        position: relative; width: 940px; height: 940px; margin: 0 auto; justify-self: center;
         display: grid; place-items: center;
       }
       .o-center {
@@ -89,8 +89,8 @@
         opacity: 0;
         animation: ringIn 1.2s var(--r-in) var(--expo) both, spin var(--dur) linear both;
       }
-      .o-ring.inner { width: 520px; height: 520px; margin: -260px 0 0 -260px; --r-in: 0.5s; --dir: 1; }
-      .o-ring.outer { width: 800px; height: 800px; margin: -400px 0 0 -400px; --r-in: 0.62s; --dir: -1;
+      .o-ring.inner { width: 500px; height: 500px; margin: -250px 0 0 -250px; --r-in: 0.5s; --dir: 1; }
+      .o-ring.outer { width: 820px; height: 820px; margin: -410px 0 0 -410px; --r-in: 0.62s; --dir: -1;
         border-color: color-mix(in srgb, var(--gold) 16%, transparent); }
       @keyframes ringIn { from { opacity: 0; scale: 0.9; } to { opacity: 1; scale: 1; } }
       /* Slow orbital drift; tiles counter-rotate so marks stay upright. */
@@ -106,14 +106,15 @@
       .o-upright { rotate: calc(var(--a) * -1); }
       .o-counter { animation: counterSpin var(--dur) linear both; }
       .o-tile {
-        width: 168px; height: 104px; margin: -52px 0 0 -84px;
+        width: 160px; height: 100px; margin: -50px 0 0 -80px;
         border-radius: 24px; padding: 16px 18px;
         display: grid; place-items: center;
         border: 1px solid transparent;
         box-shadow: 0 14px 32px color-mix(in srgb, var(--shade, var(--ink)) 35%, transparent);
         animation: fxPop 0.55s calc(var(--s) + 0.28s) var(--pop) both;
       }
-      .o-seat.far .o-tile { width: 148px; height: 92px; margin: -46px 0 0 -74px; }
+      .o-seat.far .o-tile { width: 136px; height: 84px; margin: -42px 0 0 -68px; padding: 14px 16px; }
+      .o-seat.far .o-tile img { max-height: 44px; }
       .o-tile[data-tone="light"] {
         background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, #f4f7f2 70%, var(--gold) 8%) 100%);
         border-color: color-mix(in srgb, #0a1f0a 10%, transparent);
@@ -144,7 +145,8 @@
       html[data-frame='portrait'] .compose { gap: 8px; }
       html[data-frame='portrait'] .sub { max-width: none; }
       html[data-frame='portrait'] .legend { max-width: none; }
-      html[data-frame='portrait'] .orbit { zoom: 0.78; }
+      html[data-frame='portrait'] .legend span { font-size: 17px; }
+      html[data-frame='portrait'] .orbit { zoom: 0.7; }
       html[data-frame='portrait'] .bloom { left: 50%; top: 62%; width: 1000px; height: 1000px; margin: -500px 0 0 -500px; }
     </style>
   </head>

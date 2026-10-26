@@ -85,6 +85,8 @@ export function typeFitRuntimeSource() {
       for (const el of els) { el.style.fontSize = px + 'px'; el.dataset.fitPx = px.toFixed(1); }
     }
     document.body.dataset.typeFit = '1';
+    // Then the composition settles into the frame (lib/frameFit.mjs).
+    if (typeof window.__fitFrame === 'function') window.__fitFrame();
   };
   window.__fitType();
 })();`;

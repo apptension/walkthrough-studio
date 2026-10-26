@@ -13,7 +13,17 @@ import { deflashGraph, flashesFor } from './deflash.mjs';
 import { crossZoomGraph, frameAssets, frameGraph, frameMask, planZooms, zoomGraph, zoomTiming } from './camera.mjs';
 import { loadCardMarks } from './cardMarks.mjs';
 import { buildEditPlan, resolveEdit, xfadeArgs } from './edit.mjs';
-import { cardMarkKey, compactEdit, editCameraMarks, liveTimeMap, resolveLenses, speedFilter, withEditLenses } from './editDeck.mjs';
+import {
+  cardMarkKey,
+  compactEdit,
+  editCameraMarks,
+  liveTimeMap,
+  platePlayback,
+  plateTimingFilter,
+  resolveLenses,
+  speedFilter,
+  withEditLenses,
+} from './editDeck.mjs';
 import { rasterLayoutPngs, sectionStageGraph, takeCapture, videoLayout } from './layout.mjs';
 import { lensGeometry, lensPlaceChain, lensTiming } from './lens.mjs';
 import { prepareLensBakes } from './lensBake.mjs';
@@ -30,7 +40,9 @@ import {
 } from './encode.mjs';
 import { assertPlayable, duration, ffmpegProgress, mmss, run } from './media.mjs';
 import { FPS } from './motion.mjs';
-import { renderPlates } from './plates.mjs';
+import { renderCarryPlates, renderPlates } from './plates.mjs';
+import { coveredChapterKeys } from './chapterPlates.mjs';
+import { preparePlateFx } from './plateFx.mjs';
 import { livePath } from './record.mjs';
 import { cardBakeOverlayGraph, prepareLiveCardBakes } from './liveCardBake.mjs';
 import { outputFrame } from './format.mjs';
@@ -142,12 +154,15 @@ export async function prepareLive(video, LIVE, { cardBake: givenBake } = {}) {
     camera,
   });
   const useSections = layoutPack.custom;
-  if (useSections && cardBake.plans?.length && layoutPack.carried.length) {
-    const drop = new Set(layoutPack.carried);
+  // A chapter that plays as a plate is a slide of its own now, so its card must not also be
+  // stamped on the recording; same for a chapter whose title the section layout puts on stage.
+  const dropCards = new Set(useSections ? layoutPack.carried : []);
+  for (const key of coveredChapterKeys(video)) dropCards.add(key);
+  if (cardBake.plans?.length && dropCards.size) {
     const plans = [];
     const files = [];
     cardBake.plans.forEach((p, i) => {
-      if (drop.has(cardMarkKey(p))) return;
+      if (dropCards.has(cardMarkKey(p))) return;
       plans.push(p);
       files.push(cardBake.files[i]);
     });
@@ -383,6 +398,11 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   const { clean: cleanLive, camera, speed } = await prepareLive(video, LIVE, { cardBake });
   const cleanSec = (Date.now() - cleanStarted) / 1000;
   const plan = buildEditPlan(video);
+  // Slides that share a background carry it across their joins: each is drawn at its planned
+  // length on the run's backdrop clock, so the plate's retime and pad are already in its frames.
+  const carryStarted = Date.now();
+  const carried = await renderCarryPlates(video, plan.segments, { force: forcePlates });
+  platesSec += carried ? (Date.now() - carryStarted) / 1000 : 0;
 
   // Live segments read straight from the cleaned reel (frame-accurate input seek): no slice
   // files, one generation fewer between the take and the master.
@@ -393,10 +413,12 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   );
   rmSync(join(video.out, 'slices'), { recursive: true, force: true });
   const joins = plan.segments.slice(1).map((s) => `${s.transitionIn.type}/${s.transitionIn.dur.toFixed(2)}s`);
+  const continuous = plan.segments.filter((s) => s.transitionIn?.type === 'continue').length;
   console.log(`» plan · ${plan.segments.length} shots · ${joins.length} dissolve${joins.length === 1 ? '' : 's'}`);
   console.log(
     `· transitions: ${plan.transitions.style} ${plan.transitions.duration}s · ${joins.length} join(s)` +
-      (plan.segments.some((s) => s.transitionIn?.card) ? ' · plate→chapter cards dissolve' : '')
+      (plan.segments.some((s) => s.transitionIn?.card) ? ' · plate→chapter cards dissolve' : '') +
+      (continuous ? ` · ${continuous} continuous background join(s)` : '')
   );
 
   const labels = { intro: 'Introduction', start: 'Getting started', summary: 'Summary', ...config.chapterLabels };
@@ -435,14 +457,34 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
   // length so frame-grid rounding never drifts the offsets.
   const norm = `fps=${FPS},${toBt709(width, height)}`;
   const n = plan.segments.length;
+  // Camera moves and magnifiers placed on plates. They are stitched on before the plate's own
+  // retime, so a trim, a hold or a speed change carries them the way it carries the picture.
+  const plateFx = await preparePlateFx(video, plan.segments, plan.edit, {
+    width,
+    height,
+    camera: video.brand.direction?.camera || {},
+    rimHex: video.brand.colors.gold,
+  });
+  // The extra glass inputs go after the chapters metadata, so -map_metadata/-map_chapters n hold.
+  const fxInputAt = n + 1;
   const filter = plan.segments.flatMap((s, i) => {
-    const hold = s.padOut > 0 ? `,tpad=stop_mode=clone:stop_duration=${(s.padOut + 0.1).toFixed(4)}` : '';
+    const hold = s.carryBaked
+      ? ',tpad=stop_mode=clone:stop_duration=0.1000'
+      : s.padOut > 0
+        ? `,tpad=stop_mode=clone:stop_duration=${(s.padOut + 0.1).toFixed(4)}`
+        : '';
     const head = s.transitionIn?.motion === 'crosszoom' ? s.transitionIn.dur : 0;
     const next = plan.segments[i + 1]?.transitionIn;
     const tail = next?.motion === 'crosszoom' ? next.dur : 0;
-    const base = `[${i}:v]setpts=PTS-STARTPTS,${norm}${hold},trim=duration=${s.dur.toFixed(4)},setpts=PTS-STARTPTS`;
-    if (!head && !tail) return [`${base},settb=AVTB[v${i}]`];
+    // A retimed plate (edit.plateTimes) plays its trimmed, held, re-speeded clock first.
+    const fx = plateFx.plan.get(i)?.lines(`[${i}:v]`, `[fx${i}]`, fxInputAt) || { lines: [], out: `[${i}:v]` };
+    const timed = s.kind === 'plate' && s.timing && !s.carryBaked ? plateTimingFilter(fx.out, `[p${i}]`, platePlayback(s.timing, s.timing.baseDur, s.timing.holdAt), FPS) : [];
+    const src = timed.length ? `[p${i}]` : fx.out;
+    const base = `${src}setpts=PTS-STARTPTS,${norm}${hold},trim=duration=${s.dur.toFixed(4)},setpts=PTS-STARTPTS`;
+    if (!head && !tail) return [...fx.lines, ...timed, `${base},settb=AVTB[v${i}]`];
     return [
+      ...fx.lines,
+      ...timed,
       `${base}[c${i}]`,
       ...crossZoomGraph({ src: `[c${i}]`, out: `[cz${i}]`, dur: s.dur, head, tail, width, height, fps: FPS }),
       `[cz${i}]settb=AVTB[v${i}]`,
@@ -467,6 +509,7 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     '-hide_banner', '-loglevel', 'error', '-y',
     ...inputs,
     '-i', metaPath,
+    ...plateFx.inputs,
     '-filter_complex', filter.join(';'),
     '-map', '[v]', '-map_metadata', String(n), '-map_chapters', String(n),
     '-r', String(FPS),
@@ -512,7 +555,9 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     ...(s.start != null ? { start: s.start, end: s.end } : {}),
     ...(s.opensOnCard ? { opensOnCard: s.opensOnCard } : {}),
     ...(s.padOut ? { padOut: s.padOut } : {}),
+    ...(s.timing ? { timing: s.timing, naturalDur: s.naturalDur } : {}),
     ...(s.join ? { join: s.join } : {}),
+    ...(s.carry ? { carry: s.carry } : {}),
     transitionIn: s.transitionIn,
   }));
   const meta = {

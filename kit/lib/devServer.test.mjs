@@ -12,9 +12,9 @@ test('watch kinds restart the server, restyle css, and ignore tests', () => {
   assert.equal(devWatchKind(`${kitDir}/lib/studio.mjs`, { kitDir }), 'restart');
   assert.equal(devWatchKind(`${kitDir}/cli.mjs`, { kitDir }), 'restart');
   assert.equal(devWatchKind(`${kitDir}/lib/studio.test.mjs`, { kitDir }), 'ignore');
-  assert.equal(devWatchKind(`${kitDir}/studio/styles.css`, { kitDir }), 'css');
-  assert.equal(devWatchKind(`${kitDir}/studio/app.js`, { kitDir }), 'reload');
-  assert.equal(devWatchKind(`${kitDir}/studio/app.test.js`, { kitDir }), 'ignore');
+  assert.equal(devWatchKind(`${kitDir}/studio/src/styles/studio.css`, { kitDir }), 'ignore');
+  assert.equal(devWatchKind(`${kitDir}/studio/src/main.tsx`, { kitDir }), 'ignore');
+  assert.equal(devWatchKind(`${kitDir}/studio/src/main.test.tsx`, { kitDir }), 'ignore');
   assert.equal(devWatchKind(`${kitDir}/studio/.DS_Store`, { kitDir }), 'ignore');
   assert.equal(devWatchKind('/elsewhere/app.js', { kitDir }), 'ignore');
 });

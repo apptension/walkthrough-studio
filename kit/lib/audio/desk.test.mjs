@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compactEdit, normalizeEdit, patchEdit } from '../editDeck.mjs';
 import { compactAudio, describeAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice, voiceLineSpec, voiceShape } from './desk.mjs';
-import { musicLinearAt } from '../../studio/mixMath.js';
+import { musicLinearAt } from '../shared/mixMath.js';
 
 test('an untouched desk stores nothing and mastering overrides the brand mix', () => {
   const fresh = normalizeAudio({});

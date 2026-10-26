@@ -4,4 +4,4 @@ export {
   recordFailureAction,
   recordFailureNote,
   recordFailureView,
-} from '../studio/recordFailure.js';
+} from './shared/recordFailure.js';

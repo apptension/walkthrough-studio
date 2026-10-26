@@ -1,7 +1,7 @@
 /** Save a restorable source revision, then update the brief. Credential values never land in the copy. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { scrubSecrets } from '../studio/briefRevise.js';
+import { scrubSecrets } from './shared/briefRevise.js';
 import { upsertDotEnv } from './project.mjs';
 
 const KEEP = ['brief.json', 'video.config.json', 'flow.mjs', 'narration.mjs'];

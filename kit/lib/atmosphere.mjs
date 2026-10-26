@@ -20,11 +20,13 @@
 import { parseCssHex } from './text.mjs';
 import { ATMOSPHERE_IDS, resolveMotion } from './plateMotion.mjs';
 import { countUpRuntimeSource } from './countUp.mjs';
+import { frameFitRuntimeSource } from './frameFit.mjs';
 import { typeFitRuntimeSource } from './typeFit.mjs';
 import { titleRevealRuntimeSource } from './titleReveal.mjs';
 import { GLSL_PREAMBLE } from './atmosphereGlsl.mjs';
 import { DELIVERY } from './format.mjs';
 import { labShaderSource, PROMOTED_FIELDS } from './atmosphereLab.mjs';
+import { plateCarryRuntimeSource } from './plateCarryRuntime.mjs';
 
 export { GLSL_PREAMBLE };
 
@@ -36,6 +38,7 @@ const CORE_ATMOSPHERES = {
   particles: { label: 'Particles', hint: 'Parallax bokeh dust', opacity: 0.5 },
   grid: { label: 'Grid', hint: 'Perspective floor with a light pulse', opacity: 0.4 },
   waves: { label: 'Waves', hint: 'Topographic contour lines', opacity: 0.36 },
+  stagelight: { label: 'Stage light', hint: 'Volumetric spots over a hazy floor', opacity: 0.46 },
 };
 
 export const ATMOSPHERES = Object.freeze({
@@ -273,6 +276,44 @@ void main(){
   alpha = clamp(alpha, 0.0, 1.0);
   gl_FragColor = vec4(col, alpha);
 }`,
+
+  // Two volumetric stage lights sweep slowly over a hazy floor — the bed for interface
+  // showcases and product reveals: the screen sits in the light, the edges fall away.
+  stagelight: `
+float cone(vec2 p, vec2 src, float ang, float width){
+  vec2 d = p - src;
+  float along = -d.y;
+  if (along <= 0.0) return 0.0;
+  vec2 dir = vec2(sin(ang), -cos(ang));
+  float side = abs(d.x * dir.y - d.y * dir.x) ;
+  float half_ = along * width;
+  float beam = 1.0 - smoothstep(half_ * 0.55, half_, side);
+  float fall = exp(-along * 1.35);
+  return beam * fall;
+}
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float aspect = uRes.x / uRes.y;
+  vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+  float t = uTime * 0.18 * uDrift;
+  float haze = fbm(p * 1.8 + vec2(t * 0.35, -t * 0.2)) * 0.55 + 0.45;
+  float a1 = sin(t * 0.9) * 0.22 - 0.18;
+  float a2 = cos(t * 0.7 + 1.4) * 0.22 + 0.18;
+  float c1 = cone(p, vec2(-0.55 + sin(t * 0.5) * 0.1, 0.78), a1, 0.42);
+  float c2 = cone(p, vec2(0.55 + cos(t * 0.6) * 0.1, 0.78), a2, 0.42);
+  float c3 = cone(p, vec2(0.0, 0.92), sin(t * 0.4) * 0.08, 0.26) * 0.7;
+  vec3 col = uGold * c1 + uAmber * c2 + mix(uGold, uTeal, 0.4) * c3;
+  float light = (c1 + c2 + c3) * haze;
+  float floorY = -0.34;
+  float floor_ = exp(-abs(p.y - floorY) * 9.0) * smoothstep(1.3, 0.1, abs(p.x));
+  float ripple = 0.5 + 0.5 * sin(p.x * 9.0 + t * 3.0) * exp(-abs(p.y - floorY) * 20.0);
+  col += mix(uGold, uAmber, 0.5) * floor_ * (0.9 + 0.3 * ripple);
+  float alpha = light * 0.9 + floor_ * 0.55;
+  vec3 base = mix(uInk, uSurface, 0.4);
+  col = mix(base, col / max(alpha, 0.35), clamp(alpha, 0.0, 1.0));
+  alpha = clamp(alpha, 0.0, 1.0) * vignette(p * vec2(0.85, 1.0)) * contentDim(uv) * uOpacity * uEnv;
+  gl_FragColor = vec4(col, alpha);
+}`,
 };
 
 /** Fragment shader source for a field id (preamble + body). */
@@ -341,9 +382,13 @@ export function atmosphereSnippet(brand, opts = {}) {
     return Math.max(0, a.currentTime == null ? 0 : Number(a.currentTime));
   }
   const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  // Background continuity (plateCarry.mjs): a carried edge neither fades the field in nor dims it.
+  const carry = { in: false, out: false, blackOut: null };
   function envelope(sec) {
-    const blackOut = cssSec('--black-out', durMs() / 1000 - 0.7);
-    return smooth(0, 0.9, sec) * (1 - 0.6 * smooth(blackOut - 0.15, blackOut + 0.55, sec));
+    const blackOut = Number.isFinite(carry.blackOut) ? carry.blackOut : cssSec('--black-out', durMs() / 1000 - 0.7);
+    const rise = carry.in ? 1 : smooth(0, 0.9, sec);
+    const fall = carry.out ? 1 : 1 - 0.6 * smooth(blackOut - 0.15, blackOut + 0.55, sec);
+    return rise * fall;
   }
 
   let drawField = null;
@@ -385,16 +430,42 @@ export function atmosphereSnippet(brand, opts = {}) {
     gl.enable(gl.BLEND);
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
-    drawField = function (sec) {
+    ${
+      local
+        ? `const tint = (_name, baked) => baked;`
+        : `// The field follows the page's colour variables, so a style edit or the Studio's live
+    // colour preview recolours it like the CSS. The baked brand values are the fallback.
+    const probe = document.createElement('canvas').getContext('2d');
+    const seen = new Map();
+    const rootStyle = getComputedStyle(document.documentElement);
+    const tint = (name, baked) => {
+      const raw = rootStyle.getPropertyValue(name).trim();
+      if (!raw || !probe) return baked;
+      if (seen.has(raw)) return seen.get(raw) || baked;
+      probe.fillStyle = '#010203';
+      probe.fillStyle = raw;
+      const s = String(probe.fillStyle);
+      let v = null;
+      if (s !== '#010203' || raw.toLowerCase() === '#010203') {
+        const hex = /^#([0-9a-f]{6})$/i.exec(s);
+        const fn = /^rgba?\\(([^)]+)\\)$/i.exec(s);
+        if (hex) v = [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16) / 255);
+        else if (fn) v = fn[1].split(',').slice(0, 3).map((n) => parseFloat(n) / 255);
+      }
+      seen.set(raw, v);
+      return v || baked;
+    };`
+    }
+    drawField = function (sec, bgSec) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
-      gl.uniform1f(U.uTime, sec * ${atmo.speed.toFixed(3)});
-      gl.uniform3fv(U.uGold, ${vec3(gold)});
-      gl.uniform3fv(U.uAmber, ${vec3(amber)});
-      gl.uniform3fv(U.uTeal, ${vec3(teal)});
-      gl.uniform3fv(U.uInk, ${vec3(ink)});
-      gl.uniform3fv(U.uSurface, ${vec3(surface)});
+      gl.uniform1f(U.uTime, bgSec * ${atmo.speed.toFixed(3)});
+      gl.uniform3fv(U.uGold, tint('--gold', ${vec3(gold)}));
+      gl.uniform3fv(U.uAmber, tint('--amber', ${vec3(amber)}));
+      gl.uniform3fv(U.uTeal, tint('--teal', ${vec3(teal)}));
+      gl.uniform3fv(U.uInk, tint('--ink', ${vec3(ink)}));
+      gl.uniform3fv(U.uSurface, tint('--surface', ${vec3(surface)}));
       gl.uniform1f(U.uOpacity, ${atmo.opacity.toFixed(3)});
       gl.uniform1f(U.uDrift, ${Number(atmo.drift).toFixed(3)});
       gl.uniform1f(U.uEnv, envelope(sec));
@@ -404,19 +475,22 @@ export function atmosphereSnippet(brand, opts = {}) {
       : ''
   }
 
-  function render(ms) {
+  // bgMs is the backdrop's clock; it follows the plate's own unless a continuous run sets it.
+  function render(ms, bgMs) {
     const sec = Math.max(0, ms) / 1000;
-    if (drawField) drawField(sec);
+    const bgSec = Number.isFinite(bgMs) ? Math.max(0, bgMs) / 1000 : sec;
+    if (drawField) drawField(sec, bgSec);
     for (const h of hooks) { try { h(ms); } catch (e) { console.warn('[plate-hook]', e); } }
   }
 
   window.__plateRuntime = {
     field: ${JSON.stringify(atmo.id)},
-    renderAt(ms) {
+    carry,
+    renderAt(ms, bgMs) {
       const a = ensureClock();
       a.pause();
       a.currentTime = Math.max(0, ms);
-      render(ms);
+      render(ms, bgMs);
     },
     /** Register a per-frame hook; it runs once at the current clock so static previews are correct. */
     hook(fn) {
@@ -427,26 +501,52 @@ export function atmosphereSnippet(brand, opts = {}) {
   window.__plateField = window.__plateRuntime;
 
   // Live Studio preview: follow the shared clock while CSS animations run.
-  let raf = 0;
+  let tickHandle = 0;
+  let idleFrames = 0;
   function playing() {
     const lists = [document.getAnimations()];
     if (root.getAnimations) lists.push(root.getAnimations({ subtree: true }));
     return lists.some((list) => list.some((a) => a.playState === 'running'));
   }
-  function loop() {
-    if (playing()) render(clockMs());
-    raf = requestAnimationFrame(loop);
+  function stopLoop() {
+    if (!tickHandle) return;
+    cancelAnimationFrame(tickHandle);
+    clearTimeout(tickHandle);
+    tickHandle = 0;
+  }
+  function scheduleLoop(ms) {
+    stopLoop();
+    tickHandle = ms ? setTimeout(tick, ms) : requestAnimationFrame(tick);
+  }
+  function tick() {
+    tickHandle = 0;
+    if (document.hidden) {
+      scheduleLoop(500);
+      return;
+    }
+    if (playing()) {
+      idleFrames = 0;
+      render(clockMs());
+      scheduleLoop(0);
+      return;
+    }
+    idleFrames += 1;
+    if (idleFrames < 3) scheduleLoop(0);
+    else scheduleLoop(250);
   }
   ensureClock();
   render(0);
-  raf = requestAnimationFrame(loop);
-  window.addEventListener('beforeunload', () => cancelAnimationFrame(raf));
+  scheduleLoop(0);
+  window.addEventListener('beforeunload', () => stopLoop());
 })();
-</script>
+</script>${local ? '' : `\n<script>\n${plateCarryRuntimeSource()}\n</script>`}
 ${
     withHooks
       ? `<script>
 ${countUpRuntimeSource()}
+</script>
+<script>
+${frameFitRuntimeSource()}
 </script>
 <script>
 ${typeFitRuntimeSource()}

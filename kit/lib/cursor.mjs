@@ -10,7 +10,7 @@
  * switches the morph (default on for the arrow; the dot keeps its pulse).
  */
 import { hexA } from './text.mjs';
-import { minJerk } from '../studio/easing.js';
+import { minJerk } from './shared/easing.js';
 
 export const CURSOR_STYLES = Object.freeze(['classic', 'arrow', 'dot']);
 export const CURSOR_SIZES = Object.freeze({ s: 1, m: 1.3, l: 1.65 });

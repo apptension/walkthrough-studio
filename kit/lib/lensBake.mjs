@@ -87,9 +87,10 @@ function render(args) {
  * @param {{mark: object, geo: object}[]} lenses
  * @returns {Promise<{files: string[], stamp: string|null, rendered: number}>}
  */
-export async function prepareLensBakes(video, take, lenses, { rimHex = '#F6AA1E', timing, force = false } = {}) {
+export async function prepareLensBakes(video, take, lenses, { rimHex = '#F6AA1E', timing, force = false, scope = '' } = {}) {
   if (!lenses?.length) return { files: [], stamp: null, rendered: 0 };
-  const dir = join(video.out, 'overlays', 'lens');
+  // Each take bakes into its own folder, so a plate's glass never collides with the recording's.
+  const dir = join(video.out, 'overlays', 'lens', ...(scope ? [scope] : []));
   mkdirSync(dir, { recursive: true });
   const st = statSync(take);
   const takeId = `${st.size}:${st.mtimeMs}`;

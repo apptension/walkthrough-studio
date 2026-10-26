@@ -26,6 +26,8 @@ export const PLATE_CATALOG = Object.freeze([
   { type: 'faq', label: 'FAQ', hint: 'Questions answered before they are asked', list: 'items', fields: ['label', 'note'], shape: 'items:[{label:question,note:answer}] (2–4)' },
   { type: 'pricing', label: 'Pricing', hint: 'Plans side by side, one featured', list: 'tiers', fields: ['label', 'value', 'period', 'note', 'lines'], shape: 'tiers:[{label,value,period?,note?,items?:[],featured?,badge?}] (2–3)' },
   { type: 'team', label: 'People', hint: 'Roles or personas with avatars', list: 'items', fields: ['label', 'note', 'asset'], shape: 'items:[{label,note?,asset?}] (3–6)' },
+  { type: 'showcase', label: 'Showcase', hint: 'An interface shot in a device, zooming to the detail with callout pins', list: 'callouts', fields: ['label', 'x', 'y'], shape: 'shot?:asset, sub?, caption?, focus?:center|top|bottom|left|right, callouts?:[{label,x:0–100,y:0–100}] (≤4)' },
+  { type: 'bento', label: 'Bento', hint: 'Editorial board — the interface, one number, one voice, the stack', list: 'logos', fields: ['label', 'asset'], shape: 'shot?:asset, value, label, quote?, author?, caption?, logos?:[{asset,label?}] (≤4)' },
 ]);
 
 /** Type ids in catalog order. */

@@ -26,7 +26,7 @@ import {
   chapterMotionTiming,
   clampCardHoldMs,
   defaultCardHoldMs,
-} from '../studio/cardMotion.js';
+} from './shared/cardMotion.js';
 import { loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
 import { atmosphereSnippet } from './atmosphere.mjs';
 import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, resolveMotion } from './plateMotion.mjs';
@@ -671,6 +671,12 @@ export function liveCardPaths(video) {
   return { dir, css: join(dir, 'overlays.css') };
 }
 
+/**
+ * Flow indices at or above this belong to cards the Editor wrote rather than the script. They
+ * have no `chapter()`/`say()` call to point at, so they take indices the flow can never reach.
+ */
+export const ADDED_CARD_BASE = 100000;
+
 export function cardId(kind, flowIndex) {
   return `overlay:${kind === 'step' ? 'caption' : kind}:${flowIndex}`;
 }
@@ -688,9 +694,30 @@ export function buildLiveCards(video) {
   copyFileSync(join(TEMPLATES, 'overlays.css'), paths.css);
 
   const flowPath = join(video.dir, 'flow.mjs');
-  const calls = existsSync(flowPath) ? parseFlowCalls(readFileSync(flowPath, 'utf8')) : [];
+  const flowCalls = existsSync(flowPath) ? parseFlowCalls(readFileSync(flowPath, 'utf8')) : [];
+  const marks = loadCardMarks(video);
   // One pairing for every consumer: the card carries its mark's key so bake and Studio match by id.
-  const markByCall = pairCallsToMarks(calls, loadCardMarks(video));
+  const markByCall = pairCallsToMarks(flowCalls, marks);
+  const calls = [...flowCalls];
+  // Cards the Editor wrote. They have no flow call, so one is made up for them — above the
+  // flow's own indices, which is how `addedCardIndex` tells them apart when the copy is edited.
+  const chapterAt = (t) => marks.filter((m) => m.kind === 'chapter' && !m.copyOf && (Number(m.t) || 0) <= t).pop() || null;
+  marks
+    .filter((m) => m.added)
+    .forEach((m, i) => {
+      const at = chapterAt(Number(m.t) || 0);
+      const call = {
+        kind: m.kind === 'chapter' ? 'chapter' : 'say',
+        index: ADDED_CARD_BASE + i,
+        title: String(m.label || ''),
+        body: String(m.body || ''),
+        holdMs: Math.round((Number(m.dur) || 2) * 1000),
+        chapterTitle: at ? String(at.label || '') : '',
+        chapterNo: at ? marks.filter((x) => x.kind === 'chapter' && !x.copyOf && (Number(x.t) || 0) <= (Number(at.t) || 0)).length : 1,
+      };
+      calls.push(call);
+      markByCall.set(call.index, m);
+    });
   const shell = readFileSync(join(TEMPLATES, 'overlay-preview.html'), 'utf8');
   const frame = outputFrame(video.config);
   const p = palette(video.brand);
@@ -713,17 +740,22 @@ export function buildLiveCards(video) {
 
   for (const call of calls) {
     const isChapter = call.kind === 'chapter';
-    if (isChapter) {
+    const added = call.index >= ADDED_CARD_BASE;
+    if (isChapter && !added) {
       chapterNo += 1;
       chapterTitle = call.title;
     }
+    // An added card sits wherever the editor dropped it, so it takes the chapter it fell under
+    // rather than the one the flow had reached.
+    const underNo = added ? Math.max(1, call.chapterNo || 1) : Math.max(1, chapterNo);
+    const underTitle = added ? call.chapterTitle || chapterTitle : chapterTitle;
     const kind = isChapter ? 'chapter' : 'caption';
     const id = cardId(kind, call.index);
     const mark = markByCall.get(call.index) || null;
     const ms = cardHoldMs(call, mark);
     const fragment = renderLiveCardHtml(video.brand, kind, {
-      chapterNo: isChapter ? chapterNo : Math.max(1, chapterNo),
-      chapterTitle,
+      chapterNo: isChapter && !added ? chapterNo : underNo,
+      chapterTitle: underTitle,
       title: call.title,
       body: call.body,
       ms,
@@ -754,15 +786,16 @@ export function buildLiveCards(video) {
       flowIndex: call.index,
       label: call.title,
       body: call.body || '',
-      chapterNo: isChapter ? chapterNo : Math.max(1, chapterNo),
+      chapterNo: isChapter && !added ? chapterNo : underNo,
       holdMs: ms,
       markKey: mark?.key || null,
+      ...(added ? { added: true } : {}),
       htmlPath: file,
       htmlUrl: `/media/${video.slug}/overlays/${id.replace(/:/g, '-')}.html`,
       type: kind,
-      look: chapterLook(isChapter ? chapterNo : Math.max(1, chapterNo))[kind],
+      look: chapterLook(isChapter && !added ? chapterNo : underNo)[kind],
       // Which background keys this card takes from its chapter rather than the video.
-      lookScope: chapterLook(isChapter ? chapterNo : Math.max(1, chapterNo)).scope[kind],
+      lookScope: chapterLook(isChapter && !added ? chapterNo : underNo).scope[kind],
     });
   }
 
@@ -791,10 +824,35 @@ export function listLiveCards(video) {
   }));
 }
 
+/** The copy of a card the Editor wrote lives on the cut, so it is saved there, not in the script. */
+function saveAddedCardCopy(video, flowIndex, fields) {
+  const marks = loadCardMarks(video);
+  const mark = marks.filter((m) => m.added)[flowIndex - ADDED_CARD_BASE];
+  if (!mark) throw new Error(`No added card at index ${flowIndex}`);
+  const raw = JSON.parse(readFileSync(video.configPath, 'utf8'));
+  const edit = { ...(raw.edit || {}) };
+  edit.cards = (edit.cards || []).map((c) =>
+    c.key !== mark.key
+      ? c
+      : {
+          ...c,
+          ...(fields.title != null ? { label: String(fields.title).trim().slice(0, 120) } : {}),
+          ...(fields.body != null ? { body: String(fields.body).trim().slice(0, 240) } : {}),
+        },
+  );
+  raw.edit = edit;
+  writeFileSync(video.configPath, JSON.stringify(raw, null, 2) + '\n');
+  return { op: 'card-copy', index: flowIndex, key: mark.key };
+}
+
 /** Apply Studio inline edit onto flow.mjs (title/body) and video.config.json (chapter label, ghost number). */
 export async function saveLiveCardCopy(video, cardIdStr, fields = {}) {
   const parsed = parseCardId(cardIdStr);
   if (!parsed) throw new Error(`Not a live card id: ${cardIdStr}`);
+  if (parsed.flowIndex >= ADDED_CARD_BASE) {
+    if (fields.title == null && fields.body == null) throw new Error('No text fields to save');
+    return saveAddedCardCopy(video, parsed.flowIndex, fields);
+  }
   const hasCopy = fields.title != null || fields.body != null;
   const hasChrome = parsed.kind === 'chapter' && (fields.chapter != null || fields.number != null);
   if (!hasCopy && !hasChrome) throw new Error('No text fields to save');

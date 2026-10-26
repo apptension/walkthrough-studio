@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { previewCacheControl } from './livePreviewFeed.mjs';
-import { deskFile, resolveDesk } from './deskAssets.mjs';
+import { deskFile } from './deskAssets.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   agentAuthStatus,
@@ -49,19 +49,21 @@ import { PLACEMENT_META, SIZE_IDS, takeCapture, videoLayout } from './layout.mjs
 import { applyCaptureSettings, captureOptions, captureSettings, parseScreen } from './captureSettings.mjs';
 import { outputFrame } from './format.mjs';
 import { lensGeometry, lensTiming } from './lens.mjs';
-import { CURVES, MOTION_SPEEDS } from '../studio/easing.js';
+import { CURVES, MOTION_SPEEDS } from './shared/easing.js';
 
 /** Curve / motion presets for the Studio UI (labels, hints, CSS equivalents — no functions). */
 const CURVES_META = Object.fromEntries(Object.entries(CURVES).map(([id, c]) => [id, { label: c.label, hint: c.hint, css: c.css }]));
 const MOTIONS_META = Object.fromEntries(Object.entries(MOTION_SPEEDS).map(([id, m]) => [id, { label: m.label, hint: m.hint, scale: m.scale }]));
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { recordFailureView } from './recordFailure.mjs';
-import { nextBrief, revisePlan } from '../studio/briefRevise.js';
+import { nextBrief, revisePlan } from './shared/briefRevise.js';
 import { applyBriefRevision, saveSourceRevision, storeCredential } from './briefRevise.mjs';
 import { waitFiles } from './signInPause.mjs';
 import { applyCleanup, formatBytes, planCleanup } from './cleanup.mjs';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
-import { resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
+import { plateClearAt, plateHoldAt, resolveEdit, resolveTransitions, TRANSITION_STYLES } from './edit.mjs';
+import { FPS } from './motion.mjs';
+import { patchPlateColors, plateColorOptions, resolvePlateColors } from './plateColors.mjs';
 import {
   SPEED_RANGE,
   STYLE_GROUPS,
@@ -91,7 +93,13 @@ import {
   patchEdit,
   patchStyle,
   plateTarget,
+  platePlayback,
   rampConflicts,
+  MIN_PLATE_KEEP,
+  PLATE_HOLD_MAX,
+  PLATE_RATE_RANGE,
+  PLATE_TRIM_MAX,
+  normalizePlateTimes,
 } from './editDeck.mjs';
 import {
   GAIN_RANGE,
@@ -141,8 +149,16 @@ import {
   resolveOverlays,
   saveLiveCardCopy,
 } from './liveCards.mjs';
-import { buildPlates, platePaths, readPlateRenderMeta } from './plates.mjs';
+import { buildPlateHtml, buildPlates, checkPlate, mp4Complete, plateBackdrops, plateRows, platePaths, readPlateRenderMeta } from './plates.mjs';
+import { CARRY_STYLE, carryCheck } from './plateCarry.mjs';
+import { chapterCoverage, chapterPlateKeys, isChapterPlate } from './chapterPlates.mjs';
+import { plateMarks } from './plateFx.mjs';
+import { ATMOSPHERES, fieldShaderSource } from './atmosphere.mjs';
 import { plateStill } from './plateStills.mjs';
+import { plateLibrary, revertPlate, swapPlate, swapSummary, trackLayout } from './plateSwap.mjs';
+import { applyPlateContent, plateContent } from './plateSchema.mjs';
+import { ICONS } from './plateIcons.mjs';
+import { grabFrameAsset, listPlateAssets, plateAssetFile, savePlateAsset } from './plateAssets.mjs';
 import { brandDraftState, candidateFile, lockupImage, saveBrandChoices } from './brandDraft.mjs';
 import { exploreFeed } from './exploreFeed.mjs';
 import { savePlateCopy } from './plateCopy.mjs';
@@ -161,7 +177,7 @@ import { createProject, draftNote } from './newProject.mjs';
 import { readGuidedTake, takeFiles } from './guideTake.mjs';
 import { readGuideStatus, readGuidedTour, requestGuideControl, requestGuideFinish } from './guidedTour.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
-import { createDevHub, injectDevClient } from './devServer.mjs';
+import { createDevHub } from './devServer.mjs';
 import { brandReadiness, listBrands, listVideos, loadVideo, OUT_ROOT } from './project.mjs';
 import { suggestPlates, applyPlateSuggestions } from './suggestPlates.mjs';
 import {
@@ -173,8 +189,8 @@ import {
   versionMediaPath,
 } from './versions.mjs';
 
-const STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio');
-const NEXT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio-next', 'dist');
+const DESK_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio', 'dist');
+const DESK_PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio', 'public');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -493,7 +509,7 @@ function videoSummary(slug) {
     guidedTour: guidedTourSummary(video),
     brief: readJsonSafe(join(video.dir, 'brief.json')),
     lineage: lineageSummary(video),
-    interstitials: (video.config.interstitials || []).map((i) => ({
+    interstitials: plateRows(video).map((i) => ({
       id: i.id,
       type: i.type,
       before: i.before,
@@ -510,7 +526,7 @@ function videoSummary(slug) {
       close: motionOverrides(video.config.close?.motion),
     },
     plateStyles: Object.fromEntries(
-      ['open', 'close', ...(video.config.interstitials || []).map((i) => i.id)]
+      ['open', 'close', ...plateRows(video).map((i) => i.id)]
         .map((id) => [id, Object.keys(plateTarget(video.config, id)?.style || {}).length])
         .filter(([, n]) => n > 0)
     ),
@@ -614,6 +630,9 @@ function plateEncodeSummary(mp4Path) {
   if (!meta) {
     return { ok: false, status: 'no-meta', warnings: ['render-json-missing'] };
   }
+  if (!mp4Complete(mp4Path)) {
+    return { ok: false, status: 'broken', warnings: ['mp4-incomplete'] };
+  }
   if (meta.qc && meta.qc.ok === false) {
     return {
       ok: false,
@@ -662,7 +681,7 @@ function storySummary(video) {
   const brief = readJsonSafe(join(video.dir, 'brief.json'));
   const purpose = resolvePurpose(video.config, brief);
   const spine = PURPOSES[purpose];
-  const types = new Set((video.config.interstitials || []).map((i) => i.type));
+  const types = new Set(plateRows(video).map((i) => i.type));
   return {
     purpose,
     explicit: PURPOSE_IDS.includes(video.config.purpose) || PURPOSE_IDS.includes(brief?.purpose),
@@ -744,6 +763,12 @@ function plateRenderHealth(video) {
   return { bad: issues.length > 0, issues, byId };
 }
 
+/** A render's URL, versioned by its file time so a re-rendered plate is never served from cache. */
+function mediaUrl(slug, file) {
+  if (!existsSync(file)) return null;
+  return `/media/${slug}/${basename(file)}?v=${Math.round(statSync(file).mtimeMs)}`;
+}
+
 /** Live HTML plate previews (open / close / interstitials) for the Program iframe. */
 function listHtmlPlates(video) {
   const paths = platePaths(video);
@@ -758,12 +783,12 @@ function listHtmlPlates(video) {
       type,
       htmlUrl: `/media/${slug}/plates/${id}.html?t=${Date.now()}`,
       path: htmlPath,
-      mp4Url: existsSync(mp4Path) ? `/media/${slug}/${basename(mp4Path)}` : null,
+      mp4Url: mediaUrl(slug, mp4Path),
       encode,
     });
   };
   push('open', 'Open', paths.open.html, paths.open.mp4, 'open');
-  for (const it of video.config.interstitials || []) {
+  for (const it of plateRows(video)) {
     const dest = paths.interstitial[it.id];
     if (dest) push(it.id, it.title || it.id, dest.html, dest.mp4, it.type);
   }
@@ -965,7 +990,7 @@ function coalesceContiguousLive(scenes) {
  * Editor-only: break live scenes at chapter marks so “Meet Apptension” etc. appear as their own
  * bricks (order/omit). Produce’s buildEditPlan applies the same split when writing edit-plan.json.
  */
-function splitEditorScenesAtChapters(scenes, timeline, map) {
+function splitEditorScenesAtChapters(scenes, timeline, map, plateByKey = null) {
   const chapters = (timeline || []).filter((m) => m.kind === 'chapter');
   if (!chapters.length) return scenes;
   const out = [];
@@ -990,6 +1015,16 @@ function splitEditorScenesAtChapters(scenes, timeline, map) {
       if (chStart > cursor + 0.35) {
         out.push(liveSceneSlice(s, cursor, chStart, map));
         cursor = chStart;
+      }
+      // The same hand-off produce makes: the chapter plays as a slide, standing in for the
+      // stretch the recording held still under the old card. Keeps Editor and master in step.
+      const cover = plateByKey?.get(ch.key || cardMarkKey(ch));
+      if (cover) {
+        if (cover.scene) out.push(cover.scene);
+        cursor = Math.min(nextT, Math.max(chStart, chStart + cover.hold));
+        if (cursor < nextT - 0.05) out.push(liveSceneSlice(s, cursor, nextT, map, ch.label));
+        cursor = nextT;
+        continue;
       }
       const start = cursor < chStart ? cursor : chStart;
       out.push(liveSceneSlice(s, start, nextT, map, ch.label));
@@ -1026,41 +1061,113 @@ const UNRENDERED_PLATE_SEC = 4.5;
  * own, a plate added since). Each sits before the chapter it introduces, with its source's
  * length until its own MP4 exists.
  */
+/**
+ * A plate row as an Editor scene. Plays its render when there is one; until then it stands in
+ * at the length its twin runs, so the sequence reads right before the first Produce.
+ */
+function plateScene(video, row, near = []) {
+  const plate = listHtmlPlates(video).find((p) => p.id === row.id);
+  if (!plate) return null;
+  const mp4 = platePaths(video).interstitial[row.id]?.mp4;
+  const plates = near.filter((s) => s.kind === 'plate');
+  const twin = plates.find((s) => row.id.startsWith(`${s.id}-`)) || plates.find((s) => s.type === row.type);
+  return {
+    id: row.id,
+    kind: 'plate',
+    title: row.title || row.id,
+    type: row.type,
+    dur: mp4 && existsSync(mp4) ? mediaDuration(mp4) : twin?.dur || UNRENDERED_PLATE_SEC,
+    transitionIn: null,
+    join: null,
+    cleanFrom: null,
+    cleanTo: null,
+    editable: true,
+    plateId: row.id,
+    renderOnly: `plate:${row.id}`,
+    htmlUrl: plate.htmlUrl,
+    mp4Url: plate.mp4Url,
+  };
+}
+
 function withUnrenderedPlates(video, scenes) {
   const have = new Set(scenes.map((s) => s.plateId || s.id));
-  const missing = (video.config.interstitials || []).filter((it) => it?.id && !have.has(it.id));
+  const missing = plateRows(video).filter((it) => it?.id && !have.has(it.id));
   if (!missing.length) return scenes;
-  const html = Object.fromEntries(listHtmlPlates(video).map((p) => [p.id, p]));
-  const paths = platePaths(video);
   const out = [...scenes];
   for (const it of missing) {
-    const plate = html[it.id];
-    if (!plate) continue;
-    const mp4 = paths.interstitial[it.id]?.mp4;
-    const plates = scenes.filter((s) => s.kind === 'plate');
-    const twin = plates.find((s) => it.id.startsWith(`${s.id}-`)) || plates.find((s) => s.type === it.type);
-    const dur = mp4 && existsSync(mp4) ? mediaDuration(mp4) : twin?.dur || UNRENDERED_PLATE_SEC;
-    const scene = {
-      id: it.id,
-      kind: 'plate',
-      title: it.title || it.id,
-      type: it.type,
-      dur,
-      transitionIn: null,
-      join: null,
-      cleanFrom: null,
-      cleanTo: null,
-      editable: true,
-      plateId: it.id,
-      renderOnly: `plate:${it.id}`,
-      htmlUrl: plate.htmlUrl,
-      mp4Url: plate.mp4Url,
-    };
+    const scene = plateScene(video, it, scenes);
+    if (!scene) continue;
     const at = out.findIndex((s) => s.kind === 'live' && s.title === it.before);
     const close = out.findIndex((s) => s.id === 'close');
     out.splice(at >= 0 ? at : close >= 0 ? close : out.length, 0, scene);
   }
   return out;
+}
+
+/**
+ * Rebuild every plate. When another plate's problem stops that, still write `plateId`'s own
+ * HTML so the change shows, and hand back what is wrong elsewhere as a warning.
+ */
+function rebuildAround(slug, plateId) {
+  try {
+    return rebuildPlateHtml(slug);
+  } catch (err) {
+    const video = loadVideo(slug);
+    if (plateId !== 'open' && plateId !== 'close') buildPlateHtml(video, plateId);
+    return { ok: true, plates: listProgramCards(video), warning: err.message || String(err) };
+  }
+}
+
+/** Rewrite a config row in place, so the parent array (or `config.open`) keeps pointing at it. */
+function replaceRow(target, next) {
+  if (next === target) return;
+  for (const k of Object.keys(target)) delete target[k];
+  Object.assign(target, next);
+}
+
+/**
+ * Re-render one plate a moment after the last swap: flicking through types queues one job,
+ * and the timeline gets the new template's true length without waiting for Produce.
+ */
+const plateRenderTimers = new Map();
+function renderPlateSoon(slug, plateId, ms = 3500) {
+  const key = `${slug}:${plateId}`;
+  clearTimeout(plateRenderTimers.get(key));
+  const timer = setTimeout(() => {
+    plateRenderTimers.delete(key);
+    try {
+      const video = loadVideo(slug);
+      if (plateRows(video).some((r) => r.id === plateId)) startKitJob(video, 'plates', ['--force', '--only', plateId]);
+    } catch (err) {
+      console.warn(`plate render after swap (${plateId}):`, err.message || err);
+    }
+  }, ms);
+  timer.unref?.();
+  plateRenderTimers.set(key, timer);
+}
+
+/**
+ * The chapter a plate inserted after scene `at` introduces: the next recording stretch that
+ * opens on a chapter, else the last chapter. The deck order places it exactly; this keeps the
+ * script sheet grouping it where it plays.
+ */
+function chapterAfter(scenes, at, timeline = []) {
+  const chapters = (timeline || []).filter((m) => m.kind === 'chapter' && m.label).map((m) => String(m.label));
+  const known = new Set(chapters);
+  for (const s of scenes.slice(at + 1)) {
+    const label = s.kind === 'live' ? s.opensOnCard || (known.has(s.title) ? s.title : null) : null;
+    if (label) return label;
+  }
+  return chapters.at(-1) || null;
+}
+
+/** The derived row behind a plate id, so a first edit on a chapter plate has something to save. */
+function derivedPlateRow(video, plateId) {
+  try {
+    return plateRows(video).find((r) => r.id === plateId && isChapterPlate(r)) || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Delivery-timeline scenes from edit-plan.json (or produce-meta.edit). */
@@ -1097,18 +1204,57 @@ function listScenes(video) {
       join: seg.join || null,
       cleanFrom: isPlate ? null : (seg.start ?? null),
       cleanTo: isPlate ? null : (seg.end ?? null),
+      ...(isPlate && seg.padOut ? { padOut: seg.padOut } : {}),
+      ...(isPlate && seg.naturalDur ? { naturalDur: seg.naturalDur } : {}),
       editable: isPlate,
       plateId,
       ...(seg.repeatOf ? { repeatOf: seg.repeatOf } : {}),
       renderOnly: plateKey,
       htmlUrl: isPlate && htmlById[plateId] ? htmlById[plateId].htmlUrl : null,
       mp4Url: isPlate
-        ? plateId === 'open'
-          ? `/media/${video.slug}/brand-open.mp4`
-          : plateId === 'close'
-            ? `/media/${video.slug}/brand-close.mp4`
-            : `/media/${video.slug}/plate-${plateId}.mp4`
+        ? mediaUrl(video.slug, join(video.out, plateId === 'open' ? 'brand-open.mp4' : plateId === 'close' ? 'brand-close.mp4' : `plate-${plateId}.mp4`)) ||
+          `/media/${video.slug}/${plateId === 'open' ? 'brand-open.mp4' : plateId === 'close' ? 'brand-close.mp4' : `plate-${plateId}.mp4`}`
         : null,
+    };
+  });
+}
+
+/**
+ * Plate scenes on their own clock (edit.plateTimes). Each plate carries its natural length (the
+ * rendered plate, before any retime), the settled frame an extension holds, and `timing` when it
+ * is retimed, so the Editor previews and the render cut the same frames.
+ */
+function timePlateScenes(video, scenes, plateTimes, pinnedJoins = {}) {
+  const paths = platePaths(video);
+  const byId = new Map(normalizePlateTimes(plateTimes).map((t) => [t.id, t]));
+  return scenes.map((s, i) => {
+    if (s.kind !== 'plate' || !s.plateId) return s;
+    const file = s.plateId === 'open' ? paths.open : s.plateId === 'close' ? paths.close : paths.interstitial[s.plateId];
+    const meta = file?.mp4 ? readPlateRenderMeta(file.mp4) : null;
+    const planPad = Number(s.padOut) || 0;
+    const natural = Number(meta?.durationSec) || Number(s.naturalDur) || Math.max(0.5, Number(s.dur) - planPad);
+    const holdAt = plateHoldAt(file?.html, natural);
+    const pb = platePlayback(byId.get(s.id), natural, holdAt);
+    // The last render's pad was sized for its own timing; a plate retimed then or now re-derives it
+    // the way buildEditPlan does — the next transition starts only once the exits are clear.
+    const next = scenes[i + 1];
+    const snap = (v) => Math.round(v * FPS) / FPS;
+    const body = pb.identity ? pb.dur : snap(pb.dur);
+    let pad = planPad;
+    const clearAt = plateClearAt(file?.html, natural);
+    if ((!pb.identity || s.naturalDur != null) && next && !next.hardCut) {
+      const want = snap(Number(pinnedJoins[joinKey(s, next)]?.duration ?? next.transitionIn?.dur) || 0);
+      const clearOut = Math.min(pb.dur, pb.toOutput(clearAt));
+      pad = snap(Math.max(0, clearOut + want - body));
+    }
+    return {
+      ...s,
+      clearAt: Math.round(clearAt * 1000) / 1000,
+      ...(pad ? { padOut: Math.round(pad * 1000) / 1000 } : { padOut: undefined }),
+      dur: Math.round((body + pad) * 1000) / 1000,
+      naturalDur: pb.baseDur,
+      holdAt: pb.holdAt,
+      timing: pb.identity ? null : { trimStart: pb.from, trimEnd: Math.round((pb.baseDur - pb.to) * 1000) / 1000, hold: pb.hold, rate: pb.rate },
     };
   });
 }
@@ -1181,6 +1327,9 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   const space = takeSpace(video);
   const width = space.cssW;
   const height = space.cssH;
+  // Plate marks are fractions of the delivered frame, not the capture viewport.
+  const { width: frameW, height: frameH } = outputFrame(video.config);
+  const frame = { width: frameW, height: frameH };
   const deck = resolveEdit(video, { liveDur: hasLive ? liveDur : Infinity });
   const timeline = loadRawTimeline(video);
   const camera = video.brand.direction?.camera || { zoom: 'off', frame: 'full', background: 'brand' };
@@ -1194,37 +1343,63 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   // Live slices were cut on the clean reel of the last render; map them back to recording time
   // with that render's ramps so the editor can lay them out under the current deck.
   const renderedMap = liveTimeMap(meta?.speed?.ramps || [], liveDur);
+  // The last render baked its trims into these slices; give them back their full length so the
+  // deck's trims below apply once, not on top of the old ones.
+  const renderedTrims = new Map((meta?.editDeck?.trims || []).map((t) => [t.id, t]));
   // Replays in the last render come back from the deck below, so drop them here.
   const listed = listScenes(video)
     .filter((s) => !isRepeatId(s.id))
-    .map((s) =>
-      s.kind === 'live' && hasLive && s.cleanFrom != null
-        ? { ...s, recFrom: renderedMap.fromClean(s.cleanFrom), recTo: renderedMap.fromClean(s.cleanTo) }
-        : s
-    );
+    .map((s) => {
+      if (s.kind !== 'live' || !hasLive || s.cleanFrom == null) return s;
+      const baked = renderedTrims.get(s.id);
+      return {
+        ...s,
+        recFrom: Math.max(0, renderedMap.fromClean(s.cleanFrom) - (Number(baked?.trimStart) || 0)),
+        recTo: Math.min(liveDur, renderedMap.fromClean(s.cleanTo) + (Number(baked?.trimEnd) || 0)),
+      };
+    });
   // Honour edit.cards so moving a chapter on the timeline reshapes rearrangeable sections.
   const splitMarks = applyCardEdits(keyCardMarks(timeline), deck.cards).filter((m) => !m.copyOf);
   // edit-plan may already be chapter-split; coalesce contiguous live bricks, then re-split
   // from current marks so Editor sections track timeline card moves.
-  const natural = withUnrenderedPlates(video, splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map));
+  // Chapters that play as slides: the Editor splits the recording for them exactly as produce does.
+  const coverage = chapterCoverage(video.config, splitMarks, { chapterCards: deck.chapterCards });
+  const chapterPlates = new Map();
+  for (const [key, a] of coverage.absorbed) chapterPlates.set(key, { hold: a.hold, scene: null });
+  for (const row of coverage.rows) {
+    const scene = plateScene(video, row, listed);
+    if (scene) chapterPlates.set(row.chapter, { hold: row.hold, scene });
+  }
+  const natural = withUnrenderedPlates(video, splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map, chapterPlates));
   // The editor's order plays the rendered slices in a new sequence; omit drops sections; trims cut heads/tails.
-  const scenes = applySegmentCuts(
-    applySegmentTrims(applySegmentOmit(applySegmentOrder(applySegmentRepeats(natural, deck.repeats), deck.order), deck.omit), deck.trims),
-    deck.cuts,
-    map
+  const scenes = timePlateScenes(
+    video,
+    applySegmentCuts(
+      applySegmentTrims(applySegmentOmit(applySegmentOrder(applySegmentRepeats(natural, deck.repeats), deck.order), deck.omit), deck.trims),
+      deck.cuts,
+      map
+    ),
+    deck.plateTimes,
+    deck.transitions
   );
   const omitted = natural
     .filter((s) => (deck.omit || []).includes(s.id))
     .map((s) => ({ id: s.id, kind: s.kind, title: s.title, type: s.type || null }));
+  // Continuity is decided on the cut as it stands now (order, omits, colours), not the last render's.
+  const backdrops = plateBackdrops(video);
+  const videoStyle = resolveTransitions(video).style;
   const joins = scenes.slice(1).map((s, i) => {
     const prev = scenes[i];
     const key = s.join || joinKey(prev, s);
+    const carry = carryCheck(prev, s, { backdrops, deck, style: deck.transitions[key]?.style || videoStyle });
+    const planned = s.transitionIn?.type || null;
     return {
       key,
       prev: { id: prev.id, kind: prev.kind, title: prev.title },
       next: { id: s.id, kind: s.kind, title: s.title },
       at: s.start,
-      type: s.hardCut ? null : s.transitionIn?.type || null,
+      type: s.hardCut ? null : carry.ok ? CARRY_STYLE : planned === CARRY_STYLE ? 'dissolve' : planned,
+      ...(prev.kind === 'plate' && s.kind === 'plate' ? { carry } : {}),
       dur: s.hardCut ? 0 : s.transitionIn?.dur || null,
       card: s.hardCut ? false : Boolean(s.transitionIn?.card),
       pinned: deck.transitions[key] || null,
@@ -1245,9 +1420,13 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       htmlUrl: p.htmlUrl,
       mp4Url: p.mp4Url,
       style: target.style || {},
+      colors: target.colors || {},
       motion: target.motion || {},
       overrides: motionOverrides(target.motion),
       layout: resolveLayout(plateKind(p.id, { type: p.type }), target.layout),
+      swap: swapSummary(target, p.id),
+      // Chapter plates follow their chapter; the ends change composition; the rest change type.
+      swappable: p.id === 'open' || p.id === 'close' || Boolean((video.config.interstitials || []).some((i) => i.id === p.id && !i.chapter && i.type)),
     };
   });
   const marks = applyCardEdits(
@@ -1266,6 +1445,28 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
     deck.cards
   );
   const direction = video.brand.direction || {};
+  // Magnifiers placed on a plate live on that plate's own clock and in frame fractions, so they
+  // are resolved against the delivered frame rather than the recording's.
+  const plateLenses = [];
+  for (const clip of new Set((deck.lenses || []).map((l) => l.clip).filter(Boolean))) {
+    for (const m of plateMarks(deck, clip, frame).lenses) {
+      const geo = lensGeometry(m, frame);
+      plateLenses.push({
+        key: `edit:${m.id}`,
+        id: m.id,
+        clip,
+        source: 'edit',
+        label: m.label,
+        t: m.t,
+        dur: m.dur,
+        rect: m.rect,
+        path: null,
+        zoom: Number(geo.zoom.toFixed(3)),
+        diameter: geo.diameter,
+        S: geo.S,
+      });
+    }
+  }
   const lenses = resolveLenses(timeline, deck).map((m) => {
     const geo = lensGeometry(m, { width, height });
     return {
@@ -1423,15 +1624,22 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
     naturalIds: applySegmentRepeats(natural, deck.repeats).map((s) => s.id),
     omitted,
     plates,
+    plateLibrary: plateLibrary(),
     styleGroups: STYLE_GROUPS,
     transitionStyles: TRANSITION_STYLES,
     transitions: resolveTransitions(video),
     camera,
     frame: camera.frame === 'inset' ? { ...insetGeometry({ width, height, padding: camera.padding, corners: camera.corners }), background: camera.background || 'brand', shadow: camera.shadow || 'soft' } : null,
-    lenses,
+    lenses: [...lenses, ...plateLenses],
     recordedLenses,
+    // Camera moves on plates: plate clock, frame fractions, no auto shots to merge with.
+    plateZooms: (deck.zooms || []).filter((z) => z.clip),
+    plateFrame: frame,
     lensRim: video.brand.colors?.gold || '#F6AA1E',
-    brandColors: { ink: video.brand.colors?.ink, surface: video.brand.colors?.surface, gold: video.brand.colors?.gold, amber: video.brand.colors?.amber },
+    brandColors: { ink: video.brand.colors?.ink, surface: video.brand.colors?.surface, gold: video.brand.colors?.gold, amber: video.brand.colors?.amber, teal: video.brand.colors?.teal || video.brand.colors?.gold, text: video.brand.colors?.text, muted: video.brand.colors?.muted, onAccent: video.brand.colors?.onAccent },
+    // Plate background colours: the video default (each plate's own pick rides on `plates[].colors`).
+    plateColors: video.config.plateColors || {},
+    plateColorOptions: plateColorOptions(),
     cursor: direction.cursor || null,
     cursorOptions: CURSOR_OPTIONS,
     pace: direction.pace || 'steady',
@@ -1453,6 +1661,10 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       voiceMinSec: VOICE_MIN_SEC,
       voiceSpeed: VOICE_SPEED_RANGE,
       voiceTextMax: VOICE_TEXT_MAX,
+      plateRate: PLATE_RATE_RANGE,
+      plateHoldMax: PLATE_HOLD_MAX,
+      plateTrimMax: PLATE_TRIM_MAX,
+      plateMinKeep: MIN_PLATE_KEEP,
     },
     audio,
   };
@@ -1533,6 +1745,20 @@ async function handleApi(req, res, url) {
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
+  }
+
+  if (path === '/api/atmospheres/shaders' && req.method === 'GET') {
+    const fields = {};
+    for (const id of ATMOSPHERE_IDS) {
+      if (id === 'none') continue;
+      try {
+        fields[id] = { label: ATMOSPHERES[id]?.label || id, opacity: ATMOSPHERES[id]?.opacity ?? 0.4, shader: fieldShaderSource(id) };
+      } catch {
+        /* a field without a shader falls back to its CSS swatch */
+      }
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return json(res, 200, { fields });
   }
 
   if (path === '/api/capture/options' && req.method === 'GET') {
@@ -1986,10 +2212,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
-    const target =
-      plateId === 'open' || plateId === 'close'
-        ? (current[plateId] = current[plateId] || {})
-        : (current.interstitials || []).find((i) => i.id === plateId);
+    const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
     if (!target) return json(res, 404, { error: `No plate "${plateId}"` });
     try {
       if (body.reset) delete target.motion;
@@ -2022,10 +2245,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
-    const target =
-      plateId === 'open' || plateId === 'close'
-        ? (current[plateId] = current[plateId] || {})
-        : (current.interstitials || []).find((i) => i.id === plateId);
+    const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
     if (!target) return json(res, 404, { error: `No plate "${plateId}"` });
     const kind = plateKind(plateId, target);
     let layout;
@@ -2034,12 +2254,177 @@ async function handleApi(req, res, url) {
     } catch (e) {
       return json(res, 400, { error: e.message });
     }
+    const prev = structuredClone(target);
     if (layout) target.layout = layout;
     else delete target.layout;
+    replaceRow(target, trackLayout(prev, target, plateId));
     snapshotSources(video);
     writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
     const rebuilt = rebuildPlateHtml(slug);
-    return json(res, 200, { ...rebuilt, ok: true, plateId, layout: resolveLayout(kind, layout), style: target.style || {} });
+    return json(res, 200, { ...rebuilt, ok: true, plateId, layout: resolveLayout(kind, layout), style: target.style || {}, swap: swapSummary(target, plateId) });
+  }
+
+  // Swap a plate for another type in the same slot (`{ type }`), or go back to the plate the
+  // script chose (`{ revert: true }` — also undoes an opening / close composition change).
+  const plateSwapRoute = rest.match(/^\/plates\/([^/]+)\/swap$/);
+  if (plateSwapRoute && req.method === 'POST') {
+    const plateId = decodeURIComponent(plateSwapRoute[1]);
+    const body = await readBody(req);
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const target = plateTarget(current, plateId);
+    if (!target) return json(res, 404, { error: `"${plateId}" follows its chapter — restyle it instead of swapping` });
+    try {
+      const next = body.revert ? revertPlate(target, plateId) : swapPlate(target, String(body.type || ''));
+      if (plateId !== 'open' && plateId !== 'close') checkPlate(video.brand, next);
+      replaceRow(target, next);
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+    snapshotSources(video);
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    let rebuilt;
+    try {
+      rebuilt = rebuildAround(slug, plateId);
+    } catch (err) {
+      return json(res, 500, { error: err.message || String(err) });
+    }
+    if (plateId !== 'open' && plateId !== 'close') renderPlateSoon(slug, plateId);
+    return json(res, 200, { ...rebuilt, ok: true, plateId, type: target.type || plateId, layout: target.layout || null, swap: swapSummary(target, plateId), ...(await editDeckFull(loadVideo(slug))) });
+  }
+
+  // ── Plate content: what the plate is made of beyond its words ───────────────────────────
+  // Schema + current values for the Inspector's Content pane (lists, assets, icons, numbers).
+  const plateContentRoute = rest.match(/^\/plates\/([^/]+)\/content$/);
+  if (plateContentRoute && req.method === 'GET') {
+    const plateId = decodeURIComponent(plateContentRoute[1]);
+    const row = plateTarget(video.config, plateId) || derivedPlateRow(video, plateId);
+    if (!row) return json(res, 404, { error: `Unknown plate "${plateId}"` });
+    const content = plateContent(row);
+    if (!content) return json(res, 200, { ok: true, plateId, type: row.type || plateId, schema: null, fields: {}, lists: {} });
+    return json(res, 200, { ok: true, plateId, type: row.type, ...content, assets: listPlateAssets(video) });
+  }
+  // Apply content ops (set / add / remove / move / duplicate). The plate is rebuilt in a scratch
+  // dir first, so a row that the builder would reject never lands in the config.
+  if (plateContentRoute && req.method === 'POST') {
+    const plateId = decodeURIComponent(plateContentRoute[1]);
+    const body = await readBody(req);
+    const ops = Array.isArray(body.ops) ? body.ops : body.op ? [body] : [];
+    if (!ops.length) return json(res, 400, { error: 'No content ops' });
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
+    if (!target) return json(res, 404, { error: `Unknown plate "${plateId}"` });
+    let changed;
+    try {
+      changed = applyPlateContent(target, ops).changed;
+      checkPlate(video.brand, target);
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+    snapshotSources(video);
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    let rebuilt;
+    try {
+      rebuilt = rebuildAround(slug, plateId);
+    } catch (err) {
+      return json(res, 500, { error: err.message || String(err) });
+    }
+    renderPlateSoon(slug, plateId);
+    const fresh = loadVideo(slug);
+    const row = plateTarget(fresh.config, plateId);
+    return json(res, 200, { ...rebuilt, ok: true, plateId, changed, ...(plateContent(row) || {}), ...(await editDeckFull(fresh)) });
+  }
+  // Upload an image for a plate (base64 JSON, like music and voice uploads). Returns the asset path.
+  const plateAssetRoute = rest.match(/^\/plates\/([^/]+)\/asset$/);
+  if (plateAssetRoute && req.method === 'POST') {
+    const body = await readBody(req);
+    try {
+      const saved = savePlateAsset(video, { name: body.name, data: body.data || body.image, mime: body.mime });
+      return json(res, 200, { ok: true, asset: saved.asset, bytes: saved.bytes, assets: listPlateAssets(video) });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+  }
+  // Grab an interface frame from the recording at `t` (live seconds) as a plate asset.
+  const plateGrabRoute = rest.match(/^\/plates\/([^/]+)\/grab$/);
+  if (plateGrabRoute && req.method === 'POST') {
+    const body = await readBody(req);
+    try {
+      const grabbed = grabFrameAsset(video, body.t);
+      return json(res, 200, { ok: true, asset: grabbed.asset, t: grabbed.t, assets: listPlateAssets(video) });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+  }
+  // One plate icon as a standalone SVG (the Inspector's icon picker shows the real glyphs).
+  const plateIconRoute = rest.match(/^\/plate-icon\/([^/]+)\.svg$/);
+  if (plateIconRoute && req.method === 'GET') {
+    const name = decodeURIComponent(plateIconRoute[1]);
+    const svg = ICONS[name];
+    if (!svg) return json(res, 404, { error: `No icon "${name}"` });
+    res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
+    res.end(svg.replace(/currentColor/g, '#e8ebe6').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+    return;
+  }
+  // Every image a plate can show, for the Inspector's asset shelf.
+  if (rest === '/plate-assets' && req.method === 'GET') {
+    return json(res, 200, { ok: true, assets: listPlateAssets(video) });
+  }
+  // The image behind an asset path, for thumbnails.
+  if (rest === '/plate-asset' && req.method === 'GET') {
+    const asset = url.searchParams.get('path') || '';
+    const file = plateAssetFile(video, asset);
+    if (!file) return json(res, 404, { error: `No asset "${asset}"` });
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif' }[extname(file).toLowerCase()] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'private, max-age=60' });
+    createReadStream(file).pipe(res);
+    return;
+  }
+
+  // A plate from the library joins the scenario (config row + narration slot) and lands in the
+  // cut right after `after` (a scene id), or before the close when there is none.
+  if (rest === '/plates/add' && req.method === 'POST') {
+    const body = await readBody(req);
+    const type = String(body.type || '');
+    const before = await editDeckFull(video);
+    const sequence = (before.scenes || []).map((s) => s.id);
+    const closeAt = sequence.indexOf('close');
+    const afterAt = body.after ? sequence.indexOf(String(body.after)) : -1;
+    const at = afterAt >= 0 ? afterAt : closeAt > 0 ? closeAt - 1 : sequence.length - 1;
+    let result;
+    snapshotSources(video);
+    try {
+      const chapter = chapterAfter(before.scenes || [], at, loadRawTimeline(video));
+      result = await applyScriptStructure(video, { op: 'plate-add', type, ...(chapter ? { before: chapter } : {}) }).catch((err) =>
+        chapter && /not a chapter/.test(err.message) ? applyScriptStructure(video, { op: 'plate-add', type }) : Promise.reject(err),
+      );
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+    const plateId = result.plateId;
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const deck = current.edit || {};
+    const order = [...(deck.order?.length ? deck.order : before.naturalIds || sequence)].filter((id) => id !== plateId);
+    const anchor = sequence[at];
+    const pos = anchor != null && order.includes(anchor) ? order.indexOf(anchor) + 1 : Math.max(0, order.indexOf('close'));
+    order.splice(pos, 0, plateId);
+    const space = takeSpace(video, current);
+    const LIVE = join(video.out, 'live.mp4');
+    current.edit = compactEdit(
+      patchEdit(deck, { order }, { liveDur: existsSync(LIVE) ? mediaDuration(LIVE) : Infinity, width: space.cssW, height: space.cssH, styles: TRANSITION_STYLES }),
+    );
+    if (!current.edit) delete current.edit;
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    let rebuilt;
+    try {
+      rebuilt = rebuildAround(slug, plateId);
+    } catch (err) {
+      return json(res, 500, { error: err.message || String(err) });
+    }
+    const job = startKitJob(loadVideo(slug), 'plates', ['--force', '--only', plateId]);
+    return json(res, 200, { ok: true, id: plateId, type, job: jobPayload(job), warning: rebuilt.warning || null, ...(await editDeckFull(loadVideo(slug))) });
   }
 
   // Editor deck: speed ramps, manual zooms, zoom-free windows, pinned joins.
@@ -2397,7 +2782,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
-    const target = plateTarget(current, plateId, { create: true });
+    const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
     if (!target) return json(res, 404, { error: `No plate "${plateId}"` });
     try {
       const plateType = plateId === 'open' || plateId === 'close' ? plateId : target.type || null;
@@ -2416,6 +2801,45 @@ async function handleApi(req, res, url) {
       return json(res, 500, { error: err.message || String(err) });
     }
     return json(res, 200, { ...rebuilt, ok: true, plateId, style: target.style || {} });
+  }
+
+  // Plate background colours. One plate: open/close/interstitials[].colors; every plate:
+  // config.plateColors. Body `{ colors: { background, accent, accent2, text } }` (null clears a
+  // key), `{ preset }` sets a curated look, `{ reset: true }` drops the override.
+  const plateColorsMatch = rest.match(/^\/plates\/([^/]+)\/colors$/);
+  if ((plateColorsMatch || rest === '/plate-colors') && req.method === 'POST') {
+    const plateId = plateColorsMatch ? decodeURIComponent(plateColorsMatch[1]) : null;
+    const body = await readBody(req);
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const target = plateId ? plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) }) : current;
+    if (!target) return json(res, 404, { error: `No plate "${plateId}"` });
+    const key = plateId ? 'colors' : 'plateColors';
+    try {
+      const next = body.reset
+        ? undefined
+        : patchPlateColors(target[key], body.preset != null ? { preset: body.preset } : body.colors || {}, { plate: Boolean(plateId) });
+      if (next) target[key] = next;
+      else delete target[key];
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+    snapshotSources(video);
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    let rebuilt;
+    try {
+      rebuilt = rebuildPlateHtml(slug);
+    } catch (err) {
+      return json(res, 500, { error: err.message || String(err) });
+    }
+    const own = plateId ? target.colors || {} : null;
+    return json(res, 200, {
+      ...rebuilt,
+      ok: true,
+      plateId,
+      plateColors: current.plateColors || {},
+      ...(plateId ? { colors: own, vars: resolvePlateColors(video.brand.colors, current.plateColors, own).vars } : {}),
+    });
   }
 
   // Story purpose → config.purpose; the agents and the critic read it from there.
@@ -3034,8 +3458,8 @@ function serveMedia(req, res, url) {
   return true;
 }
 
-function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
-  const { bad, file, immutable } = deskFile(url.pathname, desk, { nextDist: NEXT_DIST, legacyDir: STUDIO_DIR });
+function serveStatic(req, res, url, { dev = false } = {}) {
+  const { bad, file, immutable } = deskFile(url.pathname, { distDir: DESK_DIST, publicDir: DESK_PUBLIC });
   if (bad) {
     res.writeHead(400);
     res.end('bad');
@@ -3043,10 +3467,7 @@ function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
   }
   if (!file) return false;
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
-  const raw = readFileSync(file);
-  // The dev hub reloads the classic desk; the new desk reloads through Vite.
-  const inject = dev && desk === 'legacy' && /\.html?$/i.test(file);
-  const payload = inject ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
+  const payload = readFileSync(file);
   const fresh = dev || /\.(html|js|css|mjs|svg)$/i.test(file);
   res.writeHead(200, {
     'Content-Type': mime,
@@ -3057,8 +3478,7 @@ function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
   return true;
 }
 
-export async function startStudio({ port = 4747, openSlug = null, dev = false, desk: requestedDesk = process.env.WALKTHROUGH_DESK } = {}) {
-  const desk = resolveDesk(requestedDesk, { nextDist: NEXT_DIST });
+export async function startStudio({ port = 4747, openSlug = null, dev = false } = {}) {
   // Surface fatal async failures — otherwise a rejected promise can kill the process with no log.
   if (!globalThis.__wtStudioHandlers) {
     globalThis.__wtStudioHandlers = true;
@@ -3066,7 +3486,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
     process.on('unhandledRejection', (err) => console.error('Studio unhandledRejection', err));
   }
 
-  const devHub = dev ? createDevHub({ studioDir: STUDIO_DIR, kitDir: join(STUDIO_DIR, '..') }) : null;
+  const devHub = dev ? createDevHub({ kitDir: join(dirname(fileURLToPath(import.meta.url)), '..') }) : null;
 
   const server = createServer(async (req, res) => {
     try {
@@ -3079,7 +3499,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
       if (url.pathname.startsWith('/media/') || url.pathname.startsWith('/version-media/')) {
         if (serveMedia(req, res, url)) return;
       }
-      if (serveStatic(req, res, url, { dev: Boolean(devHub), desk })) return;
+      if (serveStatic(req, res, url, { dev: Boolean(devHub) })) return;
       res.writeHead(404);
       res.end('Not found');
     } catch (err) {
@@ -3093,7 +3513,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
   const agent = agentAuthStatus();
   console.log(`✓ Walkthrough Studio → ${url}`);
   console.log(`  agent CLI: ${formatAgentBanner(agent)}`);
-  console.log(`  desk: ${desk === 'next' ? 'new' : 'classic (retiring — the new desk is the default)'}`);
+  console.log('  desk: studio');
   console.log(`  videos: ${listVideos().join(', ') || '(none)'} · out: ${OUT_ROOT}`);
-  return { server, url, desk };
+  return { server, url, desk: 'studio' };
 }

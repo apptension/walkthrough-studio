@@ -11,9 +11,13 @@
  *   edit.audio        { music, voice, master }    the mix desk (delivery clock; see audio/desk.mjs)
  *   edit.cards        [{ key, t?, dur? }]         chapter/caption mark nudges (recording clock)
  *   edit.trims        [{ id, trimStart, trimEnd }] head/tail cut on a live section (recording sec)
+ *   edit.plateTimes   [{ id, trimStart, trimEnd, hold, rate }] a plate's own clock (plate seconds):
+ *                     trims cut its intro/outro, hold freezes the settled frame, rate plays it faster/slower
  *   edit.cuts         [{ from, to }]              stretches removed from the recording (recording sec)
  *   open.style / close.style / interstitials[].style   { "--gold": "#e9b949", ... } CSS variables
  *                                                       injected after the plate's own :root
+ *   plateColors / open.colors / … / interstitials[].colors   { background, accent, accent2, text }
+ *                                                       plate background colours (plateColors.mjs)
  *
  * All times are in the original recording's clock (live.mp4), so a ramp and a zoom describe the
  * same frames the Studio shows while scrubbing. `liveTimeMap` converts to the cleaned reel.
@@ -236,12 +240,18 @@ export function injectStyle(html, style) {
 }
 
 /** Where a plate's editable copy/motion/style live in video.config.json. */
-export function plateTarget(config, plateId, { create = false } = {}) {
+export function plateTarget(config, plateId, { create = false, derived = null } = {}) {
   if (plateId === 'open' || plateId === 'close') {
     if (!config[plateId] && create) config[plateId] = {};
     return config[plateId] || null;
   }
-  return (config.interstitials || []).find((i) => i.id === plateId) || null;
+  const own = (config.interstitials || []).find((i) => i.id === plateId);
+  if (own || !create || !derived) return own || null;
+  // A chapter plate is derived from the recording until someone restyles it; writing the row
+  // here is what makes that edit stick (and what later reads win over the derived default).
+  const { liveAt: _at, hold: _hold, ...row } = derived;
+  config.interstitials = [...(config.interstitials || []), row];
+  return config.interstitials[config.interstitials.length - 1];
 }
 
 /** The key the deck uses for a join; live slices collapse to `live` so the key survives re-records. */
@@ -275,10 +285,46 @@ function normalizeRamps(list = [], { liveDur = Infinity } = {}) {
   return out;
 }
 
+/**
+ * A mark on a plate rather than the recording.
+ *
+ * Plates are rendered pages with no capture viewport, so their marks cannot use recording
+ * seconds or capture CSS pixels. `clip` names the segment, `t` is seconds inside it, and the
+ * position is a fraction of the frame — which survives any output resolution.
+ */
+function clipOf(raw) {
+  const id = String(raw?.clip || '').trim();
+  return id && /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(id) ? id : '';
+}
+const frac = (v, fallback) => {
+  const n = Number(v);
+  return Math.round(clamp(Number.isFinite(n) ? n : fallback, 0, 1) * 1e4) / 1e4;
+};
+
 function normalizeZooms(list = [], { liveDur = Infinity, width = CAPTURE.width, height = CAPTURE.height } = {}) {
   const out = [];
   const seen = new Set();
   for (const raw of Array.isArray(list) ? list : []) {
+    const clip = clipOf(raw);
+    if (clip) {
+      const t = r3(Math.max(0, Number(raw.t)));
+      const dur = r3(Number(raw.dur));
+      if (!Number.isFinite(t) || !Number.isFinite(dur)) throw new Error('zoom needs numeric t and dur');
+      if (dur < MIN_ZOOM_SEC) throw new Error(`zoom at ${t}s must last at least ${MIN_ZOOM_SEC}s`);
+      let id = String(raw.id || '').trim() || `z-${clip}-${Math.round(t * 10)}`;
+      while (seen.has(id)) id = `${id}b`;
+      seen.add(id);
+      out.push({
+        id,
+        clip,
+        t,
+        dur,
+        zoom: Math.round(clamp(Number(raw.zoom) || 1.6, ZOOM_RANGE[0], ZOOM_RANGE[1]) * 100) / 100,
+        nx: frac(raw.nx, 0.5),
+        ny: frac(raw.ny, 0.5),
+      });
+      continue;
+    }
     const t = r3(clamp(Number(raw.t), 0, liveDur));
     const dur = r3(Number(raw.dur));
     if (!Number.isFinite(t) || !Number.isFinite(dur)) throw new Error('zoom needs numeric t and dur');
@@ -291,7 +337,7 @@ function normalizeZooms(list = [], { liveDur = Infinity, width = CAPTURE.width, 
     seen.add(id);
     out.push({ id, t, dur: r3(Math.min(dur, Math.max(MIN_ZOOM_SEC, liveDur - t))), zoom, x, y });
   }
-  out.sort((a, b) => a.t - b.t);
+  out.sort((a, b) => (a.clip || '').localeCompare(b.clip || '') || a.t - b.t);
   return out;
 }
 
@@ -299,6 +345,23 @@ function normalizeLenses(list = [], { liveDur = Infinity, width = CAPTURE.width,
   const out = [];
   const seen = new Set();
   for (const raw of Array.isArray(list) ? list : []) {
+    const clip = clipOf(raw);
+    if (clip) {
+      const t = r3(Math.max(0, Number(raw.t)));
+      const dur = r3(Number(raw.dur));
+      if (!Number.isFinite(t) || !Number.isFinite(dur)) throw new Error('magnifier needs numeric t and dur');
+      if (dur < MIN_LENS_SEC) throw new Error(`magnifier at ${t}s must last at least ${MIN_LENS_SEC}s`);
+      let id = String(raw.id || '').trim() || `m-${clip}-${Math.round(t * 10)}`;
+      while (seen.has(id)) id = `${id}b`;
+      seen.add(id);
+      const lens = { id, clip, t, dur, nx: frac(raw.nx, 0.5), ny: frac(raw.ny, 0.5), nw: frac(raw.nw, 0.13), nh: frac(raw.nh, 0.055) };
+      if (raw.zoom != null && raw.zoom !== '') {
+        lens.zoom = Math.round(clamp(Number(raw.zoom) || 1.8, LENS_ZOOM_RANGE[0], LENS_ZOOM_RANGE[1]) * 100) / 100;
+      }
+      if (raw.label) lens.label = String(raw.label).slice(0, 60);
+      out.push(lens);
+      continue;
+    }
     const t = r3(clamp(Number(raw.t), 0, liveDur));
     const dur = r3(Number(raw.dur));
     if (!Number.isFinite(t) || !Number.isFinite(dur)) throw new Error('magnifier needs numeric t and dur');
@@ -317,7 +380,7 @@ function normalizeLenses(list = [], { liveDur = Infinity, width = CAPTURE.width,
     if (raw.label) lens.label = String(raw.label).slice(0, 60);
     out.push(lens);
   }
-  return out.sort((a, b) => a.t - b.t);
+  return out.sort((a, b) => (a.clip || '').localeCompare(b.clip || '') || a.t - b.t);
 }
 
 function normalizeLensOff(list = []) {
@@ -562,6 +625,124 @@ export function applySegmentTrims(segments, trims) {
   });
 }
 
+export const PLATE_RATE_RANGE = Object.freeze([0.5, 3]);
+export const PLATE_HOLD_MAX = 20;
+export const PLATE_TRIM_MAX = 30;
+/** A plate never plays less than this much of its own animation. */
+export const MIN_PLATE_KEEP = 0.6;
+
+/** Per-plate timing keyed by segment id (a replay `id+2` has its own row). */
+export function normalizePlateTimes(list = []) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(list) ? list : []) {
+    const id = String(raw?.id ?? '').trim();
+    if (!id || id.length > 80 || seen.has(id) || !/^[\w.:@+-]+$/.test(id)) continue;
+    const trimStart = r3(clamp(Number(raw.trimStart) || 0, 0, PLATE_TRIM_MAX));
+    const trimEnd = r3(clamp(Number(raw.trimEnd) || 0, 0, PLATE_TRIM_MAX));
+    const hold = r3(clamp(Number(raw.hold) || 0, 0, PLATE_HOLD_MAX));
+    const wantRate = Number(raw.rate);
+    const rate = Number.isFinite(wantRate) && wantRate > 0 ? Math.round(clamp(wantRate, ...PLATE_RATE_RANGE) * 100) / 100 : 1;
+    const row = {
+      id,
+      ...(trimStart ? { trimStart } : {}),
+      ...(trimEnd ? { trimEnd } : {}),
+      ...(hold ? { hold } : {}),
+      ...(Math.abs(rate - 1) > 0.001 ? { rate } : {}),
+    };
+    if (Object.keys(row).length === 1) continue;
+    seen.add(id);
+    out.push(row);
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+/**
+ * How a plate plays under its timing. The source window is [from, to] of the rendered plate; the
+ * settled frame at `holdAt` freezes for `hold` seconds; the moving parts play at `rate`.
+ * `toSource(u)` maps a moment of the cut (seconds into the plate) to the plate's own clock, which
+ * is what the Studio stage seeks and what the render's filter graph reproduces.
+ */
+export function platePlayback(timing, baseDur, holdAt = null) {
+  const t = timing || {};
+  const base = Math.max(0, Number(baseDur) || 0);
+  const rate = clamp(Number(t.rate) || 1, PLATE_RATE_RANGE[0], PLATE_RATE_RANGE[1]);
+  const keep = Math.min(MIN_PLATE_KEEP, base);
+  const from = r3(clamp(Number(t.trimStart) || 0, 0, Math.max(0, base - keep)));
+  const to = r3(clamp(base - (Number(t.trimEnd) || 0), from + keep, base));
+  const hold = r3(clamp(Number(t.hold) || 0, 0, PLATE_HOLD_MAX));
+  const settle = Number.isFinite(Number(holdAt)) && holdAt != null ? Number(holdAt) : to - 0.8;
+  const at = r3(clamp(settle, from, to));
+  const head = (at - from) / rate;
+  const tail = (to - at) / rate;
+  const dur = r3(head + hold + tail);
+  const toSource = (u) => {
+    const x = Math.max(0, Number(u) || 0);
+    if (x <= head) return r3(from + x * rate);
+    if (x <= head + hold) return at;
+    return r3(Math.min(to, at + (x - head - hold) * rate));
+  };
+  const toOutput = (s) => {
+    const x = Number(s) || 0;
+    if (x <= from) return 0;
+    if (x <= at) return r3((x - from) / rate);
+    if (x <= to) return r3(head + hold + (x - at) / rate);
+    return dur;
+  };
+  const identity = from < 1e-3 && to >= base - 1e-3 && hold < 1e-3 && Math.abs(rate - 1) < 1e-3;
+  return { from, to, holdAt: at, hold, rate, head: r3(head), tail: r3(tail), dur, baseDur: r3(base), identity, toSource, toOutput };
+}
+
+/**
+ * ffmpeg filters that play `input` (a rendered plate) under its playback and label the result `out`.
+ * The settled frame is held with tpad between the two moving halves so nothing re-renders.
+ */
+export function plateTimingFilter(input, out, pb, fps) {
+  const f = (v) => Number(v).toFixed(4);
+  const frame = 1 / fps;
+  const speed = (from, to) => `trim=start=${f(from)}:end=${f(to)},setpts=(PTS-STARTPTS)/${f(pb.rate)},fps=${fps}`;
+  // Two spare frames so the caller's exact `trim=duration` never runs short on rounding.
+  const spare = `tpad=stop_mode=clone:stop_duration=${f(frame * 2)}`;
+  if (pb.hold < frame) return [`${input}${speed(pb.from, pb.to)},${spare}${out}`];
+  const pad = (mode) => `tpad=${mode}_mode=clone:${mode}_duration=${f(pb.hold)}`;
+  if (pb.holdAt - pb.from < frame) return [`${input}${speed(pb.holdAt, pb.to)},${pad('start')},${spare}${out}`];
+  if (pb.to - pb.holdAt < frame) return [`${input}${speed(pb.from, pb.holdAt)},tpad=stop_mode=clone:stop_duration=${f(pb.hold + frame * 2)}${out}`];
+  const tag = out.replace(/[[\]]/g, '');
+  return [
+    `${input}split=2[${tag}a][${tag}b]`,
+    `[${tag}a]${speed(pb.from, pb.holdAt)},${pad('stop')}[${tag}h]`,
+    `[${tag}b]${speed(pb.holdAt, pb.to)}[${tag}t]`,
+    `[${tag}h][${tag}t]concat=n=2:v=1:a=0,${spare}${out}`,
+  ];
+}
+
+/**
+ * Lay edit.plateTimes on plate segments. `holdAtOf(seg)` returns the plate's settled moment (the
+ * frame before its exits). Each timed segment carries `timing` and its new `dur`; `clearAt`
+ * (when present) moves onto the cut's clock.
+ */
+export function applyPlateTimes(segments, plateTimes, { holdAtOf = (seg) => seg.holdAt ?? null } = {}) {
+  const byId = new Map(normalizePlateTimes(plateTimes).map((t) => [t.id, t]));
+  if (!byId.size || !Array.isArray(segments)) return segments;
+  return segments.map((seg) => {
+    if (seg.kind !== 'plate') return seg;
+    const t = byId.get(seg.id);
+    if (!t) return seg;
+    const base = Number(seg.naturalDur ?? seg.dur) || 0;
+    const pb = platePlayback(t, base, holdAtOf(seg));
+    if (pb.identity) return seg;
+    const next = {
+      ...seg,
+      naturalDur: pb.baseDur,
+      dur: pb.dur,
+      timing: { trimStart: pb.from, trimEnd: r3(pb.baseDur - pb.to), hold: pb.hold, rate: pb.rate, holdAt: pb.holdAt, baseDur: pb.baseDur },
+    };
+    if (seg.clearAt != null) next.clearAt = Math.min(pb.dur, pb.toOutput(seg.clearAt));
+    return next;
+  });
+}
+
 /**
  * Permute segments by `order`. Ids the plan no longer has are skipped. A segment the order
  * doesn't mention (a plate added since) keeps its place after the nearest listed predecessor.
@@ -717,9 +898,15 @@ export function applyCardEdits(marks, cards = []) {
     if (!edit) return m.key ? m : { ...m, key };
     return place({ ...m, key }, edit);
   });
+  // Cards written in the Editor: they stand on their own, with no recorded mark behind them.
+  const have = new Set(out.filter((m) => m.key).map((m) => m.key));
+  for (const row of cards) {
+    if (!row.label || row.copyOf || have.has(row.key)) continue;
+    have.add(row.key);
+    out.push({ kind: row.kind || 'caption', t: Number(row.t) || 0, dur: Number(row.dur) || 2, label: row.label, ...(row.body ? { body: row.body } : {}), key: row.key, added: true });
+  }
   // Duplicated cards: the source card's copy and look again at their own time.
   const copies = cards.filter((c) => c.copyOf);
-  if (!copies.length) return out;
   const sources = new Map(out.filter((m) => (m.kind === 'chapter' || m.kind === 'caption') && m.key).map((m) => [m.key, m]));
   for (const row of copies) {
     const src = sources.get(row.copyOf);
@@ -748,9 +935,38 @@ export function normalizeCards(list, { liveDur = Infinity } = {}) {
     }
     const copyOf = String(raw.copyOf || '').trim();
     if (copyOf && copyOf.length <= 160 && copyOf !== key) row.copyOf = copyOf;
+    // A row that brings its own copy is a card the editor wrote, not an override of a recorded
+    // one — there is no mark behind it, so it also carries the kind and its time is required.
+    const label = String(raw.label ?? '').trim();
+    if (label && !row.copyOf) {
+      row.kind = raw.kind === 'chapter' ? 'chapter' : 'caption';
+      row.label = label.slice(0, 120);
+      const body = String(raw.body ?? '').trim();
+      if (body) row.body = body.slice(0, 240);
+      if (row.t == null) row.t = 0;
+      if (row.dur == null) row.dur = 2;
+    }
     if (row.t == null && row.dur == null && !row.copyOf) continue;
     seen.add(key);
     out.push(row);
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+/**
+ * Chapters the editor kept as overlay cards instead of plates (card mark keys). Every chapter
+ * plays as a plate by default; this is the opt-out.
+ */
+export function normalizeChapterCards(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of list) {
+    const key = String(raw || '').trim();
+    if (!key || key.length > 160 || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
     if (out.length >= 80) break;
   }
   return out;
@@ -767,11 +983,13 @@ export function normalizeEdit(edit = {}, { liveDur = Infinity, width = CAPTURE.w
     transitions: normalizeTransitions(src.transitions, styles),
     audio: normalizeAudio(src.audio),
     cards: normalizeCards(src.cards, { liveDur }),
+    chapterCards: normalizeChapterCards(src.chapterCards),
     layouts: normalizeLayouts(src.layouts),
     order: normalizeOrder(src.order),
     omit: normalizeOrder(src.omit),
     repeats: normalizeRepeats(src.repeats),
     trims: normalizeTrims(src.trims),
+    plateTimes: normalizePlateTimes(src.plateTimes),
     cuts: normalizeCuts(src.cuts, { liveDur }),
   };
 }
@@ -786,11 +1004,13 @@ export function isEmptyDeck(deck) {
       !deck.lensOff?.length &&
       !Object.keys(deck.transitions || {}).length &&
       !deck.cards?.length &&
+      !deck.chapterCards?.length &&
       !deck.layouts?.length &&
       !deck.order?.length &&
       !deck.omit?.length &&
       !deck.repeats?.length &&
       !deck.trims?.length &&
+      !deck.plateTimes?.length &&
       !deck.cuts?.length &&
       isEmptyAudio(deck.audio))
   );
@@ -800,7 +1020,7 @@ export function isEmptyDeck(deck) {
 export function patchEdit(current = {}, patch = {}, opts = {}) {
   if (patch.reset) return normalizeEdit({}, opts);
   const merged = { ...(current || {}) };
-  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'layouts', 'order', 'omit', 'repeats', 'trims', 'cuts']) {
+  for (const key of ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'transitions', 'audio', 'cards', 'chapterCards', 'layouts', 'order', 'omit', 'repeats', 'trims', 'plateTimes', 'cuts']) {
     if (key in patch) merged[key] = patch[key] ?? (key === 'transitions' ? {} : []);
   }
   return normalizeEdit(merged, opts);
@@ -816,11 +1036,13 @@ export function compactEdit(deck) {
   if (deck?.lensOff?.length) out.lensOff = deck.lensOff;
   if (deck?.transitions && Object.keys(deck.transitions).length) out.transitions = deck.transitions;
   if (deck?.cards?.length) out.cards = deck.cards;
+  if (deck?.chapterCards?.length) out.chapterCards = deck.chapterCards;
   if (deck?.layouts?.length) out.layouts = deck.layouts;
   if (deck?.order?.length) out.order = deck.order;
   if (deck?.omit?.length) out.omit = deck.omit;
   if (deck?.repeats?.length) out.repeats = deck.repeats;
   if (deck?.trims?.length) out.trims = deck.trims;
+  if (deck?.plateTimes?.length) out.plateTimes = deck.plateTimes;
   if (deck?.cuts?.length) out.cuts = deck.cuts;
   const audio = compactAudio(deck?.audio);
   if (audio) out.audio = audio;
@@ -901,7 +1123,8 @@ export function remapTimeline(timeline = [], map) {
 /** Synthetic timeline marks that feed the deck's zooms and skips into planZooms. */
 export function editCameraMarks(deck) {
   const marks = [];
-  for (const z of deck?.zooms || []) {
+  // Marks carrying a `clip` belong to a plate; the plate's own chain picks those up.
+  for (const z of (deck?.zooms || []).filter((z) => !z.clip)) {
     marks.push({ kind: 'zoom', id: z.id, t: z.t, dur: z.dur, zoom: z.zoom, x: z.x, y: z.y, source: 'edit' });
   }
   for (const s of deck?.zoomSkips || []) marks.push({ kind: 'nozoom', t: s.from, dur: r3(s.to - s.from) });
@@ -917,7 +1140,7 @@ export function resolveLenses(timeline = [], deck) {
   const recorded = timeline
     .filter((m) => m.kind === 'magnify' && m.rect && m.dur && !off.has(r3(m.t)))
     .map((m) => ({ ...m, source: 'auto' }));
-  const own = (deck?.lenses || []).map((l) => ({
+  const own = (deck?.lenses || []).filter((l) => !l.clip).map((l) => ({
     kind: 'magnify',
     id: l.id,
     label: l.label || 'Magnifier',
@@ -967,6 +1190,7 @@ export function describeDeck(deck) {
   if (deck?.order?.length) bits.push('sequence reordered');
   if (deck?.omit?.length) bits.push(`${deck.omit.length} section${deck.omit.length === 1 ? '' : 's'} omitted`);
   if (deck?.trims?.length) bits.push(`${deck.trims.length} live trim${deck.trims.length === 1 ? '' : 's'}`);
+  if (deck?.plateTimes?.length) bits.push(`${deck.plateTimes.length} plate${deck.plateTimes.length === 1 ? '' : 's'} retimed`);
   if (deck?.cuts?.length) {
     const sec = deck.cuts.reduce((sum, cut) => sum + (cut.to - cut.from), 0);
     bits.push(`${deck.cuts.length} cut${deck.cuts.length === 1 ? '' : 's'} · ${sec.toFixed(1)}s removed`);
