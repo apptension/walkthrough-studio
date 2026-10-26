@@ -14,7 +14,7 @@
   <a href="#agent-ready"><img src="https://img.shields.io/badge/Agent%20Ready-Cursor%20%C2%B7%20Claude%20Code-42f272?style=flat-square&labelColor=0a0a0a" alt="Agent Ready: Cursor and Claude Code" /></a>
   <a href="#84-languages-one-recording"><img src="https://img.shields.io/badge/languages-84-42f272?style=flat-square&labelColor=0a0a0a" alt="84 languages" /></a>
   <a href="kit/package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white&labelColor=0a0a0a" alt="Node.js 20+" /></a>
-  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.7"><img src="https://img.shields.io/badge/release-v1.0.0--beta.7-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.7" /></a>
+  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.8"><img src="https://img.shields.io/badge/release-v1.0.0--beta.8-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.8" /></a>
   <a href="https://apptension.com/builders-toolkit/walkthrough-studio"><img src="https://img.shields.io/badge/site-apptension.com-0a0a0a?style=flat-square" alt="Product page" /></a>
 </p>
 
@@ -51,30 +51,28 @@ Walkthrough Studio is a local desk that treats your real product as the source o
 ## Quick start
 
 ```bash
-git clone --branch v1.0.0-beta.7 --depth 1 https://github.com/apptension/walkthrough-studio.git
+git clone --branch v1.0.0-beta.8 --depth 1 https://github.com/apptension/walkthrough-studio.git
 cd walkthrough-studio
 ./studio
 ```
 
-That checks out the current public beta, [v1.0.0-beta.7](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.7). `main` is the development line. Run `./studio`. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
+That checks out the current public beta, [v1.0.0-beta.8](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.8). `main` is the development line. Run `./studio`. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
 
 Voice and music need an `ELEVENLABS_API_KEY` in `kit/.env`. Agent jobs need a signed-in Cursor CLI (`agent`) or Claude Code (`claude`). Studio opens without either.
 
-### Upgrading from 1.0.0-beta.6
+### Upgrading from 1.0.0-beta.7
 
 ```bash
-git fetch --tags && git checkout v1.0.0-beta.7    # or: git pull on main
+git fetch --tags && git checkout v1.0.0-beta.8    # or: git pull on main
 ./studio
 ```
 
 Your projects, brands, and `kit/.env` stay where they are. `./studio` rebuilds the desk when its sources change. `./studio --v2` still starts the same desk.
 
-- **Stage a plate more than one way.** Open, close, features, stats, statement, and callout each have several compositions. A first draft fills anything left open, seeded by the video, so two videos for one brand rarely match.
-- **On-screen copy follows one house style.** Sentence case, closing punctuation, and typography are applied at render. Brand names, acronyms, and camelCase names keep their own casing.
-- **The score covers the picture.** Music is composed to the cut. A bed that is too short is recomposed instead of looped, and Review names a repeat or a silent tail.
-- **New video shows the work.** While discovery runs you can pick a logo and tune the palette. The creation stage shows the screens the agent reached and the storyboard as it is written.
-- **Pick the agent model** from a runner logo in the header. The choice is saved in `kit/.env` and used by every agent job.
-- **Duplicate** (⌘D) copies the selected clip, plate, effect, card, voice line, or transition into the next sensible place.
+- **Custom plate layouts.** A slide no built-in type covers lives under `videos/<slug>/templates/` as `type: "custom"`. Shared `kit/templates` stay untouched.
+- **Storyboard shows this video.** The creation stage paints stills of the project's own open, plates, and close — not brand samples.
+- **Stage matches the encode.** Grain and the black curtain are dropped the same way in the editor and the master. Title reveals and atmosphere tune without a double flash on every drag.
+- **Chapter plates encode once.** Restyled chapter rows no longer write the same plate file twice and leave an unplayable master.
 
 Coming from an earlier beta? Check out this tag the same way, then run `./studio`. That serves the desk on [http://127.0.0.1:4747](http://127.0.0.1:4747). The classic desk is gone; `./studio --legacy` tells you so and exits.
 

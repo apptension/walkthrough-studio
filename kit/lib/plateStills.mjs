@@ -5,16 +5,17 @@
  *
  * Requests resolve per-type as each JPEG lands — the wizard does not wait for the full set.
  */
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DELIVERY } from './format.mjs';
-import { brandReadiness, loadBrand, OUT_ROOT, TEMPLATES } from './project.mjs';
-import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { brandReadiness, loadBrand, loadVideo, OUT_ROOT, TEMPLATES } from './project.mjs';
+import { PLATE_TYPE_SET, SAMPLED_PLATE_TYPE_IDS } from './plateTypes.mjs';
 import { scaffoldPlate } from './script.mjs';
-import { writePreviewPlate } from './plates.mjs';
+import { buildPlates, platePaths, plateRows, writePreviewPlate } from './plates.mjs';
+import { RENDER_CSS } from './shared/renderCss.js';
 
 /** Bump when the still's framing or sample copy changes. */
 const STILL_REV = 1;
@@ -103,9 +104,10 @@ function waitForFile(file, { timeoutMs = 180000, everyMs = 120 } = {}) {
   });
 }
 
+/** Capture the settled frame of one plate HTML file as a 720-wide JPEG. */
 async function captureOne(page, htmlPath, out) {
   await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.addStyleTag({ content: '.grain{animation:none!important}.black{display:none!important}' });
+  await page.addStyleTag({ content: RENDER_CSS });
   await page.evaluate(async () => {
     await document.fonts.ready;
     for (const a of document.getAnimations()) {
@@ -127,15 +129,26 @@ async function captureOne(page, htmlPath, out) {
   });
   const full = `${out}.full.jpg`;
   await page.screenshot({ path: full, type: 'jpeg', quality: 70 });
-  const scaled = spawnSync(
-    'ffmpeg',
-    ['-y', '-loglevel', 'error', '-i', full, '-vf', 'scale=720:-2', '-q:v', '4', out],
-    { encoding: 'utf8' }
-  );
-  if (scaled.status !== 0 || !existsSync(out)) {
+  const ok = await scaleStill(full, out);
+  if (!ok || !existsSync(out)) {
     writeFileSync(out, readFileSync(full));
   }
   rmSync(full, { force: true });
+}
+
+/**
+ * Shrink a captured frame to picker size.
+ *
+ * Awaited rather than run with `spawnSync`: these stills are rendered inside the Studio server,
+ * and a synchronous ffmpeg per plate held the whole event loop for the length of every encode —
+ * so asking the picker for a brand's set stalled the job polls that draw its own progress.
+ */
+function scaleStill(src, out) {
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=720:-2', '-q:v', '4', out], (err) =>
+      resolve(!err)
+    );
+  });
 }
 
 /**
@@ -146,7 +159,7 @@ async function renderBrand(brandName, dir) {
   const brand = loadBrand(brandName);
   mkdirSync(dir, { recursive: true });
   const html = new Map();
-  for (const type of PLATE_TYPE_IDS) {
+  for (const type of SAMPLED_PLATE_TYPE_IDS) {
     html.set(type, writePreviewPlate(brand, previewPlate(type), join(dir, 'build', type)));
   }
 
@@ -165,7 +178,7 @@ async function renderBrand(brandName, dir) {
       'compare',
       'quote',
       'metric',
-      ...PLATE_TYPE_IDS.filter(
+      ...SAMPLED_PLATE_TYPE_IDS.filter(
         (t) =>
           ![
             'features',
@@ -201,7 +214,7 @@ function startBrandJob(brandName) {
   const brand = loadBrand(brandName);
   const stamp = sourceStamp(brand);
   const dir = cacheDir(brandName, stamp);
-  const done = PLATE_TYPE_IDS.every((type) => existsSync(join(dir, `${type}.jpg`)));
+  const done = SAMPLED_PLATE_TYPE_IDS.every((type) => existsSync(join(dir, `${type}.jpg`)));
   if (done) {
     return { dir, all: Promise.resolve(dir), types: new Map() };
   }
@@ -215,6 +228,8 @@ function startBrandJob(brandName) {
 /** Absolute path of the settled JPEG for one plate type in a brand pack. */
 export function plateStill(brandName, type) {
   if (!PLATE_TYPE_SET.has(type)) throw new Error(`Unknown plate type "${type}"`);
+  // A custom plate's markup belongs to one video — ask for it through `videoPlateStill`.
+  if (!SAMPLED_PLATE_TYPE_IDS.includes(type)) throw new Error(`"${type}" plates are built per video, so they have no brand sample`);
   let job = inflight.get(brandName);
   if (!job) {
     job = startBrandJob(brandName);
@@ -233,6 +248,75 @@ export function plateStill(brandName, type) {
       }),
     ]);
     job.types.set(type, pending);
+  }
+  return pending;
+}
+
+/* ---------- this video's own plates ---------- */
+
+/**
+ * The same still, but of a real project's plate rather than a sample in a brand.
+ *
+ * The wizard's storyboard used sample stills for plates and a plain text tile for the opener and
+ * closer, so the board showed a generic deck while the agent was writing a specific one. These
+ * come from the video's own `video.config.json` through the same builder the render uses, so
+ * what the reviewer approves is what the encode produces.
+ *
+ * `plateId` is 'open', 'close', or an interstitial id.
+ */
+const videoInflight = new Map();
+/** slug → the tail of its render queue, so a board asking for six stills launches one browser. */
+const videoQueue = new Map();
+
+function videoStamp(video, plateId) {
+  const cfg = JSON.stringify(
+    plateId === 'open' ? video.config?.open : plateId === 'close' ? video.config?.close : plateRows(video).find((r) => r.id === plateId)
+  );
+  const look = JSON.stringify([video.config?.plateColors, video.config?.motion, video.config?.brand]);
+  return createHash('sha1').update(`${STILL_REV}:${cfg}:${look}:${sourceStamp(video.brand)}`).digest('hex').slice(0, 12);
+}
+
+async function renderVideoStill(video, plateId, out) {
+  buildPlates(video);
+  const paths = platePaths(video);
+  const html = plateId === 'open' ? paths.open.html : plateId === 'close' ? paths.close.html : paths.interstitial[plateId]?.html;
+  if (!html || !existsSync(html)) throw new Error(`No plate "${plateId}" in ${video.slug}`);
+  mkdirSync(dirname(out), { recursive: true });
+  const { chromium } = await import('playwright');
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: DELIVERY.width, height: DELIVERY.height }, deviceScaleFactor: 1 });
+    await captureOne(page, html, out);
+  } finally {
+    await browser.close();
+  }
+  return out;
+}
+
+/**
+ * Absolute path of the settled JPEG for one plate of one video.
+ *
+ * Renders for a slug run one after another: a storyboard asks for its opener, its plates and its
+ * closer at once, and launching a browser per card would cost more than the whole draft.
+ */
+export function videoPlateStill(slug, plateId) {
+  const video = loadVideo(slug);
+  const stamp = videoStamp(video, plateId);
+  const out = join(OUT_ROOT, '_video-stills', slug, stamp, `${plateId}.jpg`);
+  if (existsSync(out)) return Promise.resolve(out);
+  const key = `${slug}:${plateId}:${stamp}`;
+  let pending = videoInflight.get(key);
+  if (!pending) {
+    const after = videoQueue.get(slug) || Promise.resolve();
+    pending = after
+      .catch(() => {})
+      .then(() => (existsSync(out) ? out : renderVideoStill(video, plateId, out)))
+      .finally(() => {
+        videoInflight.delete(key);
+        if (videoQueue.get(slug) === pending) videoQueue.delete(slug);
+      });
+    videoInflight.set(key, pending);
+    videoQueue.set(slug, pending);
   }
   return pending;
 }

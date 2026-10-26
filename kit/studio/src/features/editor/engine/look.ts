@@ -7,6 +7,7 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, sho
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
 import { reloadPlate } from './lifecycle';
+import { retargetTitleReveal } from './plate';
 import { P } from './plateCtl';
 import { curClip } from './seq';
 import { plateReady, renderFrame } from './stage';
@@ -101,7 +102,10 @@ async function flushStyle(id: string): Promise<void> {
     paintStatus();
     markStyleRows(id);
     renderClipsTrack();
-    refreshPlatePreview(id);
+    // `scheduleStylePreview` already restarted the plate on these values 160ms ago. Restarting
+    // again when the save lands is the second flash on every slider drag — do it only when that
+    // earlier preview had to stand down (text mode, a load in flight).
+    if (ed.needsPlateResync === id) refreshPlatePreview(id);
   } catch (err) {
     toast('Style not saved', errMessage(err), 'err');
   }
@@ -193,7 +197,13 @@ export function plateDoc(id: string): Document | null {
   }
 }
 
-type RuntimeWindow = Window & { __plateRuntime?: { field?: string | null; syncTitles?: () => void } };
+type RuntimeWindow = Window & {
+  __plateRuntime?: {
+    field?: string | null;
+    syncTitles?: () => void;
+    tuneField?: (patch: { opacity?: number | undefined; speed?: number | undefined; drift?: number | undefined }) => void;
+  };
+};
 
 export function frameLook(doc: Document | null): { atmosphere: string | null; titleReveal: string | null } {
   const title = doc?.querySelector<HTMLElement>('.title[data-reveal]');
@@ -220,7 +230,9 @@ export function lookValue(info: Pick<DeckPlate, 'motion'> | null, key: string): 
 export function paintLook(doc: Document | null, vars: Record<string, string> | null | undefined, titleReveal: string | null | undefined): void {
   if (!doc) return;
   for (const [name, value] of Object.entries(vars || {})) applyVar(name, value);
-  if (titleReveal) doc.querySelectorAll<HTMLElement>('.title[data-reveal]').forEach((t) => (t.dataset['reveal'] = titleReveal));
+  // `retargetTitleReveal` also sheds the markup and host styles the previous reveal left, so the
+  // new one is not blocked by the `:has()` guards in plates.css or by a stranded letter-spacing.
+  if (titleReveal) retargetTitleReveal(doc, titleReveal);
   try {
     (doc.defaultView as RuntimeWindow | null)?.__plateRuntime?.syncTitles?.();
   } catch {
@@ -236,6 +248,25 @@ export function paintLookVars(vars: Record<string, string> | null | undefined, t
   } catch {
     /* same-origin plates only */
   }
+}
+
+/**
+ * Presence/Speed live on the stage at once: these are plain numbers baked into the field's draw
+ * call (see `kit/lib/atmosphere.mjs`), not CSS, but the runtime exposes `tuneField` precisely so
+ * dragging a slider repaints the field in place instead of waiting on a rebuild + reload.
+ */
+export function tuneAtmosphereLive(opacity: number | undefined, speed: number | undefined): void {
+  try {
+    const win: RuntimeWindow | null | undefined = $<HTMLIFrameElement>('plateFrame')?.contentWindow;
+    win?.__plateRuntime?.tuneField?.({ opacity, speed });
+  } catch {
+    /* same-origin plates only */
+  }
+}
+
+/** The atmosphere pattern baked into the plate frame on stage right now — `null` off-stage. */
+export function frameAtmosphereOnStage(): string | null {
+  return frameLook(plateDoc(desk.get().activePlateId || curClip()?.plateId || '')).atmosphere;
 }
 
 /** Markup family for a title reveal. Mirrors `revealMarkup` in kit/lib/titleReveal.mjs. */
@@ -346,7 +377,10 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
   const doc = plateDoc(id);
   if (doc) {
     const vars = lookVarsFor(want);
-    paintLook(doc, vars, revealNeedsMarkup(id, was.titleReveal, want['titleReveal']) ? null : want['titleReveal']);
+    // Always move the title onto the new reveal, even when the rebuild will re-bake its markup:
+    // holding the old attribute back left the stage playing the reveal the author just replaced
+    // for as long as the save took, and forever when the frame could not be reloaded.
+    paintLook(doc, vars, want['titleReveal']);
     refreshPlatePreview(id);
   }
 

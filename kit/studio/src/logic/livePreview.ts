@@ -3,6 +3,8 @@
  * Kept free of DOM so scrubbing / magnifier behaviour can be unit-tested.
  */
 
+import { glassCanvas } from './lensGlass';
+
 const EPSILON = 1 / 90;
 
 export type LiveSeekPlan = { action: 'none' } | { action: 'defer' | 'seek'; wantRec: number };
@@ -25,6 +27,13 @@ export interface AfterSeekedInput {
 
 export interface LensLoupe {
   zoom: number;
+  /**
+   * The magnification the render actually lands on. ffmpeg crops a whole number of source pixels
+   * (`cropW = even(W / zoom)`) and scales that to `W`, so the glass magnifies by `W / cropW`
+   * rather than by the requested `zoom`. Painting the stage with `zoom` drifts up to ~1% from the
+   * master; painting it with `zoomExact` does not.
+   */
+  zoomExact: number;
   diameter: number;
   S: number;
   capped: boolean;
@@ -43,6 +52,7 @@ export interface LensPaintInput {
   hasLens?: boolean;
   viewportCssPx?: number;
   readyState?: number;
+  /** @deprecated Ignored — see `planLensPaint`. */
   hold?: boolean;
 }
 
@@ -126,7 +136,9 @@ export function lensLoupe(size: unknown, zoom?: number | null, frame?: LoupeFram
   const raw = s * z + LOUPE.room;
   if (raw > max) z = lensZoomCeiling(s, frame);
   const diameter = even(clamp(raw, min, max));
-  return { zoom: z, diameter, S: diameter + 2 * LOUPE.pad, capped: raw > max };
+  const { W } = glassCanvas(diameter, LOUPE.pad);
+  const cropW = Math.max(2, even(W / z));
+  return { zoom: z, zoomExact: W / cropW, diameter, S: diameter + 2 * LOUPE.pad, capped: raw > max };
 }
 
 /** Hit target for on-frame magnify and zoom controls. */
@@ -155,16 +167,18 @@ export function planFrameEditor({
  * or clear because no lens is active.
  *
  * Clearing while readyState < 2 (common mid-seek) is what makes the magnifier
- * vanish during timeline scrub. `hold` keeps that loupe when the on-frame
- * editor is still inside its block even if the lens lookup missed a frame.
+ * vanish during timeline scrub, so a lens on this frame keeps its last loupe.
+ *
+ * No lens on this frame always clears, whatever `hold` says. `hold` compares the
+ * playhead with the selected lens's block, but the playhead is the clock of the
+ * surface on stage — so it also "held" a stale loupe over another slide or the
+ * recording that happened to share those seconds. It no longer decides anything.
  */
 export function planLensPaint({
   hasLens = false,
   viewportCssPx = 0,
   readyState = 0,
-  hold = false,
 }: LensPaintInput = {}): { action: 'keep' | 'clear' | 'draw' } {
-  if (hold && readyState < 2) return { action: 'keep' };
   if (!hasLens || viewportCssPx <= 0) return { action: 'clear' };
   if (readyState < 2) return { action: 'keep' };
   return { action: 'draw' };

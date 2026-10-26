@@ -111,3 +111,19 @@ test('long text is kept whole, plain lines become entries, payload is plain data
   assert.ok(wire.rev > 0);
   assert.ok(tail(long).length <= 222);
 });
+
+test('a refused command is counted apart from one that ran and failed', () => {
+  const denied = feed([
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'node kit/cli.mjs check-flow demo' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'Shell command was rejected by the user' }] } },
+  ]);
+  assert.equal(denied.denied, 1);
+  assert.equal(denied.entries.at(-1).denied, true);
+
+  const failed = feed([
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't2', name: 'Bash', input: { command: 'node kit/cli.mjs check-flow demo' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'check-flow: ✗ scene 3 has no narration' }] } },
+  ]);
+  assert.equal(failed.denied, 0);
+  assert.equal(failed.entries.at(-1).denied, undefined);
+});

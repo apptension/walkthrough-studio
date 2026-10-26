@@ -29,7 +29,8 @@ import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } f
 import { brandCssVars, emphasize, esc } from './text.mjs';
 import { copyContextFor, normalizeCopy, normalizePlateCopy, normalizeTitle } from './copyCase.mjs';
 import { injectStyle, patchStyle, platePlayback } from './editDeck.mjs';
-import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { CUSTOM_PLATE_TYPE, PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { RENDER_CSS } from './shared/renderCss.js';
 import { videoChapterPlates } from './chapterPlates.mjs';
 import { normalizeLayout, resolveLayout } from './plateLayouts.mjs';
 
@@ -92,7 +93,8 @@ const RENDER_PIPELINE = PLATE_RENDER_PIPELINE;
  * Encoded plates drop the template's `.black` in/out: produce owns every join (xfade through
  * the plate's own brand background, head/tail fades on the master). HTML previews keep it.
  */
-const RENDER_CSS = '.grain{animation:none!important}.black{display:none!important}';
+export { RENDER_CSS };
+
 /** Outside hold, this many identical consecutive frames = stuck capture (fail). */
 const MAX_STUCK_FRAMES = Math.max(6, Math.round(FPS / 4));
 /** Hold must survive animation+pixel probes or it is disabled. */
@@ -1070,6 +1072,21 @@ function teamItems(items, brand) {
  * critic, the agent prompts — stay on `config.interstitials`, because a chapter plate is derived
  * from the recording, not written by hand.
  */
+/**
+ * Authored interstitials plus derived chapter plates, one row per id.
+ *
+ * A chapter someone restyled is saved into `config.interstitials` and also comes back from
+ * `chapterCoverage`, which already merges that saved row (copy, layout, motion) with the
+ * recording's `liveAt` and hold. Listing both rendered the same `plate-<id>.mp4` twice in
+ * parallel — the two faststart rewrites leave two `moov` atoms, and the delivery encode
+ * cannot decode the file.
+ */
+export function mergePlateRows(authored, chapters) {
+  const chapterIds = new Set((chapters || []).map((c) => c?.id).filter(Boolean));
+  const head = (authored || []).filter((i) => i?.id && !chapterIds.has(i.id));
+  return [...head, ...(chapters || [])];
+}
+
 export function plateRows(video) {
   const authored = video.config?.interstitials || [];
   let chapters = [];
@@ -1078,8 +1095,7 @@ export function plateRows(video) {
   } catch {
     /* no recording yet (or an unreadable timeline): only the authored plates exist */
   }
-  const ids = new Set(authored.map((i) => i.id));
-  return [...authored, ...chapters.filter((c) => !ids.has(c.id) || c.chapter)];
+  return mergePlateRows(authored, chapters);
 }
 
 /**
@@ -1118,13 +1134,41 @@ export function platePaths(video) {
   };
 }
 
+/** Where a video keeps the plate markup it owns. */
+export function videoTemplatesDir(video) {
+  return join(video.dir, 'templates');
+}
+
+/**
+ * The HTML template a plate is built from.
+ *
+ * Built-in types come from `kit/templates`. A `custom` plate names a file this video owns, so the
+ * agent can author one slide's layout without changing every other video that uses the type — the
+ * reason a "custom layout" request used to have nowhere to land but a shared template.
+ */
+export function plateTemplatePath(video, it) {
+  if (it.type !== CUSTOM_PLATE_TYPE) return join(TEMPLATES, `${it.type}.html`);
+  const name = String(it.template || '').trim();
+  if (!name) return join(TEMPLATES, 'custom.html');
+  if (!/^[a-z0-9][a-z0-9-]*$/i.test(name)) {
+    throw new Error(`custom plate "${it.id}": template "${name}" must be a file stem — letters, digits and dashes only`);
+  }
+  const dir = video.dir ? videoTemplatesDir(video) : '';
+  const file = dir ? join(dir, `${name}.html`) : '';
+  if (file && existsSync(file)) return file;
+  // Checked off to the side (checkPlate, plate stills) there may be no project on disk at all,
+  // and an unwritten template should read as "not written yet", not as a broken plate.
+  if (dir) throw new Error(`custom plate "${it.id}": no template at ${file} — copy ${join(TEMPLATES, 'custom.html')} there and make it yours`);
+  return join(TEMPLATES, 'custom.html');
+}
+
 function buildInterstitial(video, it, paths, common) {
   if (!PLATE_TYPES.has(it.type)) {
     throw new Error(`Unknown interstitial type "${it.type}" (use ${INTERSTITIAL_TYPES.join('|')})`);
   }
   it = normalizePlateCopy(it, copyContextFor(video));
   const dest = paths.interstitial[it.id];
-  const tpl = readFileSync(join(TEMPLATES, `${it.type}.html`), 'utf8');
+  const tpl = readFileSync(plateTemplatePath(video, it), 'utf8');
   const brand = video.brand;
   // Per-plate motion overlay (energy, depth, sheen, title reveal, atmosphere tuning).
   const { motion, plateBrand, ...plateCommon } = interstitialBrandVars(common, brand, it, video.config?.plateColors);
@@ -1449,7 +1493,45 @@ function buildInterstitial(video, it, paths, common) {
       SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
       LOGOS: bentoLogos(logos, brand),
     });
+  } else if (it.type === CUSTOM_PLATE_TYPE) {
+    const items = it.items || [];
+    write({
+      ...eyebrow(''),
+      ...title(it.title),
+      SUB: emphasize(it.sub || ''),
+      SUB_RAW: escAttr(it.sub || ''),
+      BODY: emphasize(it.body || ''),
+      BODY_RAW: escAttr(it.body || ''),
+      ITEM_COUNT: items.length,
+      ITEMS: customItems(items, brand),
+      SHOT: shotMarkup(brand, it.shot || it.asset || it.image),
+    });
   }
+}
+
+/**
+ * Rows for a custom plate.
+ *
+ * A custom template cannot ship its own renderer, so it gets one generic row shape and styles it:
+ * `.item` carrying `--s` (its stagger) and `--i` (its index), with whichever of label / note /
+ * value / icon / asset the row actually set. Every field is `data-edit`-addressed the same way the
+ * built-in plates address theirs, so the editor's content pane and live paint work unchanged.
+ */
+function customItems(items, brand) {
+  return items
+    .map((it, i) => {
+      const bit = (key, cls, value) =>
+        value ? `<div class="${cls}" data-edit="items.${i}.${key}" data-edit-raw="${escAttr(String(value))}">${emphasize(String(value))}</div>` : '';
+      const asset = it.asset || it.shot || it.image;
+      return `<div class="item" data-slot="items.${i}" style="--s: ${(0.7 + i * 0.12).toFixed(2)}s; --i: ${i}">
+          ${it.icon ? iconHtml(it.icon) : ''}
+          ${asset ? shotMarkup(brand, asset) : ''}
+          ${bit('value', 'item-value', it.value)}
+          ${bit('label', 'item-label', it.label)}
+          ${bit('note', 'item-note', it.note)}
+        </div>`;
+    })
+    .join('\n        ');
 }
 
 /* ——— Showcase and bento: interface shots with editorial framing ——— */
@@ -1504,9 +1586,10 @@ function bentoLogos(items, brand) {
  * Write one interstitial's HTML (plus plates.css) into `dir/plates` for a still or a preview.
  * `brand` is a loaded brand pack; `plate` is a config entry with `type`.
  */
-export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY } = {}) {
+export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY, videoDir = dir } = {}) {
   const it = { ...plate, id: plate.id || plate.type };
-  const video = { brand, config: { interstitials: [it], output: { format: frame.format } }, out: dir };
+  // `videoDir` is only read for custom plates, which look for their template under it.
+  const video = { brand, dir: videoDir, config: { interstitials: [it], output: { format: frame.format } }, out: dir };
   const paths = platePaths(video);
   mkdirSync(paths.dir, { recursive: true });
   copyFileSync(join(TEMPLATES, 'plates.css'), join(paths.dir, 'plates.css'));
@@ -1525,10 +1608,10 @@ export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY } = {}) 
  * Throws the builder's own complaint when `row` would not make a plate (too few rows, a title
  * too long…) — checked off to the side, so nothing in the video is touched.
  */
-export function checkPlate(brand, row) {
+export function checkPlate(brand, row, { videoDir } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'plate-check-'));
   try {
-    writePreviewPlate(brand, { ...row, id: row.id || row.type }, dir);
+    writePreviewPlate(brand, { ...row, id: row.id || row.type }, dir, videoDir ? { videoDir } : {});
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -2144,7 +2227,7 @@ export function mp4Complete(mp4Path) {
     fd = openSync(mp4Path, 'r');
     const head = Buffer.alloc(16);
     let at = 0;
-    let moov = false;
+    let moov = 0;
     while (at + 8 <= size) {
       readSync(fd, head, 0, 16, at);
       let len = head.readUInt32BE(0);
@@ -2152,10 +2235,12 @@ export function mp4Complete(mp4Path) {
       if (len === 1) len = Number(head.readBigUInt64BE(8));
       else if (len === 0) len = size - at;
       if (len < 8) return false;
-      if (type === 'moov') moov = true;
+      if (type === 'moov') moov += 1;
       at += len;
     }
-    return moov && at === size;
+    // Two moov atoms means two encoders rewrote the same file. The chunk offsets point
+    // into the other index, so every frame fails to decode.
+    return moov === 1 && at === size;
   } catch {
     return false;
   } finally {
@@ -2233,9 +2318,11 @@ export async function renderPlates(video, { force = false, only } = {}) {
   };
   const jobs = [];
   const saved = [];
+  const seenMp4 = new Set();
   const want = (key) => !only || only === key || (only === 'interstitials' && key.startsWith('plate:'));
   const consider = (key, html, mp4) => {
-    if (!want(key)) return;
+    if (!want(key) || seenMp4.has(mp4)) return;
+    seenMp4.add(mp4);
     const row = { key, label: labelFor(key), html, mp4 };
     if (force || !plateCacheFresh(mp4, html, cacheOpts)) jobs.push(row);
     else saved.push(row);

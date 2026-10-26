@@ -1,4 +1,4 @@
-import type { Job, Scene } from '@/api/types';
+import type { HtmlPlate, Job, Scene } from '@/api/types';
 
 import type { QueueItem } from './store';
 
@@ -28,10 +28,16 @@ export interface EditorBridge {
   selectLive(scene: Scene): void;
   /** `editor.paintLookVars(vars, titleReveal)`: paint Direction look tokens on the stage before a rebuild lands. */
   paintLookVars?(vars: Record<string, string>, titleReveal: string | null): void;
+  /** `editor.tuneAtmosphere(opacity, speed)`: repaint the live plate's WebGL field in place — Presence/Speed need no rebuild. */
+  tuneAtmosphere?(opacity: number | undefined, speed: number | undefined): void;
+  /** The atmosphere pattern id baked into the plate frame on stage right now, or `null` off-stage. */
+  frameAtmosphere?(): string | null;
 }
 
 export interface PlateBridge {
   rebuildPlateHtmlPreview(opts?: { selectFirst?: boolean; plateId?: string | null }): Promise<unknown>;
+  /** `applyRebuiltPlates(plates, { reload })`: pick up plates a save already rebuilt, without a second rebuild round trip. */
+  applyRebuiltPlates?(plates: HtmlPlate[], opts?: { reload?: boolean }): void;
   openPlateFromScene(scene: Scene): Promise<void>;
   fitFhdPreview(): void;
   ensureFhdFitObserver(): void;

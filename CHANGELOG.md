@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.0.0-beta.8 — 2026-10-26
+
+Custom plate layouts, storyboard stills from the video itself, and a stage that matches the encode. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.8 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio
+```
+
+Upgrade from 1.0.0-beta.7:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.8
+./studio
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio` rebuilds the desk when its sources change.
+
+### Plates
+
+- **Custom layouts.** A plate can use `type: "custom"` with HTML under `videos/<slug>/templates/`. Copy `kit/templates/custom.html`, keep the `data-edit` attributes and stage scaffolding, and the agent is steered away from editing shared templates.
+- **Storyboard stills.** The creation stage shows JPEGs of this video's open, plates, and close — not brand samples — so what you approve is what the encode produces. Brand picker stills no longer stall job polls while ffmpeg scales them.
+- **One encode, one moov.** Restyled chapter plates no longer render the same `plate-<id>.mp4` twice in parallel (two `moov` atoms, unplayable delivery).
+
+### Desk
+
+- **Stage matches the master.** Shared `RENDER_CSS` drops grain and the black curtain in the editor, stills, and encode the same way. Title-reveal switches retarget in place; atmosphere presence and speed tune live on the stage.
+- **Lens and look.** Loupes clear when the slide or source changes instead of keeping another plate's glass. Style saves no longer flash the plate twice on every slider drag.
+
 ## 1.0.0-beta.7 — 2026-10-26
 
 The desk is `kit/studio`. The classic desk is gone. Pin this tag. `main` is the development line.

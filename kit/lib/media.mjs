@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { assertX264Args, BT709_PARAMS, BT709_TAGS, lossyX264, QUALITY } from './encode.mjs';
 // Not `./motion.mjs`: that module sits mid-cycle with camera.mjs/direction.mjs/project.mjs, and
 // media.mjs is meant to stay a dependency-free leaf. The tail below reads the source's own rate.
@@ -68,8 +68,34 @@ export const mmss = (sec) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-export const duration = (file) =>
-  parseFloat(run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]));
+/**
+ * Probed lengths, kept against the file they were read from: path → { mtimeMs, size, sec }.
+ *
+ * A clip's length cannot change while its bytes do not, so re-probing the same file is pure cost.
+ * It adds up: the Studio server builds the edit deck by asking for the take's length plus one per
+ * rendered plate, and every `ffprobe` is a process spawn that blocks the event loop — so opening a
+ * project with twenty slides stalled every other request behind twenty probes, on every refresh.
+ */
+const probed = new Map();
+
+export const duration = (file) => {
+  let st = null;
+  try {
+    st = statSync(file);
+  } catch {
+    /* leave it to ffprobe to report what is wrong with the path */
+  }
+  const hit = st && probed.get(file);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.sec;
+  const sec = parseFloat(run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]));
+  if (st && Number.isFinite(sec)) {
+    // One entry per media file is small, but the server outlives many renders; drop the lot rather
+    // than grow without bound, since refilling it costs one probe per file still in use.
+    if (probed.size > 500) probed.clear();
+    probed.set(file, { mtimeMs: st.mtimeMs, size: st.size, sec });
+  }
+  return sec;
+};
 
 /**
  * Refuse to pass a broken render downstream.

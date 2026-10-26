@@ -294,6 +294,7 @@ export const PLATE_SHELVES = Object.freeze([
   { id: 'show', label: 'Show', types: ['showcase', 'bento'] },
   { id: 'proof', label: 'Proof', types: ['stats', 'kpi', 'metric', 'testimonials', 'logos', 'orbit'] },
   { id: 'plans', label: 'Plans', types: ['timeline', 'pricing'] },
+  { id: 'made', label: 'Made here', types: ['custom'] },
 ]);
 
 export function plateLibrary() {

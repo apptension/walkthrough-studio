@@ -502,6 +502,13 @@ export function freezePlateAtPeak(doc: Document, peakSec: number): number {
   return anims.length;
 }
 
+/**
+ * The properties the static composers pin by name. `pinLiveAnimationFrames` pins whatever each
+ * keyframe animates instead, which is open-ended — `titleFocus` animates `letter-spacing`,
+ * other reveals animate `rotate`, `gap`, `color`. Those are recorded per element in
+ * `data-studio-reveal` so `clearPlateRevealOverrides` lifts exactly what it laid down; a reveal
+ * swap used to strand them `!important` and the title kept the old spread.
+ */
 export const REVEAL_STYLE_PROPS = [
   'overflow',
   'clip-path',
@@ -525,10 +532,12 @@ type Styled = Element & { style: CSSStyleDeclaration; dataset: DOMStringMap };
 export function forceStyle(el: Element | null | undefined, styles: Record<string, string>): void {
   const node = el as Styled | null | undefined;
   if (!node?.style) return;
-  node.dataset['studioReveal'] = '1';
+  const props = new Set((node.dataset['studioReveal'] || '').split(' ').filter((p) => p && p !== '1'));
   for (const [prop, value] of Object.entries(styles)) {
     node.style.setProperty(prop, value, 'important');
+    props.add(prop);
   }
+  node.dataset['studioReveal'] = props.size ? [...props].join(' ') : '1';
 }
 
 export function forceAll(doc: Document, selector: string, styles: Record<string, string>): void {
@@ -752,7 +761,8 @@ export function clearPlateRevealOverrides(doc: Document | null | undefined): voi
   if (!doc) return;
   doc.getElementById('studio-overlay-held')?.remove();
   doc.querySelectorAll<HTMLElement>('[data-studio-reveal]').forEach((el) => {
-    for (const prop of REVEAL_STYLE_PROPS) {
+    const pinned = (el.dataset['studioReveal'] || '').split(' ').filter((p) => p && p !== '1');
+    for (const prop of new Set([...REVEAL_STYLE_PROPS, ...pinned])) {
       el.style.removeProperty(prop);
     }
     delete el.dataset['studioReveal'];

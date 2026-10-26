@@ -15,7 +15,7 @@ import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { hoverContentSlot, moveContentSlot, openContentSlot, syncContentToField } from './plateContentPane';
-import { invalidatePlates, paintLookVars } from './look';
+import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
 import { closePacePop, onPaceModeChange, pacePopOpen } from './platePace';
@@ -487,6 +487,12 @@ export function wireTimelineBar(signal: AbortSignal): void {
   signal.addEventListener('abort', () => closePacePop());
   wireOverview(signal);
   const scroll = $('etlScroll');
+  // The ruler is sticky; the playhead pin and clock read this so they stay on that bar.
+  scroll?.addEventListener(
+    'scroll',
+    () => scroll.style.setProperty('--etl-scroll-y', `${scroll.scrollTop}px`),
+    { passive: true, signal },
+  );
   // A gesture restyles blocks in place; whatever it commits (or abandons), the next paint is whole.
   for (const type of ['pointerdown', 'pointerup', 'pointercancel'] as const)
     (type === 'pointerdown' ? scroll : window)?.addEventListener(type, invalidateTimeline, { capture: true, signal });
@@ -597,6 +603,8 @@ export const editorApi = {
   paintLookVars,
   renderClips: (): void => renderTimeline(),
   renderInspector,
+  tuneAtmosphere: (opacity: number | undefined, speed: number | undefined): void => tuneAtmosphereLive(opacity, speed),
+  frameAtmosphere: () => frameAtmosphereOnStage(),
   /** The desk calls this where the legacy called `updatePlateEditChrome()`. */
   onPlateDirty: (): void => updatePlateEditChrome(),
   get active(): boolean {

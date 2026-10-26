@@ -303,12 +303,12 @@ export function watchJob(jobId: string, opts: WatchOpts = {}): Promise<Job> {
   const surface = opts.surface || 'render';
   const signal = opts.signal || runtime.workAbort?.signal;
   return new Promise((resolve, reject) => {
-    let timer: ReturnType<typeof setInterval> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
     const finish = <A>(fn: (arg: A) => void, arg: A) => {
       if (settled) return;
       settled = true;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       fn(arg);
     };
@@ -376,8 +376,14 @@ export function watchJob(jobId: string, opts: WatchOpts = {}): Promise<Job> {
         finish(reject, err);
       }
     };
-    timer = setInterval(() => void tick(), 700);
-    void tick();
+    // Each read waits for the previous one to land. On a fixed interval a job whose read takes
+    // longer than the gap — or one parked on a sign-in question — queued another request every
+    // 700ms behind the one still in flight, so the slowest jobs hammered the server hardest.
+    const pump = async () => {
+      await tick();
+      if (!settled) timer = setTimeout(() => void pump(), 700);
+    };
+    void pump();
   });
 }
 

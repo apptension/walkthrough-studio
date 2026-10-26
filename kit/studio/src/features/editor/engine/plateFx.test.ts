@@ -6,7 +6,9 @@ import { server } from '@/test/msw/server';
 
 import { aimSpace, lensPatchFor, markClock } from './aim';
 import { addLensAt, addZoomAt } from './edits';
+import { placePlateGlass, resetPlateGlassForTests } from './plateGlass';
 import { buildSeq, fxClipId, shotByKey } from './seq';
+import { drawPlate } from './stage';
 import { ed, resetEdForTests } from './state';
 import { fxSegments } from './timeline';
 import type { Deck, DeckEdit, Lens } from './types';
@@ -143,5 +145,24 @@ describe('plate and recording clocks', () => {
   it('aims plate marks against the delivered frame, recording marks against the capture', () => {
     expect(aimSpace('ch1-ask-hn')).toEqual({ width: 1920, height: 1080 });
     expect(aimSpace(null)).toEqual({ width: 440, height: 950 });
+  });
+});
+
+describe('the magnifier\u2019s live mirror', () => {
+  it('is tucked away on a frame that does not draw through it', () => {
+    resetPlateGlassForTests();
+    const glass = document.createElement('div');
+    glass.id = 'plateLoupeGlass';
+    const frame = document.createElement('iframe');
+    frame.id = 'plateLoupeFrame';
+    glass.appendChild(frame);
+    document.body.appendChild(glass);
+    // A glass left over from the previous slide.
+    placePlateGlass({ left: 100, top: 100, r: 50, cx: 10, cy: 10, scale: 2, alpha: 1 });
+    expect(glass.hidden).toBe(false);
+    // The slide the playhead moved to has no document yet, so nothing paints through the glass.
+    expect(drawPlate(ed.seq[0]!)).toBe(false);
+    expect(glass.hidden).toBe(true);
+    glass.remove();
   });
 });

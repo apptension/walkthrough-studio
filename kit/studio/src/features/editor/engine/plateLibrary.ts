@@ -41,13 +41,18 @@ const base = (): string => `/api/video/${encodeURIComponent(slug() || '')}`;
 
 export function plateStill(type: string): string {
   const brand = desk.get().video?.brand;
-  return brand ? `/api/plate-stills/${encodeURIComponent(brand)}/${encodeURIComponent(type)}.jpg` : '';
+  // A custom plate's markup belongs to one video, so there is no sample of it to paint.
+  if (!brand || type === 'custom') return '';
+  return `/api/plate-stills/${encodeURIComponent(brand)}/${encodeURIComponent(type)}.jpg`;
 }
 
 /** A still that fades in once decoded; a shimmer holds its place while the server paints it. */
 export function stillThumb(type: string, cls = 'plib-thumb'): string {
   const src = plateStill(type);
-  return `<span class="${cls}"><i class="plib-shimmer" aria-hidden="true"></i>${src ? `<img src="${escapeHtml(src)}" alt="" decoding="async" onload="this.parentNode.classList.add('is-ready')" onerror="this.parentNode.classList.add('is-failed')" />` : ''}</span>`;
+  // With nothing to load, settle the tile rather than leaving it shimmering for a frame that
+  // is never coming.
+  if (!src) return `<span class="${cls} is-failed"></span>`;
+  return `<span class="${cls}"><i class="plib-shimmer" aria-hidden="true"></i><img src="${escapeHtml(src)}" alt="" decoding="async" onload="this.parentNode.classList.add('is-ready')" onerror="this.parentNode.classList.add('is-failed')" /></span>`;
 }
 
 export function plateTypeLabel(type: string | null | undefined): string {

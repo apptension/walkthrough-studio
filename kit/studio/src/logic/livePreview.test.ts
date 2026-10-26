@@ -13,7 +13,7 @@ const { lensGeometry } = legacyLens as {
   lensGeometry: (
     mark: { rect: { x: number; y: number; w: number; h: number }; zoom: number | undefined },
     frame: { width: number; height: number },
-  ) => { zoom: number; diameter: number; S: number };
+  ) => { zoom: number; zoomExact: number; diameter: number; S: number };
 };
 
 describe('planLiveSeek', () => {
@@ -79,8 +79,10 @@ describe('planLensPaint', () => {
     assert.deepEqual(planLensPaint({ hasLens: true, viewportCssPx: 640, readyState: 2 }), { action: 'draw' });
   });
 
-  it('keeps the loupe across a seek while the editor is held', () => {
-    assert.deepEqual(planLensPaint({ hasLens: false, viewportCssPx: 640, readyState: 1, hold: true }), { action: 'keep' });
+  it('never keeps a loupe on a frame with no lens, even while the selected one is held', () => {
+    // The held lens's seconds can be another surface's seconds: keeping here left its glass
+    // over a slide or recording it was never placed on.
+    assert.deepEqual(planLensPaint({ hasLens: false, viewportCssPx: 640, readyState: 1, hold: true }), { action: 'clear' });
   });
 });
 
@@ -113,9 +115,16 @@ describe('lensLoupe', () => {
       const r = render(30, 52, zoom);
       const l = lensLoupe(52, zoom);
       assert.equal(l.zoom, r.zoom, `zoom ${zoom}`);
+      assert.equal(l.zoomExact, r.zoomExact, `zoomExact ${zoom}`);
       assert.equal(l.diameter, r.diameter, `diameter ${zoom}`);
       assert.equal(l.S, r.S, `S ${zoom}`);
     }
+  });
+
+  it('reports the magnification the render lands on, not the one asked for', () => {
+    const l = lensLoupe(52, 1.8);
+    assert.notEqual(l.zoomExact, l.zoom, 'the whole-pixel crop moves it');
+    assert.ok(Math.abs(l.zoomExact - l.zoom) < 0.02, 'but only slightly');
   });
 
   it('drops the strength the same way the render does once the area outgrows the loupe', () => {

@@ -15,8 +15,20 @@
 const MAX_ENTRIES = 240;
 const MAX_TEXT = 24000;
 
+/**
+ * A tool the harness refused, as opposed to one that ran and failed.
+ *
+ * Worth telling apart: a failed command is the agent's problem to fix and it usually does. A
+ * refused one is the harness's problem — the agent cannot retry its way past it, so it narrates
+ * a fallback ("I'll write the draft directly without fetching live data") and the job finishes
+ * on guesswork. Counting these lets Studio say so instead of shipping a quietly worse draft.
+ */
+const DENIED_RE = /\b(rejected|denied|not allowed|not permitted|requires approval|refused|did not approve|permission)\b/i;
+
+export const isToolDenial = (note) => DENIED_RE.test(String(note || ''));
+
 export function createStream() {
-  return { seq: 0, rev: 0, entries: [], tools: {}, blocks: {} };
+  return { seq: 0, rev: 0, entries: [], tools: {}, blocks: {}, denied: 0 };
 }
 
 function touch(stream) {
@@ -197,6 +209,10 @@ function toolEnd(stream, callId, { ok = true, note = '' } = {}) {
   e.done = true;
   e.ok = ok;
   if (!ok && note) e.text = clip(`${e.text}${e.text ? '\n' : ''}${note}`);
+  if (!ok && isToolDenial(note)) {
+    e.denied = true;
+    stream.denied = (stream.denied || 0) + 1;
+  }
   touch(stream);
   return e;
 }

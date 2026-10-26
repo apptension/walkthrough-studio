@@ -10276,7 +10276,9 @@ body:not(.is-editor) #edStatus { display: none; }
 .ed-play.is-playing { background: var(--brand-fill); color: var(--on-accent); }
 .etl-time {
   position: absolute;
-  top: 2px;
+  /* Follows vertical scroll so the clock stays on the stuck ruler (the playhead itself is
+     transformed, which would trap a sticky child). */
+  top: calc(var(--etl-scroll-y, 0px) + 2px);
   left: 14px;
   z-index: 7;
   display: inline-flex;
@@ -10491,7 +10493,15 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
   box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.3), 4px 0 12px -8px rgba(0, 0, 0, 0.55);
 }
 .etl-head { display: grid; place-items: center; color: var(--muted); }
-.etl-head.ruler { height: 22px; }
+/* The seconds bar stays put while the lanes scroll. Only this cell sticks — pinning the
+   whole icon column would freeze every lane label over the last rows. */
+.etl-head.ruler {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 22px;
+  background: color-mix(in srgb, var(--rail) 88%, #000);
+}
 .etl-head.clips { height: 54px; color: var(--ink-dim); }
 .etl-head.chapters { height: 28px; color: var(--etl-plate); }
 .etl-head.captions { height: 28px; color: color-mix(in srgb, #fff 55%, var(--etl-live)); }
@@ -10520,10 +10530,14 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
   user-select: none;
 }
 .etl-ruler {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   height: 22px;
   cursor: pointer;
   border-bottom: 1px solid var(--line);
+  /* Opaque so lanes sliding underneath don't show through the ticks. */
+  background: #101210;
 }
 .etl-ruler i { position: absolute; bottom: 0; width: 1px; height: 4px; background: rgba(255, 255, 255, 0.14); }
 .etl-ruler i.mj { height: 8px; background: rgba(255, 255, 255, 0.3); }
@@ -10775,12 +10789,16 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
   background: #2c302c;
   color: var(--ink-dim);
   cursor: pointer;
+  /* Quiet by default — every cut has one of these, so a full-strength badge at each seam reads
+     as timeline noise rather than a control. Pinned/selected joins (something you actually set)
+     stay at full strength below; a plain auto-dissolve only needs to be legible on hover. */
+  opacity: 0.55;
   transition: opacity .18s, transform .15s var(--ease-out), background .15s, color .15s;
 }
 .etl-join svg { width: 10px; height: 10px; }
-.etl-join:hover { transform: scale(1.25); color: #fff; background: #3d443d; }
-.etl-join.is-pinned { color: var(--on-accent); background: var(--accent); }
-.etl-join.is-sel { background: #fff; color: #0b0d0b; box-shadow: 0 0 0 2px var(--accent); }
+.etl-join:hover, .etl-join:focus-visible { opacity: 1; transform: scale(1.25); color: #fff; background: #3d443d; }
+.etl-join.is-pinned { opacity: 1; color: var(--on-accent); background: var(--accent); }
+.etl-join.is-sel { opacity: 1; background: #fff; color: #0b0d0b; box-shadow: 0 0 0 2px var(--accent); }
 
 .fx {
   position: absolute;
@@ -10887,7 +10905,7 @@ body.tl-collapsed .etl-toggle-chevron { transform: rotate(-90deg); }
 }
 .etl-playhead > i {
   position: absolute;
-  top: -1px;
+  top: calc(var(--etl-scroll-y, 0px) - 1px);
   left: -6px;
   width: 12px;
   height: 15px;

@@ -114,8 +114,14 @@ export function fitFhdPreview(attempt = 0): void {
   // Always show the whole output frame of this video — never crop.
   const out = desk.get().video?.output;
   if (out?.width && out?.height) {
+    const was = canvas.style.getPropertyValue('--wt-frame-w');
     canvas.style.setProperty('--wt-frame-w', `${out.width}px`);
     canvas.style.setProperty('--wt-frame-h', `${out.height}px`);
+    // The plates in the frames just changed size. Anything they fitted to the old one is wrong.
+    if (was !== `${out.width}px`) {
+      refitPlateComposition(frameEl());
+      refitPlateComposition(backEl());
+    }
   }
   const fw = canvas.offsetWidth || 1;
   const fh = canvas.offsetHeight || 1;
@@ -209,6 +215,7 @@ export function loadPlateFrame(plateId: string, { force = false, motionAt }: { f
     frame.onload = () => {
       if (token !== plateLoadToken) return resolve('cancelled');
       fitFhdPreview();
+      refitPlateComposition(frame);
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
           enablePlateInlineEdit(frame, {
@@ -319,6 +326,9 @@ function swapPlateFrames(plateId: string): void {
   plateFrameReady = plateId;
   plateEditBound = true;
   updatePlateEditChrome();
+  // No refit here: the page fitted itself once it was loaded and had a frame (typeFit waits for
+  // both), and that fit rides through the motion clone as inline style. Refitting now measures the
+  // freshly cloned stage before its images decode — that is what shrank or grew a slide on swap.
   fitFhdPreview();
   if (String(plateId).startsWith('overlay:')) plateSetLiveComposite(true);
 }
@@ -345,6 +355,49 @@ export function dropPreloadedPlates(id?: string): void {
     backToken += 1;
     backLoad = null;
   }
+}
+
+interface FitWindow extends Window {
+  __fitType?: () => Promise<void> | void;
+}
+
+/**
+ * Re-run the plate's own type and composition fit against the frame it is sitting in now.
+ *
+ * A plate fits itself once, from its page script, as soon as its fonts resolve. In the render
+ * that is exactly right: Playwright opens the page at the delivery size, so `innerWidth` is the
+ * output frame. In the editor the document often beats the stage to it — the back frame loads
+ * off-stage, and `--wt-frame-w` is only written when `fitFhdPreview` runs — so the plate can
+ * settle against the wrong viewport and bake a shrink (`planFrameFit` floors at 0.6) into
+ * `.compose`. That is the slide that looks zoomed out for no reason. Copy edits have the same
+ * gap the other way: the encoder refits after every change, the stage used to keep the old fit.
+ *
+ * `__fitType` clears `font-size` and `.compose`'s `scale` / `translate` before measuring, so
+ * calling it again is safe and lands on the same numbers the encoder will.
+ */
+export function refitPlateComposition(frame: HTMLIFrameElement | null = frameEl()): void {
+  try {
+    void (frame?.contentWindow as FitWindow | null)?.__fitType?.();
+  } catch {
+    /* same-origin plates only */
+  }
+}
+
+/** Refit once the author stops typing, so sizes never move under the caret mid-word. */
+const refitTimers = new WeakMap<Document, ReturnType<typeof setTimeout>>();
+export function refitSoon(doc: Document | null | undefined, delay = 500): void {
+  if (!doc?.defaultView) return;
+  clearTimeout(refitTimers.get(doc));
+  refitTimers.set(
+    doc,
+    setTimeout(() => {
+      try {
+        void (doc.defaultView as FitWindow | null)?.__fitType?.();
+      } catch {
+        /* same-origin plates only */
+      }
+    }, delay),
+  );
 }
 
 /**
@@ -648,6 +701,25 @@ function ensurePlatePeekStyle(doc: Document | null | undefined): void {
     doc.head.appendChild(peek);
   }
   peek.textContent = PLATE_PEEK_CSS;
+  ensureStageRenderCss(doc);
+}
+
+/**
+ * The two rules every renderer adds before it captures a frame (`RENDER_CSS` in
+ * lib/shared/renderCss.js, which a parity test keeps this equal to). The `.black` overlay is the
+ * template's own fade to and from black, which the encoder drops because `produce` joins slides
+ * itself; the grain is frozen so it does not crawl between stepped frames. Without them the stage
+ * flashed black at every slide boundary and shimmered where the master is still — discrepancies
+ * the author then tried to "fix" in the edit.
+ */
+export const STAGE_RENDER_CSS = '.grain{animation:none!important}.black{display:none!important}';
+
+function ensureStageRenderCss(doc: Document | null | undefined): void {
+  if (!doc?.head || doc.getElementById('studio-render-css')) return;
+  const el = doc.createElement('style');
+  el.id = 'studio-render-css';
+  el.textContent = STAGE_RENDER_CSS;
+  doc.head.appendChild(el);
 }
 
 /** Motion → text: a click on any `[data-edit]` asks the parent Studio to enter edit mode on that field. */
@@ -827,6 +899,30 @@ export function setPlateFieldSource(path: string, source: string | null | undefi
   return true;
 }
 
+/**
+ * Paint a value the server has already accepted straight onto the live plate.
+ *
+ * The Content pane used to reload the whole iframe after every typed field — a cache-busting
+ * document load per keystroke pause, which is where the stage went clunky. The saved value is
+ * the same copy the rebuild will bake, so writing it into the field is both faster and what the
+ * author is waiting to see. Returns false when the plate cannot show it (no such field, or the
+ * title still wears a previous reveal's markup), and the caller falls back to a reload.
+ */
+export function paintPlateFieldValue(path: string, source: string | number | null | undefined): boolean {
+  const doc = plateFrameDoc();
+  if (!doc?.body || !path) return false;
+  const el = fieldByPath(doc, path);
+  if (!el) return false;
+  // A baked reveal (cascade letters, wiped lines) is markup only the builder can reproduce.
+  if (el.matches('.title[data-reveal]') && el.querySelector(REVEAL_SHELLS)) return false;
+  learnField(el);
+  renderField(el, source == null ? '' : String(source));
+  el.dataset['editArmed'] = '1';
+  delete el.dataset['dirty'];
+  refitSoon(doc);
+  return true;
+}
+
 function selectFieldRange(el: HTMLElement, start: number, end: number): void {
   const doc = el.ownerDocument;
   const a = positionAt(el, start, { isBlock: blockNode });
@@ -939,6 +1035,10 @@ function bindPlateEditDelegation(doc: Document): void {
     markFieldDirty(el);
     absorbTypedAccents(el);
     notifyPlateSelection();
+    // The encoder refits type and composition for whatever the copy ended up being. Doing the
+    // same once typing settles is what keeps long copy from overflowing on stage but not in the
+    // render — the wait is long enough that sizes never jump under the caret mid-word.
+    refitSoon(doc);
   });
   doc.body.addEventListener('keydown', (e) => {
     const el = editTarget(e);
@@ -1120,6 +1220,43 @@ const plateLabel = (): string => {
   const s = desk.get();
   return s.activePlateId ? `Plate · ${findPlate(s.activePlateId)?.label || s.activePlateId}` : 'Plate HTML';
 };
+
+/** Shells a previous title reveal baked into the heading (see `revealMarkup` in lib/titleReveal.mjs). */
+const REVEAL_SHELLS = '.char, .cw, .title-cascade, .line-wipe, .line-exit, .mask, .rise';
+
+/**
+ * Host properties a reveal animates directly. The pinned-frame overrides are lifted by
+ * `clearPlateRevealOverrides`; these are what the WebGL runtime and a cancelled animation leave
+ * on the element itself.
+ */
+const REVEAL_HOST_PROPS = ['letter-spacing', 'clip-path', '-webkit-clip-path', 'transform', 'filter', 'opacity', 'animation', 'perspective'];
+
+/**
+ * Move every title on the plate onto `to` right now.
+ *
+ * A reveal only runs when the title carries its own markup family: `plates.css` guards each
+ * host animation with `:not(:has(.char, .mask, .line-wipe, .title-cascade))`, so a title still
+ * wearing cascade letters keeps playing cascade no matter what `data-reveal` says. The server
+ * rebuild lands a few hundred ms later and the iframe reloads, but until then the stage showed
+ * the reveal the author just replaced. Rebuilding the heading from the raw copy it already
+ * carries is the same plain markup the builder emits, so the new reveal takes over at once.
+ */
+export function retargetTitleReveal(doc: Document | null | undefined, to: string | null | undefined): void {
+  if (!doc?.body || !to) return;
+  let changed = false;
+  doc.querySelectorAll<HTMLElement>('.title[data-reveal]').forEach((title) => {
+    if (title.dataset['reveal'] === to) return;
+    if (title.querySelector(REVEAL_SHELLS) && title.dataset['edit']) {
+      const raw = fieldRaw(title);
+      if (raw) renderField(title, raw);
+    }
+    for (const prop of REVEAL_HOST_PROPS) title.style.removeProperty(prop);
+    title.dataset['reveal'] = to;
+    changed = true;
+  });
+  // Two reflows — only worth it when a title actually moved. `paintLook` runs on every hover.
+  if (changed) recreatePlateAnimations(doc);
+}
 
 /**
  * Replay plate motion in-place — keeps unsaved inline edits.
@@ -1416,6 +1553,30 @@ interface RebuildResponse {
   plates?: HtmlPlate[];
   motion?: Motion;
   [key: string]: unknown;
+}
+
+/**
+ * Apply plates a Direction save already rebuilt on disk (the response that triggered this carries
+ * them — no second `/plates/rebuild-html` round trip). `reload` is false for a change the stage
+ * already shows live (CSS look tokens, the atmosphere field's own `tuneField`): the list and any
+ * inspector state still pick up the fresh data, but the frame itself is left alone so nothing
+ * flashes. It is true only when the plate's markup or WebGL field actually changed shape.
+ */
+export function applyRebuiltPlates(plates: HtmlPlate[], { reload = true }: { reload?: boolean } = {}): void {
+  renderHtmlPlatePicker(plates);
+  if (!reload) {
+    // The frame on stage is already correct (optimistic CSS paint / the field's own tuneField).
+    // Still drop anything idle in the back buffer — a plate preloaded just before this save would
+    // otherwise carry the pre-save look the moment it swaps onto stage.
+    dropPreloadedPlates();
+    return;
+  }
+  plateFrameReady = null;
+  dropPreloadedPlates();
+  const activeId = desk.get().activePlateId;
+  const target = (activeId && plates.find((p) => p.id === activeId)) || plates[0] || null;
+  if (ed.active) void invalidatePlates();
+  else if (target) showPlateHtml(target);
 }
 
 export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = null }: { selectFirst?: boolean; plateId?: string | null } = {}): Promise<RebuildResponse> {

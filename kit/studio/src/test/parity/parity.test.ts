@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import { STAGE_RENDER_CSS } from '@/features/editor/engine/plate';
 import { ICON_ALIAS, ICON_BODY, ICON_META } from '@/ui/icons.gen';
 import { legacyModule } from './legacySource';
+
+describe('the editor paints plates under the render\u2019s own CSS', () => {
+  it('matches renderCss.js, so the stage cannot drift from the encode', () => {
+    const legacy = legacyModule<{ RENDER_CSS: string }>('renderCss.js', ['RENDER_CSS']);
+    expect(STAGE_RENDER_CSS).toBe(legacy.RENDER_CSS);
+  });
+});
 
 describe('icon tables match kit/lib/shared', () => {
   it('the icon table matches icons.js', () => {

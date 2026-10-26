@@ -169,15 +169,24 @@ export interface StoryTotals {
 
 const EMPTY_TOTALS: StoryTotals = { chapters: 0, plates: 0, beats: 0, words: 0, estSec: 0 };
 
-/** Template copy from `templates/new-video` — never shown as if the agent wrote it. */
-const PLACEHOLDER = /^(first line of the promise|second line with an|first chapter|short recap line|the payoff|chapter title from flow|caption title from flow|one sentence (on|over)|what the viewer)/i;
+/**
+ * Template copy from `templates/new-video` — never shown as if the agent wrote it.
+ *
+ * This has to know every starter title the backend's `scaffold` flag knows (SCAFFOLD_TITLES in
+ * lib/script.mjs), because the storyboard no longer waits on that flag: it is all-or-nothing, so
+ * one leftover starter chapter kept the whole board empty for most of the draft. Judging each
+ * scene instead lets real chapters appear the moment the agent writes them.
+ */
+const PLACEHOLDER =
+  /^(first line of the promise|second line with an|first chapter|sign in|do the thing|ready to work|product walkthrough|short recap line|the payoff|chapter title from flow|caption title from flow|one sentence (on|over)|what the viewer)/i;
 const STORY_KINDS = new Set(['open', 'chapter', 'plate', 'close']);
 
-const isPlaceholder = (s: ScriptScene) => PLACEHOLDER.test((s.title || '').replace(/\*/g, '').trim());
+const clean = (v: string | null | undefined) => (v ?? '').replace(/\*/g, '').trim();
+const isPlaceholder = (s: ScriptScene) => PLACEHOLDER.test(clean(s.title));
 
-/** The script as storyboard cards; empty while it is still the untouched scaffold. */
+/** The script as storyboard cards — each scene appears as soon as it stops being template copy. */
 export function storyCards(script: Pick<Script, 'scenes'> & { scaffold?: boolean } | null | undefined): StoryCard[] {
-  if (!script || script.scaffold) return [];
+  if (!script) return [];
   const cards: StoryCard[] = [];
   let n = 0;
   for (const s of script.scenes || []) {
@@ -188,15 +197,15 @@ export function storyCards(script: Pick<Script, 'scenes'> & { scaffold?: boolean
     }
     if (!STORY_KINDS.has(s.kind) || isPlaceholder(s)) continue;
     const kind = s.kind as StoryCard['kind'];
+    const line = clean(s.narration || s.onScreen || s.sub);
     cards.push({
       key: s.key || `${kind}:${cards.length}`,
       kind,
       n: kind === 'chapter' ? ++n : 0,
-      title: (s.title || s.plateTitle || s.plateId || '').replace(/\*/g, ''),
-      eyebrow: (s.eyebrow || s.plate?.typeLabel || '').replace(/\*/g, ''),
-      line: String(s.narration || s.onScreen || s.sub || '')
-        .replace(/\*/g, '')
-        .trim(),
+      title: clean(s.title || s.plateTitle || s.plateId),
+      eyebrow: clean(s.eyebrow || s.plate?.typeLabel),
+      // A real title can still carry the starter's narration — show the card, not the template line.
+      line: PLACEHOLDER.test(line) ? '' : line,
       plateType: s.plateType || s.plate?.type || '',
       beats: 0,
     });

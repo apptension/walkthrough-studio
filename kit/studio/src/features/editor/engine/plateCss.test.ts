@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pinLiveAnimationFrames } from './plateCss';
+import { clearPlateRevealOverrides, pinLiveAnimationFrames } from './plateCss';
 
 /**
  * Fakes a running CSS animation the way `document.getAnimations()` would report it, without
@@ -77,5 +77,29 @@ describe('pinLiveAnimationFrames', () => {
 
     expect(() => pinLiveAnimationFrames(document)).not.toThrow();
     expect(el.getAttribute('style')).toBeNull();
+  });
+});
+
+describe('clearPlateRevealOverrides', () => {
+  it('lifts every property a reveal pinned, not only the ones on the static list', () => {
+    // `titleFocus` opens on `letter-spacing: 0.14em`. Pinning it is right — that is what is on
+    // screen — but it was pinned `!important` and never lifted, so picking another reveal left
+    // the title stretched out for good.
+    document.body.innerHTML = '<h1 class="title" data-reveal="focus" style="letter-spacing: 0.1em; opacity: 0.4"></h1>';
+    const title = document.body.querySelector('.title') as HTMLElement;
+    const focus = fakeAnimation(title, 'titleFocus', [
+      { offset: 0, opacity: '0', letterSpacing: '0.14em' },
+      { offset: 1, opacity: '1' },
+    ]);
+    (document as unknown as { getAnimations: () => unknown[] }).getAnimations = () => [focus];
+
+    pinLiveAnimationFrames(document);
+    expect(title.style.getPropertyValue('letter-spacing')).toBe('0.1em');
+    expect(title.style.getPropertyPriority('letter-spacing')).toBe('important');
+
+    clearPlateRevealOverrides(document);
+    expect(title.style.getPropertyValue('letter-spacing')).toBe('');
+    expect(title.style.getPropertyValue('opacity')).toBe('');
+    expect(title.hasAttribute('data-studio-reveal')).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { api } from '@/desk/api';
 import { desk } from '@/desk/store';
 import { applyCardMotionToDocument } from '@/logic/cardMotion';
 import { cardElapsedMs, cardMarkDuration, cardMarkInClip, cardMarkKey, liveMarksAtRecTime, resolveLiveCardFromPlates } from '@/logic/liveCardStage';
-import { lensLoupe, planFrameEditor, planLensPaint, planLiveSeek } from '@/logic/livePreview';
+import { lensLoupe, planLensPaint, planLiveSeek } from '@/logic/livePreview';
 import {
   joinFrameOwner,
   liveRecDiscontinuous,
@@ -319,12 +319,13 @@ export function lensShape(lens: Lens, aim: { x: number; y: number; w: number; h:
   rect: { x: number; y: number; w: number; h: number };
   path: null;
   zoom: number;
+  zoomExact: number;
   diameter: number;
   S: number;
 } {
   const rect = { x: aim.x - aim.w / 2, y: aim.y - aim.h / 2, w: aim.w, h: aim.h };
-  const { zoom, diameter, S } = lensLoupe(Math.max(rect.w, rect.h), aim.zoom, aimSpace(lens.clip));
-  return { rect, path: null, zoom, diameter, S };
+  const { zoom, zoomExact, diameter, S } = lensLoupe(Math.max(rect.w, rect.h), aim.zoom, aimSpace(lens.clip));
+  return { rect, path: null, zoom, zoomExact, diameter, S };
 }
 
 /** Edge-smear crop so corner targets still fill the loupe (mirrors ffmpeg pad+fillborders). */
@@ -387,20 +388,45 @@ export function drawLens(rec: number | null, src: LoupeSource = {}): Lens | null
   }
 }
 
+/**
+ * What each lens canvas holds right now. "Keep the last loupe" is only honest when the last
+ * loupe is this lens, on this surface, painted from real pixels: anything else on the canvas is
+ * another slide's glass — and a glass painted for the live mirror is a punched-out disc that
+ * reads as a dark ring around nothing once the mirror underneath is gone.
+ */
+interface LensMark {
+  key: string;
+  clip: string | null;
+  via: 'pixels' | 'glass';
+}
+const lensMarks = new WeakMap<HTMLCanvasElement, LensMark>();
+
+function wipeLens(cv: HTMLCanvasElement | null | undefined): void {
+  if (!cv) return;
+  if (cv.width && cv.height) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
+  lensMarks.delete(cv);
+}
+
+/** The plate loupe and the live mirror under it, both gone. */
+export function clearPlateLens(): void {
+  wipeLens($<HTMLCanvasElement>('plateLens'));
+  placePlateGlass(null);
+}
+
 function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) => void): Lens | null {
   const cv = $<HTMLCanvasElement>(src.canvas || 'liveLens');
   const live = Boolean(src.glass);
-  const v = live ? null : (src.el ?? video());
-  if (!cv || (!v && !live)) return null;
+  // `el: null` is a surface with nothing to sample yet, not "use the recording": falling back
+  // there painted the take's pixels inside a magnifier sitting on a slide.
+  const v = live ? null : 'el' in src ? (src.el ?? null) : video();
+  if (!cv) return null;
+  if (!v && !live) {
+    // Nothing to sample this frame (the slide's render does not exist yet): show no loupe
+    // rather than whatever the canvas last held.
+    wipeLens(cv);
+    return null;
+  }
   const lens = lensAt(rec, src.clip ?? null);
-  const selected = selectedLens();
-  const hold = planFrameEditor({
-    selected: Boolean(selected) && selected?.source !== 'off',
-    blockStart: selected?.t ?? 0,
-    blockEnd: (selected?.t ?? 0) + (selected?.dur ?? 0),
-    playhead: rec,
-    playing: ed.playing,
-  }).visible;
   const vp = $(src.over || 'liveViewport');
   // A plate's frame is scaled to fit inside its pane, so the glass follows that box rather than
   // the pane: `getBoundingClientRect` already has the fit transform baked in.
@@ -410,32 +436,47 @@ function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) =
   const cw = Math.round(cssW * (window.devicePixelRatio || 1));
   const ch = Math.round(cssH * (window.devicePixelRatio || 1));
   if (cv.width !== cw || cv.height !== ch) {
+    // Resizing a canvas empties it, so there is no longer a last loupe to keep.
     cv.width = cw;
     cv.height = ch;
+    lensMarks.delete(cv);
   }
+  // The glass canvas is out of flow, so sizing it cannot move its offsetParent — one measurement
+  // serves both the canvas placement here and the mirror placement further down. Reading it again
+  // after the writes below would force the browser to rebuild layout mid-frame for the same answer.
+  const host = box ? cv.offsetParent?.getBoundingClientRect() : undefined;
   if (box) {
-    const host = cv.offsetParent?.getBoundingClientRect();
     cv.style.width = `${cssW}px`;
     cv.style.height = `${cssH}px`;
     cv.style.transform = `translate(${Math.round(box.left - (host?.left ?? 0))}px, ${Math.round(box.top - (host?.top ?? 0))}px)`;
   }
   const g = cv.getContext('2d');
   if (!g) return null;
-  const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v ? v.readyState : 4, hold });
-  if (paint.action === 'clear') {
-    g.clearRect(0, 0, cv.width, cv.height);
+  const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v ? v.readyState : 4 });
+  if (paint.action === 'clear' || !lens || rec == null) {
+    wipeLens(cv);
     return null;
   }
-  // Mid-seek the decoder often dips below HAVE_CURRENT_DATA — keep the last loupe.
-  if (paint.action === 'keep' || !lens || rec == null) return lens;
+  // Mid-seek the decoder often dips below HAVE_CURRENT_DATA — keep the last loupe, but only when
+  // it is this one. A switch of slide, lens or source is never a seek dip.
+  if (paint.action === 'keep') {
+    const was = lensMarks.get(cv);
+    if (was && was.key === lens.key && was.clip === (src.clip ?? null) && was.via === 'pixels') return lens;
+    wipeLens(cv);
+    return null;
+  }
   g.clearRect(0, 0, cv.width, cv.height);
+  lensMarks.set(cv, { key: lens.key, clip: src.clip ?? null, via: v ? 'pixels' : 'glass' });
   const W = src.width || liveW();
   const H = src.height || liveH();
   const k = cw / W;
   const aiming = ed.lensAim && !ed.playing && lens.key === ed.sel?.key;
   const T = rec - lens.t;
   const st = aiming ? { open: 1, scale: 1, alpha: 1, swell: 1 } : lensOpenState(T, lens.dur, ed.deck?.lensTiming);
-  if (st.alpha <= 0.001) return null;
+  if (st.alpha <= 0.001) {
+    lensMarks.delete(cv);
+    return null;
+  }
   const { x: tx, y: ty } = lensCentre(lens, clamp(T, 0, lens.dur));
   const cx = clamp(tx, 0, W);
   const cy = clamp(ty, 0, H);
@@ -446,9 +487,12 @@ function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) =
   const Rk = R * k;
   const rim = rimWidth(lens.diameter);
   const rimHex = ed.deck?.lensRim || '#F6AA1E';
-  // Source: the frame around the target at full zoom, over the glass's whole reach.
+  // Source: the frame around the target at full zoom, over the glass's whole reach. The render
+  // crops a whole number of source pixels and scales that to the glass, so its magnification is
+  // `zoomExact`, not the requested zoom — the stage uses the same number or it drifts ~1%.
+  const zoom = lens.zoomExact || lens.zoom;
   const reach = (1 + GLASS.bulge + GLASS.bevel) / st.swell;
-  const crop = (2 * R * reach + 8) / lens.zoom;
+  const crop = (2 * R * reach + 8) / zoom;
   g.save();
   g.globalAlpha = st.alpha;
   // Drop shadow, falling slightly below the glass.
@@ -470,7 +514,6 @@ function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) =
     g.arc(mx, my, Rk, 0, Math.PI * 2);
     g.fill();
     g.restore();
-    const host = cv.offsetParent?.getBoundingClientRect();
     const kc = cssW / W;
     place({
       left: (box ? box.left - (host?.left ?? 0) : 0) + cx * kc,
@@ -478,7 +521,7 @@ function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) =
       r: R * kc,
       cx,
       cy,
-      scale: kc * lens.zoom * st.swell,
+      scale: kc * zoom * st.swell,
       alpha: st.alpha,
     });
   }
@@ -491,21 +534,31 @@ function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) =
   g.clip();
   try {
     const src = v ? loupeSourceCanvas(v, cx, cy, crop, W, H) : null;
-    const full = (src?.width ?? 0) * lens.zoom * k; // on-screen size of the source at full magnification
-    const bands = src ? 14 : 0;
-    for (let i = bands - 1; i >= 0; i--) {
-      const d1 = (i + 1) / bands;
-      const dm = (i + 0.5) / bands;
-      const gF = glassProfile(dm) / st.swell;
-      if (i < bands - 1) {
-        g.save();
-        g.beginPath();
-        g.arc(mx, my, Rk * d1, 0, Math.PI * 2);
-        g.clip();
+    const full = (src?.width ?? 0) * zoom * k; // on-screen size of the source at full magnification
+    // One band per ~2 device px of radius: a fixed count left visible rings on a big loupe and
+    // wasted draws on a small one. geq is per-pixel, so more bands is strictly closer to it.
+    const bands = src ? Math.round(clamp(Rk / 2, 14, 48)) : 0;
+    // Bands run outside in, so each clip circle sits inside the last and `clip` already intersects
+    // with what is in force. Letting them accumulate under one save/restore draws the same glass as
+    // saving and restoring around all ~48 of them, without the state churn on every frame. The
+    // restore is unconditional: an undecodable frame mid-loop must not leave the clip narrowed for
+    // the shade and light passes below.
+    g.save();
+    try {
+      for (let i = bands - 1; i >= 0; i--) {
+        const d1 = (i + 1) / bands;
+        const dm = (i + 0.5) / bands;
+        const gF = glassProfile(dm) / st.swell;
+        if (i < bands - 1) {
+          g.beginPath();
+          g.arc(mx, my, Rk * d1, 0, Math.PI * 2);
+          g.clip();
+        }
+        const size = full / gF;
+        if (src) g.drawImage(src, mx - size / 2, my - size / 2, size, size);
       }
-      const size = full / gF;
-      if (src) g.drawImage(src, mx - size / 2, my - size / 2, size, size);
-      if (i < bands - 1) g.restore();
+    } finally {
+      g.restore();
     }
   } catch {
     /* frame not decodable yet */
@@ -633,6 +686,9 @@ export function drawPlate(c: Clip): boolean {
   const ready = plateReady(c.plateId);
   carryNow = syncCarry(c, plateHolds(c.plateId));
   if (!ready) {
+    // Nothing paints this frame — neither the glass nor the mirror under it may keep showing
+    // the slide they last drew over the one being held.
+    clearPlateLens();
     void requestPlate(c.plateId);
     return false;
   }
@@ -644,9 +700,7 @@ export function drawPlate(c: Clip): boolean {
 
 function clearPlateZoom(): void {
   if (ed.plateLoupe && !ed.plateLoupe.paused) ed.plateLoupe.pause();
-  const glass = $<HTMLCanvasElement>('plateLens');
-  if (glass?.width) glass.getContext('2d')?.clearRect(0, 0, glass.width, glass.height);
-  placePlateGlass(null);
+  clearPlateLens();
   const layer = $('plateFrame');
   if (!layer || !layer.style.transform) return;
   layer.style.transform = '';
@@ -683,6 +737,11 @@ function paintPlateFx(c: Clip, at: number): void {
   if (mirrored) {
     if (ed.plateLoupe && !ed.plateLoupe.paused) ed.plateLoupe.pause();
     syncPlateGlass($<HTMLIFrameElement>('plateFrame'), Math.round(at * 1000), carryNow?.bgMs);
+  } else {
+    // The mirror is a sibling of the canvas, so clearing the canvas alone leaves the last glass
+    // on stage — the previous slide's pixels under a dead loupe. Tuck it away whenever this
+    // frame is not drawing through it (no lens here, or the mirror is still loading the slide).
+    placePlateGlass(null);
   }
   const lens = drawLens(at, {
     ...(mirrored ? { glass: placePlateGlass } : { el: plateLoupeSource(c, at), glass: null }),
@@ -864,6 +923,9 @@ export function renderFrame(): void {
   }
 }
 
+/** The chips as last written, so an unchanged HUD costs nothing to confirm. */
+let hudShown: { el: HTMLElement; html: string } | null = null;
+
 export function paintHud(_c: Clip, transition: string | null): void {
   const hud = $('edHud');
   if (!hud) return;
@@ -877,7 +939,12 @@ export function paintHud(_c: Clip, transition: string | null): void {
   if (ed.hud && ed.hud.zoom > 1.01) chips.push(`<span class="ed-chip zoom">${ICONS['zoom']}${ed.hud.zoom.toFixed(2)}×</span>`);
   if (ed.hud?.lens) chips.push(`<span class="ed-chip lens">${ICONS['lens']}${ed.hud.lens.zoom.toFixed(1)}× magnifier</span>`);
   const html = chips.join('');
-  if (hud.innerHTML !== html) hud.innerHTML = html;
+  // Comparing against `hud.innerHTML` would serialize the chips back out of the DOM every frame
+  // just to find they match; remembering what was written answers the same question for free.
+  if (hudShown?.el !== hud || hudShown.html !== html) {
+    hud.innerHTML = html;
+    hudShown = { el: hud, html };
+  }
 }
 
 let lastPreloadAt = 0;

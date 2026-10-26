@@ -49,12 +49,35 @@ describe('agentPulse', () => {
 });
 
 describe('storyCards', () => {
-  it('drops the untouched scaffold and template copy', () => {
-    expect(storyCards({ ...makeScript().script, scaffold: true })).toEqual([]);
+  it('drops template copy, scene by scene, so written scenes show while others are still starters', () => {
+    expect(
+      storyCards({
+        scenes: [
+          makeScriptScene({ kind: 'open', key: 'open', title: 'First line of the promise' }),
+          makeScriptScene({ key: 'c1', title: 'First chapter' }),
+          makeScriptScene({ key: 'c2', title: 'Do the thing' }),
+          makeScriptScene({ key: 'c3', title: 'Ready to work' }),
+        ],
+      }),
+    ).toEqual([]);
+
+    // Mid-draft: the agent has written chapter one and left the rest on the starter.
     const cards = storyCards({
-      scenes: [makeScriptScene({ kind: 'open', key: 'open', title: 'First line of the promise' }), makeScriptScene({ key: 'c1', title: 'First chapter' })],
+      scaffold: true,
+      scenes: [
+        makeScriptScene({ key: 'c1', title: 'Scheduling', narration: 'Drag a booking into place.' }),
+        makeScriptScene({ key: 'c2', title: 'Do the thing' }),
+      ],
     });
-    expect(cards).toEqual([]);
+    expect(cards.map((c) => c.title)).toEqual(['Scheduling']);
+  });
+
+  it('keeps a written title whose narration is still the starter line, without the starter line', () => {
+    const [card] = storyCards({
+      scenes: [makeScriptScene({ kind: 'open', key: 'open', title: 'Plan your team', narration: 'One sentence over the opening plate' })],
+    });
+    expect(card?.title).toBe('Plan your team');
+    expect(card?.line).toBe('');
   });
 
   it('numbers chapters, folds captions into beats and keeps plates and closers', () => {

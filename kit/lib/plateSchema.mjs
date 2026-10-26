@@ -136,6 +136,27 @@ const SCHEMAS = {
     ],
     lists: [{ key: 'logos', label: 'Logos', item: 'Logo', min: 0, max: 4, fields: [f('asset', 'Logo', 'asset'), f('label', 'Label', 'text', { optional: true })], starter: { asset: '', label: 'Tool' } }],
   },
+  // A layout authored for one video. The fields are deliberately generic: the template decides
+  // which of them it paints, so the Inspector offers the same set whatever that template does.
+  custom: {
+    fields: [
+      f('template', 'Template', 'text', { optional: true, hint: 'File stem under videos/<slug>/templates — blank uses the default custom layout' }),
+      f('sub', 'Subtitle', 'text', { optional: true }),
+      f('body', 'Body', 'long', { optional: true }),
+      f('shot', 'Screenshot', 'asset', { optional: true }),
+    ],
+    lists: [
+      {
+        key: 'items',
+        label: 'Items',
+        item: 'Item',
+        min: 0,
+        max: 8,
+        fields: [LABEL, NOTE, f('value', 'Value', 'text', { optional: true }), f('icon', 'Icon', 'icon', { optional: true }), f('asset', 'Image', 'asset', { optional: true })],
+        starter: { label: 'A point', note: '' },
+      },
+    ],
+  },
 };
 
 /** Common head fields every interstitial has; title and eyebrow are edited on the stage. */

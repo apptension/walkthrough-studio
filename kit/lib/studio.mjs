@@ -154,7 +154,7 @@ import { CARRY_STYLE, carryCheck } from './plateCarry.mjs';
 import { chapterCoverage, chapterPlateKeys, isChapterPlate } from './chapterPlates.mjs';
 import { plateMarks } from './plateFx.mjs';
 import { ATMOSPHERES, fieldShaderSource } from './atmosphere.mjs';
-import { plateStill } from './plateStills.mjs';
+import { plateStill, videoPlateStill } from './plateStills.mjs';
 import { plateLibrary, revertPlate, swapPlate, swapSummary, trackLayout } from './plateSwap.mjs';
 import { applyPlateContent, plateContent } from './plateSchema.mjs';
 import { ICONS } from './plateIcons.mjs';
@@ -1065,8 +1065,13 @@ const UNRENDERED_PLATE_SEC = 4.5;
  * A plate row as an Editor scene. Plays its render when there is one; until then it stands in
  * at the length its twin runs, so the sequence reads right before the first Produce.
  */
-function plateScene(video, row, near = []) {
-  const plate = listHtmlPlates(video).find((p) => p.id === row.id);
+/**
+ * @param {object[]|null} listedPlates The deck's plate listing, when the caller already has it.
+ *   Listing stats every plate's mp4 and reads its render sidecar, so doing it per row turned one
+ *   deck read into a scan of the whole set per slide.
+ */
+function plateScene(video, row, near = [], listedPlates = null) {
+  const plate = (listedPlates || listHtmlPlates(video)).find((p) => p.id === row.id);
   if (!plate) return null;
   const mp4 = platePaths(video).interstitial[row.id]?.mp4;
   const plates = near.filter((s) => s.kind === 'plate');
@@ -1089,13 +1094,13 @@ function plateScene(video, row, near = []) {
   };
 }
 
-function withUnrenderedPlates(video, scenes) {
+function withUnrenderedPlates(video, scenes, listedPlates = null) {
   const have = new Set(scenes.map((s) => s.plateId || s.id));
   const missing = plateRows(video).filter((it) => it?.id && !have.has(it.id));
   if (!missing.length) return scenes;
   const out = [...scenes];
   for (const it of missing) {
-    const scene = plateScene(video, it, scenes);
+    const scene = plateScene(video, it, scenes, listedPlates);
     if (!scene) continue;
     const at = out.findIndex((s) => s.kind === 'live' && s.title === it.before);
     const close = out.findIndex((s) => s.id === 'close');
@@ -1321,6 +1326,10 @@ async function editDeckFull(video) {
 function editDeck(video, { written = new Map(), narration = null } = {}) {
   const voiceWritten = written;
   const slug = video.slug;
+  // One listing for the whole read. Nothing on disk moves while a deck is being assembled, and
+  // listing walks every plate's mp4 atoms and render sidecar, so the scenes below and the plate
+  // payload at the end share this instead of each asking again.
+  const listedPlates = listHtmlPlates(video);
   const LIVE = join(video.out, 'live.mp4');
   const hasLive = existsSync(LIVE);
   const liveDur = hasLive ? mediaDuration(LIVE) : 0;
@@ -1367,10 +1376,14 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   const chapterPlates = new Map();
   for (const [key, a] of coverage.absorbed) chapterPlates.set(key, { hold: a.hold, scene: null });
   for (const row of coverage.rows) {
-    const scene = plateScene(video, row, listed);
+    const scene = plateScene(video, row, listed, listedPlates);
     if (scene) chapterPlates.set(row.chapter, { hold: row.hold, scene });
   }
-  const natural = withUnrenderedPlates(video, splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map, chapterPlates));
+  const natural = withUnrenderedPlates(
+    video,
+    splitEditorScenesAtChapters(coalesceContiguousLive(listed), splitMarks, map, chapterPlates),
+    listedPlates,
+  );
   // The editor's order plays the rendered slices in a new sequence; omit drops sections; trims cut heads/tails.
   const scenes = timePlateScenes(
     video,
@@ -1411,7 +1424,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
     const { audio: _audio, ...rest } = deck;
     return Object.keys(rest).length ? rest : null;
   };
-  const plates = listHtmlPlates(video).map((p) => {
+  const plates = listedPlates.map((p) => {
     const target = plateTarget(video.config, p.id) || {};
     return {
       id: p.id,
@@ -1462,6 +1475,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
         rect: m.rect,
         path: null,
         zoom: Number(geo.zoom.toFixed(3)),
+        zoomExact: Number(geo.zoomExact.toFixed(5)),
         diameter: geo.diameter,
         S: geo.S,
       });
@@ -1479,6 +1493,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       rect: m.rect,
       path: m.path || null,
       zoom: Number(geo.zoom.toFixed(3)),
+      zoomExact: Number(geo.zoomExact.toFixed(5)),
       diameter: geo.diameter,
       S: geo.S,
     };
@@ -1786,6 +1801,19 @@ async function handleApi(req, res, url) {
       'Cache-Control': 'no-cache',
     });
     res.end(image.body);
+    return;
+  }
+
+  // This video's own plate, built from its config — not a sample in its brand.
+  const videoStillMatch = path.match(/^\/api\/video\/([^/]+)\/still\/([^/]+)\.jpg$/);
+  if (videoStillMatch && req.method === 'GET') {
+    try {
+      const file = await videoPlateStill(decodeURIComponent(videoStillMatch[1]), decodeURIComponent(videoStillMatch[2]));
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-cache' });
+      createReadStream(file).pipe(res);
+    } catch (err) {
+      json(res, 404, { error: err.message || String(err) });
+    }
     return;
   }
 
@@ -2276,7 +2304,7 @@ async function handleApi(req, res, url) {
     if (!target) return json(res, 404, { error: `"${plateId}" follows its chapter — restyle it instead of swapping` });
     try {
       const next = body.revert ? revertPlate(target, plateId) : swapPlate(target, String(body.type || ''));
-      if (plateId !== 'open' && plateId !== 'close') checkPlate(video.brand, next);
+      if (plateId !== 'open' && plateId !== 'close') checkPlate(video.brand, next, { videoDir: video.dir });
       replaceRow(target, next);
     } catch (err) {
       return json(res, 400, { error: err.message });
@@ -2318,7 +2346,7 @@ async function handleApi(req, res, url) {
     let changed;
     try {
       changed = applyPlateContent(target, ops).changed;
-      checkPlate(video.brand, target);
+      checkPlate(video.brand, target, { videoDir: video.dir });
     } catch (err) {
       return json(res, 400, { error: err.message || String(err) });
     }
@@ -2351,7 +2379,7 @@ async function handleApi(req, res, url) {
   if (plateGrabRoute && req.method === 'POST') {
     const body = await readBody(req);
     try {
-      const grabbed = grabFrameAsset(video, body.t);
+      const grabbed = await grabFrameAsset(video, body.t);
       return json(res, 200, { ok: true, asset: grabbed.asset, t: grabbed.t, assets: listPlateAssets(video) });
     } catch (err) {
       return json(res, 400, { error: err.message || String(err) });
