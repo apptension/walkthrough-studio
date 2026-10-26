@@ -3654,6 +3654,38 @@ video.hidden { display: none; }
   background:
     radial-gradient(ellipse at 50% 45%, #131513 0%, #050605 70%);
 }
+/* The zoom and magnifier aim boxes, laid over whichever surface is on stage. */
+.stage-aim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.stage-aim > * { pointer-events: auto; }
+.stage-aim > [hidden] { display: none; }
+
+/* The plate's render, held one pixel wide so the decoder keeps feeding the loupe real frames. */
+.plate-loupe-src {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The magnifier's glass over a plate. Positioned onto the fitted frame as `drawLens` paints. */
+.plate-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+}
 .fhd-canvas {
   /* The video's output frame; app.js sets it per video (vertical masters are 1080×1920). */
   --wt-frame-w: 1920px;
@@ -11840,30 +11872,37 @@ button.var-reset:hover { color: var(--accent); }
 .ins-field-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  align-items: stretch;
+  gap: 4px;
   margin: 0 0 10px;
-  padding: 3px;
+  padding: 4px;
   border-radius: 11px;
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 .ins-field-tab {
   appearance: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 30px;
-  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Grow to fill a row when few fields; wrap instead of crushing when many. */
+  flex: 1 1 5.75rem;
+  min-width: 5.75rem;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 7px 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  font: 650 11.5px/1 var(--font);
+  font: 650 11.5px/1.15 var(--font);
   letter-spacing: 0.01em;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .ins-field-tab > span {
-  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11874,16 +11913,14 @@ button.var-reset:hover { color: var(--accent); }
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
-.ins-field-tab.dirty:not(.on)::after,
-.ins-field-tab.dirty.on::after {
+/* Dirty mark sits beside the label — never wraps under as a dash. */
+.ins-field-tab.dirty::after {
   content: '';
-  display: inline-block;
+  flex: 0 0 auto;
   width: 5px;
   height: 5px;
-  margin-left: 6px;
   border-radius: 50%;
   background: var(--warn);
-  vertical-align: 1px;
 }
 .ins-field-panel {
   display: grid;

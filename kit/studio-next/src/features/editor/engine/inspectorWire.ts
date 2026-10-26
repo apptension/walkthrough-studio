@@ -8,7 +8,7 @@ import { lensLoupe, lensZoomCeiling } from '@/logic/livePreview';
 import { neonButtonLabel } from '@/ui/neonFx';
 import { paintRange } from '@/ui/rangeFill';
 
-import { deckLens, lensTarget, paintLensBox, paintZoomBox, selectedShot } from './aim';
+import { aimSpace, deckLens, lensPatchFor, lensTarget, paintLensBox, paintZoomBox, recenterZoom, selectedShot } from './aim';
 import {
   addVoiceLine,
   listenLine,
@@ -28,11 +28,12 @@ import { requestMake, requestMusicFit, saveDirection } from './ctx';
 import { postDeck, refresh } from './data';
 import { detachPlate, duplicateSelected } from './duplicate';
 import { layoutRow, layoutText, sectionForClip, upsertLayout } from './layoutPreview';
-import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSelected, restoreOmitted, select, selectFx, toolLens, toolZoom } from './edits';
+import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSelected, restoreOmitted, select, selectFx, toolCaption, toolLens, toolZoom } from './edits';
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
 import { P } from './plateCtl';
 import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
+import { wireSlideInspector } from './slideInspectorWire';
 import { renderFrame, requestPlate } from './stage';
 import { audioDesk, deckEdit, ed, preview, setHtmlPlates, slug, type LensAim } from './state';
 import { enterLiveCard, enterText, enterTextFor, exitText, paintFieldChips, paintTextMode } from './text';
@@ -293,7 +294,9 @@ export function wireInspector(): void {
     const shot = selectedShot();
     return shot && adoptShot(shot);
   });
+  act('zoom-center', recenterZoom);
   act('add-lens', toolLens);
+  act('add-caption', toolCaption);
   act('adopt-lens', () => {
     const l = selectedLens();
     return l && adoptLens(l);
@@ -318,11 +321,11 @@ export function wireInspector(): void {
       if (ride) previewRange(ride.from, ride.to);
     } else if (s?.type === 'lens') {
       const l = selectedLens();
-      const seg = l && fxSegments(l.t, l.t + l.dur)[0];
+      const seg = l && fxSegments(l.t, l.t + l.dur, l.clip)[0];
       if (seg) previewRange(seg.a, seg.b);
     } else if (s?.type === 'zoom') {
       const shot = selectedShot();
-      const seg = shot && fxSegments(shot.start, shot.end)[0];
+      const seg = shot && fxSegments(shot.start, shot.end, shot.clip)[0];
       if (seg) {
         ed.sel = { ...s };
         previewRange(seg.a, seg.b);
@@ -410,7 +413,9 @@ export function wireInspector(): void {
   const lens = selectedLens();
   const own = lens?.source === 'edit' ? deckLens(lens) : null;
   const [lensLo, lensHi] = ed.deck?.ranges?.lensZoom || [1.2, 2.4];
-  const saveLens = (patch: Partial<DeckLens>) => (own ? postDeck({ lenses: d.lenses.map((l) => (l.id === own.id ? { ...l, ...patch } : l)) }) : null);
+  // A plate's magnifier stores its area as fractions of the frame; the rows here speak pixels.
+  const saveLens = (patch: Partial<DeckLens>) =>
+    own && lens ? postDeck({ lenses: d.lenses.map((l) => (l.id === own.id ? { ...l, ...lensPatchFor(lens, patch) } : l)) }, { hint: 'Magnifier saved' }) : null;
   // The aim carries every pending slider value, so strength and area preview together.
   const previewLens = (patch: Partial<LensAim>) => {
     if (!own || !lens) return;
@@ -424,14 +429,15 @@ export function wireInspector(): void {
     const a = ed.lensAim;
     return Math.max(a?.w ?? own?.w ?? lens?.rect.w ?? 24, a?.h ?? own?.h ?? lens?.rect.h ?? 24);
   };
-  const lensCeiling = () => r3(clamp(lensZoomCeiling(lensSizeNow()), lensLo, lensHi));
+  const lensFrame = aimSpace(lens?.clip);
+  const lensCeiling = () => r3(clamp(lensZoomCeiling(lensSizeNow(), lensFrame), lensLo, lensHi));
   /** Strength slider, readout, presets and the cap note follow the area the loupe has to cover. */
   function syncLensStrength() {
     const zoomEl = root!.querySelector<HTMLInputElement>('[data-lens-zoom]');
     if (!zoomEl || !own) return;
     const ceiling = lensCeiling();
     const want = ed.lensAim ? ed.lensAim.zoom : own.zoom;
-    const loupe = lensLoupe(lensSizeNow(), want);
+    const loupe = lensLoupe(lensSizeNow(), want, lensFrame);
     zoomEl.max = String(ceiling);
     zoomEl.disabled = ceiling - lensLo < 0.05;
     if (want != null && Number(zoomEl.value) !== Math.min(want, ceiling)) zoomEl.value = String(Math.min(want, ceiling));
@@ -869,14 +875,14 @@ export function wireInspector(): void {
     void withMaster({ [el.dataset['master'] || '']: Number(el.value) }, 'Master updated');
   });
 
+  wireSlideInspector(root);
+
   // Plate
   rootClicks?.abort();
   rootClicks = null;
   const plateC = s?.type === 'clip' ? ed.seq.find((x) => x.id === s.id && x.kind === 'plate') : null;
   if (!plateC) return;
   const id = plateC.plateId || '';
-  on('[data-look]', 'change', (el) => void changeLook(id, { [el.dataset['look'] || '']: el.value === '' ? null : el.value }));
-  on('[data-plate-layout]', 'change', (el) => void plateApi(id, 'layout', { layout: el.value }, 'Layout updated'));
   act('look-reset', () => changeLook(id, { reset: true }));
   act('style-reset', async () => {
     await plateApi(id, 'style', { reset: true }, 'Back to the brand values');

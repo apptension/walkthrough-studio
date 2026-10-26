@@ -1,6 +1,7 @@
 import { api } from '@/desk/api';
 import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
+import { plateClockMs } from '@/logic/plateTiming';
 import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, shouldParkPlayheadAtClipStart } from '@/logic/plateSync';
 
 import { paintStatus } from './edits';
@@ -45,7 +46,7 @@ export function refreshPlatePreview(id: string | null | undefined, { fromStart =
     ed.t = clip.at;
     paintHead();
   }
-  const ms = previewClockMs(clip, ed.t, { fromStart, onPlate });
+  const ms = previewClockMs(clip, ed.t, { fromStart, onPlate }) && clip ? plateClockMs(clip, ed.t) : 0;
   if (typeof P.restart === 'function') P.restart(ms);
   else {
     P.motion?.();
@@ -269,18 +270,82 @@ export function guessLook(info: Pick<DeckPlate, 'motion'> | null, patch: Record<
   return out;
 }
 
+function sameVars(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) if ((a[key] || '') !== (b[key] || '')) return false;
+  return true;
+}
+
+function lookVarsFor(look: ResolvedLook): Record<string, string> {
+  const table = desk.get().video?.motionOptions?.lookVars || {};
+  const vars: Record<string, string> = {};
+  for (const key of ['energy', 'depth', 'sheen', 'titleReveal']) Object.assign(vars, table[key]?.[look[key] ?? ''] || {});
+  return vars;
+}
+
+interface LookHover {
+  id: string;
+  doc: Document;
+  /** Inline values on the frame before the first hover touched each token (null: unset). */
+  before: Map<string, string | null>;
+  reveal: string | null;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+let hover: LookHover | null = null;
+
+/**
+ * Hovering a look tile tries it on the stage: the tokens paint at once and, after a short dwell,
+ * the plate replays its intro so energy and title reveals read as motion. Nothing is saved and
+ * the playhead stays put. Backgrounds need a rebuild, so their tiles preview themselves instead.
+ */
+export function hoverLook(id: string, key: string, value: string | null): void {
+  if (key === 'atmosphere' || ed.playing || ed.textMode || ed.loadingPlate === id) return;
+  const doc = plateDoc(id);
+  if (!doc?.documentElement || !playheadOnPlate(curClip(), id)) return;
+  const info = plateInfo(id);
+  const now = guessLook(info, {});
+  const want = guessLook(info, { [key]: value });
+  if (!hover || hover.id !== id || hover.doc !== doc) hover = { id, doc, before: new Map(), reveal: frameLook(doc).titleReveal, timer: null };
+  const h = hover;
+  const vars = lookVarsFor(want);
+  for (const name of Object.keys(vars)) if (!h.before.has(name)) h.before.set(name, doc.documentElement.style.getPropertyValue(name) || null);
+  for (const [name, was] of h.before) if (!(name in vars)) applyVar(name, was);
+  paintLook(doc, vars, revealNeedsMarkup(id, now['titleReveal'], want['titleReveal']) ? h.reveal : want['titleReveal']);
+  if (h.timer) clearTimeout(h.timer);
+  h.timer = setTimeout(() => {
+    if (hover !== h || !P.restart?.(0)) return;
+    for (const a of doc.getAnimations?.() || []) a.play();
+  }, 240);
+}
+
+/** Pointer left the tiles: put the frame back exactly as it was. */
+export function endHoverLook(): void {
+  const h = hover;
+  hover = null;
+  if (!h) return;
+  if (h.timer) clearTimeout(h.timer);
+  if (plateDoc(h.id) !== h.doc) return;
+  for (const [name, was] of h.before) applyVar(name, was);
+  paintLook(h.doc, {}, h.reveal);
+  refreshPlatePreview(h.id);
+}
+
+/** A tile was picked: the hover becomes the new look, so there is nothing to put back. */
+export function commitHoverLook(): void {
+  if (hover?.timer) clearTimeout(hover.timer);
+  hover = null;
+}
+
 export async function changeLook(id: string, patch: Record<string, unknown>): Promise<void> {
   const gen = ++lookGen;
   const info = plateInfo(id);
-  const table = desk.get().video?.motionOptions?.lookVars || {};
   const was = { atmosphere: lookValue(info, 'atmosphere'), titleReveal: lookValue(info, 'titleReveal') };
   const want = guessLook(info, patch);
 
   // 1. Optimistic paint from the table that shipped with the video — the pick shows this frame.
   const doc = plateDoc(id);
   if (doc) {
-    const vars: Record<string, string> = {};
-    for (const key of ['energy', 'depth', 'sheen', 'titleReveal']) Object.assign(vars, table[key]?.[want[key] ?? ''] || {});
+    const vars = lookVarsFor(want);
     paintLook(doc, vars, revealNeedsMarkup(id, was.titleReveal, want['titleReveal']) ? null : want['titleReveal']);
     refreshPlatePreview(id);
   }
@@ -305,8 +370,15 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
       onStage.titleReveal !== look['titleReveal'] &&
       revealNeedsMarkup(id, onStage.titleReveal, look['titleReveal']));
   if (after && !markupChanged) {
-    paintLook(after, look.vars || {}, look['titleReveal']);
-    refreshPlatePreview(id);
+    const resolved = look.vars || {};
+    // The click already painted this and restarted the plate. Doing it again when the save
+    // lands is the second flash.
+    const already =
+      Boolean(doc) && sameVars(lookVarsFor(want), resolved) && (look['titleReveal'] ?? null) === (want['titleReveal'] ?? null);
+    if (!already) {
+      paintLook(after, resolved, look['titleReveal']);
+      refreshPlatePreview(id);
+    }
   } else if (
     canReloadPlateFrame({
       dirty: P.dirty(),
@@ -315,8 +387,8 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
       playheadPlateId: curClip()?.plateId || null,
     })
   ) {
-    await reloadPlate(id);
-    refreshPlatePreview(id);
+    // The reload parks the new frame before it is shown. A second restart would flash it.
+    await reloadPlate(id, { paint: false });
   }
   // Off stage, or the HTML itself changed while the playhead sits elsewhere: the next visit shows the rebuilt plate.
   else {

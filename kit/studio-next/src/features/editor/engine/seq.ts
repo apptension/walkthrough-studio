@@ -50,6 +50,11 @@ export function buildSeq(): void {
         recTo: recTo as number,
         join,
         ...(s.repeatOf ? { repeatOf: s.repeatOf } : {}),
+        ...(!isLive && s.naturalDur ? { naturalDur: s.naturalDur } : {}),
+        ...(!isLive && s.holdAt != null ? { holdAt: s.holdAt } : {}),
+        ...(!isLive && s.clearAt != null ? { clearAt: s.clearAt } : {}),
+        ...(!isLive && s.padOut ? { padOut: s.padOut } : {}),
+        ...(!isLive && s.timing ? { timing: s.timing } : {}),
       });
     });
   } else {
@@ -160,6 +165,13 @@ export const rateAt = (rec: number): number => deckEdit().speed.find((r) => rec 
 export const curClip = (): Clip | null => ed.seq[clipIndexAt(ed.t)] || null;
 export const shotKey = (s: Pick<ZoomShot, 'id' | 'start'>): string => s.id || `auto@${s.start}`;
 
+/**
+ * The key a plate's zooms and magnifiers are filed under. A duplicate plays the same file, so it
+ * shares its source's marks — the render keys off `repeatOf || id` for the same reason.
+ */
+export const fxClipId = (c: Clip | null | undefined): string | null =>
+  c && c.kind === 'plate' ? c.repeatOf || c.plateId || c.id : null;
+
 /** Every magnifier the zoom row shows: the ones that render plus recorded ones switched off. */
 export const lensItems = (): Lens[] => [
   ...(ed.deck?.lenses || []),
@@ -168,4 +180,12 @@ export const lensItems = (): Lens[] => [
     .map((l) => ({ ...l, key: `off:${l.t}`, source: 'off' }) as unknown as Lens),
 ];
 export const lensByKey = (key: string | null | undefined): Lens | null => lensItems().find((l) => l.key === key) || null;
+
+/** A zoom by its pill key, whether the planner made it on the recording or it sits on a plate. */
+export const shotByKey = (key: string | null | undefined): ZoomShot | null => {
+  const own = (ed.deck?.zoomShots || []).find((s) => shotKey(s) === key);
+  if (own) return own;
+  const z = (ed.deck?.plateZooms || []).find((p) => p.id === key);
+  return z ? { id: z.id, clip: z.clip, source: 'edit', start: z.t, end: z.t + z.dur, zoom: z.zoom } : null;
+};
 export const selectedLens = (): Lens | null => (ed.sel?.type === 'lens' ? lensByKey(ed.sel.key) : null);

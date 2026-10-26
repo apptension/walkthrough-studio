@@ -82,7 +82,7 @@ function MonitorContext() {
   const hint = useDesk((s) => s.monitorLabel.hint);
   return (
     <div className="monitor-context">
-      <span className="monitor-label" id="monitorLabel" hidden={text === 'Program' || text === 'Plate HTML'}>
+      <span className="monitor-label" id="monitorLabel" hidden={text === 'Program' || text === 'Plate HTML' || text === 'Editor'}>
         {text}
       </span>
       {' '}

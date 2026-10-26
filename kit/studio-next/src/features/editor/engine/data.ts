@@ -4,13 +4,14 @@ import { toast } from '@/desk/toast';
 import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
+import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
 import { liveCardAtPlayhead, paintFrame, plateReady, renderFrame, requestPlate, syncLiveSource } from './stage';
-import { audioDesk, deckEdit, ed, htmlPlates, preview, slug } from './state';
+import { audioDesk, deckEdit, ed, htmlPlates, preview, setHtmlPlates, slug } from './state';
 import { flashHint, renderTimeline } from './timeline';
 import { paintHead, paintTransport, pause } from './transport';
-import type { Deck, DeckEdit } from './types';
+import type { Deck, DeckEdit, PlateRow } from './types';
 import { clamp, errMessage } from './util';
 
 /** Deck load / save / undo from `kit/studio/editor.js`. */
@@ -65,32 +66,77 @@ export function resetForProject(): void {
   ed.clock = null;
 }
 
-export async function refresh(): Promise<Deck | null> {
+/** Bumped whenever the deck is replaced from a save; a fetch that started before it is older news. */
+let deckGen = 0;
+let running: Promise<Deck | null> | null = null;
+let trailing: Promise<Deck | null> | null = null;
+
+/**
+ * Re-read the deck. A pipeline asks from several places at once (step publish, loadVideo, the
+ * overview's own watcher): calls during a fetch share one trailing re-fetch, so the timeline paints
+ * once from the newest deck instead of racing responses that can land out of order.
+ */
+export function refresh(): Promise<Deck | null> {
+  if (!running) {
+    running = fetchDeck().finally(() => {
+      running = null;
+    });
+    return running;
+  }
+  trailing ??= running.then(() => {
+    trailing = null;
+    return refresh();
+  });
+  return trailing;
+}
+
+async function fetchDeck(): Promise<Deck | null> {
   if (!slug()) return null;
   const want = slug();
+  const gen = deckGen;
   try {
     const deck = await api<Deck>(`/api/video/${encodeURIComponent(want || '')}/edit`);
     // Sequence may have changed while the request was in flight.
     if (slug() !== want) return null;
+    // An edit saved meanwhile returned a newer deck than this read.
+    if (gen !== deckGen) return ed.deck;
+    // Nothing moved on disk: keep the drawn timeline (and any morph playing across it) as it is.
+    if (ed.deck && ed.seq.length && JSON.stringify(deck) === JSON.stringify(ed.deck)) {
+      if (ed.active) {
+        syncLiveSource();
+        paintFrame();
+        renderFrame();
+        renderInspector();
+        paintStatus();
+        paintTransport();
+      }
+      return ed.deck;
+    }
     ed.deck = deck;
   } catch (err) {
     if (slug() !== want) return null;
-    ed.deck = null;
     console.warn('editor deck', err);
+    // A failed re-read keeps the cut on screen; only a first load has nothing to show.
+    if (ed.deck && ed.seq.length) return ed.deck;
+    ed.deck = null;
   }
-  syncLiveSource();
   buildSeq();
   ed.t = clamp(ed.t, 0, ed.total || 0);
+  if (!ed.active) {
+    // Program overview: the cut is all it needs — the stage and the audio preview wait for the Editor.
+    renderTimeline();
+    return ed.deck;
+  }
+  syncLiveSource();
   paintFrame();
   void preview.load(previewState());
-  if (ed.active) {
-    validateSelection();
-    renderTimeline();
-    renderFrame();
-    renderInspector();
-    paintStatus();
-    paintTransport();
-  }
+  validateSelection();
+  renderTimeline();
+  renderFrame();
+  renderInspector();
+  refreshPacePop();
+  paintStatus();
+  paintTransport();
   return ed.deck;
 }
 
@@ -111,6 +157,7 @@ export const snapshotDeck = (): DeckEdit => {
       omit: d.omit || [],
       repeats: d.repeats || [],
       trims: d.trims || [],
+      plateTimes: d.plateTimes || [],
       cuts: d.cuts || [],
     }),
   ) as DeckEdit;
@@ -125,6 +172,7 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
       if (ed.undo.length > 60) ed.undo.shift();
       ed.redo = [];
     }
+    deckGen += 1;
     ed.deck = r;
     ed.hear = null;
     // Cut shape changed — drop composite preview so the next frame loads the true plate/HTML.
@@ -134,6 +182,14 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
     if (Object.prototype.hasOwnProperty.call(patch || {}, 'cards')) {
       for (const p of htmlPlates() || []) {
         if (p.liveCard || String(p.id || '').startsWith('overlay:')) ed.stalePlates.add(p.id);
+      }
+      // The save rebuilt overlay HTML for a caption written here. Pull that list before the
+      // stage paints, or Edit copy looks up a card the editor has never heard of.
+      try {
+        const listed = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates`);
+        if (listed?.plates?.length) setHtmlPlates(listed.plates);
+      } catch {
+        /* Edit copy fetches again if the new card is still missing */
       }
     }
     if (!ed.textMode) ed.liveCardId = null;
@@ -157,6 +213,7 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
     }
     paintHead();
     renderInspector();
+    refreshPacePop();
     paintStatus();
     if (hint) flashHint(hint);
     return r;

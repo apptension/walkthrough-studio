@@ -1,3 +1,4 @@
+import { escapeHtml } from '@/lib/escapeHtml';
 import { icon } from '@/ui/iconString';
 import { curveOf, minJerk } from '@/logic/easing';
 
@@ -34,7 +35,7 @@ export const ICONS: Record<string, string> = Object.fromEntries(ICON_KEYS.map((k
 
 /** Transition glyphs for the join grid (`icons.js#T_GLYPH`). */
 export const T_GLYPH: Record<string, string> = Object.fromEntries(
-  ['directed', 'dissolve', 'wipe', 'push', 'zoom', 'iris', 'blur', 'dip', 'radial', 'slice', 'diagonal'].map((k) => [
+  ['directed', 'dissolve', 'wipe', 'push', 'zoom', 'iris', 'blur', 'dip', 'radial', 'slice', 'diagonal', 'continue'].map((k) => [
     k,
     icon(`tr-${k}`, { size: 14 }),
   ]),
@@ -62,10 +63,7 @@ export function zen(
   return `<div class="zen${opts.mini ? ' mini' : ''}${opts.cls ? ` ${opts.cls}` : ''}"${attrs} data-zen="${escapeHtml(art)}">${ZEN_ART[art] || ''}<div class="zen-copy"><strong class="zen-title">${escapeHtml(title)}</strong>${sub ? `<p class="zen-sub">${body}</p>` : ''}</div>${opts.action || ''}</div>`;
 }
 
-/** `escapeHtml()` from `app.js`. */
-export function escapeHtml(s: unknown): string {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+export { escapeHtml };
 
 /** `$()` from `app.js`. */
 export function $<T extends HTMLElement = HTMLElement>(id: string): T | null {
@@ -189,6 +187,8 @@ export function paintTransition(style: string, p: number, inL: HTMLElement | nul
     inL.style.opacity = String(opacity);
     return;
   }
+  // Continuous background: the stage keeps one backdrop running and swaps only the copy.
+  if (style === 'continue') return;
   const e = ease(p);
   const set = (el: HTMLElement | null, prop: LayerStyle, v: string) => {
     if (el) setLayerStyle(el, prop, v);

@@ -45,8 +45,12 @@ test('snippet emits a canvas + runtime for fields and only the clock for none', 
   assert.match(on.script, /__plateRuntime/);
   assert.match(on.script, /blendFuncSeparate/);
   // Colour uniforms are JS arrays, never GLSL constructors leaking into the page script.
-  assert.match(on.script, /gl\.uniform3fv\(U\.uGold, \[0\.0471, 0\.6392, 0\.0000\]\)/);
-  assert.doesNotMatch(on.script, /uniform3fv\(U\.\w+, vec3\(/);
+  // The field follows the page's colour variables live, with the brand baked in as the fallback.
+  assert.match(on.script, /gl\.uniform3fv\(U\.uGold, tint\('--gold', \[0\.0471, 0\.6392, 0\.0000\]\)\)/);
+  assert.doesNotMatch(on.script, /uniform3fv\(U\.\w+, (tint\('--\w+', )?vec3\(/);
+  assert.doesNotThrow(() => new Function(on.script.replace(/<\/?script>/g, '')));
+  const local = atmosphereSnippet(brand({ atmosphere: 'particles' }), { local: true });
+  assert.match(local.script, /const tint = \(_name, baked\) => baked;/, 'live cards keep the baked colours');
 
   const off = atmosphereSnippet(brand());
   assert.equal(off.enabled, false);

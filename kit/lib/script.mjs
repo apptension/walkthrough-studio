@@ -436,6 +436,7 @@ export function scaffoldPlate(type, { before, title } = {}) {
         quotes: [
           { quote: 'Replace with a real customer quote.', author: 'Customer', role: 'Role' },
           { quote: 'Second real quote — keep it short.', author: 'Customer', role: 'Company' },
+          { quote: 'A third voice makes the flood read as a pattern.', author: 'Customer', role: 'Team lead' },
         ],
       };
     case 'stats':

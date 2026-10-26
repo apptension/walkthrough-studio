@@ -1,0 +1,293 @@
+/* ═══ One timeline ══════════════════════════════════════════════════════════════════════════
+   `#edTimeline` is the only timeline. Outside the Editor it is Program's overview: the whole cut
+   fitted to the width, clip / chapter / caption / voice rows only, tools folded away. Opening the
+   Editor unfolds it in place — the shell grows, the effect rows open, the tools slide in and every
+   block morphs (FLIP, timelineMorph.ts) from its compact box into its Editor box. */
+
+:root {
+  --etl-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --etl-morph: 0.48s;
+}
+
+/* —— Shell —— */
+body:not(.is-editor) { --tl-h: var(--tl-h-overview, 184px); }
+html body.tl-collapsed:not(.is-editor) { --tl-h: 42px; }
+body .timeline-shell { transition: height var(--etl-morph) var(--etl-ease), opacity 0.25s var(--ease-out), filter 0.25s var(--ease-out); }
+body:not(.is-editor) .timeline-shell { border-top-color: var(--line); }
+
+.timeline-shell > #edTimeline {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Folding keeps the rows laid out (no repaint, no reflow of the cut) and lets the shell clip them. */
+html body.tl-collapsed .etl > .etl-body {
+  display: flex;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out), visibility 0s linear 0.42s;
+}
+.etl-body { transition: opacity 0.3s var(--ease-out) 0.06s, visibility 0s; }
+
+/* —— Bar: what folds in and out —— */
+.etl-reveal {
+  display: grid;
+  grid-template-columns: 0fr;
+  /* Folded, a reveal takes no room — not even the bar's gap. */
+  margin-left: -10px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-columns var(--etl-morph) var(--etl-ease),
+    opacity 0.22s var(--ease-out),
+    visibility 0s linear var(--etl-morph);
+}
+.etl-reveal-in {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 10px;
+}
+body.is-editor .etl-reveal-tools,
+body.is-editor .etl-reveal-scale,
+body:not(.is-editor) .etl-reveal-open {
+  grid-template-columns: 1fr;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    grid-template-columns var(--etl-morph) var(--etl-ease),
+    opacity 0.32s var(--ease-out) 0.08s,
+    visibility 0s;
+}
+.etl-reveal-scale .etl-reveal-in { gap: 8px; }
+
+/* Tools arrive one after another, left to right. */
+.etl-tools > * {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out), background 0.15s, border-color 0.15s;
+}
+body.is-editor .etl-tools > * {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.32s var(--ease-out) calc(0.1s + var(--i, 0) * 28ms),
+    transform 0.42s var(--etl-ease) calc(0.1s + var(--i, 0) * 28ms),
+    background 0.15s,
+    border-color 0.15s;
+}
+body.is-editor .etl-tools > .etl-tool:disabled,
+body.is-editor .etl-tools > .etl-icon:disabled { opacity: 0.38; }
+.etl-tools > :nth-child(2) { --i: 1; }
+.etl-tools > :nth-child(3) { --i: 2; }
+.etl-tools > :nth-child(4) { --i: 3; }
+.etl-tools > :nth-child(5) { --i: 4; }
+.etl-tools > :nth-child(6) { --i: 5; }
+.etl-tools > :nth-child(7) { --i: 6; }
+.etl-tools > :nth-child(8) { --i: 7; }
+.etl-tools > :nth-child(9) { --i: 8; }
+.etl-tools > :nth-child(10) { --i: 9; }
+.etl-tools > :nth-child(11) { --i: 10; }
+
+.etl-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px 0 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, rgba(255, 255, 255, 0.02));
+  color: var(--ink);
+  font: 600 12px var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s var(--ease-out);
+}
+.etl-open svg { color: var(--accent); }
+.etl-open:hover { background: color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.03)); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.etl-open:active { transform: scale(0.97); }
+.etl-open:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+
+/* The hint swaps with a soft cross-fade as the mode changes. */
+.etl-context > .ctx-hint { animation: etlHintIn 0.36s var(--etl-ease) both; }
+@keyframes etlHintIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+.ctx-hint.ctx-behind { color: color-mix(in srgb, var(--warn, #e4b14a) 70%, var(--muted)); }
+.ctx-hint.ctx-behind svg { color: var(--warn, #e4b14a); }
+
+/* —— Rows —— */
+/* Effect and music rows belong to the Editor; in the overview they fold to nothing. */
+body:not(.is-editor) #edTimeline :is(.etl-track.fxrow.speed, .etl-track.fxrow.zoom, .etl-track.fxrow.cut, .etl-track.fxrow.music, .etl-head.speed, .etl-head.zoom, .etl-head.cut, .etl-head.music) {
+  height: 0 !important;
+  opacity: 0;
+  border-top-color: transparent;
+  overflow: hidden;
+  pointer-events: none;
+}
+#edTimeline :is(.etl-track, .etl-head) { transition: opacity 0.3s var(--ease-out) 0.12s; }
+body:not(.is-editor) #edTimeline :is(.etl-track, .etl-head) { transition-delay: 0s; }
+/* Heights only glide while the timeline changes density — edits inside the Editor stay instant. */
+body.etl-morphing #edTimeline :is(.etl-track, .etl-head) {
+  transition:
+    height var(--etl-morph) var(--etl-ease),
+    opacity 0.3s var(--ease-out) 0.1s,
+    border-color 0.3s var(--ease-out);
+}
+body.etl-morphing:not(.is-editor) #edTimeline :is(.etl-track, .etl-head) {
+  transition:
+    height var(--etl-morph) var(--etl-ease),
+    opacity 0.18s var(--ease-out),
+    border-color 0.3s var(--ease-out);
+}
+body.etl-morphing #edTimeline .etl-playhead { transition: transform var(--etl-morph) var(--etl-ease); }
+
+/* A row with nothing on it folds away in the overview. */
+#edTimeline :is(.etl-track, .etl-head).is-folded { border-top-color: transparent; overflow: hidden; opacity: 0; }
+
+/* Compact clip row. */
+body:not(.is-editor) #edTimeline .etl-track.clips,
+body:not(.is-editor) #edTimeline .etl-head.clips { height: 44px; }
+body:not(.is-editor) #edTimeline .etl-clip {
+  top: 6px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+body:not(.is-editor) #edTimeline .ec-ico { width: 18px; height: 18px; border-radius: 5px; }
+body:not(.is-editor) #edTimeline :is(.ec-h, .ec-hold, .ec-rate, .ec-dot) { display: none; }
+body:not(.is-editor) #edTimeline .etl-join { opacity: 0; transform: scale(0.4); pointer-events: none; }
+body:not(.is-editor) #edTimeline .etl-clip.is-sel {
+  /* Program has no selection — the Editor's last pick should not shout here. */
+  border-color: color-mix(in srgb, var(--c) 52%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--c) 35%, rgba(255, 255, 255, 0.2)), 0 4px 12px -6px color-mix(in srgb, var(--c) 40%, transparent);
+}
+body:not(.is-editor) #edTimeline .etl-clip:hover,
+body:not(.is-editor) #edTimeline .ec-card:hover,
+body:not(.is-editor) #edTimeline .fx.voice:hover {
+  filter: brightness(1.18) saturate(1.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 6px 16px -6px rgba(0, 0, 0, 0.6);
+}
+#etlScroll.is-pressing .etl-clip:active,
+#etlScroll.is-pressing .ec-card:active,
+#etlScroll.is-pressing .fx.voice:active { scale: 0.985; }
+
+/* Compact chapter / caption / voice rows. */
+body:not(.is-editor) #edTimeline .ec-card {
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+body:not(.is-editor) #edTimeline .ec-card .h { display: none; }
+
+/* —— Short blocks degrade by tier: name → icon → colour. Never a bare brick, never "O…". —— */
+#edTimeline .etl-clip.is-narrow { gap: 5px; padding-right: 4px; }
+#edTimeline .etl-clip.is-narrow .ec-t { display: block; font-size: 10.5px; letter-spacing: -0.01em; }
+#edTimeline .etl-clip.is-tiny { justify-content: center; padding: 0; }
+#edTimeline .etl-clip.is-tiny .ec-t { display: none; }
+#edTimeline .etl-clip.is-micro .ec-ico { display: none; }
+#edTimeline .etl-clip.is-micro {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%);
+}
+#edTimeline .ec-card.is-tight { justify-content: center; padding: 0; }
+#edTimeline .ec-card.is-tight .ec-card-t { display: none; }
+#edTimeline .ec-card.is-tight::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+}
+body:not(.is-editor) #edTimeline .ec-card.is-on { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+body:not(.is-editor) #edTimeline .fx.voice {
+  height: 14px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+body:not(.is-editor) #edTimeline .fx.voice .h { display: none; }
+body:not(.is-editor) #edTimeline .fx.voice > span svg { width: 10px; height: 10px; }
+body:not(.is-editor) #edTimeline .fx.voice.is-sel { filter: none; box-shadow: none; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+body:not(.is-editor) #edTimeline .etl-track.fxrow::before { opacity: 0; }
+body:not(.is-editor) #edTimeline .etl-track.fxrow { cursor: pointer; }
+body:not(.is-editor) #edTimeline .etl-canvas { cursor: pointer; }
+body:not(.is-editor) #edTimeline .etl-sel { display: none; }
+body:not(.is-editor) #edTimeline .etl-ruler { cursor: col-resize; }
+
+/* Nothing to draw yet. */
+.etl-track.clips::before {
+  content: attr(data-empty);
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 12px var(--font);
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* The overview is one slider. */
+body:not(.is-editor) #etlScroll { outline: none; overflow-x: hidden; }
+body:not(.is-editor) #etlScroll:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px; }
+
+/* —— Hover ghost + scrub tip —— */
+.etl-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -0.5px;
+  z-index: 5;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.32);
+  pointer-events: none;
+  will-change: transform;
+}
+.etl-ghost.is-snap { background: color-mix(in srgb, var(--accent) 80%, #fff); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent); }
+.etl-tip {
+  position: absolute;
+  top: 2px;
+  z-index: 9;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 18px;
+  padding: 0 7px;
+  margin-left: 8px;
+  border-radius: 6px;
+  background: rgba(8, 10, 8, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  font: 600 10px/1 var(--mono);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: etlTipIn 0.16s var(--ease-out);
+}
+.etl-tip.is-flip { margin-left: 0; transform: translateX(calc(-100% - 8px)); }
+.etl-tip.is-scrub { background: #fff; color: #0b0d0b; border-color: #fff; }
+.etl-tip-edit { font: 500 10.5px/1 var(--font); color: var(--ink-dim); }
+.etl-tip-edit b { color: #fff; font-weight: 600; }
+.etl-tip-snap { display: inline-flex; align-items: center; gap: 5px; font: 600 10.5px/1 var(--font); }
+.etl-tip-snap i { width: 6px; height: 6px; border-radius: 2px; background: var(--accent); }
+@keyframes etlTipIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#etlCanvas.has-tip .etl-time { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .etl-reveal, .etl-tools > *, .etl-body, #edTimeline :is(.etl-track, .etl-head), .etl-context > .ctx-hint { transition: none !important; animation: none !important; }
+}

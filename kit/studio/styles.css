@@ -3654,6 +3654,38 @@ video.hidden { display: none; }
   background:
     radial-gradient(ellipse at 50% 45%, #131513 0%, #050605 70%);
 }
+/* The zoom and magnifier aim boxes, laid over whichever surface is on stage. */
+.stage-aim {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.stage-aim > * { pointer-events: auto; }
+.stage-aim > [hidden] { display: none; }
+
+/* The plate's render, held one pixel wide so the decoder keeps feeding the loupe real frames. */
+.plate-loupe-src {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The magnifier's glass over a plate. Positioned onto the fitted frame as `drawLens` paints. */
+.plate-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+}
 .fhd-canvas {
   /* The video's output frame; app.js sets it per video (vertical masters are 1080×1920). */
   --wt-frame-w: 1920px;

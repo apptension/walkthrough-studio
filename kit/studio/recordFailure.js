@@ -11,9 +11,16 @@ function firstLine(note) {
   );
 }
 
+/** Pull the start URL from a Playwright failure note without trailing quotes or commas. */
+export function recordFailureUrlFromNote(text) {
+  const quoted = String(text || '').match(/navigating to\s+["'](https?:\/\/[^"']+)["']/i);
+  if (quoted) return quoted[1];
+  return String(text || '').match(/https?:\/\/[^\s)"',]+/)?.[0] || '';
+}
+
 export function describeRecordFailure(note) {
   const text = String(note || '');
-  const url = text.match(/https?:\/\/[^\s)]+/)?.[0] || '';
+  const url = recordFailureUrlFromNote(text);
   let reason = 'The recording stopped before the walkthrough finished.';
   let next = 'Re-record once the page is ready, or use Fix with AI to repair the flow.';
   if (/net::ERR|ERR_CONNECTION|ECONNREFUSED/i.test(text)) {

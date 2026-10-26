@@ -7,7 +7,10 @@ import { Scrubber } from '@/ui/Scrubber';
 
 import { wireTimelineBar } from './engine/lifecycle';
 
-/** `#edTimeline` — the engine renders the ruler, tracks, selection and context (`renderTimeline`). */
+/**
+ * `#edTimeline` — the one timeline. The engine renders the ruler, tracks, selection and context
+ * (`renderTimeline`); outside the Editor it draws the same cut as Program's compact overview.
+ */
 export function EdTimeline() {
   const collapsed = useDesk((s) => s.tlCollapsed);
 
@@ -36,6 +39,8 @@ export function EdTimeline() {
           </span>
         </button>
         {' '}
+        <div className="etl-reveal etl-reveal-tools">
+        <div className="etl-reveal-in">
         <span className="etl-sep" aria-hidden="true" />
         <div className="etl-tools" role="toolbar" aria-label="Edit tools">
           <button type="button" id="etlAddSpeed" className="etl-tool speed">
@@ -51,6 +56,16 @@ export function EdTimeline() {
           <button type="button" id="etlAddLens" className="etl-tool lens">
             <Icon name="ui-lens" size={14} />
             Magnify
+          </button>
+          {' '}
+          <button type="button" id="etlAddCard" className="etl-tool card" title="Add a caption at the playhead">
+            <Icon name="ui-captions" size={14} />
+            Caption
+          </button>
+          {' '}
+          <button type="button" id="etlAddPlate" className="etl-tool plate" title="Add a plate from the library after this slide (P)" aria-haspopup="dialog">
+            <Icon name="ui-plate" size={14} />
+            Plate
           </button>
           {' '}
           <button type="button" id="etlAddCut" className="etl-tool cut" title="Cut a stretch out of the recording">
@@ -85,13 +100,27 @@ export function EdTimeline() {
             <Icon name="ui-redo" size={14} />
           </button>
         </div>
+        </div>
+        </div>
         <div id="etlContext" className="etl-context" />
+        <div className="etl-reveal etl-reveal-open">
+          <div className="etl-reveal-in">
+            <button type="button" id="etlOpen" className="etl-open" title="Open the Editor where Program is (↵)">
+              <Icon name="ui-pencil" size={13} />
+              Edit
+            </button>
+          </div>
+        </div>
         <div className="etl-scale">
-          <button type="button" id="etlFit" className="etl-icon" title="Fit the whole cut" aria-label="Fit the whole cut">
-            <Icon name="ui-fullscreen" size={14} />
-          </button>
-          {' '}
-          <Scrubber id="etlScale" min="0" max="4.5" step="0.05" defaultValue="0" aria-label="Timeline zoom" title="Timeline zoom (⌘ + scroll)" />
+          <div className="etl-reveal etl-reveal-scale">
+            <div className="etl-reveal-in">
+              <button type="button" id="etlFit" className="etl-icon" title="Fit the whole cut" aria-label="Fit the whole cut">
+                <Icon name="ui-fullscreen" size={14} />
+              </button>
+              {' '}
+              <Scrubber id="etlScale" min="0" max="4.5" step="0.05" defaultValue="0" aria-label="Timeline zoom" title="Timeline zoom (⌘ + scroll)" />
+            </div>
+          </div>
           {' '}
           <span id="etlDur" className="etl-dur">
             0:00.0
@@ -139,6 +168,8 @@ export function EdTimeline() {
               <div id="etlVoice" className="etl-track fxrow voice" />
               <div id="etlMusic" className="etl-track fxrow music" />
               <div id="etlSel" className="etl-sel" hidden />
+              <div id="etlGhost" className="etl-ghost" hidden aria-hidden="true" />
+              <div id="etlTip" className="etl-tip" hidden aria-hidden="true" />
               <div id="etlPlayhead" className="etl-playhead">
                 <i />
                 <span id="edClock" className="etl-time" aria-live="off">

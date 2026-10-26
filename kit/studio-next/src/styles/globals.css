@@ -12,7 +12,17 @@
 @import './wizard-onboarding.css';
 @import './direction-logo.css';
 @import './editor-duplicate.css';
+@import './slide-inspector.css';
 @import './neon-button.css';
+@import './stage-bars.css';
+@import './plate-pace.css';
+@import './plate-library.css';
+@import './plate-colors.css';
+@import './plate-carry.css';
+@import './timeline-overview.css';
+@import './stage-loading.css';
+@import './pane.css';
+@import './direction-panel.css';
 
 /* React mounts into #root; the legacy layout expects the chrome, stage bar and
    workspace to be direct flex children of <body>. */

@@ -1,0 +1,718 @@
+/*
+ * Stage control panels — the copy bar (#edTextBar), the zoom bar (#edZoomPanel) and the magnifier
+ * bar (#edLensPanel). studio-next only: overrides the legacy `.ed-textbar` rules in studio.css
+ * (never edit that copy).
+ *
+ * One family (engine/stagePanels.ts): every panel lives in the monitor's `.stage-wrap`, can leave
+ * the video box, collapses into a labelled pill, drags anywhere, docks on the top or bottom rail
+ * or attaches to what it edits. JS sets `--sp-x/y` (top-left, host px); `translate` places the
+ * panel so `transform` and `scale` stay free for entrance and drag-lift motion.
+ */
+
+.stage-wrap.has-sp-panels { position: relative; }
+/* The plate iframe would swallow pointer moves mid-drag. */
+.stage-wrap.is-sp-dragging iframe { pointer-events: none; }
+.stage-wrap.is-sp-dragging { cursor: grabbing; }
+/* They used to live inside #playerPlate and vanish with it — keep that. */
+.stage-wrap:has(#playerPlate[hidden]) > .sp-dock,
+.stage-wrap:has(#playerPlate[hidden]) > .sp-zone,
+.stage-wrap:has(#playerPlate[hidden]) > .sp-attach-ghost { display: none !important; }
+
+.stage-panel[data-tone="lens"] { --sp-tone: var(--etl-lens); }
+
+.sp-dock {
+  --sp-spring: cubic-bezier(0.34, 1.42, 0.5, 1);
+  --sp-morph: cubic-bezier(0.3, 1.18, 0.4, 1);
+  --sp-radius: 14px;
+  --sp-enter-dy: 4px;
+  --sp-ring: color-mix(in srgb, var(--sp-tone) 55%, transparent);
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  z-index: 30;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  max-width: min(760px, calc(100% - 20px));
+  min-height: 44px;
+  padding: 6px 7px 6px 6px;
+  gap: 0;
+  border-radius: var(--sp-radius);
+  translate: var(--sp-x, 0px) var(--sp-y, 0px);
+  transform: none;
+  transform-origin: 50% 50%;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  will-change: translate;
+  transition:
+    translate 0.42s var(--ease-out),
+    scale 0.3s var(--ease-spring),
+    opacity 0.2s var(--ease),
+    box-shadow 0.3s var(--ease),
+    border-color 0.3s var(--ease),
+    border-radius 0.42s var(--ease-spring);
+  animation: spDockIn 0.38s var(--ease-out);
+}
+/* The legacy bar anchored itself with left/bottom/transform; the dock owns placement now. */
+#edTextBar.sp-dock { left: 0; top: 0; bottom: auto; transform: none; max-width: min(760px, calc(100% - 20px)); padding: 6px 7px 6px 6px; }
+.sp-dock.is-dock-top { --sp-enter-dy: -8px; transform-origin: 50% 0; }
+.sp-dock.is-dock-bottom { --sp-enter-dy: 8px; transform-origin: 50% 100%; }
+#edTextBar.sp-dock.is-coach { --sp-radius: 21px; }
+.sp-dock.is-leaving {
+  pointer-events: none;
+  animation: spDockOut 0.19s var(--ease) forwards;
+}
+.sp-dock.is-instant,
+.sp-dock.is-instant > .sp-full,
+.sp-dock.is-instant > .sp-mini { transition: none !important; }
+.sp-dock button { cursor: pointer; }
+.sp-dock .is-grip { cursor: grab; }
+/* While the ring it edits rides the pointer, the magnifier bar goes quiet so the glass is what you watch. */
+.sp-dock.is-riding { opacity: 0.62; transition: opacity 0.2s var(--ease); }
+
+/* Drag lift — follows the pointer 1:1; a rail or the panel's subject eases it toward the slot. */
+.sp-dock.is-dragging {
+  cursor: grabbing;
+  scale: 1.025;
+  border-color: color-mix(in srgb, var(--sp-tone) 42%, rgba(255, 255, 255, 0.14));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 14px 26px -14px rgba(0, 0, 0, 0.7),
+    0 34px 74px -24px rgba(0, 0, 0, 0.95),
+    0 0 58px -14px color-mix(in srgb, var(--sp-tone) 60%, transparent);
+  transition:
+    scale 0.3s var(--ease-spring),
+    box-shadow 0.3s var(--ease),
+    border-color 0.2s var(--ease);
+}
+.sp-dock.is-dragging.is-magnet {
+  scale: 1.01;
+  transition:
+    translate 0.2s var(--ease-out),
+    scale 0.3s var(--ease-spring),
+    box-shadow 0.3s var(--ease),
+    border-color 0.2s var(--ease);
+}
+.sp-dock.is-dragging * { cursor: grabbing !important; }
+/* Released over a rail or its subject: land with a little overshoot. */
+.sp-dock.is-snapping {
+  transition:
+    translate 0.58s var(--sp-spring),
+    scale 0.42s var(--ease-spring),
+    box-shadow 0.4s var(--ease),
+    border-color 0.4s var(--ease);
+}
+
+/* Tether notch on the edge a docked panel is pinned to. */
+.sp-dock::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  width: 26px;
+  height: 2px;
+  border-radius: 2px;
+  translate: -50% 0;
+  background: color-mix(in srgb, var(--sp-tone) 80%, #fff);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sp-tone) 80%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease), width 0.42s var(--ease-spring);
+}
+.sp-dock.is-dock-bottom::before { top: auto; bottom: -1px; }
+.sp-dock.is-dock-top::before,
+.sp-dock.is-dock-bottom::before { opacity: 0.6; }
+.sp-dock.is-collapsed::before { width: 12px; }
+.sp-dock.is-dragging::before { opacity: 0; }
+
+/* Snap confirmation ring. */
+.sp-dock::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+.sp-dock.is-snapped::after { animation: spDockRing 0.7s var(--ease-out) 0.14s; }
+
+/* Panels attached to their subject soften in, no edge notch. */
+.sp-dock.is-attached { --sp-enter-dy: 6px; }
+
+/* —— Full panel ⇄ pill —— */
+.sp-dock > .sp-full {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  transform-origin: 0 50%;
+  transition:
+    opacity 0.22s var(--ease) 0.06s,
+    filter 0.26s var(--ease) 0.06s,
+    transform 0.42s var(--ease-spring);
+}
+.sp-dock > .sp-mini {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  opacity: 0;
+  filter: blur(4px);
+  transform: scale(0.7);
+  pointer-events: none;
+  transition:
+    opacity 0.14s var(--ease),
+    filter 0.18s var(--ease),
+    transform 0.3s var(--ease-spring);
+}
+.sp-dock.is-collapsed {
+  --sp-radius: 23px;
+  padding: 4px;
+  overflow: hidden;
+}
+#edTextBar.sp-dock.is-collapsed { padding: 4px; }
+.sp-dock.is-collapsed > .sp-full {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: max-content;
+  translate: 0 -50%;
+  opacity: 0;
+  filter: blur(6px);
+  transform: scale(0.88);
+  pointer-events: none;
+  transition:
+    opacity 0.14s var(--ease),
+    filter 0.18s var(--ease),
+    transform 0.3s var(--ease);
+}
+.sp-dock.is-collapsed > .sp-mini {
+  position: relative;
+  inset: auto;
+  opacity: 1;
+  filter: none;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity 0.24s var(--ease) 0.08s,
+    filter 0.28s var(--ease) 0.08s,
+    transform 0.46s var(--sp-spring) 0.04s;
+}
+.sp-dock.is-morphing {
+  overflow: hidden;
+  transition:
+    width 0.48s var(--sp-morph),
+    height 0.48s var(--sp-morph),
+    padding 0.48s var(--sp-morph),
+    border-radius 0.48s var(--sp-morph),
+    translate 0.48s var(--sp-morph),
+    box-shadow 0.3s var(--ease);
+}
+.sp-dock.is-collapsed.is-dirty {
+  border-color: color-mix(in srgb, var(--warn) 48%, transparent);
+  --sp-ring: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.sp-dock.is-collapsed.is-dirty:not(.is-dragging) { animation: spDockIn 0.38s var(--ease-out), spDirtyGlow 2.8s ease-in-out 0.4s infinite; }
+.sp-dock.is-collapsed.is-dirty.is-leaving { animation: spDockOut 0.19s var(--ease) forwards; }
+
+/* The pill: the panel's icon, its name and its live value — enough to know what is on the slide. */
+.sp-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 0;
+  padding: 0 13px 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: 650 12px/1 var(--font);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: background 0.18s var(--ease), transform 0.24s var(--ease-spring);
+}
+.sp-pill .sp-ico {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  transition: transform 0.32s var(--ease-spring), box-shadow 0.2s var(--ease);
+}
+.sp-pill-label { color: var(--ink); }
+.sp-pill-value {
+  font: 700 11.5px/1 var(--mono);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--sp-tone) 72%, #fff);
+}
+.sp-pill-value:empty { display: none; }
+.sp-pill:hover { background: rgba(255, 255, 255, 0.07); }
+.sp-pill:hover .sp-ico {
+  transform: scale(1.08);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-tone) 45%, transparent), 0 0 16px -4px color-mix(in srgb, var(--sp-tone) 60%, transparent);
+}
+.sp-pill:active { transform: scale(0.95); }
+.sp-pill:focus-visible { outline: none; box-shadow: var(--focus); }
+.sp-dock.is-auto .sp-pill-value,
+.sp-dock.is-recorded .sp-pill-value { color: var(--muted); }
+
+.sp-pill-dot {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 65%, #fff);
+  box-shadow: 0 0 0 2px #0d0f0d;
+  transition: background 0.3s var(--ease), transform 0.3s var(--ease-spring);
+}
+.sp-pill-dot[data-state="tip"] { transform: scale(0.75); opacity: 0.85; }
+.sp-pill-dot[data-state="editing"] {
+  background: var(--accent);
+  animation: spPulse 1.6s ease-out infinite;
+}
+.sp-pill-dot[data-state="dirty"] {
+  background: var(--warn);
+  box-shadow: 0 0 0 2px #0d0f0d, 0 0 10px color-mix(in srgb, var(--warn) 75%, transparent);
+}
+
+.sp-pill-act {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin: 0 1px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-fill);
+  color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px -8px var(--accent-glow);
+  transition: transform 0.24s var(--ease-spring), filter 0.18s var(--ease), box-shadow 0.2s var(--ease);
+}
+.sp-pill-act.is-save {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--warn) 80%, #fff), var(--warn));
+  color: #1a1206;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 16px -8px color-mix(in srgb, var(--warn) 80%, transparent);
+}
+.sp-pill-act svg { display: block; width: 14px; height: 14px; }
+.sp-pill-act:hover { transform: scale(1.08); filter: brightness(1.08); }
+.sp-pill-act:active { transform: scale(0.92); }
+.sp-pill-act:focus-visible { outline: none; box-shadow: var(--focus); }
+.sp-dock.is-collapsed .sp-pill-act { animation: spPop 0.46s var(--sp-spring) 0.1s backwards; }
+
+/* —— Bars: zoom and magnifier controls in the same row anatomy as the copy bar —— */
+.sp-bar .sp-title { margin-right: 2px; }
+.sp-bar .sp-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+#edZoomPanel .sp-slider { width: 190px; }
+#edZoomPanel .sp-slider .sp-range { flex: 1; min-width: 0; }
+.sp-pair { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sp-slider--labelled {
+  padding: 0 8px !important;
+  border-radius: 9px;
+  transition: background 0.18s var(--ease);
+}
+.sp-slider--labelled:hover { background: rgba(255, 255, 255, 0.04); }
+.sp-slider-label {
+  font: 700 9.5px/1 var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sp-slider--labelled .sp-range { width: 92px; }
+.sp-slider--labelled .sp-value { min-width: 4ch; font-size: 11px; }
+.sp-dock.is-auto .sp-ico,
+.sp-dock.is-recorded .sp-ico { color: color-mix(in srgb, var(--sp-tone) 55%, var(--muted)); }
+.sp-bar [data-lens-hud-take]:not([hidden]) { animation: spPop 0.42s var(--sp-spring); }
+.sp-bar [data-lens-hud-take] { transition: transform 0.24s var(--ease-spring), box-shadow 0.22s var(--ease); }
+.sp-bar [data-lens-hud-take]:hover { transform: translateY(-1px); }
+.sp-bar [data-lens-hud-take]:active { transform: scale(0.97); }
+/* A narrow stage: the slider captions give way first, then the sliders shorten. */
+@media (max-width: 1100px) {
+  .sp-slider-label { display: none; }
+  .sp-slider--labelled .sp-range { width: 76px; }
+  #edZoomPanel .sp-slider { width: 150px; }
+}
+
+/* —— Shortcuts: one "?" per panel, the card opens on hover or focus —— */
+.sp-help { position: relative; display: inline-flex; flex-shrink: 0; }
+.sp-help-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font: 750 12px/1 var(--font);
+  color: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.sp-help-btn span { line-height: 1; }
+.sp-help:hover .sp-help-btn,
+.sp-help:focus-within .sp-help-btn {
+  color: #fff;
+  background: color-mix(in srgb, var(--sp-tone) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-tone) 50%, transparent), 0 0 14px -4px color-mix(in srgb, var(--sp-tone) 70%, transparent);
+}
+.sp-help-pop {
+  position: absolute;
+  right: -6px;
+  bottom: calc(100% + 13px);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 7px 12px;
+  width: max-content;
+  max-width: 320px;
+  padding: 11px 13px 12px;
+  border-radius: 12px;
+  font: 500 11.5px/1.3 var(--font);
+  color: var(--ink-dim);
+  text-align: left;
+  white-space: normal;
+  background:
+    radial-gradient(120% 120% at 100% 100%, color-mix(in srgb, var(--sp-tone) 10%, transparent), transparent 60%),
+    rgba(11, 13, 11, 0.97);
+  border: 1px solid color-mix(in srgb, var(--sp-tone) 24%, rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 44px -14px rgba(0, 0, 0, 0.9),
+    0 0 30px -14px color-mix(in srgb, var(--sp-tone) 50%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(5px) scale(0.96);
+  transform-origin: calc(100% - 19px) 100%;
+  pointer-events: none;
+  cursor: default;
+  transition:
+    opacity 0.14s var(--ease),
+    transform 0.2s var(--ease),
+    visibility 0s linear 0.2s;
+}
+/* The arrow, pointing at the "?". */
+.sp-help-pop::after {
+  content: "";
+  position: absolute;
+  right: 15px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  rotate: 45deg;
+  background: rgba(11, 13, 11, 0.97);
+  border-right: 1px solid color-mix(in srgb, var(--sp-tone) 24%, rgba(255, 255, 255, 0.1));
+  border-bottom: 1px solid color-mix(in srgb, var(--sp-tone) 24%, rgba(255, 255, 255, 0.1));
+}
+.sp-dock[data-pop="down"] .sp-help-pop {
+  bottom: auto;
+  top: calc(100% + 13px);
+  transform: translateY(-5px) scale(0.96);
+  transform-origin: calc(100% - 19px) 0;
+}
+.sp-dock[data-pop="down"] .sp-help-pop::after {
+  bottom: auto;
+  top: -5px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--sp-tone) 24%, rgba(255, 255, 255, 0.1));
+  border-top: 1px solid color-mix(in srgb, var(--sp-tone) 24%, rgba(255, 255, 255, 0.1));
+}
+/* Hover intent: a short dwell before it opens, so sweeping across the bar doesn't flash it. */
+.sp-help:hover .sp-help-pop,
+.sp-help:focus-within .sp-help-pop {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 0.18s var(--ease) 0.12s,
+    transform 0.32s var(--ease-spring) 0.12s,
+    visibility 0s linear 0.12s;
+}
+.sp-dock.is-dragging .sp-help-pop,
+.sp-dock.is-collapsed .sp-help-pop { display: none; }
+.sp-help-title {
+  grid-column: 1 / -1;
+  margin-bottom: 1px;
+  font: 700 9.5px/1 var(--font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sp-tone) 70%, #fff);
+}
+.sp-help-row { display: contents; }
+.sp-help-keys { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; }
+.sp-help-label { color: var(--ink-dim); }
+.sp-help-pop kbd { min-width: 18px; justify-content: center; }
+/* The move rows read as a footer under the panel's own keys. */
+.sp-help-row:nth-last-child(-n + 3) > * { opacity: 0.72; }
+.sp-help-row:nth-last-child(3) > * { padding-top: 7px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+
+/* —— Micro-interactions inside a panel —— */
+#edTextBar .ed-tb-badge {
+  animation: spBadge 0.36s var(--ease-spring);
+  transition: color 0.25s var(--ease), background 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+#edTextBar .ed-tb-field { animation: spBadge 0.36s var(--ease-spring) 0.04s backwards; }
+.sp-dock .is-grip:hover { color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.06); }
+.sp-dock .is-grip:focus-visible { outline: none; box-shadow: var(--focus); }
+.sp-dock .sp-collapse svg path,
+.sp-dock .ed-tb-close svg { transition: transform 0.3s var(--ease-spring); }
+.sp-dock .sp-collapse:hover .sp-chev-l { transform: translateX(1.5px); }
+.sp-dock .sp-collapse:hover .sp-chev-r { transform: translateX(-1.5px); }
+.sp-dock .ed-tb-close:hover svg { transform: rotate(90deg); }
+.sp-dock .sp-icon-btn svg { transition: transform 0.28s var(--ease-spring); }
+.sp-dock .sp-icon-btn:not(.is-grip):not(.sp-collapse):hover svg { transform: scale(1.1); }
+.sp-dock .sp-icon-btn.is-danger:hover svg { animation: spWiggle 0.42s var(--ease-out); }
+.sp-dock .ed-pill-btn {
+  transition:
+    background 0.18s var(--ease),
+    border-color 0.18s var(--ease),
+    box-shadow 0.22s var(--ease),
+    transform 0.24s var(--ease-spring);
+}
+.sp-dock .ed-pill-btn > svg { transition: transform 0.3s var(--ease-spring); }
+.sp-dock .ed-pill-btn:not(:disabled):hover { transform: translateY(-1px); }
+.sp-dock .ed-pill-btn:not(:disabled):hover > svg { transform: scale(1.12); }
+.sp-dock .ed-pill-btn.primary:not(:disabled):hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 22px -10px var(--accent-glow);
+}
+.sp-dock .ed-pill-btn:not(:disabled):active { transform: translateY(0) scale(0.96); }
+.sp-dock:not(.is-dragging):hover {
+  border-color: color-mix(in srgb, var(--sp-tone) 38%, rgba(255, 255, 255, 0.12));
+}
+
+/* —— Rails (shown while dragging) —— */
+.stage-wrap > .sp-zone {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  z-index: 29;
+  height: calc(var(--sp-slot-h, 42px) + 58px);
+  border-radius: 14px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s var(--ease), translate 0.36s var(--ease-spring), background 0.25s var(--ease);
+}
+.stage-wrap > .sp-zone[data-sp-zone="top"] {
+  top: 0;
+  translate: 0 -8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
+}
+.stage-wrap > .sp-zone[data-sp-zone="bottom"] {
+  bottom: 0;
+  translate: 0 8px;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
+}
+.stage-wrap.is-sp-dragging > .sp-zone { opacity: 1; translate: 0 0; }
+.stage-wrap > .sp-zone.is-hot[data-sp-zone="top"] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent);
+}
+.stage-wrap > .sp-zone.is-hot[data-sp-zone="bottom"] {
+  background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent);
+}
+.sp-slot {
+  position: absolute;
+  left: 50%;
+  width: var(--sp-slot-w, 240px);
+  max-width: 100%;
+  height: var(--sp-slot-h, 42px);
+  border-radius: var(--sp-slot-r, 14px);
+  translate: -50% 0;
+  scale: 0.96;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  transition:
+    scale 0.36s var(--ease-spring),
+    border-color 0.2s var(--ease),
+    background 0.2s var(--ease),
+    box-shadow 0.25s var(--ease);
+}
+.sp-zone[data-sp-zone="top"] .sp-slot { top: 10px; }
+.sp-zone[data-sp-zone="bottom"] .sp-slot { bottom: 10px; }
+.sp-zone.is-hot .sp-slot {
+  scale: 1;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 0 34px -6px var(--accent-glow);
+}
+.sp-zone-label {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  font: 700 9.5px/1 var(--font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--accent-text);
+  opacity: 0;
+  transition: opacity 0.2s var(--ease), translate 0.3s var(--ease-spring);
+}
+.sp-zone[data-sp-zone="top"] .sp-zone-label { top: calc(var(--sp-slot-h, 42px) + 18px); }
+.sp-zone[data-sp-zone="bottom"] .sp-zone-label { bottom: calc(var(--sp-slot-h, 42px) + 18px); }
+.sp-zone.is-hot .sp-zone-label { opacity: 0.9; }
+
+/* Attach: a ghost of the panel where it would sit by its subject, in the panel's own tone. */
+.stage-wrap[data-sp-dragging="zoom"] { --sp-ghost: var(--etl-zoom); }
+.stage-wrap[data-sp-dragging="lens"] { --sp-ghost: var(--etl-lens); }
+.stage-wrap > .sp-attach-ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 29;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: var(--sp-slot-r, 14px);
+  border: 1.5px solid color-mix(in srgb, var(--sp-ghost, var(--accent)) 70%, transparent);
+  background: color-mix(in srgb, var(--sp-ghost, var(--accent)) 10%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--sp-ghost, var(--accent)) 10%, transparent),
+    0 0 34px -6px color-mix(in srgb, var(--sp-ghost, var(--accent)) 60%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.94;
+  transition: opacity 0.2s var(--ease), scale 0.36s var(--ease-spring);
+}
+.stage-wrap > .sp-attach-ghost.is-hot { opacity: 1; scale: 1; }
+.sp-attach-ghost span {
+  font: 700 9.5px/1 var(--font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sp-ghost, var(--accent)) 75%, #fff);
+}
+
+/* —— Magnifier on a slide: the live mirror under the canvas glass —— */
+.plate-loupe-glass {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #000;
+  pointer-events: none;
+  contain: strict;
+  isolation: isolate;
+}
+.plate-loupe-glass[hidden] { display: block !important; visibility: hidden; }
+.plate-loupe-glass > iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.fhd-fit > .plate-lens { z-index: 4; }
+
+/* —— Magnifier ring: resize grip on its edge, focus ring for keyboard aim —— */
+.live-lens-box:focus { outline-color: transparent; }
+.live-lens-box:focus-visible,
+.live-lens-box.is-sizing { outline-color: color-mix(in srgb, var(--accent) 80%, #fff); }
+.live-lens-box .lens-grip {
+  position: absolute;
+  left: 85.36%;
+  top: 85.36%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--brand-fill);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 0 0 2px rgba(8, 10, 8, 0.72),
+    0 4px 12px -2px var(--accent-glow);
+  cursor: nwse-resize;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.6);
+  transition: opacity 0.16s var(--ease-out), transform 0.22s var(--ease-spring);
+}
+.live-lens-box .lens-grip::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+.live-lens-box:hover .lens-grip,
+.live-lens-box:focus-visible .lens-grip,
+.live-lens-box.is-sizing .lens-grip { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.live-lens-box.is-sizing .lens-grip { transform: translate(-50%, -50%) scale(1.15); }
+.live-lens-box.is-sizing { cursor: nwse-resize; }
+.live-lens-box.is-auto .lens-grip { display: none; }
+
+/* —— Zoom surface: keyboard focus shows the frame it pans, corners light while pushing —— */
+.live-zoom-box:focus { outline: none; }
+.live-zoom-box:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.live-zoom-box.is-pushing .zh { transform: scale(1.18); }
+
+/* The Program-monitor copy strip: state changes fade, arrivals rise. */
+.plate-edit-bar { transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
+.plate-edit-bar:not([hidden]) { animation: plateBarIn 0.3s var(--ease-out); }
+
+@keyframes spDockIn {
+  from { opacity: 0; transform: translateY(var(--sp-enter-dy, 4px)) scale(0.94); filter: blur(6px); }
+  60% { filter: blur(0); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes spDockOut {
+  to { opacity: 0; transform: translateY(var(--sp-enter-dy, 4px)) scale(0.96); filter: blur(4px); }
+}
+@keyframes spDockRing {
+  0% { opacity: 1; box-shadow: 0 0 0 0 var(--sp-ring); }
+  100% { opacity: 0; box-shadow: 0 0 0 12px transparent; }
+}
+@keyframes spPulse {
+  0% { box-shadow: 0 0 0 2px #0d0f0d, 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent); }
+  80%, 100% { box-shadow: 0 0 0 2px #0d0f0d, 0 0 0 8px transparent; }
+}
+@keyframes spDirtyGlow {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.35), 0 18px 44px -18px rgba(0, 0, 0, 0.9), 0 0 22px -10px color-mix(in srgb, var(--warn) 35%, transparent); }
+  50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.35), 0 18px 44px -18px rgba(0, 0, 0, 0.9), 0 0 30px -8px color-mix(in srgb, var(--warn) 60%, transparent); }
+}
+@keyframes spPop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes spBadge {
+  from { opacity: 0; transform: translateY(3px) scale(0.92); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes spWiggle {
+  0%, 100% { transform: rotate(0) scale(1.1); }
+  30% { transform: rotate(-9deg) scale(1.1); }
+  60% { transform: rotate(7deg) scale(1.1); }
+}
+@keyframes plateBarIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-dock,
+  .sp-dock *,
+  .sp-dock::before,
+  .sp-dock::after,
+  .stage-wrap > .sp-zone,
+  .stage-wrap > .sp-zone *,
+  .stage-wrap > .sp-attach-ghost,
+  .stage-panel,
+  .stage-panel *,
+  .plate-edit-bar {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .sp-dock.is-dragging { scale: 1; }
+}

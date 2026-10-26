@@ -45,6 +45,11 @@ test('plates.css ships the shared markIn keyframes for corner seats', () => {
   assert.match(css, /@keyframes markIn/);
   assert.match(css, /\.corner-logo/);
   assert.match(css, /--mark-logo-size/);
+  // A value set on the seat beats :root, so Editor "Inset X: 0" could not centre the features mark.
+  const seat = css.match(/\.corner-logo\s*\{[^}]*\}/);
+  assert.ok(seat, 'corner-logo rule');
+  assert.doesNotMatch(seat[0], /--mark-logo-x\s*:/);
+  assert.doesNotMatch(seat[0], /--mark-logo-y\s*:/);
 });
 
 test('style groups expose lockup controls only for the matching plate', () => {

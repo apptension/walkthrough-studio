@@ -1,12 +1,34 @@
-import { Fragment, type MouseEvent } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { HelpTip } from '@/ui/HelpTip';
-import { Scrubber } from '@/ui/Scrubber';
+import {
+  atmospherePreview,
+  CORE_ATMOSPHERES,
+  DEPTH_HINT,
+  depthPreview,
+  ENERGY_HINT,
+  energyPreview,
+  revealPreview,
+  sheenPreview,
+} from '@/ui/look/previews';
+import {
+  LookTile,
+  MoreTiles,
+  PaneNote,
+  PaneSection,
+  PaneSub,
+  RangeRow,
+  TileGrid,
+  useAtmosphereThumbs,
+} from '@/ui/pane';
 
 import { pickEnergy, scheduleMotionLive } from './actions';
-import { radioAria } from './model';
-import { directionView, setAtmosphere, STATIC_ATMOSPHERES, useDirectionView, type DirectionView } from './view';
+import {
+  directionView,
+  setAtmosphere,
+  useDirectionView,
+  type AtmosphereChoice,
+  type DirectionView,
+} from './view';
 
 const ENERGY_HELP =
   'Calm uses softer entrances. Clear is balanced. Punchy is more energetic. This direction is local to this video, not every project using the brand.';
@@ -16,44 +38,50 @@ const EFFECTS_HELP =
   'Title reveal templates. Rise, Cascade and Wipe move the type. Focus and Veil settle the line. Ink, Slit, Iris and Embers are WebGL masks in the brand colours, stepped on the same clock as the plate. Depth tilts cards as they land. Sheen sweeps a highlight after they settle.';
 
 const ENERGIES = [
-  { id: 'calm', name: 'Calm', em: 'Soft · slow', title: 'Soft enters, longer holds' },
-  { id: 'clear', name: 'Clear', em: 'Balanced', title: 'Balanced product motion' },
-  { id: 'punchy', name: 'Punchy', em: 'Snappy', title: 'Snappy enters, stronger push' },
+  { id: 'calm', name: 'Calm' },
+  { id: 'clear', name: 'Clear' },
+  { id: 'punchy', name: 'Punchy' },
 ];
 
-export function EnergyField() {
-  const { energy, marked } = useDirectionView(useShallow((s) => ({ energy: s.energy, marked: s.energyMarked })));
+export function EnergySection() {
+  const energy = useDirectionView((s) => s.energy);
   return (
-    <div className="field">
-      <span data-help={ENERGY_HELP} className="has-help">
-        Motion energy
-        <HelpTip text={ENERGY_HELP} label="Motion energy" />
-      </span>
-      <div className="energy-row templates" id="energyGrid" role="radiogroup" aria-label="Motion template">
-        {ENERGIES.map((e, i) => {
+    <PaneSection
+      icon="speed"
+      title="Motion energy"
+      help={ENERGY_HELP}
+      extra={<span className="dir-val">{ENERGIES.find((e) => e.id === energy)?.name}</span>}
+    >
+      <TileGrid label="Motion template" id="energyGrid">
+        {ENERGIES.map((e) => {
           const on = e.id === energy;
           return (
-            <Fragment key={e.id}>
-              {i > 0 ? ' ' : null}
-              <button
-                type="button"
-                className={on ? 'energy active' : 'energy'}
-                data-energy={e.id}
-                role="radio"
-                aria-checked={radioAria(on, marked)}
-                title={e.title}
-                onClick={() => pickEnergy(e.id)}
-              >
-                <strong>{e.name}</strong>
-                <em>{e.em}</em>
-              </button>
-            </Fragment>
+            <LookTile
+              key={e.id}
+              preview={energyPreview(e.id)}
+              label={e.name}
+              hint={`${e.name} — ${ENERGY_HINT[e.id]}`}
+              on={on}
+              data={{ 'data-energy': e.id }}
+              onSelect={() => {
+                if (!on) pickEnergy(e.id);
+              }}
+            />
           );
         })}
-      </div>
-    </div>
+      </TileGrid>
+      {ENERGY_HINT[energy] ? <PaneNote>{ENERGY_HINT[energy]}</PaneNote> : null}
+    </PaneSection>
   );
 }
+
+const FALLBACK_PALETTE = {
+  ink: '#0b0e12',
+  surface: '#1b2028',
+  gold: '#42f272',
+  amber: '#ffb648',
+  teal: '#3cc8e8',
+};
 
 function AtmosphereSliders() {
   const { hidden, opacity, opacityOut, speed, speedOut } = useDirectionView(
@@ -66,92 +94,104 @@ function AtmosphereSliders() {
     })),
   );
   return (
-    <div className={hidden ? 'atmosphere-sliders hidden' : 'atmosphere-sliders'}>
-      <label className="transition-duration">
-        <span>Presence</span>{' '}
-        <Scrubber
-          id="atmosphereOpacity"
-          min="0.1"
-          max="1"
-          step="0.05"
-          value={opacity}
-          aria-label="Atmosphere presence"
-          onChange={(e) => {
-            directionView.set({ opacity: e.target.value, opacityOut: Number(e.target.value).toFixed(2) });
-            scheduleMotionLive();
-          }}
-        />{' '}
-        <output id="atmosphereOpacityOut" htmlFor="atmosphereOpacity">
-          {opacityOut}
-        </output>
-      </label>{' '}
-      <label className="transition-duration">
-        <span>Speed</span>{' '}
-        <Scrubber
-          id="atmosphereSpeed"
-          min="0.3"
-          max="2"
-          step="0.1"
-          value={speed}
-          aria-label="Atmosphere speed"
-          onChange={(e) => {
-            directionView.set({ speed: e.target.value, speedOut: `${Number(e.target.value).toFixed(1)}×` });
-            scheduleMotionLive();
-          }}
-        />{' '}
-        <output id="atmosphereSpeedOut" htmlFor="atmosphereSpeed">
-          {speedOut}
-        </output>
-      </label>
+    <div
+      className={
+        hidden ? 'atmosphere-sliders pane-ranges hidden' : 'atmosphere-sliders pane-ranges'
+      }
+      hidden={hidden}
+    >
+      <RangeRow
+        id="atmosphereOpacity"
+        label="Presence"
+        aria="Atmosphere presence"
+        min="0.1"
+        max="1"
+        step="0.05"
+        value={opacity}
+        out={opacityOut}
+        onChange={(e) => {
+          directionView.set({
+            opacity: e.target.value,
+            opacityOut: Number(e.target.value).toFixed(2),
+          });
+          scheduleMotionLive();
+        }}
+      />
+      <RangeRow
+        id="atmosphereSpeed"
+        label="Speed"
+        aria="Atmosphere speed"
+        min="0.3"
+        max="2"
+        step="0.1"
+        value={speed}
+        out={speedOut}
+        onChange={(e) => {
+          directionView.set({
+            speed: e.target.value,
+            speedOut: `${Number(e.target.value).toFixed(1)}×`,
+          });
+          scheduleMotionLive();
+        }}
+      />
     </div>
   );
 }
 
-export function AtmosphereField() {
-  const { atmospheres, atmosphere, marked } = useDirectionView(
-    useShallow((s) => ({ atmospheres: s.atmospheres, atmosphere: s.atmosphere, marked: s.atmosphereMarked })),
-  );
-  const onClick = (e: MouseEvent<HTMLDivElement>) => {
-    const btn = (e.target as Element).closest<HTMLElement>('[data-atmosphere]');
-    if (!btn || !e.currentTarget.contains(btn)) return;
-    setAtmosphere(btn.dataset.atmosphere ?? '');
-    scheduleMotionLive();
-  };
+function atmosphereTile(a: AtmosphereChoice, current: string) {
+  const on = a.id === current;
   return (
-    <div className="field">
-      <span data-help={ATMOSPHERE_HELP} className="has-help">
-        Atmosphere
-        <HelpTip text={ATMOSPHERE_HELP} label="Atmosphere" />
-      </span>
-      <div
-        className="energy-row templates atmosphere-row"
-        id="atmosphereGrid"
-        role="radiogroup"
-        aria-label="Plate atmosphere"
-        onClick={onClick}
-      >
-        {atmospheres.map((a, i) => {
-          const on = a.id === atmosphere;
-          return (
-            <Fragment key={a.id}>
-              {i > 0 && atmospheres === STATIC_ATMOSPHERES ? ' ' : null}
-              <button
-                type="button"
-                className={on ? 'energy active' : 'energy'}
-                data-atmosphere={a.id}
-                role="radio"
-                aria-checked={radioAria(on, marked)}
-                title={a.title}
-              >
-                <strong>{a.name}</strong>
-                <em>{a.em}</em>
-              </button>
-            </Fragment>
-          );
-        })}
+    <LookTile
+      key={a.id}
+      preview={atmospherePreview(a.id)}
+      label={a.em ? `${a.name} · ${a.em}` : a.name}
+      hint={a.title}
+      on={on}
+      data={{ 'data-atmosphere': a.id }}
+      onSelect={() => {
+        if (on) return;
+        setAtmosphere(a.id);
+        scheduleMotionLive();
+      }}
+    />
+  );
+}
+
+export function AtmosphereSection() {
+  const { atmospheres, atmosphere } = useDirectionView(
+    useShallow((s) => ({ atmospheres: s.atmospheres, atmosphere: s.atmosphere })),
+  );
+  const colors = useDirectionView((s) => s.direction?.colors);
+  const palette = { ...FALLBACK_PALETTE, ...colors };
+  const thumbsRef = useAtmosphereThumbs(palette, atmospheres.map((a) => a.id).join());
+  const core = atmospheres.filter((a) => CORE_ATMOSPHERES.includes(a.id));
+  const more = atmospheres.filter((a) => !CORE_ATMOSPHERES.includes(a.id));
+  const name = atmospheres.find((a) => a.id === atmosphere)?.name;
+  return (
+    <PaneSection
+      icon="sparkle"
+      title="Background"
+      help={ATMOSPHERE_HELP}
+      extra={name ? <span className="dir-val">{name}</span> : null}
+    >
+      <div ref={thumbsRef} className="dir-atms">
+        <TileGrid label="Plate atmosphere" id="atmosphereGrid">
+          {core.map((a) => atmosphereTile(a, atmosphere))}
+        </TileGrid>
+        {more.length ? (
+          <MoreTiles
+            label="More backgrounds"
+            count={more.length}
+            open={more.some((a) => a.id === atmosphere)}
+          >
+            <TileGrid label="More atmospheres" id="atmosphereMore">
+              {more.map((a) => atmosphereTile(a, atmosphere))}
+            </TileGrid>
+          </MoreTiles>
+        ) : null}
       </div>
       <AtmosphereSliders />
-    </div>
+    </PaneSection>
   );
 }
 
@@ -162,78 +202,79 @@ function setEffect(key: EffectKey, value: string) {
   scheduleMotionLive();
 }
 
-export function EffectsField() {
-  const { titleReveal, depth, sheen, reveals, revealMarked } = useDirectionView(
+const DEPTHS = ['flat', 'soft', 'deep'];
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+export function EffectsSection() {
+  const { titleReveal, depth, sheen, reveals } = useDirectionView(
     useShallow((s) => ({
       titleReveal: s.titleReveal,
       depth: s.depth,
       sheen: s.sheen,
       reveals: s.reveals,
-      revealMarked: s.revealMarked,
     })),
   );
-  const onReveal = (e: MouseEvent<HTMLDivElement>) => {
-    const btn = (e.target as Element).closest<HTMLElement>('[data-title-reveal]');
-    if (!btn || !e.currentTarget.contains(btn)) return;
-    setEffect('titleReveal', btn.dataset.titleReveal ?? '');
-    directionView.set({ revealMarked: true });
-  };
   return (
-    <div className="field effects-field">
-      <span data-help={EFFECTS_HELP} className="has-help">
-        Effects
-        <HelpTip text={EFFECTS_HELP} label="Effects" />
-      </span>
-      <div
-        className="energy-row templates atmosphere-row"
-        id="revealGrid"
-        role="radiogroup"
-        aria-label="Title reveal"
-        onClick={onReveal}
-      >
-        {reveals.map((r) => {
-          const on = r.id === titleReveal;
-          return (
-            <button
-              key={r.id}
-              type="button"
-              className={on ? 'energy active' : 'energy'}
-              data-title-reveal={r.id}
-              role="radio"
-              aria-checked={radioAria(on, revealMarked)}
-              title={r.title}
-            >
-              <strong>{r.name}</strong>
-              <em>{r.em}</em>
-            </button>
-          );
-        })}
-      </div>
-      <div className="effects-row is-pair">
-        <label className="effects-select">
-          <span>Depth</span>{' '}
-          <select id="cardDepth" aria-label="Card depth" value={depth} onChange={(e) => setEffect('depth', e.target.value)}>
-            <option value="flat">Flat</option>
-            <option value="soft">Soft</option>
-            <option value="deep">Deep</option>
-          </select>
-        </label>{' '}
-        <label className="effects-switch">
-          <span>Sheen</span>{' '}
-          <input
-            type="checkbox"
-            id="sheenToggle"
-            className="switch"
-            role="switch"
-            checked={sheen}
-            aria-label="Card sheen sweep"
-            onChange={(e) => {
-              directionView.set({ sheen: e.target.checked });
-              scheduleMotionLive();
-            }}
-          />
-        </label>
-      </div>
-    </div>
+    <PaneSection icon="text" title="Effects" help={EFFECTS_HELP}>
+      <PaneSub label="Title reveal">
+        <TileGrid label="Title reveal" id="revealGrid">
+          {reveals.map((r) => {
+            const on = r.id === titleReveal;
+            return (
+              <LookTile
+                key={r.id}
+                preview={revealPreview(r.id)}
+                label={r.name}
+                hint={r.title}
+                on={on}
+                data={{ 'data-title-reveal': r.id }}
+                onSelect={() => {
+                  if (!on) setEffect('titleReveal', r.id);
+                }}
+              />
+            );
+          })}
+        </TileGrid>
+      </PaneSub>
+      <PaneSub label="Depth">
+        <TileGrid label="Card depth" id="cardDepth">
+          {DEPTHS.map((d) => {
+            const on = d === depth;
+            return (
+              <LookTile
+                key={d}
+                preview={depthPreview(d)}
+                label={cap(d)}
+                hint={`${cap(d)} — ${DEPTH_HINT[d]}`}
+                on={on}
+                data={{ 'data-depth': d }}
+                onSelect={() => {
+                  if (!on) setEffect('depth', d);
+                }}
+              />
+            );
+          })}
+        </TileGrid>
+      </PaneSub>
+      <PaneSub label="Sheen">
+        <TileGrid label="Card sheen sweep" id="sheenToggle">
+          {[true, false].map((v) => (
+            <LookTile
+              key={String(v)}
+              preview={sheenPreview(v)}
+              label={v ? 'On' : 'Off'}
+              hint={v ? 'A light sweep across titles and cards' : 'No sweep'}
+              on={sheen === v}
+              data={{ 'data-sheen': v ? 'on' : 'off' }}
+              onSelect={() => {
+                if (sheen === v) return;
+                directionView.set({ sheen: v });
+                scheduleMotionLive();
+              }}
+            />
+          ))}
+        </TileGrid>
+      </PaneSub>
+    </PaneSection>
   );
 }

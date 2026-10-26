@@ -8,17 +8,18 @@ import { neonFxHtml } from '@/ui/neonFx';
 import { paintRanges } from '@/ui/rangeFill';
 import { helpLabel, helpState, helpTips } from '@/ui/helpStore';
 
-import { deckLens, selectedShot } from './aim';
+import { aimSpace, deckLens, selectedShot } from './aim';
 import { canDuplicate } from './duplicate';
 import { sectionForClip } from './layoutPreview';
 import { wireInspector } from './inspectorWire';
-import { lensItems, selectedLens, shotKey } from './seq';
+import { selectedLens } from './seq';
 import { joinStyle, liveCardAtPlayhead, marksInLiveClip, plateReady, resolveLiveCard } from './stage';
 import { audioDesk, deckEdit, ed, htmlPlates, slug } from './state';
+import { renderLayoutPicker, renderLookTiles, renderSlide } from './slideInspector';
 import { renderPlateFields } from './text';
-import { plateInfo } from './timeline';
+import { carryNote } from '@/ui/look/previews';
 import type { Clip, DeckPlate, NarratorVoice, PlateRow, Selection } from './types';
-import { $, CUT_ICON, DUP_ICON, ICONS, LENS_PRESETS, PLATE_ICON, SPEED_PRESETS, T_GLYPH, ZEN_ART, ZOOM_PRESETS, clamp, errMessage, escapeHtml, fmtRate, fmtT, r3 } from './util';
+import { $, CUT_ICON, DUP_ICON, ICONS, LENS_PRESETS, SPEED_PRESETS, T_GLYPH, ZEN_ART, ZOOM_PRESETS, clamp, errMessage, escapeHtml, fmtRate, fmtT, r3 } from './util';
 
 const PLACE_HELP =
   'Drag the block to reorder. Use the trash or ⌫ to pull it out of the cut — restore it anytime from the empty inspector.';
@@ -257,9 +258,29 @@ export const section = (icon: string, title: string, body: string, extra = ''): 
 export const segBtns = <V extends string | number>(attr: string, values: V[], current: unknown, label: (v: V) => string = (v) => String(v)): string =>
   `<div class="ins-seg">${values.map((v) => `<button type="button" ${attr}="${v}" class="${String(current) === String(v) ? 'on' : ''}">${label(v)}</button>`).join('')}</div>`;
 
+/** Same selection repainting itself (a look pick, Use video look, a background). A new selection animates in. */
+export function inspectorStaysPut(prevKey: string, nextKey: string, hasBody: boolean): boolean {
+  return Boolean(nextKey) && prevKey === nextKey && hasBody;
+}
+
+function inspectorPaintKey(): string {
+  if (!ed.deck) return '';
+  const s = ed.sel;
+  if (!s) return 'none';
+  return [s.type, s.id ?? '', s.i ?? ''].join(':');
+}
+
 export function renderInspector(): void {
   const root = $('inspectorRoot');
   if (!root) return;
+  const panel = root.closest<HTMLElement>('#rightInspector');
+  const key = inspectorPaintKey();
+  const quiet = inspectorStaysPut(root.dataset['paint'] || '', key, root.childElementCount > 0);
+  const scroll = quiet ? panel?.scrollTop ?? 0 : 0;
+  const open = quiet
+    ? new Set([...root.querySelectorAll('details[open] summary')].map((s) => s.textContent?.trim() || ''))
+    : null;
+  const focus = quiet ? focusedTile(root) : '';
   if (!ed.deck) {
     root.innerHTML = `<p class="panel-lede">Loading the cut…</p>`;
     return;
@@ -281,11 +302,33 @@ export function renderInspector(): void {
   else if (s.type === 'range') html = renderRange(s);
   else if (s.type === 'cut') html = renderCut(s.i ?? -1);
   else if (s.type === 'card') html = renderCardSel(s);
+  // Class first, so the new sections are born without the entrance — adding it after would still flash one frame.
+  panel?.classList.toggle('is-quiet', quiet);
   root.innerHTML = html;
+  root.dataset['paint'] = key;
+  if (quiet && panel) {
+    panel.scrollTop = scroll;
+    open?.forEach((label) => {
+      root.querySelectorAll('details').forEach((d) => {
+        if ((d.querySelector('summary')?.textContent?.trim() || '') === label) d.open = true;
+      });
+    });
+    if (focus) root.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true });
+  }
   // Every inspector range is the same meter the stage panels drag.
   paintRanges(root);
   wireInspector();
   wireInsHelp(root);
+}
+
+function focusedTile(root: HTMLElement): string {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement) || !root.contains(el)) return '';
+  const tile = el.closest<HTMLElement>('[data-look-key]');
+  if (tile?.dataset['lookKey'] != null) {
+    return `[data-look-key="${CSS.escape(tile.dataset['lookKey'])}"][data-look="${CSS.escape(tile.dataset['look'] || '')}"]`;
+  }
+  return el.id ? `#${CSS.escape(el.id)}` : '';
 }
 
 /** Bind string-HTML `.help-tip[data-ins-help]` buttons to the shared HelpPop. */
@@ -323,20 +366,6 @@ export const head = (icon: string, kind: string, title: string, sub: string, act
 function dupBtn(): string {
   const dup = canDuplicate();
   return dup.ok ? `<button type="button" class="ins-icon" data-act="duplicate" title="${escapeHtml(dup.label)} (⌘D)" aria-label="${escapeHtml(dup.label)}">${DUP_ICON}</button>` : '';
-}
-
-/** A plate replay shares the source's file — say so, and offer to split it off. */
-function repeatNote(c: Clip): string {
-  if (!c.repeatOf) return '';
-  if (c.kind === 'live') {
-    return `<div class="ins-repeat"><p class="ins-note">${DUP_ICON}<span>Replays this stretch of the recording — its zooms, magnifiers and cards come along. Trim it on its own; delete removes only the replay.</span></p></div>`;
-  }
-  const src = ed.seq.find((x) => x.id === c.repeatOf || (x.kind === 'plate' && x.plateId === c.plateId && !x.repeatOf));
-  return `<div class="ins-repeat"><p class="ins-note">${DUP_ICON}<span>Plays ${escapeHtml(src?.title || 'this plate')} again — copy and style edits change both.</span></p>${
-    c.kind === 'plate'
-      ? `<button type="button" class="ins-btn wide" data-act="detach-plate" title="Give this copy its own words and look">${ICONS['plate']}Make it its own plate</button>`
-      : ''
-  }</div>`;
 }
 
 export function renderEmpty(): string {
@@ -445,20 +474,7 @@ export function placeSection(c: Clip): string {
 }
 
 export function renderPlate(c: Clip): string {
-  const info = plateInfo(c.plateId);
-  const missing = ed.missing.has(c.plateId || '');
-  const styleCount = Object.keys(info?.style || {}).length;
-  return (
-    head(ICONS[PLATE_ICON[c.plateId || ''] || 'plate'] ?? '', 'plate', c.title, `${escapeHtml(info?.type || c.type || 'plate')} · ${c.dur.toFixed(1)}s`, clipRemoveBtn(c)) +
-    repeatNote(c) +
-    placeSection(c) +
-    (missing
-      ? `<p class="ins-note">${ICONS['warn']} No preview for this plate yet — run Preview plates or Render.</p>`
-      : renderPlateFields() +
-        section('motion', 'Look', renderLook(info), (info?.overrides || []).length ? `<button type="button" class="ins-link" data-act="look-reset">Use video look</button>` : '') +
-        section('palette', 'Colours & motion', renderStyle(c.plateId || '', info), styleCount ? `<button type="button" class="ins-link" data-act="style-reset">Reset all</button>` : '')) +
-    renderJoinsFor(c)
-  );
+  return renderSlide(c);
 }
 
 export function renderJoinsFor(c: Clip): string {
@@ -473,36 +489,10 @@ export function renderJoinsFor(c: Clip): string {
   return rows ? section('transition', 'Transitions', rows) : '';
 }
 
+/** The plate's layout picker and look tiles, as the Design tab shows them. */
 export function renderLook(info: DeckPlate | null): string {
-  const m = (info?.motion || {}) as Record<string, unknown>;
-  const o: Partial<{ atmospheres: string[]; atmosphereLabels: Record<string, string>; titleReveals: string[]; titleRevealLabels: Record<string, string>; depths: string[]; energies: string[] }> =
-    desk.get().video?.motionOptions || {};
-  const sel = (key: string, values: string[] | undefined, labels: Record<string, string> = {}, current?: unknown) =>
-    `<select class="ins-select" data-look="${key}"><option value="">Video default</option>${(values || [])
-      .map((v) => `<option value="${v}" ${current === v ? 'selected' : ''}>${escapeHtml(labels[v] || v)}</option>`)
-      .join('')}</select>`;
-  const row = (label: string, control: string) => `<label class="ins-row"><span>${label}</span>${control}</label>`;
   const kind = info?.id === 'open' || info?.id === 'close' ? info.id : info?.type || '';
-  const layouts = desk.get().video?.motionOptions?.layouts?.[kind] || [];
-  const layout = info?.layout || layouts[0]?.id;
-  return (
-    (layouts.length > 1
-      ? row(
-          'Layout',
-          `<select class="ins-select" data-plate-layout aria-label="Plate layout">${layouts
-            .map((l) => `<option value="${l.id}" title="${escapeHtml(l.hint)}" ${l.id === layout ? 'selected' : ''}>${escapeHtml(l.label)}</option>`)
-            .join('')}</select>`,
-        )
-      : '') +
-    row('Background', sel('atmosphere', o.atmospheres, o.atmosphereLabels, m['atmosphere'])) +
-    row('Title reveal', sel('titleReveal', o.titleReveals, o.titleRevealLabels, m['titleReveal'])) +
-    row('Depth', sel('depth', o.depths, {}, m['depth'])) +
-    row('Energy', sel('energy', o.energies, {}, m['energy'])) +
-    row(
-      'Sheen',
-      `<select class="ins-select" data-look="sheen"><option value="">Video default</option><option value="on" ${m['sheen'] === true ? 'selected' : ''}>On</option><option value="off" ${m['sheen'] === false ? 'selected' : ''}>Off</option></select>`,
-    )
-  );
+  return renderLayoutPicker(info, kind) + renderLookTiles(info);
 }
 
 export function liveVarValue(name: string): string {
@@ -578,8 +568,8 @@ export function renderStyle(id: string, info: DeckPlate | null): string {
 
 export function renderLiveCards(c: Clip): string {
   const marks = marksInLiveClip(c);
-  if (!marks.length) return '';
   const at = ed.liveCardId || liveCardAtPlayhead()?.id || null;
+  const written = new Set((deckEdit().cards || []).filter((r) => r.label && !r.copyOf).map((r) => r.key));
   const rows = marks
     .map((m) => {
       const card = resolveLiveCard(m);
@@ -587,117 +577,32 @@ export function renderLiveCards(c: Clip): string {
       const on = id && (at === id || (ed.textMode && ed.liveCardId === id));
       const kind = m.kind === 'chapter' ? 'Chapter' : 'Caption';
       const key = m.key || cardMarkKey(m);
-      return `<button type="button" class="ins-item${on ? ' is-on' : ''}" data-edit-card="${escapeHtml(id)}" data-mark-t="${m.t}" data-mark-key="${escapeHtml(key)}">${ICONS['plate']}<span><b>${escapeHtml(m.label || kind)}</b><em>${kind} · at ${fmtT(Math.max(0, m.t - c.recFrom))}${
+      const from = written.has(key) ? 'Yours' : kind;
+      return `<button type="button" class="ins-item${on ? ' is-on' : ''}" data-edit-card="${escapeHtml(id)}" data-mark-t="${m.t}" data-mark-key="${escapeHtml(key)}">${ICONS['plate']}<span><b>${escapeHtml(m.label || kind)}</b><em>${from} · at ${fmtT(Math.max(0, m.t - c.recFrom))}${
         id ? '' : ' · will rebuild'
       }</em></span><i>${ed.textMode && ed.liveCardId === id ? 'Editing' : 'Edit'}</i></button>`;
     })
     .join('');
+  const add = `<button type="button" class="ins-btn wide" data-act="add-caption">${ICONS['plate']}Add a caption at the playhead</button>`;
   const fields = ed.textMode && ed.liveCardId ? renderPlateFields() : '';
   return (
     section(
       'plate',
       'Cards',
-      `${rows}<p class="ins-note subtle">${
-        ed.deck?.live?.overlaysMode === 'clean'
-          ? 'Stage shows the live Direction look. Save copy · Produce bakes into the master.'
-          : 'Stage shows the live Direction look (covers the burned take). Save copy · Re-record once for a clean master, then Produce bakes.'
+      `${rows}${add}<p class="ins-note subtle">${
+        marks.length === 0
+          ? 'The script\u2019s steps become captions. Add one of your own here and write it on the stage \u2014 no re-record needed.'
+          : ed.deck?.live?.overlaysMode === 'clean'
+            ? 'Stage shows the live Direction look. Save copy \u00b7 Produce bakes into the master.'
+            : 'Stage shows the live Direction look (covers the burned take). Save copy \u00b7 Re-record once for a clean master, then Produce bakes.'
       }</p>`,
     ) + fields
   );
 }
 
-const capFirst = (v: string) => v[0]!.toUpperCase() + v.slice(1);
 
 export function renderLive(c: Clip): string {
-  const deck = ed.deck!;
-  const d = deckEdit();
-  const ramps = d.speed.map((r, i) => ({ r, i })).filter(({ r }) => r.to > c.recFrom && r.from < c.recTo);
-  const shots = (deck.zoomShots || []).filter((s) => s.end > c.recFrom && s.start < c.recTo);
-  const recLen = c.recTo - c.recFrom;
-  const cam = deck.camera || {};
-  const cur = deck.cursor || {};
-  const speedRows = ramps.length
-    ? ramps
-        .map(
-          ({ r, i }) =>
-            `<button type="button" class="ins-item" data-goto-ramp="${i}">${r.rate < 1 ? ICONS['slow'] : ICONS['speed']}<span><b>${fmtRate(r.rate)}</b><em>${fmtT(r.from - c.recFrom)}–${fmtT(r.to - c.recFrom)} of the clip</em></span><i>›</i></button>`,
-        )
-        .join('')
-    : `<p class="ins-note">Plays at normal speed.</p>`;
-  const zoomRows = shots.length
-    ? shots
-        .map(
-          (s) =>
-            `<button type="button" class="ins-item" data-goto-shot="${escapeHtml(shotKey(s))}">${ICONS['zoom']}<span><b>${s.zoom.toFixed(2)}× ${s.source === 'auto' ? '<small>auto</small>' : ''}</b><em>at ${fmtT(Math.max(0, s.start - c.recFrom))} for ${(s.end - s.start).toFixed(1)}s</em></span><i>›</i></button>`,
-        )
-        .join('')
-    : `<p class="ins-note">${cam['zoom'] === 'off' ? 'Auto zoom is off.' : 'No zooms in this clip.'}</p>`;
-  const trim: { trimStart?: number; trimEnd?: number } = (d.trims || []).find((t) => t.id === c.id) || {};
-  const rawLen = Math.max(0.4, c.recTo - c.recFrom + (trim.trimStart || 0) + (trim.trimEnd || 0));
-  const maxHead = Math.max(0, r3(rawLen - 0.4 - (trim.trimEnd || 0)));
-  const maxTail = Math.max(0, r3(rawLen - 0.4 - (trim.trimStart || 0)));
-  const trimSection = section(
-    'motion',
-    'Trim',
-    `<div class="var-row${trim.trimStart ? ' is-set' : ''}"><span>Trim head</span><input type="range" min="0" max="${maxHead}" step="0.05" value="${trim.trimStart || 0}" data-live-trim="trimStart" aria-label="Trim the head of this recording clip" /><output>${(trim.trimStart || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimStart" title="Back to 0" ${trim.trimStart ? '' : 'hidden'}>${ICONS['reset']}</button></div>
-      <div class="var-row${trim.trimEnd ? ' is-set' : ''}"><span>Trim tail</span><input type="range" min="0" max="${maxTail}" step="0.05" value="${trim.trimEnd || 0}" data-live-trim="trimEnd" aria-label="Trim the tail of this recording clip" /><output>${(trim.trimEnd || 0).toFixed(2)}s</output><button type="button" class="var-reset" data-live-trim-reset="trimEnd" title="Back to 0" ${trim.trimEnd ? '' : 'hidden'}>${ICONS['reset']}</button></div>
-      <div class="ins-pair">
-        <button type="button" class="ins-btn" data-act="trim-head-playhead" title="Drop everything before the playhead in this clip">Head to playhead</button>
-        <button type="button" class="ins-btn" data-act="trim-tail-playhead" title="Drop everything after the playhead in this clip">Tail from playhead</button>
-      </div>
-      <p class="ins-note subtle">Cuts bad waits or login bleed from this section without re-recording. Render to bake the trim into the cut.</p>`,
-  );
-  const one = ramps.length === 1 ? ramps[0]!.r : null;
-  const wholeRate = one && one.from <= c.recFrom + 0.05 && one.to >= c.recTo - 0.05 ? one.rate : ramps.length ? '' : 1;
-  return (
-    head(
-      ICONS['film'] ?? '',
-      'live',
-      c.title,
-      `Recording · ${c.dur.toFixed(1)}s${Math.abs(c.dur - recLen) > 0.05 ? ` <s>${recLen.toFixed(1)}s</s>` : ''}`,
-      clipRemoveBtn(c),
-    ) +
-    repeatNote(c) +
-    placeSection(c) +
-    layoutSection(c) +
-    trimSection +
-    renderLiveCards(c) +
-    section('speed', 'Speed', `${speedRows}<div class="ins-quick"><span>Whole clip</span>${segBtns('data-clip-rate', [1, 1.25, 1.5, 2], wholeRate, fmtRate)}</div>`) +
-    section(
-      'zoom',
-      'Zoom',
-      `<div class="ins-quick"><span>Auto zoom</span>${segBtns('data-cam-zoom', ['off', 'subtle', 'bold'], cam['zoom'] || 'off', capFirst)}</div>${zoomRows}
-        <button type="button" class="ins-btn wide" data-act="add-zoom">${ICONS['plus']}Zoom in at the playhead</button>`,
-    ) +
-    section(
-      'speed',
-      'Motion',
-      `<div class="ins-quick"><span>Curve</span>${segBtns('data-cam-curve', Object.keys(deck.curves || { glide: 1, smooth: 1, cinematic: 1, snappy: 1 }), cam['curve'] || 'glide', (v) => deck.curves?.[v]?.label || v)}</div>
-        <div class="ins-quick"><span>Length</span>${segBtns('data-cam-motion', Object.keys(deck.motions || { unhurried: 1, natural: 1, swift: 1 }), cam['motion'] || 'natural', (v) => deck.motions?.[v]?.label || v)}</div>
-        <p class="ins-note subtle">${escapeHtml(deck.curves?.[cam['curve'] || 'glide']?.hint || '')}. Shapes every push-in, pan and the magnifier's open and close; the stage previews it live.</p>`,
-    ) +
-    section(
-      'lens',
-      'Magnifier',
-      `${
-        lensItems()
-          .filter((l) => l.t < c.recTo && l.t + l.dur > c.recFrom)
-          .map(
-            (l) =>
-              `<button type="button" class="ins-item" data-goto-lens="${escapeHtml(l.key)}">${l.source === 'off' ? ICONS['lensOff'] : ICONS['lens']}<span><b>${escapeHtml(l.label || 'Magnifier')} ${l.source === 'auto' ? '<small>recorded</small>' : l.source === 'off' ? '<small>off</small>' : ''}</b><em>at ${fmtT(Math.max(0, l.t - c.recFrom))} for ${l.dur.toFixed(1)}s</em></span><i>›</i></button>`,
-          )
-          .join('') || '<p class="ins-note">A loupe that blows up a small detail without moving the camera.</p>'
-      }<button type="button" class="ins-btn wide" data-act="add-lens">${ICONS['plus']}Magnify at the playhead</button>`,
-    ) +
-    renderJoinsFor(c) +
-    `<details class="ins-sec ins-next"><summary>${ICONS['cursor']}<strong>Cursor &amp; pace</strong><em>next recording</em></summary><div class="ins-body">
-        <p class="ins-note">The pointer and the tempo are captured while recording, so these apply when you record again.</p>
-        <div class="ins-quick"><span>Cursor</span>${segBtns('data-cursor-style', ['classic', 'arrow', 'dot'], cur['style'] || 'classic', capFirst)}</div>
-        <div class="ins-quick"><span>Size</span>${segBtns('data-cursor-size', ['s', 'm', 'l'], cur['size'] || 'm', (v) => v.toUpperCase())}</div>
-        <div class="ins-quick"><span>Pace</span>${segBtns('data-pace', ['calm', 'steady', 'brisk', 'quick'], deck.pace || 'steady', capFirst)}</div>
-        <button type="button" class="ins-btn wide" data-act="record">${ICONS['film']}Record again</button>
-      </div></details>`
-  );
+  return renderSlide(c);
 }
 
 const removeBtn = (): string => `<button type="button" class="ins-icon danger" data-act="remove" title="Remove (⌫)">${ICONS['trash']}</button>`;
@@ -749,7 +654,8 @@ export function renderZoom(): string {
       'Zoom',
       `<div class="ins-big"><output id="insZoomOut">${shot.zoom.toFixed(2)}×</output><input type="range" min="${lo}" max="${hi}" step="0.05" value="${shot.zoom}" data-shot-zoom aria-label="Zoom level" /></div>
         ${segBtns('data-zoom-preset', ZOOM_PRESETS.filter((v) => v >= lo && v <= hi), shot.zoom, (v) => `${v}×`)}
-        <p class="ins-note">${ICONS['target']} The stage shows the push-in as you change strength. Drag to aim; drag the corners to zoom further in or out.</p>`,
+        <button type="button" class="ins-btn wide ghost" data-act="zoom-center">${ICONS['target']}Centre the zoom</button>
+        <p class="ins-note">${ICONS['target']} Drag the stage to aim, or double-click the spot to zoom on. Scroll or drag a corner to push in or out; arrow keys nudge once you click the stage.</p>`,
     ) +
     watchBtn()
   );
@@ -786,10 +692,11 @@ export function renderLens(): string {
   const [lo, hi] = ed.deck?.ranges?.lensZoom || [1.2, 2.4];
   const w = own.w ?? l.rect.w;
   const h = own.h ?? l.rect.h;
-  // The loupe caps at 540px, so a wide area can only take so much strength — the slider
+  // The loupe has a largest size for the frame, so a wide area can only take so much strength — the slider
   // stops where the render would start ignoring it, and the readout is what the loupe draws.
-  const ceiling = r3(clamp(lensZoomCeiling(Math.max(w, h)), lo, hi));
-  const loupe = lensLoupe(Math.max(w, h), own.zoom);
+  const frame = aimSpace(l.clip);
+  const ceiling = r3(clamp(lensZoomCeiling(Math.max(w, h), frame), lo, hi));
+  const loupe = lensLoupe(Math.max(w, h), own.zoom, frame);
   const z = Math.min(own.zoom ?? loupe.zoom, ceiling);
   return (
     head(ICONS['lens'] ?? '', 'lens', escapeHtml(l.label || 'Magnifier'), `${loupe.zoom.toFixed(1)}× · ${l.dur.toFixed(1)}s · loupe ${loupe.diameter}px`, remove) +
@@ -807,7 +714,7 @@ export function renderLens(): string {
       'Area',
       `<div class="var-row"><span>Width</span><input type="range" min="16" max="800" step="2" value="${w}" data-lens-size="w" aria-label="Magnified width" /><output>${w}px</output><i class="var-reset"></i></div>
         <div class="var-row"><span>Height</span><input type="range" min="12" max="400" step="2" value="${h}" data-lens-size="h" aria-label="Magnified height" /><output>${h}px</output><i class="var-reset"></i></div>
-        <p class="ins-note">${ICONS['target']} Drag the loupe on the stage to aim it; a bigger area gets a gentler, wider loupe.</p>`,
+        <p class="ins-note">${ICONS['target']} Drag the loupe on the stage to aim it and its edge grip to resize. Scroll over it to resize, ⌥-scroll for strength; arrow keys nudge once you click it. A bigger area gets a gentler, wider loupe.</p>`,
     ) +
     watch
   );
@@ -1081,15 +988,24 @@ export function renderJoin(i: number): string {
   const current = pinned.style || '';
   const dflt = ed.deck.transitions?.style || 'directed';
   const [lo, hi] = ed.deck.ranges?.transitionDuration || [0, 2];
-  const tiles = [['', `Video default`, dflt] as const, ...Object.entries(styles).filter(([id]) => id !== 'directed').map(([id, s]) => [id, s.label, id] as const)]
+  const carry = c.join.carry;
+  const carryOff = (id: string) => id === 'continue' && carry && !carry.ok;
+  const tiles = [
+    ['', `Video default`, dflt] as const,
+    ...Object.entries(styles)
+      .filter(([id]) => id !== 'directed' && (id !== 'continue' || carry))
+      .map(([id, s]) => [id, s.label, id] as const),
+  ]
     .map(
       ([id, label, glyph]) =>
-        `<button type="button" class="t-tile${current === id ? ' on' : ''}" data-join-style="${id}" title="${escapeHtml(id ? styles[id]?.hint || '' : `Follows the video (${styles[dflt]?.label || dflt})`)}">${T_GLYPH[glyph] || ICONS['transition']}<span>${escapeHtml(label)}</span></button>`,
+        `<button type="button" class="t-tile${current === id ? ' on' : ''}" data-join-style="${id}"${carryOff(id) ? ' data-carry-off' : ''} title="${escapeHtml(
+          carryOff(id) ? `Needs one background on both slides — ${carry!.why}` : id ? styles[id]?.hint || '' : `Follows the video (${styles[dflt]?.label || dflt})`,
+        )}">${T_GLYPH[glyph] || ICONS['transition']}<span>${escapeHtml(label)}</span></button>`,
     )
     .join('');
   return (
     head(T_GLYPH[joinStyle(c)] || ICONS['transition'] || '', 'join', 'Transition', `${escapeHtml(prev.title)} → ${escapeHtml(c.title)}${c.join.card ? ' · onto a chapter card' : ''}`) +
-    section('transition', 'Style', `<div class="t-grid">${tiles}</div>`) +
+    section('transition', 'Style', `<div class="t-grid">${tiles}</div>${carryNote(carry, joinStyle(c) === 'continue')}`) +
     section(
       'motion',
       'Length',

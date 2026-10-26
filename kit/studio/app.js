@@ -5474,7 +5474,7 @@ function setMonitorLabel(text = 'Program', hint = '') {
   const labelEl = $('monitorLabel') || document.querySelector('.monitor-label');
   if (labelEl) {
     labelEl.textContent = text;
-    labelEl.hidden = text === 'Program' || text === 'Plate HTML';
+    labelEl.hidden = text === 'Program' || text === 'Plate HTML' || text === 'Editor';
   }
   const hintEl = $('monitorModeHint');
   if (hintEl) {

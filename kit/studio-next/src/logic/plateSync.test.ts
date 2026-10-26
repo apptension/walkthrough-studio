@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import {
   canReloadPlateFrame,
+  stageReloadIsQuiet,
   capturePlayheadAnchor,
   joinFrameOwner,
   liveRecDiscontinuous,
@@ -86,6 +87,18 @@ describe('canReloadPlateFrame', () => {
       canReloadPlateFrame({ dirty: false, activePlateId: 'close', plateId: 'open', playheadPlateId: null }),
       false
     );
+  });
+});
+
+describe('stageReloadIsQuiet', () => {
+  it('stays quiet while rebuilding the plate already on stage', () => {
+    assert.equal(stageReloadIsQuiet('open', 'open', 'open'), true);
+  });
+
+  it('shows the loader when the stage is waiting on a different plate', () => {
+    assert.equal(stageReloadIsQuiet('open', 'open', 'close'), false);
+    assert.equal(stageReloadIsQuiet('open', null, 'open'), false);
+    assert.equal(stageReloadIsQuiet('open', 'open', null), false);
   });
 });
 

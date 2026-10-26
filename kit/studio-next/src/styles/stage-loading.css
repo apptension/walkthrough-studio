@@ -1,0 +1,104 @@
+/* —— Stage frames: the off-stage twin arms the next slide or card while #plateFrame stays on screen —— */
+.fhd-canvas #plateFrameBack {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* —— Stage corner: the slow-load mark sits ahead of the HUD chips —— */
+.ed-stage-corner {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.ed-stage-corner > .ed-hud {
+  position: static;
+}
+
+/* Replaces the legacy full-stage spinner (studio.css): no overlay, nothing over the frame. */
+.ed-stage-corner .ed-loading {
+  --ed-loading-ease: var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  place-items: normal;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(10, 12, 10, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.92);
+  transform-origin: left center;
+  transition:
+    opacity 0.2s var(--ed-loading-ease),
+    transform 0.28s var(--ed-loading-ease),
+    padding 0.32s var(--ed-loading-ease);
+}
+.ed-stage-corner .ed-loading[hidden] {
+  display: none;
+}
+.ed-stage-corner .ed-loading.is-on {
+  opacity: 1;
+  transform: none;
+}
+.ed-stage-corner .ed-loading.is-out {
+  opacity: 0;
+  transform: scale(0.96);
+  transition-duration: 0.18s;
+}
+
+.ed-loading-mark {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* The label only joins the mark once a load runs long enough to deserve words. */
+.ed-loading-label {
+  display: grid;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 600 11px/16px var(--font);
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transition:
+    max-width 0.36s var(--ed-loading-ease),
+    opacity 0.24s var(--ed-loading-ease) 0.06s;
+}
+.ed-loading-text {
+  grid-area: 1 / 1;
+  padding-left: 6px;
+  padding-right: 3px;
+}
+.ed-loading[data-kind='slide'] .ed-loading-text[data-for='card'],
+.ed-loading[data-kind='card'] .ed-loading-text[data-for='slide'] {
+  visibility: hidden;
+}
+.ed-stage-corner .ed-loading.is-long {
+  padding-right: 8px;
+}
+.ed-loading.is-long .ed-loading-label {
+  max-width: 120px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-stage-corner .ed-loading,
+  .ed-loading-label {
+    transition-duration: 0.01s;
+  }
+}

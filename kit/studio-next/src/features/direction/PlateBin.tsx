@@ -3,7 +3,7 @@ import type { MouseEvent } from 'react';
 import { playPlatePreview } from '@/desk/monitor';
 import { useDesk } from '@/desk/store';
 import { Icon } from '@/ui/icons';
-import { PanelSection } from '@/ui/PanelSection';
+import { PaneSection } from '@/ui/pane';
 
 const PLATES_HELP =
   'Rendered brand plates plus live chapter/caption cards. Click one to preview and edit copy in the monitor.';
@@ -19,14 +19,13 @@ export function PlateBin() {
   const assets = useDesk((s) => s.video?.assets ?? null);
   const plates = (assets || []).filter((a) => a.kind === 'plate' || a.kind === 'brand');
   return (
-    <PanelSection
+    <PaneSection
       id="plates"
-      icon="plates"
-      title="Plate & card previews"
+      icon="plates-queue"
+      title="Rendered plates"
       help={PLATES_HELP}
-      defaultOpen={false}
-      badge={
-        <span id="plateCount" className="meta">
+      extra={
+        <span id="plateCount" className="dir-count">
           {plates.length ? `${plates.length}` : ''}
         </span>
       }
@@ -57,6 +56,6 @@ export function PlateBin() {
           <li className="hint">No plate renders yet — Preview plates.</li>
         )}
       </ul>
-    </PanelSection>
+    </PaneSection>
   );
 }

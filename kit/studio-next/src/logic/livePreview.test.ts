@@ -135,4 +135,21 @@ describe('lensLoupe', () => {
     assert.equal(lensLoupe(size, lensZoomCeiling(size)).capped, false);
     assert.equal(lensLoupe(size, lensZoomCeiling(size) + 0.3).capped, true);
   });
+
+  it('sizes the loupe for a phone-sized take the way the render does', () => {
+    const phone = { width: 414, height: 896 };
+    for (const [w, h, zoom] of [
+      [376, 64, undefined],
+      [60, 30, 2.4],
+      [120, 40, 1.8],
+      [200, 200, undefined],
+    ] as const) {
+      const r = lensGeometry({ rect: { x: 10, y: 10, w, h }, zoom }, phone);
+      const l = lensLoupe(Math.max(w, h), zoom, phone);
+      assert.equal(l.diameter, r.diameter, `diameter ${w}×${h} @${zoom}`);
+      assert.equal(l.zoom, r.zoom, `zoom ${w}×${h} @${zoom}`);
+      assert.equal(l.S, r.S, `S ${w}×${h} @${zoom}`);
+    }
+    assert.ok(lensZoomCeiling(200, phone) < lensZoomCeiling(200), 'a smaller frame caps strength sooner');
+  });
 });

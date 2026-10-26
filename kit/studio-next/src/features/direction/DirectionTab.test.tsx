@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,41 +99,95 @@ afterEach(() => {
   bridges.editor = null;
 });
 
-describe('DirectionTab markup before a video', () => {
-  it('keeps the static aria state legacy shipped', () => {
+const checked = (sel: string) => $$(sel).map((b) => b.getAttribute('aria-checked'));
+const picked = (group: string) => document.querySelector<HTMLElement>(`#${group} [aria-checked="true"]`);
+
+describe('DirectionTab before a video', () => {
+  it('renders four tabs and every picker with its defaults marked', () => {
     render(<DirectionTab />);
     expect($('rightMotion')).toHaveAttribute('hidden');
     expect($('directionStatus')).toHaveTextContent('Needs approval');
     expect($('directionStatus')).not.toHaveAttribute('data-tone');
     expect($('directionBrandName')).toHaveTextContent('Brand pack');
 
-    const energy = $$('#energyGrid .energy');
-    expect(energy.map((b) => b.getAttribute('aria-checked'))).toEqual([null, 'true', null]);
-    expect(energy[1]).toHaveClass('active');
+    const tabs = $$('[role="tab"]');
+    expect(tabs.map((t) => t.dataset.tab)).toEqual(['brand', 'motion', 'camera', 'recording']);
+    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
+    expect($$('[role="tabpanel"]').map((p) => p.hidden)).toEqual([false, true, true, true]);
+
+    const energy = $$('#energyGrid [data-energy]');
+    expect(energy.map((b) => b.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
+    expect(energy[1]).toHaveClass('on');
 
     const atm = $$('#atmosphereGrid [data-atmosphere]');
     expect(atm.map((b) => b.dataset.atmosphere)).toEqual(['none', 'schedule', 'aurora', 'mesh', 'particles', 'grid', 'waves']);
-    expect(atm.filter((b) => b.hasAttribute('aria-checked')).map((b) => b.dataset.atmosphere)).toEqual(['aurora']);
+    expect(atm.filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.atmosphere)).toEqual(['aurora']);
+    expect(atm[0]?.querySelector('.lk-atm.is-none')).not.toBeNull();
+    expect(atm[2]?.querySelector('canvas[data-atm="aurora"]')).not.toBeNull();
 
-    const focus = $$('#focusGrid [data-focus]');
-    expect(focus.map((b) => b.getAttribute('aria-checked'))).toEqual(['true', null, null]);
+    expect(checked('#focusGrid [data-focus]')).toEqual(['true', 'false', 'false']);
+    expect(document.querySelector('[data-focus="guided"] .lens')).not.toBeNull();
+    expect(document.querySelector('[data-focus="spotlight"] .spot')).not.toBeNull();
+    expect(document.querySelector('[data-focus="ring"] .ring')).not.toBeNull();
 
     const transitions = $$('#transitionGrid [data-transition]');
     expect(transitions).toHaveLength(11);
-    expect(transitions[0]).toHaveClass('active');
-    expect(transitions.some((b) => b.hasAttribute('aria-checked'))).toBe(false);
+    expect(transitions[0]).toHaveClass('on');
+    expect(transitions[0]?.querySelector('.lk-tr.tr-directed')).not.toBeNull();
 
-    expect($$('[data-camera] [data-value]').some((b) => b.hasAttribute('aria-checked') || b.classList.contains('active'))).toBe(false);
+    expect($$('[data-camera] [data-value]').some((b) => b.getAttribute('aria-checked') === 'true')).toBe(false);
     expect($('backgroundRow')).not.toHaveAttribute('hidden');
 
-    expect($('paceMeta').querySelector('.help-tip')).not.toBeNull();
-    expect($('sizeMeta').querySelector('.help-tip')).not.toBeNull();
-    expect($('overlayChapterBackdrop').querySelector('.help-tip')).not.toBeNull();
+    expect($('paceMeta')).toBeEmptyDOMElement();
+    expect($('sizeMeta')).toBeEmptyDOMElement();
+    expect($('paceSection').querySelector(':scope > header .help-tip')).not.toBeNull();
+    expect($('sizeSection').querySelector(':scope > header .help-tip')).not.toBeNull();
+    expect($('overlayChapterBackdrop').closest('label')?.querySelector('.help-tip')).not.toBeNull();
     expect(($('atmosphereOpacity') as HTMLInputElement).value).toBe('0.6');
     expect($('atmosphereOpacityOut')).toHaveTextContent('0.60');
     expect($('transitionDurationOut')).toHaveTextContent('0.6s');
-    expect($('sheenToggle')).toBeChecked();
+    expect(picked('sheenToggle')?.dataset.sheen).toBe('on');
+    expect(picked('cardDepth')?.dataset.depth).toBe('flat');
     expect($('plateBin')).toBeEmptyDOMElement();
+  });
+});
+
+describe('tabs', () => {
+  it('switches panes by click and arrow keys, and remembers the tab', () => {
+    localStorage.removeItem('ws.direction.tab');
+    directionView.reset();
+    render(<DirectionTab />);
+    const tab = (id: string) => document.querySelector<HTMLElement>(`[role="tab"][data-tab="${id}"]`)!;
+    fireEvent.click(tab('camera'));
+    expect(tab('camera')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('camera')).toHaveAttribute('tabindex', '0');
+    expect(tab('brand')).toHaveAttribute('tabindex', '-1');
+    expect(document.querySelector('[data-pane="camera"]')).not.toHaveAttribute('hidden');
+    expect(document.querySelector('[data-pane="brand"]')).toHaveAttribute('hidden');
+    expect(localStorage.getItem('ws.direction.tab')).toBe('camera');
+
+    fireEvent.keyDown(tab('camera'), { key: 'ArrowRight' });
+    expect(tab('recording')).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(tab('recording'));
+    fireEvent.keyDown(tab('recording'), { key: 'ArrowRight' });
+    expect(tab('brand')).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(tab('brand'), { key: 'End' });
+    expect(tab('recording')).toHaveAttribute('aria-selected', 'true');
+
+    directionView.reset();
+    expect(directionView.get().tab).toBe('recording');
+    localStorage.removeItem('ws.direction.tab');
+  });
+
+  it('jumps from a head chip to the tab that sets it', () => {
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    const chips = $$('.dir-meta-chip');
+    expect(chips.map((c) => c.textContent)).toEqual(['Plus Jakarta Sans', 'Studio', '1.25×']);
+    fireEvent.click(chips[2]!);
+    expect(directionView.get().tab).toBe('recording');
+    fireEvent.click(chips[1]!);
+    expect(directionView.get().tab).toBe('camera');
   });
 });
 
@@ -155,6 +209,8 @@ describe('when a summary lands', () => {
     expect($('directionBrandName')).toHaveTextContent('Walkthrough Studio');
     expect($('directionBrandMeta')).toHaveTextContent('Plus Jakarta Sans · base colors · logo chosen below');
     expect($('directionBrandAccent').style.getPropertyValue('--brand-accent')).toBe('#42f272');
+    expect($('rightMotion')).toHaveAttribute('data-branded');
+    expect($('rightMotion').style.getPropertyValue('--b-gold')).toBe('#42f272');
 
     const scales = $$('#paletteGrid [data-palette]');
     expect(scales.map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false']);
@@ -164,9 +220,9 @@ describe('when a summary lands', () => {
     expect($('logoGrid').querySelector('img')).toHaveAttribute('src', '/api/video/demo/brand-file/logo.svg');
     expect($('logoGrid').querySelector('.logo-fallback')).toHaveTextContent('Plate');
 
-    expect($$('#focusGrid [data-focus]').map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    expect(checked('#focusGrid [data-focus]')).toEqual(['true', 'false', 'false']);
 
-    expect($$('#energyGrid .energy').map((b) => b.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true']);
+    expect(checked('#energyGrid [data-energy]')).toEqual(['false', 'false', 'true']);
     const atm = $$('#atmosphereGrid [data-atmosphere]');
     expect(atm.map((b) => [b.dataset.atmosphere, b.getAttribute('aria-checked')])).toEqual([
       ['none', 'true'],
@@ -174,24 +230,28 @@ describe('when a summary lands', () => {
     ]);
     expect(document.querySelector('.atmosphere-sliders')).toHaveClass('hidden');
     expect($('atmosphereOpacityOut')).toHaveTextContent('0.80');
-    expect(($('cardDepth') as HTMLSelectElement).value).toBe('deep');
-    expect($('sheenToggle')).not.toBeChecked();
+    expect(picked('cardDepth')?.dataset.depth).toBe('deep');
+    expect(picked('sheenToggle')?.dataset.sheen).toBe('off');
 
     const transitions = $$('#transitionGrid [data-transition]');
-    expect(transitions.find((b) => b.classList.contains('active'))?.dataset.transition).toBe('dissolve');
+    expect(transitions.find((b) => b.classList.contains('on'))?.dataset.transition).toBe('dissolve');
     expect(transitions.every((b) => b.hasAttribute('aria-checked'))).toBe(true);
     expect($('transitionDurationOut')).toHaveTextContent('0.4s');
 
     expect($('paceMeta').textContent).toBe('1.25×');
     expect($('paceMeta').querySelector('.help-tip')).toBeNull();
     expect($('paceHint')).toHaveTextContent('Faster · re-record to apply');
-    expect([...$('paceSeg').querySelectorAll('input')].map((i) => i.checked)).toEqual([false, true]);
+    expect(checked('#paceSeg [data-pace]')).toEqual(['false', 'true']);
     expect($('paceNote')).not.toHaveAttribute('hidden');
     expect($('paceNote')).toHaveAttribute('data-tone', 'warn');
+    // The last take ran at another pace: the Record tab asks for attention.
+    expect(document.querySelector('[data-tab="recording"] .sl-tab-dot')).not.toBeNull();
 
     expect($('lookPreview').dataset).toMatchObject({ frame: 'inset', cursor: 'classic', keys: 'on', shadow: 'deep' });
-    expect($('lookPresets').querySelector('[data-look="studio"]')).toHaveClass('active');
-    expect(document.querySelector('[data-camera="curve"] .active')).toHaveAttribute('data-value', 'snappy');
+    expect($('lookPresets').querySelector('[data-look="studio"]')).toHaveClass('on');
+    expect(document.querySelector('[data-camera="curve"] .on')).toHaveAttribute('data-value', 'snappy');
+    expect(document.querySelector('[data-camera="motion"] .on')).toHaveAttribute('data-value', 'swift');
+    expect(document.querySelector('[data-camera="shadow"] .on')).toHaveAttribute('data-value', 'deep');
     expect($('backgroundRow')).not.toHaveAttribute('hidden');
     expect($('cursorSizeRow')).toHaveAttribute('hidden');
     expect($$('.cursorDetailRow').every((r) => r.hidden)).toBe(true);
@@ -200,17 +260,19 @@ describe('when a summary lands', () => {
     expect($('keysToggle')).toBeChecked();
 
     await waitFor(() => expect($('sizeMeta').textContent).toBe('1440×900 @2x'));
-    const sizes = $$('#sizeOptions .size-option');
+    const sizes = $$('#sizeOptions .dir-size');
     expect(sizes.map((b) => [b.dataset.size, b.getAttribute('aria-checked')])).toEqual([
       ['desktop', 'false'],
       ['laptop', 'true'],
       ['custom-open', 'false'],
     ]);
-    expect(sizes[0]?.querySelector('.size-badge')).toHaveTextContent('Suggested');
+    expect(sizes[0]?.querySelector('.lk-badge')).toHaveTextContent('Suggested');
+    expect(sizes[1]?.querySelector('.lk-detail')).not.toBeEmptyDOMElement();
     expect($('sizeHint').textContent).toBe('Centred as a window on the 1920×1080 video — other aspect ratios leave a margin.');
-    expect([...$('shapeSeg').querySelectorAll('input')].map((i) => i.checked)).toEqual([true, false]);
+    expect(checked('#shapeSeg [data-shape]')).toEqual(['true', 'false']);
     expect($('sizePreview').dataset.mode).toBe('window');
     expect(($('sizeW') as HTMLInputElement).value).toBe('1440');
+    expect($$('.dir-meta-chip').at(-1)).toHaveTextContent('1440×900');
 
     expect($('plateCount')).toHaveTextContent('1');
     const li = $('plateBin').querySelector('li');
@@ -255,7 +317,7 @@ describe('motion live loop', () => {
     fireEvent.click(document.querySelector('[data-energy="calm"]')!);
     expect(desk.get().motionApplied).toBe(false);
     expect(paintLookVars).toHaveBeenCalledWith({ '--enter': '700ms' }, 'rise');
-    expect(document.querySelector('[data-energy="calm"]')).toHaveClass('active');
+    expect(document.querySelector('[data-energy="calm"]')).toHaveClass('on');
     fireEvent.click(document.querySelector('[data-title-reveal="wipe"]')!);
 
     await waitFor(() => expect(desk.get().platesPreviewed).toBe(true), { timeout: 1500 });
@@ -423,8 +485,10 @@ describe('direction picks', () => {
     expect(chapterBackdrop.value).toBe('#123456');
     expect(chapterBackdrop.querySelector('.help-tip')).toBeNull();
     expect(($('overlayChapterAtm') as HTMLSelectElement).value).toBe('mesh');
-    expect(($('overlayPreset') as HTMLSelectElement).value).toBe('editorial');
-    expect(($('overlayCaptionSeat') as HTMLSelectElement).value).toBe('bottom-left');
+    expect(picked('overlayPreset')?.dataset.preset).toBe('editorial');
+    expect(picked('overlayCaptionSeat')?.dataset.seat).toBe('bottom-left');
+    expect(picked('overlayCaptionAlign')?.dataset.value).toBe('center');
+    expect(document.querySelector('.dir-apply')).not.toHaveClass('is-dirty');
 
     fireEvent.click($('btnOverlaysApply'));
     await waitFor(() => expect(lastToast()?.title).toBe('Live cards updated'));
@@ -442,6 +506,122 @@ describe('direction picks', () => {
       text: 'Last take: narration held the tour 4s (10%) at pace steady.',
       tone: '',
     });
+  });
+});
+
+describe('tile picks', () => {
+  it('marks a camera pick at once and puts the saved one back when the save fails', async () => {
+    server.use(http.put('/api/video/:slug/direction', () => HttpResponse.json({ error: 'locked' }, { status: 409 })));
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-camera="zoom"] [data-value="bold"]')!);
+    expect(document.querySelector('[data-camera="zoom"] [data-value="bold"]')).toHaveAttribute('aria-checked', 'true');
+    await waitFor(() => expect(lastToast()?.title).toBe('Direction failed'));
+    expect(document.querySelector('[data-camera="zoom"] [data-value="subtle"]')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('saves a frame detail from its segmented control', async () => {
+    let put: unknown;
+    server.use(
+      http.put('/api/video/:slug/direction', async ({ request }) => {
+        put = await request.json();
+        const d = direction({ camera: { ...direction().camera, corners: 'round' } });
+        return HttpResponse.json({ direction: d, motion: d.motion, transitions: makeVideo().transitions });
+      }),
+    );
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-camera="corners"] [data-value="round"]')!);
+    await waitFor(() => expect(lastToast()?.title).toBe('Frame set'));
+    expect(put).toEqual({ camera: { corners: 'round' } });
+    expect(document.querySelector('[data-camera="corners"] .on')).toHaveAttribute('data-value', 'round');
+  });
+
+  it('sends depth and sheen tiles through the motion live loop', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post('/api/video/:slug/motion', async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ motion: makeMotion({ depth: 'deep', sheen: false }) });
+      }),
+    );
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-depth="deep"]')!);
+    fireEvent.click(document.querySelector('[data-sheen="off"]')!);
+    expect(picked('cardDepth')?.dataset.depth).toBe('deep');
+    expect(picked('sheenToggle')?.dataset.sheen).toBe('off');
+    await waitFor(() => expect(bodies).toHaveLength(1), { timeout: 1500 });
+    expect(bodies[0]).toMatchObject({ depth: 'deep', sheen: false });
+  });
+
+  it('picks a pace tile optimistically and saves it', async () => {
+    let put: unknown;
+    server.use(
+      http.put('/api/video/:slug/direction', async ({ request }) => {
+        put = await request.json();
+        const d = direction({ pace: { id: 'steady', tempo: 1, label: 'Steady', hint: 'Default' } });
+        return HttpResponse.json({ direction: d, motion: d.motion, transitions: makeVideo().transitions });
+      }),
+    );
+    desk.set({ slug: 'demo', video: video() });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-pace="steady"]')!);
+    expect(checked('#paceSeg [data-pace]')).toEqual(['true', 'false']);
+    await waitFor(() => expect(lastToast()?.title).toBe('Live pace set'));
+    expect(put).toEqual({ pace: 'steady' });
+    expect($('paceMeta').textContent).toBe('1×');
+  });
+
+  it('picks the video shape from its tile', async () => {
+    let posted: unknown;
+    server.use(
+      http.post('/api/video/:slug/capture', async ({ request }) => {
+        posted = await request.json();
+        return HttpResponse.json({ ...CAPTURE, output: { format: 'portrait', width: 1080, height: 1920 } });
+      }),
+    );
+    desk.set({ slug: 'demo' });
+    directionView.set({ capture: CAPTURE });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-shape="portrait"]')!);
+    expect(checked('#shapeSeg [data-shape]')).toEqual(['false', 'true']);
+    await waitFor(() => expect(lastToast()?.title).toBe('Recording size saved'));
+    expect(posted).toMatchObject({ output: 'portrait' });
+  });
+
+  it('calls out unsaved live-card edits and reverts them', () => {
+    const overlays = {
+      preset: 'editorial',
+      chapter: { atmosphere: 'waves' },
+      caption: { atmosphere: 'waves', seat: 'bottom-left', align: 'left' },
+      chapters: {},
+    };
+    desk.set({ slug: 'demo', video: video({ overlays }) });
+    render(<DirectionTab />);
+    expect(document.querySelector('.dir-apply')).toHaveTextContent('Saved');
+    fireEvent.click(document.querySelector('[data-seat="bottom-right"]')!);
+    fireEvent.click(document.querySelector('#overlayCaptionAlign [data-value="center"]')!);
+    expect(picked('overlayCaptionSeat')?.dataset.seat).toBe('bottom-right');
+    expect(document.querySelector('.dir-apply')).toHaveClass('is-dirty');
+    expect(document.querySelector('.dir-apply')).toHaveTextContent('Unsaved changes');
+    expect($('btnOverlaysApply')).toHaveClass('primary');
+    expect(document.querySelector('[data-tab="motion"] .sl-tab-dot')).not.toBeNull();
+    fireEvent.click(document.querySelector('.dir-apply .ins-link')!);
+    expect(picked('overlayCaptionSeat')?.dataset.seat).toBe('bottom-left');
+    expect(picked('overlayCaptionAlign')?.dataset.value).toBe('left');
+    expect(document.querySelector('[data-tab="motion"] .sl-tab-dot')).toBeNull();
+  });
+
+  it('cancels the custom size form', () => {
+    desk.set({ slug: 'demo' });
+    directionView.set({ capture: CAPTURE });
+    render(<DirectionTab />);
+    fireEvent.click(document.querySelector('[data-size="custom-open"]')!);
+    expect($('sizeCustom')).not.toHaveAttribute('hidden');
+    fireEvent.click(within($('sizeCustom')).getByText('Cancel'));
+    expect($('sizeCustom')).toHaveAttribute('hidden');
+    expect(document.querySelector('[data-size="laptop"]')).toHaveAttribute('aria-checked', 'true');
   });
 });
 

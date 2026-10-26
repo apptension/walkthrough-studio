@@ -1,24 +1,27 @@
 import type { Scene } from '@/api/types';
 import type { EditorSelection } from '@/desk/bridge';
-import { setMonitorMode } from '@/desk/monitor';
+import { seekTo, setMonitorMode } from '@/desk/monitor';
 import { showRightTab } from '@/desk/panels';
 import { desk } from '@/desk/store';
 import { planAfterSeeked } from '@/logic/livePreview';
 import { canReloadPlateFrame, playheadOnPlate, plateClipFor, shouldBlacklistPlateLoad } from '@/logic/plateSync';
 import { paintRange } from '@/ui/rangeFill';
 
-import { wireLensBox, wireZoomBox } from './aim';
+import { stageAimKey, wireLensBox, wireZoomBox } from './aim';
 import { previewState } from './audio';
 import { requestAudio, requestMake } from './ctx';
-import { postDeck, redo, refresh, resetForProject, undo } from './data';
+import { postDeck, redo, refresh, resetForProject, undo, validateSelection } from './data';
 import { duplicateSelected } from './duplicate';
-import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
+import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { invalidatePlates, paintLookVars } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
+import { closePacePop, onPaceModeChange, pacePopOpen } from './platePace';
+import { closePlateLibrary, openAddLibrary, plateLibOpen } from './plateLibrary';
+import { toCut, toProgram, undressOverview, wireOverview } from './overview';
 import { curClip } from './seq';
-import { ensureLiveCards, liveHitAtPlayhead, paintLoading, renderFrame } from './stage';
+import { ensureLiveCards, liveHitAtPlayhead, paintFrame, paintLoading, renderFrame, syncLiveSource } from './stage';
 import { deckEdit, ed, preview, video } from './state';
 import {
   clearPlatePreviewTimers,
@@ -30,9 +33,10 @@ import {
   paintTextMode,
   setCoachHidden,
   syncPlateField,
-  wireTextBarChrome,
 } from './text';
-import { flashHint, renderTimeline } from './timeline';
+import { wireStagePanels } from './stagePanels';
+import { flashHint, invalidateTimeline, renderTimeline } from './timeline';
+import { captureMorph, playMorph } from './timelineMorph';
 import { wireTimeline } from './timelineWire';
 import { paintHead, paintTransport, pause, replayClip, seek, toggle } from './transport';
 import type { Clip, FieldDetail } from './types';
@@ -41,10 +45,12 @@ import { $, clamp } from './util';
 /** Entry points, plate reloads and wiring from the tail of `kit/studio/editor.js`. */
 
 // ─── Plate reloads (server rebuilt the HTML) ─────────────────────────────────────────────
-export async function reloadPlate(id: string): Promise<void> {
+export async function reloadPlate(id: string, { paint = true }: { paint?: boolean } = {}): Promise<void> {
   ed.missing.delete(id);
   const c = curClip();
   const clip = plateClipFor(ed.seq, id, c);
+  const onPlate = playheadOnPlate(c, id);
+  const ms = onPlate && clip ? Math.max(0, Math.round((ed.t - clip.at) * 1000)) : 0;
   if (
     !canReloadPlateFrame({
       dirty: P.dirty(),
@@ -67,7 +73,8 @@ export async function reloadPlate(id: string): Promise<void> {
   paintLoading();
   clearPlatePreviewTimers();
   // force: true — the ready-cache must not keep a frame built before this look/palette change.
-  const ok = await P.load(id, { force: true });
+  // motionAt parks the hidden frame on the playhead before the swap, so the stage never shows the open.
+  const ok = await P.load(id, { force: true, motionAt: ed.textMode ? undefined : ms });
   ed.loadingPlate = null;
   paintLoading();
   if (shouldBlacklistPlateLoad(ok, { activePlateId: desk.get().activePlateId, requestedId: id })) {
@@ -80,43 +87,69 @@ export async function reloadPlate(id: string): Promise<void> {
     markPlateResync(id);
     paintTextMode();
   } else {
-    // Keep the playhead — a look/atmosphere reload should land on the same beat, not the open.
-    const onPlate = playheadOnPlate(curClip(), id);
-    const ms = onPlate && clip ? Math.max(0, Math.round((ed.t - clip.at) * 1000)) : 0;
-    P.motion();
-    P.restart(ms);
+    // The back buffer already stepped into motion before the swap. Restarting here would blank
+    // the animations for a frame — the flash. The single-frame fallback still needs it.
+    const parked = frameElMotion();
+    if (!parked) {
+      P.motion();
+      P.restart(ms);
+    }
     if (ed.needsPlateResync === id) ed.needsPlateResync = null;
   }
   if (playheadOnPlate(curClip(), id)) renderFrame();
-  if (ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (paint && ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) renderInspector();
+}
+
+function frameElMotion(): boolean {
+  try {
+    const frame = document.getElementById('plateFrame') as HTMLIFrameElement | null;
+    return frame?.contentDocument?.body?.dataset['motion'] === '1';
+  } catch {
+    return false;
+  }
 }
 
 // ─── Entry points ────────────────────────────────────────────────────────────────────────
 export async function onEnter({ programT }: { programT?: number | null } = {}): Promise<void> {
   ed.active = true;
   document.body.classList.add('is-editor');
+  undressOverview();
+  const focus = ed.focus;
+  ed.focus = null;
+  const land = () => {
+    if (focus) {
+      ed.t = clamp(focus.t, 0, ed.total);
+      if (focus.sel) ed.sel = focus.sel;
+    } else if (programT != null && ed.seq.length) {
+      ed.t = toCut(programT);
+    }
+    validateSelection();
+    if (!ed.sel) {
+      const c = curClip();
+      if (c) ed.sel = { type: 'clip', id: c.id };
+    }
+    syncLiveSource();
+    paintFrame();
+    renderTimeline();
+    renderFrame();
+    renderInspector();
+    paintStatus();
+    paintTransport();
+    paintTextMode();
+    showInspectorTab();
+    playMorph();
+  };
+  // The overview already drew this cut: unfold it now, and let the re-fetch catch up behind.
+  const drawn = Boolean(ed.deck && ed.deck.slug === desk.get().slug && ed.seq.length);
+  if (drawn) land();
   // Always re-fetch: desk, takes and voice meta can change on disk or via API while Program is open.
   await refresh();
+  if (!ed.active) return;
   // Warm live-card HTML so chapter/caption clicks don't race a first rebuild.
   await ensureLiveCards();
-  const scenes = ed.deck?.scenes;
-  if (programT != null && scenes?.length) {
-    const i = scenes.findIndex((s) => s.start != null && s.end != null && programT >= s.start - 0.05 && programT < s.end);
-    const c = ed.seq[i];
-    const start = scenes[i]?.start;
-    if (c && start != null) ed.t = c.at + clamp(programT - start, 0, c.dur);
-  }
-  if (!ed.sel) {
-    const c = curClip();
-    if (c) ed.sel = { type: 'clip', id: c.id };
-  }
-  renderTimeline();
-  renderFrame();
-  renderInspector();
-  paintStatus();
-  paintTransport();
-  paintTextMode();
-  showInspectorTab();
+  if (!ed.active) return;
+  if (!drawn) land();
+  void preview.load(previewState());
   requestAnimationFrame(() => {
     renderTimeline();
     P.fit();
@@ -125,8 +158,12 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
 
 export function onLeave(): void {
   if (!ed.active) return;
+  // Program picks up where the Editor was looking.
+  const programT = ed.seq.length ? toProgram(ed.t) : null;
+  captureMorph();
   pause();
   preview.pause();
+  closePlateLibrary({ instant: true });
   clearPlatePreviewTimers();
   ed.textGen += 1;
   if (ed.textMode) exitText();
@@ -134,6 +171,9 @@ export function onLeave(): void {
   ed.active = false;
   document.body.classList.remove('is-editor');
   if (desk.get().rightTab === 'inspector') showRightTab('feedback');
+  if (programT != null && desk.get().monitorMode === 'program' && !desk.get().previewingPlate) seekTo(programT);
+  renderTimeline();
+  playMorph();
 }
 
 export async function openClip(match: (c: Clip) => boolean): Promise<boolean> {
@@ -209,7 +249,7 @@ export function wireStage(signal: AbortSignal): void {
     },
     signal,
   );
-  wireTextBarChrome(signal);
+  wireStagePanels(signal);
   window.addEventListener('plate-selection', (e) => syncPlateField((e as CustomEvent<FieldDetail>).detail), { signal });
   window.addEventListener(
     'plate-canvas-edit',
@@ -250,9 +290,11 @@ async function textBarAction(act: string): Promise<void> {
   if (act === 'edit-card') {
     const hit = liveHitAtPlayhead();
     const sel = ed.sel?.type === 'card' ? ed.sel : null;
-    const cardId = ed.liveCardId || hit?.card?.id || sel?.cardId || null;
-    const markT = sel ? (sel.markT ?? null) : (hit?.mark?.t ?? null);
-    const markKey = sel ? sel.key || null : hit?.mark?.key || null;
+    // A caption just added is selected by key before its card id is known. The playhead hit
+    // fills in whichever of those the selection doesn't have yet.
+    const cardId = ed.liveCardId || sel?.cardId || hit?.card?.id || null;
+    const markT = sel?.markT ?? hit?.mark?.t ?? null;
+    const markKey = sel?.key || hit?.mark?.key || null;
     await enterLiveCard(cardId, markT, markKey);
     return;
   }
@@ -363,6 +405,8 @@ export function wireTimelineBar(signal: AbortSignal): void {
   on('etlAddCut', 'click', () => void toolCut(), signal);
   on('etlAddZoom', 'click', () => void toolZoom(), signal);
   on('etlAddLens', 'click', () => void toolLens(), signal);
+  on('etlAddCard', 'click', () => void toolCaption(), signal);
+  on('etlAddPlate', 'click', (e) => openAddLibrary(e.currentTarget as HTMLElement), signal);
   on('etlAddVoice', 'click', () => void toolVoice(), signal);
   on('etlDuplicate', 'click', () => void duplicateSelected(), signal);
   on('etlUndo', 'click', () => void undo(), signal);
@@ -390,8 +434,38 @@ export function wireTimelineBar(signal: AbortSignal): void {
     signal,
   );
   wireTimeline(signal);
+  onPaceModeChange(() => {
+    renderTimeline();
+    renderInspector();
+  });
+  signal.addEventListener('abort', () => closePacePop());
+  wireOverview(signal);
   const scroll = $('etlScroll');
-  const obs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => ed.active && renderTimeline()) : null;
+  // A gesture restyles blocks in place; whatever it commits (or abandons), the next paint is whole.
+  for (const type of ['pointerdown', 'pointerup', 'pointercancel'] as const)
+    (type === 'pointerdown' ? scroll : window)?.addEventListener(type, invalidateTimeline, { capture: true, signal });
+  // Only a new width moves the blocks; the shell growing or folding must not repaint mid-morph.
+  // A dragged pane edge fires many sizes per frame — paint once, at the last one. A hidden or
+  // throttled view may never hand out a frame, so a timer stands in rather than dropping resizes.
+  let width = -1;
+  let pending = false;
+  const paint = (): void => {
+    if (!pending || signal.aborted) return;
+    pending = false;
+    const w = scroll?.clientWidth ?? 0;
+    if (w === width) return;
+    width = w;
+    renderTimeline();
+  };
+  const obs =
+    typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          if (pending) return;
+          pending = true;
+          requestAnimationFrame(paint);
+          setTimeout(paint, 100);
+        })
+      : null;
   if (obs && scroll) {
     obs.observe(scroll);
     signal.addEventListener('abort', () => obs.disconnect());
@@ -408,7 +482,23 @@ export function wireKeys(signal: AbortSignal): void {
       const tag = target?.tagName || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
       if (target?.closest?.('[role="separator"]')) return;
-      if (document.querySelector('dialog[open]')) return;
+      // A focused panel grip moves its panel with the arrows and docks it with Home / End.
+      if (target?.closest?.('[data-sp-grip]') && /^(Arrow|Home$|End$)/.test(e.key)) return;
+      if (document.querySelector('dialog[open]') || plateLibOpen()) return;
+      if (pacePopOpen()) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          closePacePop();
+          return;
+        }
+        if (target?.closest?.('.pace-pop')) return;
+      }
+      if (stageAimKey(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       let handled = true;
@@ -423,6 +513,7 @@ export function wireKeys(signal: AbortSignal): void {
       else if (k === 'z') void toolZoom();
       else if (k === 'm') void toolLens();
       else if (k === 'l') $('edLoop')?.click();
+      else if (k === 'p') openAddLibrary($('etlAddPlate'));
       else if (k === 'home') seek(0);
       else if (k === 'end') seek(ed.total);
       else if (k === 'arrowleft' || k === 'arrowright') {
@@ -458,9 +549,7 @@ export const editorApi = {
   reloadPlate,
   invalidatePlates,
   paintLookVars,
-  renderClips: (): void => {
-    if (ed.active) renderTimeline();
-  },
+  renderClips: (): void => renderTimeline(),
   renderInspector,
   /** The desk calls this where the legacy called `updatePlateEditChrome()`. */
   onPlateDirty: (): void => updatePlateEditChrome(),

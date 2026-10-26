@@ -5,6 +5,7 @@ import { playPlatePreview, setMonitorLabel, setMonitorMode } from '@/desk/monito
 import { showLeftTab, showRightTab } from '@/desk/panels';
 import { clearRunStatus, desk, setButtonBusy, setStatus } from '@/desk/store';
 import { toast } from '@/desk/toast';
+import { runtime } from '@/desk/runtime';
 import { loadVideo } from '@/desk/video';
 import { paintMotionLiveOptimistic } from '@/features/direction/actions';
 import { renderHtmlPlatePicker } from '@/features/feedback/proposal';
@@ -47,11 +48,30 @@ import { errMessage } from './util';
  * driven imperatively, as it was; the chrome around it renders from the desk store.
  */
 
-const frameEl = (): HTMLIFrameElement | null => document.getElementById('plateFrame') as HTMLIFrameElement | null;
+const FRONT_ID = 'plateFrame';
+const BACK_ID = 'plateFrameBack';
+const frameEl = (): HTMLIFrameElement | null => document.getElementById(FRONT_ID) as HTMLIFrameElement | null;
+const backEl = (): HTMLIFrameElement | null => document.getElementById(BACK_ID) as HTMLIFrameElement | null;
 
 /** `state.plateFrameReady` — the plate id whose copy is armed in the iframe. */
 let plateFrameReady: string | null = null;
 let plateLoadToken = 0;
+/**
+ * The off-stage twin of `#plateFrame`. Documents load and arm there while the stage keeps
+ * showing the current one, then the two trade ids — so a cut, a scrub across slides or a
+ * caption change never blanks the frame. Everything else keeps addressing `#plateFrame`.
+ */
+interface BackLoad {
+  id: string;
+  token: number;
+  done: Promise<PlateLoad>;
+  /** The stage is waiting on it — a preload must not cancel it. */
+  shown: boolean;
+}
+let backToken = 0;
+let backLoad: BackLoad | null = null;
+/** Plate armed in the back frame, ready to swap on stage. */
+let backReady: string | null = null;
 /** `state.plateEditBound`. */
 let plateEditBound = false;
 let plateReplayTimer: ReturnType<typeof setTimeout> | null = null;
@@ -172,10 +192,11 @@ export type PlateLoad = true | false | 'cancelled';
  * Resolves `true` when armed, `false` on hard failure, `'cancelled'` when a newer load stole the iframe
  * (callers must not treat cancel as “plate missing”).
  */
-export function loadPlateFrame(plateId: string, { force = false }: { force?: boolean } = {}): Promise<PlateLoad> {
+export function loadPlateFrame(plateId: string, { force = false, motionAt }: { force?: boolean; motionAt?: number } = {}): Promise<PlateLoad> {
   const plate = findPlate(plateId);
   if (!plate?.htmlUrl) return Promise.resolve(false);
   if (!force && desk.get().activePlateId === plateId && plateFrameReady === plateId) return Promise.resolve(true);
+  if (frameEl() && backEl()) return loadViaBack(plate, force, motionAt);
   // Bust cache so Direction look / copy rebuilds show up when compositing over the take.
   desk.set({ activePlateId: plateId, previewingPlate: `${plate.htmlUrl.split('?')[0]}?t=${Date.now()}`, plateDirty: false });
   plateEditBound = false;
@@ -209,6 +230,123 @@ export function loadPlateFrame(plateId: string, { force = false }: { force?: boo
   });
 }
 
+const freshUrl = (plate: HtmlPlate): string => `${String(plate.htmlUrl).split('?')[0]}?t=${Date.now()}`;
+
+/** Load and arm a document in the back frame. A newer back load cancels this one. */
+function startBackLoad(plate: HtmlPlate, shown: boolean): BackLoad {
+  const frame = backEl() as HTMLIFrameElement;
+  const token = (backToken += 1);
+  backReady = null;
+  const armed = new Promise<PlateLoad>((resolve) => {
+    frame.onload = () => {
+      if (token !== backToken) return resolve('cancelled');
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          enablePlateInlineEdit(frame, {
+            bind: false,
+            onReady: () => resolve(token === backToken ? true : 'cancelled'),
+          }),
+        ),
+      );
+    };
+    frame.onerror = () => resolve(token === backToken ? false : 'cancelled');
+    frame.src = freshUrl(plate);
+  });
+  const load: BackLoad = {
+    id: plate.id,
+    token,
+    shown,
+    done: armed.then((r) => {
+      if (token === backToken) {
+        backLoad = null;
+        if (r === true) backReady = plate.id;
+      }
+      return r;
+    }),
+  };
+  backLoad = load;
+  return load;
+}
+
+async function loadViaBack(plate: HtmlPlate, force: boolean, motionAt?: number): Promise<PlateLoad> {
+  const token = (plateLoadToken += 1);
+  let pending: Promise<PlateLoad>;
+  if (!force && backReady === plate.id) pending = Promise.resolve(true);
+  else if (!force && backLoad?.id === plate.id) {
+    backLoad.shown = true;
+    pending = backLoad.done;
+  } else pending = startBackLoad(plate, true).done;
+  const r = await pending;
+  if (token !== plateLoadToken) return 'cancelled';
+  if (r !== true) return r;
+  if (backReady !== plate.id) return 'cancelled';
+  // Park the hidden frame on the playhead before it becomes the one on screen, so a look or
+  // background rebuild doesn't flash the edit still or the opening.
+  if (motionAt != null) presentPlateMotion(backEl(), motionAt);
+  swapPlateFrames(plate.id);
+  return true;
+}
+
+/** Inline state that belongs to the stage slot (camera push, carry mask), not to a document. */
+const SLOT_STYLES = ['transform', 'transformOrigin', 'visibility'] as const;
+
+function swapPlateFrames(plateId: string): void {
+  const front = frameEl();
+  const back = backEl();
+  if (!front || !back) return;
+  const leaving = plateFrameReady;
+  const keepLeaving = Boolean(leaving && !desk.get().plateDirty);
+  front.onload = null;
+  front.onerror = null;
+  front.id = BACK_ID;
+  back.id = FRONT_ID;
+  for (const k of SLOT_STYLES) {
+    back.style[k] = front.style[k];
+    front.style[k] = '';
+  }
+  back.removeAttribute('aria-hidden');
+  back.removeAttribute('tabindex');
+  back.title = 'Plate HTML preview';
+  front.setAttribute('aria-hidden', 'true');
+  front.tabIndex = -1;
+  front.title = '';
+  runtime.plateFrame = back;
+  // The document that just left stays armed off-stage: scrubbing back across the cut swaps it in again.
+  backReady = keepLeaving ? leaving : null;
+  backToken += 1;
+  backLoad = null;
+  desk.set({ activePlateId: plateId, previewingPlate: back.src, plateDirty: false });
+  plateFrameReady = plateId;
+  plateEditBound = true;
+  updatePlateEditChrome();
+  fitFhdPreview();
+  if (String(plateId).startsWith('overlay:')) plateSetLiveComposite(true);
+}
+
+/**
+ * Warm the next document the stage will need in the back frame. Never touches what is on stage
+ * and never cancels a load the stage is waiting on.
+ */
+export function preloadPlateFrame(plateId: string | null | undefined, { fresh = false }: { fresh?: boolean } = {}): boolean {
+  if (!plateId || !frameEl() || !backEl() || backLoad?.shown) return false;
+  if (plateFrameReady === plateId && desk.get().activePlateId === plateId) return false;
+  if (backLoad?.id === plateId || (backReady === plateId && !fresh)) return false;
+  const plate = findPlate(plateId);
+  if (!plate?.htmlUrl) return false;
+  startBackLoad(plate, false);
+  return true;
+}
+
+/** The back frame holds a stale build (look, copy or rebuild changed underneath it). */
+export function dropPreloadedPlates(id?: string): void {
+  if (id && backReady !== id && backLoad?.id !== id) return;
+  backReady = null;
+  if (backLoad && !backLoad.shown) {
+    backToken += 1;
+    backLoad = null;
+  }
+}
+
 /**
  * Force every CSS animation on the plate to rebuild. Changing look tokens (depth, energy,
  * reveal, atmosphere) while animations sit mid-seek leaves a frozen half-reveal — calling this
@@ -236,16 +374,23 @@ export function recreatePlateAnimations(doc: Document | null | undefined): void 
  */
 const LIVE_COMPOSITE_SCHEME = 'light';
 
+function frameDoc(frame: HTMLIFrameElement | null): Document | null {
+  try {
+    return frame?.contentDocument || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Mark overlay HTML for transparent composite over the recording (Editor + bake).
  * The scheme is pinned on every overlay document, composited or not, so older card HTML built
  * with `color-scheme: dark` cannot reintroduce the opaque canvas.
  */
-export function plateSetLiveComposite(on = true): boolean {
-  const doc = plateFrameDoc();
+export function plateSetLiveComposite(on = true, frame: HTMLIFrameElement | null = frameEl()): boolean {
+  const doc = frameDoc(frame);
   if (!doc?.body) return false;
   const overlay = String(doc.body.dataset['cardId'] || desk.get().activePlateId || '').startsWith('overlay:');
-  const frame = frameEl();
   if (frame) frame.style.colorScheme = LIVE_COMPOSITE_SCHEME;
   if (overlay) doc.documentElement.style.colorScheme = LIVE_COMPOSITE_SCHEME;
   if (on && overlay) {
@@ -263,10 +408,10 @@ export function plateSetLiveComposite(on = true): boolean {
 }
 
 /** Leave the composed edit frame so the plate's own animations can be stepped; copy (and unsaved edits) stay in the DOM. */
-export function plateMotionMode(): boolean {
-  const doc = plateFrameDoc();
+function enterPlateMotion(frame: HTMLIFrameElement | null): boolean {
+  const doc = frameDoc(frame);
   if (!doc?.body) return false;
-  plateSetLiveComposite(true);
+  plateSetLiveComposite(true, frame);
   if (doc.body.dataset['motion'] === '1') {
     ensurePlatePeekStyle(doc);
     bindPlateCanvasPick(doc);
@@ -297,16 +442,36 @@ export function plateMotionMode(): boolean {
   return true;
 }
 
+export function plateMotionMode(): boolean {
+  return enterPlateMotion(frameEl());
+}
+
 interface PlateRuntime {
   renderAt?: (ms: number) => void;
 }
 
-/** Step the plate to ms on its own clock (CSS animations + WebGL atmosphere + count-ups). */
-export function plateSeek(ms: number): void {
-  const frame = frameEl();
-  const doc = frame?.contentDocument;
+interface PlateCarry {
+  seek: (contentMs: number, bgMs: number) => void;
+  readonly state: { on: boolean };
+}
+
+/**
+ * Step the plate to ms on its own clock (CSS animations + WebGL atmosphere + count-ups).
+ * A slide in a continuous-background run also takes the run's clock for its backdrop.
+ */
+function seekPlate(frame: HTMLIFrameElement | null, ms: number, bgMs?: number | null): void {
+  const doc = frameDoc(frame);
   if (!doc?.body || doc.body.dataset['motion'] !== '1') return;
   const t = Math.max(0, Number(ms) || 0);
+  const carry = (frame?.contentWindow as (Window & { __plateCarry?: PlateCarry }) | null)?.__plateCarry;
+  if (carry?.state.on) {
+    try {
+      carry.seek(t, bgMs ?? t);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   for (const a of doc.getAnimations?.() || []) {
     try {
       a.pause();
@@ -322,6 +487,19 @@ export function plateSeek(ms: number): void {
   } catch {
     /* ignore */
   }
+}
+
+export function plateSeek(ms: number, bgMs?: number | null): void {
+  seekPlate(frameEl(), ms, bgMs);
+}
+
+/** Step any plate frame already in motion (the loupe's mirror) on the plate's clock. */
+export const seekPlateFrame = (frame: HTMLIFrameElement | null, ms: number, bgMs?: number | null): void => seekPlate(frame, ms, bgMs);
+
+/** Step a hidden frame into motion at `ms` before it is swapped on screen. */
+export function presentPlateMotion(frame: HTMLIFrameElement | null, ms: number): void {
+  if (!enterPlateMotion(frame)) return;
+  seekPlate(frame, ms);
 }
 
 /**
@@ -356,11 +534,7 @@ export function plateTextMode(opts: { onReady?: (() => void) | undefined } = {})
 }
 
 export function plateFrameDoc(): Document | null {
-  try {
-    return frameEl()?.contentDocument || null;
-  } catch {
-    return null;
-  }
+  return frameDoc(frameEl());
 }
 
 /* ———————————————————————————————————————————— inline copy fields */
@@ -734,7 +908,7 @@ function snapshotPlateEdits(doc: Document): FieldSnapshot[] {
  * Put copy back after a rebuild or clone. With `motion`, untouched fields get the template's own
  * reveal markup back so Replay animates them; edited fields show their canonical markup.
  */
-function restorePlateEdits(doc: Document, snapshot: FieldSnapshot[] | null | undefined, { motion = false } = {}): void {
+function restorePlateEdits(doc: Document, snapshot: FieldSnapshot[] | null | undefined, { motion = false, mark = true } = {}): void {
   if (!snapshot?.length) return;
   const byPath = Object.fromEntries(snapshot.map((s) => [s.path, s]));
   const originals = plateOriginalMarkup.get(doc);
@@ -755,19 +929,45 @@ function restorePlateEdits(doc: Document, snapshot: FieldSnapshot[] | null | und
     if (s.dirty) el.dataset['dirty'] = '1';
     else delete el.dataset['dirty'];
   });
-  if (snapshot.some((s) => s.dirty)) {
+  if (mark && snapshot.some((s) => s.dirty)) {
     setPlateDirty(true);
     updatePlateEditChrome();
   }
+}
+
+/**
+ * Carry the copy on stage — unsaved edits included — into another frame of the same plate in
+ * motion, the way the stage itself shows it: edited fields in their canonical markup, untouched
+ * ones with the template's reveal.
+ */
+export function mirrorPlateCopy(from: Document, to: Document, { still = false } = {}): void {
+  restorePlateEdits(to, snapshotPlateEdits(from), { motion: !still, mark: false });
+  if (still) composePlateForEdit(to);
+}
+
+/** The stage holds the composed edit still (text mode): bring the loupe's mirror to the same still. */
+export function presentPlateStill(frame: HTMLIFrameElement | null, from: Document, onReady: () => void): void {
+  const doc = frameDoc(frame);
+  if (doc?.body) delete doc.body.dataset['motion'];
+  enablePlateInlineEdit(frame, {
+    bind: false,
+    onReady: () => {
+      const to = frameDoc(frame);
+      if (to?.body) mirrorPlateCopy(from, to, { still: true });
+      onReady();
+    },
+  });
 }
 
 interface InlineEditOpts {
   attempt?: number;
   snapshot?: FieldSnapshot[] | null;
   onReady?: (() => void) | null;
+  /** False while arming the off-stage frame: the stage's bound flag follows the swap instead. */
+  bind?: boolean;
 }
 
-export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt = 0, snapshot = null, onReady = null }: InlineEditOpts = {}): void {
+export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt = 0, snapshot = null, onReady = null, bind = true }: InlineEditOpts = {}): void {
   const doc = frame?.contentDocument;
   if (!doc?.body) {
     onReady?.();
@@ -776,7 +976,7 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
   // Wait for first paint / animations so layout + SVG pathLength exist
   const ready = (doc.getAnimations?.() || []).length > 0 || attempt >= 6;
   if (!ready) {
-    setTimeout(() => enablePlateInlineEdit(frame, { attempt: attempt + 1, snapshot, onReady }), 40);
+    setTimeout(() => enablePlateInlineEdit(frame, { attempt: attempt + 1, snapshot, onReady, bind }), 40);
     return;
   }
 
@@ -817,7 +1017,7 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
   requestAnimationFrame(() => {
     if (snapshot) restorePlateEdits(doc, snapshot);
     composePlateForEdit(doc);
-    plateEditBound = true;
+    if (bind) plateEditBound = true;
     onReady?.();
   });
 }
@@ -1136,6 +1336,7 @@ export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = nu
   }
   // Drop the ready-cache: the same plate id now points at new HTML (bg, atmosphere, palette).
   plateFrameReady = null;
+  dropPreloadedPlates();
   renderHtmlPlatePicker(r.plates || []);
   const v = desk.get().video;
   if (r.motion && v) desk.set({ video: { ...v, motion: r.motion } });
@@ -1289,6 +1490,9 @@ export function resetPlateForTests(): void {
   plateFrameReady = null;
   plateLoadToken = 0;
   plateEditBound = false;
+  backToken = 0;
+  backLoad = null;
+  backReady = null;
   if (plateReplayTimer) clearTimeout(plateReplayTimer);
   plateReplayTimer = null;
   disposeFhdFitObserver();

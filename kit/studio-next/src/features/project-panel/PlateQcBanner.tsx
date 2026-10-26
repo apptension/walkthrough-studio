@@ -6,7 +6,7 @@ import { useDesk } from '@/desk/store';
 
 import { plateQcView } from './plateQc';
 
-/** `#plateQcBanner` — plates whose encode failed QC, or whose copy clips at the smallest size. */
+/** `#plateQcBanner` — plates whose encode failed QC. Clipped copy is reported on the plate itself. */
 export function PlateQcBanner() {
   const plates = useDesk((s) => s.htmlPlates);
   const view = plateQcView(plates);
@@ -18,11 +18,7 @@ export function PlateQcBanner() {
 
   return (
     <div id="plateQcBanner" className="plate-qc-banner" hidden={view.kind === 'none'}>
-      {view.kind === 'clipped' ? (
-        <>
-          <strong>Copy too long</strong> — {view.names}: text clips even at the smallest size. Shorten the copy on the plate (click text to edit).
-        </>
-      ) : view.kind === 'bad' ? (
+      {view.kind === 'bad' ? (
         <>
           <strong>Plate encode QC</strong> — {view.names} need a clean re-render (hold/frame gate).{' '}
           <button

@@ -26,6 +26,13 @@ test('a failed record shows the reason, the URL, and the screenshot', () => {
   assert.match(note, /re-record/i);
 });
 
+test('a networkidle timeout on a marketing URL does not leave junk on the parsed URL', () => {
+  const note =
+    'page.goto: Timeout 15000ms exceeded.\nCall log:\n  - navigating to "https://teamdeck.io/", waiting until "networkidle"\n';
+  const view = recordFailureView({ shotMtime: 1, liveMtime: null, note });
+  assert.equal(view?.url, 'https://teamdeck.io/');
+});
+
 test('a refused connection names what failed and what to try next', () => {
   const view = recordFailureView({
     shotMtime: 5,

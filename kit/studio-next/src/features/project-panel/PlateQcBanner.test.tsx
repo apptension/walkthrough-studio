@@ -31,21 +31,18 @@ beforeEach(() => {
 });
 
 describe('PlateQcBanner', () => {
-  it('prefers failed encodes over clipped copy', () => {
+  it('reports a failed encode and leaves clipped copy to the plate editor', () => {
     expect(plateQcView([])).toEqual({ kind: 'none' });
-    expect(plateQcView([plate('a', { notes: ['Copy clips at 32px'] })])).toEqual({ kind: 'clipped', names: 'A' });
-    expect(plateQcView([plate('a', { notes: ['Copy clips'] }), plate('b', { ok: false })])).toEqual({ kind: 'bad', names: 'B' });
+    expect(plateQcView([plate('a', { notes: ['Copy clips: overflow title "Three ways past home"'] })])).toEqual({ kind: 'none' });
+    expect(plateQcView([plate('a', { notes: ['Copy clips: overflow title "Hi"'] }), plate('b', { ok: false })])).toEqual({ kind: 'bad', names: 'B' });
   });
 
-  it('warns about clipped copy', () => {
+  it('stays quiet when the only finding is copy that clips', () => {
     render(<PlateQcBanner />);
     expect(banner().hidden).toBe(true);
-    act(() => desk.set({ htmlPlates: [plate('open', { notes: ['Copy clips even at 28px'] })] }));
-    expect(banner().hidden).toBe(false);
-    expect(banner().querySelector('strong')).toHaveTextContent('Copy too long');
-    expect(banner()).toHaveTextContent(
-      'Copy too long — OPEN: text clips even at the smallest size. Shorten the copy on the plate (click text to edit).',
-    );
+    act(() => desk.set({ htmlPlates: [plate('open', { notes: ['Copy clips: overflow title "Three ways past home"'] })] }));
+    expect(banner().hidden).toBe(true);
+    expect(banner()).not.toHaveTextContent('Copy too long');
   });
 
   it('offers a one-shot plate re-render for a failed encode', () => {

@@ -15,8 +15,6 @@ import { PlatePane } from './PlatePane';
 import { PlatePicker } from './PlatePicker';
 import { SafeAreaOverlay } from './SafeAreaOverlay';
 import { SceneBar } from './SceneBar';
-import { TlLockHint } from './TlLockHint';
-
 const $ = (id: string) => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`#${id} missing`);
@@ -50,13 +48,6 @@ describe('editor markup contract', () => {
     expect($('playerPlate')).toHaveAttribute('hidden');
     act(() => desk.set({ monitorMode: 'plate' }));
     expect($('playerPlate')).not.toHaveAttribute('hidden');
-  });
-
-  it('TlLockHint shows only in the plate monitor', () => {
-    render(<TlLockHint />);
-    expect($('tlLockHint')).toHaveAttribute('hidden');
-    act(() => desk.set({ monitorMode: 'plate' }));
-    expect($('tlLockHint')).not.toHaveAttribute('hidden');
   });
 
   it('SceneBar matches the legacy page-load bar', () => {

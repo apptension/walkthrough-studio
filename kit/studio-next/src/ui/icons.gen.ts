@@ -107,6 +107,7 @@ export const ICON_BODY: Record<string, string> = {
   "ui-text": "<path d=\"M5 7.5v-3h14v3M12 4.5v15M9 19.5h6\"/>",
   "ui-to-start": "<path d=\"M6 5.5v13\"/>\n  <path d=\"M18 6.5v11L9.5 12Z\" fill=\"currentColor\"/>",
   "ui-tr-blur": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\" opacity=\".35\"/>\n  <rect x=\"6\" y=\"7.5\" width=\"12\" height=\"9\" rx=\"1.5\" opacity=\".65\"/>\n  <rect x=\"9\" y=\"10\" width=\"6\" height=\"4\" rx=\"1\"/>",
+  "ui-tr-continue": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M3 15c3-2.4 6 2.4 9 0s6-2.4 9 0\"/>\n  <rect x=\"8\" y=\"8.25\" width=\"8\" height=\"3.5\" rx=\"1\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
   "ui-tr-diagonal": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M5 5h16L3 17V7a2 2 0 0 1 2-2Z\" fill=\"currentColor\" fill-opacity=\".25\" stroke=\"none\"/>",
   "ui-tr-dip": "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>\n  <path d=\"M3 12h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z\" fill=\"currentColor\" stroke=\"none\"/>",
   "ui-tr-directed": "<path d=\"m3.5 20.5 9.5-9.5\"/>\n  <path d=\"M16.5 3Q17.4 6.6 21 7.5Q17.4 8.4 16.5 12Q15.6 8.4 12 7.5Q15.6 6.6 16.5 3Z\"/>",
@@ -1146,6 +1147,16 @@ export const ICON_META: Record<string, IconMeta> = {
       "stroke-linejoin": "round"
     }
   },
+  "ui-tr-continue": {
+    "viewBox": "0 0 24 24",
+    "present": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.75",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    }
+  },
   "ui-tr-diagonal": {
     "viewBox": "0 0 24 24",
     "present": {
@@ -1624,5 +1635,6 @@ export const ICON_ALIAS: Record<string, string> = {
   "tr-dip": "ui-tr-dip",
   "tr-radial": "ui-tr-radial",
   "tr-slice": "ui-tr-slice",
-  "tr-diagonal": "ui-tr-diagonal"
+  "tr-diagonal": "ui-tr-diagonal",
+  "tr-continue": "ui-tr-continue"
 };

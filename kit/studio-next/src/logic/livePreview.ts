@@ -93,21 +93,40 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
  * The strongest magnification a target `size` px across can take before the loupe
  * would outgrow its cap. Past this the render drops the strength on its own.
  */
-export function lensZoomCeiling(size: unknown): number {
-  return Math.max(LOUPE.floorZoom, (LOUPE.max - LOUPE.room) / Math.max(24, Number(size) || 0));
+export function lensZoomCeiling(size: unknown, frame?: LoupeFrame | null): number {
+  return Math.max(LOUPE.floorZoom, (loupeBounds(frame).max - LOUPE.room) / Math.max(24, Number(size) || 0));
+}
+
+/** The frame a loupe is drawn on, in the units its target is measured in. */
+export interface LoupeFrame {
+  width: number;
+  height: number;
+}
+
+const even = (v: number): number => Math.round(v / 2) * 2;
+
+/**
+ * Smallest and largest loupe for a frame: a phone-sized take gets a loupe in proportion
+ * (three quarters of its short side at most), a full HD reel keeps 300–540 px.
+ */
+export function loupeBounds(frame?: LoupeFrame | null): { min: number; max: number } {
+  if (!frame || !(frame.width > 0 && frame.height > 0)) return { min: LOUPE.min, max: LOUPE.max };
+  const max = Math.min(LOUPE.max, even(Math.min(frame.width, frame.height) * 0.75));
+  return { min: Math.min(LOUPE.min, max), max };
 }
 
 /**
  * Loupe for a target `size` px across at a requested `zoom` (undefined = auto).
  * Mirrors lib/lens.mjs so the stage and the Produce master agree on what they draw.
  */
-export function lensLoupe(size: unknown, zoom?: number | null): LensLoupe {
+export function lensLoupe(size: unknown, zoom?: number | null, frame?: LoupeFrame | null): LensLoupe {
   const s = Math.max(24, Number(size) || 0);
+  const { min, max } = loupeBounds(frame);
   let z = zoom ?? clamp(260 / s, 1.5, 2.4);
   const raw = s * z + LOUPE.room;
-  if (raw > LOUPE.max) z = lensZoomCeiling(s);
-  const diameter = Math.round(clamp(raw, LOUPE.min, LOUPE.max) / 2) * 2;
-  return { zoom: z, diameter, S: diameter + 2 * LOUPE.pad, capped: raw > LOUPE.max };
+  if (raw > max) z = lensZoomCeiling(s, frame);
+  const diameter = even(clamp(raw, min, max));
+  return { zoom: z, diameter, S: diameter + 2 * LOUPE.pad, capped: raw > max };
 }
 
 /** Hit target for on-frame magnify and zoom controls. */

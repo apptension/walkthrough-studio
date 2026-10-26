@@ -176,6 +176,7 @@ const ALIAS = {
   'tr-radial': 'ui-tr-radial',
   'tr-slice': 'ui-tr-slice',
   'tr-diagonal': 'ui-tr-diagonal',
+  'tr-continue': 'ui-tr-continue',
 };
 
 export function resolveIconId(name) {

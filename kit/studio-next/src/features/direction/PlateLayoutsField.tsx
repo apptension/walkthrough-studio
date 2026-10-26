@@ -1,12 +1,11 @@
-import { Fragment } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { LayoutOption } from '@/api/types';
 import { useDesk } from '@/desk/store';
-import { HelpTip } from '@/ui/HelpTip';
+import { layoutWire } from '@/ui/look/previews';
+import { LookTile, PaneSection, PaneSub, TileGrid } from '@/ui/pane';
 
 import { pickPlateLayout } from './actions';
-import { radioAria } from './model';
 
 const LAYOUTS_HELP =
   'The composition of the opening and closing plates. Same copy, logo and colours — a different staging. Proof plates pick their own layout in the plate inspector.';
@@ -15,37 +14,30 @@ const EMPTY: LayoutOption[] = [];
 
 function LayoutRow({ plateId, label, options, current }: { plateId: 'open' | 'close'; label: string; options: LayoutOption[]; current: string }) {
   return (
-    <div className="layout-group">
-      <span className="layout-label">{label}</span>
-      <div className="energy-row templates" id={`${plateId}LayoutGrid`} role="radiogroup" aria-label={`${label} layout`}>
-        {options.map((o, i) => {
+    <PaneSub label={label}>
+      <TileGrid label={`${label} layout`} id={`${plateId}LayoutGrid`}>
+        {options.map((o) => {
           const on = o.id === current;
           return (
-            <Fragment key={o.id}>
-              {i > 0 ? ' ' : null}
-              <button
-                type="button"
-                className={on ? 'energy active' : 'energy'}
-                data-plate-layout={o.id}
-                role="radio"
-                aria-checked={radioAria(on, true)}
-                title={o.hint}
-                onClick={() => {
-                  if (!on) void pickPlateLayout(plateId, o.id);
-                }}
-              >
-                <strong>{o.label}</strong>
-                <em>{o.hint}</em>
-              </button>
-            </Fragment>
+            <LookTile
+              key={o.id}
+              preview={layoutWire(plateId, o.id)}
+              label={o.label}
+              hint={o.hint}
+              on={on}
+              data={{ 'data-plate-layout': o.id }}
+              onSelect={() => {
+                if (!on) void pickPlateLayout(plateId, o.id);
+              }}
+            />
           );
         })}
-      </div>
-    </div>
+      </TileGrid>
+    </PaneSub>
   );
 }
 
-/** Opener / closer composition pickers in Direction → Motion & transitions. */
+/** Opener / closer composition pickers. */
 export function PlateLayoutsField() {
   const { open, close, openOptions, closeOptions } = useDesk(
     useShallow((s) => ({
@@ -57,13 +49,9 @@ export function PlateLayoutsField() {
   );
   if (!openOptions.length && !closeOptions.length) return null;
   return (
-    <div className="field layouts-field">
-      <span data-help={LAYOUTS_HELP} className="has-help">
-        Plate layouts
-        <HelpTip text={LAYOUTS_HELP} label="Plate layouts" />
-      </span>
+    <PaneSection icon="plate" title="Plate layouts" help={LAYOUTS_HELP} className="layouts-field">
       {openOptions.length ? <LayoutRow plateId="open" label="Opener" options={openOptions} current={open} /> : null}
       {closeOptions.length ? <LayoutRow plateId="close" label="Closer" options={closeOptions} current={close} /> : null}
-    </div>
+    </PaneSection>
   );
 }

@@ -1,9 +1,12 @@
+import { clipPlayback } from '@/logic/plateTiming';
+
 import { withMusic, withVoice } from './audio';
+import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, select, selectFx, setSelection, showInspectorTab } from './edits';
 import { renderInspector } from './inspector';
 import { setScale } from './lifecycle';
-import { curClip, edToRec, lensByKey, recToEd, shotKey, visualIndexAt, visualSpan } from './seq';
+import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
 import { ensureLiveCards, requestPlate } from './stage';
 import { audioDesk, deckEdit, ed, live, type Drag, type FxItem } from './state';
 import { enterLiveCard, paintTextMode, setCoachHidden } from './text';
@@ -45,10 +48,21 @@ export function fxItem(target: HTMLElement): FxItem | null {
       : null;
   }
   if (target.dataset['shot'] != null) {
-    const shot = (ed.deck?.zoomShots || []).find((s) => shotKey(s) === target.dataset['shot']);
+    const shot = shotByKey(target.dataset['shot']);
     return shot ? { kind: 'zoom', key: shotKey(shot), shot, from: shot.start, to: shot.end, min: ranges?.minZoomSec ?? 0, auto: shot.source === 'auto' } : null;
   }
   return null;
+}
+
+/**
+ * The clip an effect pill belongs to at `t`: the recording under the pointer, or — for a
+ * magnifier or zoom placed on a plate — the copy of that plate under the pointer.
+ */
+export function fxOwnerAt(t: number, item: FxItem): Clip | null {
+  const plate = item.lens?.clip ?? item.shot?.clip;
+  if (!plate) return liveClipAtEd(t);
+  const c = ed.seq[visualIndexAt(t)];
+  return c?.kind === 'plate' && fxClipId(c) === plate ? c : null;
 }
 
 const targetOf = (e: Event): HTMLElement => e.target as HTMLElement;
@@ -164,7 +178,7 @@ export function wireTimeline(signal: AbortSignal): void {
       }
       if (fxEl) {
         const item = fxItem(fxEl);
-        const c = liveClipAtEd(t);
+        const c = item && fxOwnerAt(t, item);
         if (!item || !c) return;
         const mode = target.classList.contains('l') ? 'l' : target.classList.contains('r') ? 'r' : 'move';
         ed.drag = { type: 'fx', item, clip: c, mode, x0: e.clientX, t0: t, from: item.from, to: item.to, el: fxEl, moved: false };
@@ -184,6 +198,15 @@ export function wireTimeline(signal: AbortSignal): void {
         ed.sel = null;
         renderInspector();
         flashHint('Add voice at the playhead');
+        return;
+      }
+      const edgeEl = target.closest<HTMLElement>('[data-clip-edge]');
+      const edgeClipEl = edgeEl?.closest<HTMLElement>('.etl-clip');
+      const edgeClip = edgeClipEl ? ed.seq[Number(edgeClipEl.dataset['i'])] : null;
+      if (edgeEl && edgeClip) {
+        if (ed.playing) pause();
+        setSelection({ type: 'clip', id: edgeClip.id });
+        ed.drag = startClipEdge(edgeClip, edgeEl.dataset['clipEdge'] === 'l' ? 'l' : 'r', edgeClipEl ?? null, e.clientX, e.altKey);
         return;
       }
       const clipEl = target.closest<HTMLElement>('.etl-clip');
@@ -208,6 +231,8 @@ export function wireTimeline(signal: AbortSignal): void {
         } else if (g.moved) seek(t);
       } else if (g.type === 'clip') {
         dragClip(g, e.clientX - g.x0);
+      } else if (g.type === 'clipEdge') {
+        if (g.moved) dragClipEdge(g, e.clientX - g.x0);
       } else if (g.type === 'range' && g.moved && g.clip) {
         const b = edToRec(g.clip, clamp(t, g.clip.at, g.clip.at + g.clip.dur));
         const a = g.a ?? 0;
@@ -238,6 +263,11 @@ export function wireTimeline(signal: AbortSignal): void {
       }
     } else if (g.type === 'clip') {
       await dropClip(g);
+    } else if (g.type === 'clipEdge') {
+      if (!g.moved) {
+        g.el?.classList.remove('is-trimming');
+        if (g.clip) select({ type: 'clip', id: g.clip.id });
+      } else if (!(await commitClipEdge(g))) renderTimeline();
     } else if (g.type === 'range') {
       const s = ed.sel;
       const span = s?.type === 'range' ? (s.to ?? 0) - (s.from ?? 0) : 0;
@@ -299,7 +329,9 @@ export function wireTimeline(signal: AbortSignal): void {
       if (fxEl) {
         const item = fxItem(fxEl);
         const owner = liveClipAtEd(edFromEvent(e)) || curClip();
-        if (item && owner) seek(recToEd(owner, item.from + 0.02));
+        if (!item || !owner) return;
+        // A plate mark's `from` is in the plate's own clock, so it maps through its playback.
+        seek(owner.kind === 'plate' ? owner.at + clipPlayback(owner).toOutput(item.from + 0.02) : recToEd(owner, item.from + 0.02));
       }
     },
     { signal },
@@ -307,7 +339,7 @@ export function wireTimeline(signal: AbortSignal): void {
   $('etlScroll')?.addEventListener(
     'wheel',
     (e) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
+      if (!ed.active || !(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
       const scroll = $('etlScroll')!;
       const at = edFromEvent(e);
@@ -650,6 +682,7 @@ export function dragFx(g: Drag, t: number): void {
   const c = g.clip;
   const item = g.item;
   if (!c || !item) return;
+  if (c.kind === 'plate') return dragPlateFx(g, t, c, item);
   const dt = t - (g.t0 ?? 0);
   const gFrom = g.from ?? 0;
   const gTo = g.to ?? 0;
@@ -682,6 +715,40 @@ export function dragFx(g: Drag, t: number): void {
   g.newTo = r3(to);
   const a = recToEd(c, Math.max(from, lo));
   const b = recToEd(c, Math.min(to, hi));
+  if (g.el) {
+    g.el.style.left = `${a * ed.pps}px`;
+    g.el.style.width = `${Math.max(6, (b - a) * ed.pps)}px`;
+    g.el.classList.add('is-drag');
+  }
+  seek(g.mode === 'r' ? b : a);
+}
+
+/**
+ * The same drag on a plate. A plate mark is written in the plate's own clock, so the pill moves
+ * through the plate's playback rather than the recording's speed map.
+ */
+function dragPlateFx(g: Drag, t: number, c: Clip, item: FxItem): void {
+  const pb = clipPlayback(c);
+  const toEd = (src: number) => c.at + pb.toOutput(src);
+  const toSrc = (x: number) => pb.toSource(Math.max(0, x - c.at));
+  const dt = t - (g.t0 ?? 0);
+  const gFrom = g.from ?? 0;
+  const gTo = g.to ?? 0;
+  const len = gTo - gFrom;
+  let from = gFrom;
+  let to = gTo;
+  if (g.mode === 'move') {
+    from = clamp(toSrc(toEd(gFrom) + dt), 0, Math.max(0, pb.baseDur - len));
+    to = from + len;
+  } else if (g.mode === 'l') {
+    from = clamp(toSrc(toEd(gFrom) + dt), 0, gTo - item.min);
+  } else {
+    to = clamp(toSrc(toEd(gTo) + dt), gFrom + item.min, pb.baseDur);
+  }
+  g.newFrom = r3(from);
+  g.newTo = r3(to);
+  const a = toEd(from);
+  const b = toEd(to);
   if (g.el) {
     g.el.style.left = `${a * ed.pps}px`;
     g.el.style.width = `${Math.max(6, (b - a) * ed.pps)}px`;

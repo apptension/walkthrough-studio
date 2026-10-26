@@ -189,6 +189,9 @@ export function paintHead(follow = false): void {
   if (head) head.style.transform = `translateX(${x}px)`;
   const clock = $('edClock');
   if (clock) clock.innerHTML = `${fmtT(ed.t)} <span class="t-sep">/</span> ${fmtT(ed.total)}`;
+  // The slide inspector's filmstrip carries the same playhead.
+  const strip = document.querySelector<HTMLElement>('.sl-play');
+  if (strip) strip.style.left = `${((Math.min(ed.t, ed.total) / Math.max(0.01, ed.total)) * 100).toFixed(2)}%`;
   const scroll = $('etlScroll');
   if (scroll && head) {
     const left = scroll.scrollLeft;

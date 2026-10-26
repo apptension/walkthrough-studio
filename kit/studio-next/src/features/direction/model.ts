@@ -1,10 +1,15 @@
 import type { Direction, VideoSummary } from '@/api/types';
 
-/** Static markup marks only the default button until the first render marks them all. */
-export function radioAria(on: boolean, marked: boolean): 'true' | 'false' | undefined {
-  if (on) return 'true';
-  return marked ? 'false' : undefined;
-}
+const DEFAULT_ROLES = [
+  { id: 'ink', label: 'Ink' },
+  { id: 'surface', label: 'Surface' },
+  { id: 'gold', label: 'Accent' },
+  { id: 'amber', label: 'Secondary' },
+  { id: 'teal', label: 'Support' },
+];
+
+/** The five colour roles, in the order every swatch row draws them. */
+export const rolesOf = (direction: Direction | null) => direction?.roles || DEFAULT_ROLES;
 
 /** `#paceNote`: how long narration held the last take. `null` keeps the note hidden. */
 export function paceNote(pace: Direction['pace'], live: VideoSummary['livePace']): { text: string; tone: string } | null {

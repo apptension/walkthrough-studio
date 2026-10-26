@@ -787,10 +787,15 @@ export async function recordLive(
         : { url: startUrl, attempts: candidates };
     if (opened.url !== startUrl)
       console.log(`» open · ${startUrl} → ${opened.url}`);
+    const waitUntil = config.record.waitUntil || "domcontentloaded";
+    const gotoTimeout = config.record.gotoTimeout ?? 45_000;
     await page.goto(opened.url, {
-      waitUntil: config.record.waitUntil || "networkidle",
-      timeout: 15000,
+      waitUntil,
+      timeout: gotoTimeout,
     });
+    if (waitUntil !== "networkidle") {
+      await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+    }
     await page.evaluate(
       (family) => document.fonts.load(`600 20px "${family}"`),
       brand.font.family,

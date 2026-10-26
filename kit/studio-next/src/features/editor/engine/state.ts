@@ -123,9 +123,19 @@ export interface EdState {
   aimZoom: number | null;
   lensAim: LensAim | null;
   loupeBuf: HTMLCanvasElement | null;
+  /** Off-DOM video of the plate on stage, so the loupe has real pixels to magnify. */
+  plateLoupe: HTMLVideoElement | null;
   flipFrom: Map<string | undefined, number> | null;
   settleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The timeline is mounted outside the Editor: it draws the cut as a compact overview of Program. */
+  overview: boolean;
+  /** Where the Editor lands when a block on the overview opened it. */
+  focus: { t: number; sel: Selection | null } | null;
+  /** The slide inspector tab last opened, kept across selections. */
+  insTab: InspectorTab;
 }
+
+export type InspectorTab = 'design' | 'timing' | 'layers' | 'camera';
 
 /** `ed.drag` — one pointer gesture on the timeline. */
 export interface Drag {
@@ -243,8 +253,12 @@ export function initialEd(): EdState {
     aimZoom: null,
     lensAim: null,
     loupeBuf: null,
+    plateLoupe: null,
     flipFrom: null,
     settleTimer: undefined,
+    overview: false,
+    focus: null,
+    insTab: 'design',
   };
 }
 
@@ -280,6 +294,7 @@ export const deckEdit = (): DeckEdit =>
     omit: [],
     repeats: [],
     trims: [],
+    plateTimes: [],
     cuts: [],
   };
 

@@ -83,16 +83,29 @@ export interface SizeForm {
   mobile: boolean;
 }
 
+export type DirectionTabId = 'brand' | 'motion' | 'camera' | 'recording';
+export const DIRECTION_TAB_IDS: readonly DirectionTabId[] = ['brand', 'motion', 'camera', 'recording'];
+const TAB_KEY = 'ws.direction.tab';
+
+function storedTab(): DirectionTabId {
+  try {
+    const v = globalThis.localStorage?.getItem(TAB_KEY);
+    return DIRECTION_TAB_IDS.find((t) => t === v) ?? 'brand';
+  } catch {
+    return 'brand';
+  }
+}
+
 export interface DirectionView {
+  /** The open tab; remembered across sessions. */
+  tab: DirectionTabId;
+
   /* —— #energyGrid —— */
   energy: string;
-  /** Static markup carries `aria-checked` on the default button only, until the first `setEnergy`. */
-  energyMarked: boolean;
 
   /* —— #atmosphereGrid + sliders + effects —— */
   atmospheres: AtmosphereChoice[];
   atmosphere: string;
-  atmosphereMarked: boolean;
   slidersHidden: boolean;
   opacity: string;
   opacityOut: string;
@@ -100,19 +113,18 @@ export interface DirectionView {
   speedOut: string;
   titleReveal: string;
   reveals: AtmosphereChoice[];
-  /** Static markup marks the default reveal only, until the first `renderEffects`. */
-  revealMarked: boolean;
   depth: string;
   sheen: boolean;
 
   /* —— #transitionGrid —— */
   transition: string;
-  transitionMarked: boolean;
   duration: string;
   durationOut: string;
 
   /* —— live cards —— */
   overlay: OverlayDraft;
+  /** The look as last saved; the draft differs from it until Apply. `null` before a video. */
+  overlaySaved: OverlayDraft | null;
   /** Options `fillOverlayAtmospheres` wrote; `null` keeps the HTML's own options. */
   overlayOptions: Record<OverlaySelect, SelectChoice[] | null>;
 
@@ -130,11 +142,10 @@ export interface DirectionView {
 
 export function initialDirectionView(): DirectionView {
   return {
+    tab: storedTab(),
     energy: 'clear',
-    energyMarked: false,
     atmospheres: STATIC_ATMOSPHERES,
     atmosphere: 'aurora',
-    atmosphereMarked: false,
     slidersHidden: false,
     opacity: '0.6',
     opacityOut: '0.60',
@@ -142,11 +153,9 @@ export function initialDirectionView(): DirectionView {
     speedOut: '1.0×',
     titleReveal: 'rise',
     reveals: STATIC_REVEALS,
-    revealMarked: false,
     depth: 'flat',
     sheen: true,
     transition: 'directed',
-    transitionMarked: false,
     duration: '0.6',
     durationOut: '0.6s',
     overlay: {
@@ -158,6 +167,7 @@ export function initialDirectionView(): DirectionView {
       seat: 'bottom-center',
       align: 'left',
     },
+    overlaySaved: null,
     overlayOptions: { chapterAtm: null, captionAtm: null, chapterBackdrop: null, captionBackdrop: null },
     direction: null,
     toggles: { keys: false, glide: false, hand: false, idle: false, loop: false },
@@ -177,14 +187,28 @@ export const directionView = {
   reset: () => useDirectionView.setState(initialDirectionView(), true),
 };
 
-const focused = (id: string) => typeof document !== 'undefined' && document.activeElement?.id === id;
+export function setDirectionTab(tab: DirectionTabId): void {
+  directionView.set({ tab });
+  try {
+    globalThis.localStorage?.setItem(TAB_KEY, tab);
+  } catch {
+    /* private mode: the tab just is not remembered */
+  }
+}
+
+/** The live-card draft has edits Apply has not saved. */
+export const overlayDirty = (s: Pick<DirectionView, 'overlay' | 'overlaySaved'>): boolean =>
+  s.overlaySaved != null && (Object.keys(s.overlay) as Array<keyof OverlayDraft>).some((k) => s.overlay[k] !== s.overlaySaved?.[k]);
+
+/** Focus is on the control or inside its group (a tile in a radio group). */
+const focused = (id: string) => typeof document !== 'undefined' && document.activeElement?.closest(`#${id}`) != null;
 
 export function setEnergy(energy: string): void {
-  directionView.set({ energy, energyMarked: true });
+  directionView.set({ energy });
 }
 
 export function setAtmosphere(id: string): void {
-  directionView.set({ atmosphere: id, atmosphereMarked: true, slidersHidden: id === 'none' });
+  directionView.set({ atmosphere: id, slidersHidden: id === 'none' });
 }
 
 /** `renderAtmosphereGrid`: one button per engine atmosphere, labelled `Name · hint`. */
@@ -194,7 +218,6 @@ export function renderAtmosphereGrid(activeId: string): void {
   if (!ids?.length) return;
   const labels = opts?.atmosphereLabels || {};
   directionView.set({
-    atmosphereMarked: true,
     atmosphere: activeId,
     atmospheres: ids.map((atm) => {
       const full = labels[atm] || atm;
@@ -226,7 +249,6 @@ export function renderRevealGrid(activeId: string): void {
   if (!opts || !ids?.length) return;
   const labels = opts.titleRevealLabels || {};
   directionView.set({
-    revealMarked: true,
     titleReveal: activeId,
     reveals: ids.map((id) => splitLabel(labels[id] || id, id)),
   });
@@ -258,7 +280,6 @@ export function renderTransitions(transitions: Pick<Transitions, 'style' | 'dura
   if (!transitions) return;
   directionView.set({
     transition: transitions.style,
-    transitionMarked: true,
     ...(focused('transitionDuration') ? {} : { duration: String(transitions.duration) }),
     durationOut: `${Number(transitions.duration).toFixed(1)}s`,
   });
@@ -268,7 +289,10 @@ type Choice = string | { id: string; label?: string };
 
 /** `fillOverlayAtmospheres(id, choices, value)`: replace the options and keep the value when it survives. */
 function fillOverlay(key: OverlaySelect, choices: Choice[] | undefined, value: string, view: DirectionView, patch: Partial<DirectionView>) {
-  if (!choices?.length) return;
+  if (!choices?.length) {
+    patch.overlay = { ...(patch.overlay ?? view.overlay), [key]: value || view.overlay[key] };
+    return;
+  }
   const cur = value || view.overlay[key];
   const options = choices.map((c) =>
     typeof c === 'string' ? { id: c, label: c } : { id: c.id, label: c.label || c.id },
@@ -297,11 +321,18 @@ export function renderOverlays(overlays: Overlays | null | undefined): void {
       .map((c) => (c.id === 'auto' ? { ...c, label: `Auto · ${paperName}` } : c));
     fillOverlay(key, value.startsWith('#') ? [...choices, { id: value, label: `Custom ${value}` }] : choices, value, view, patch);
   }
-  const overlay = { ...(patch.overlay ?? view.overlay) };
-  if (!focused('overlayPreset')) overlay.preset = look.preset || 'plateMatch';
-  if (!focused('overlayCaptionSeat')) overlay.seat = str(look.caption?.seat) || 'bottom-center';
-  if (!focused('overlayCaptionAlign')) overlay.align = str(look.caption?.align) || 'left';
+  const saved: OverlayDraft = {
+    ...(patch.overlay ?? view.overlay),
+    preset: look.preset || 'plateMatch',
+    seat: str(look.caption?.seat) || 'bottom-center',
+    align: str(look.caption?.align) || 'left',
+  };
+  const overlay = { ...saved };
+  if (focused('overlayPreset')) overlay.preset = view.overlay.preset;
+  if (focused('overlayCaptionSeat')) overlay.seat = view.overlay.seat;
+  if (focused('overlayCaptionAlign')) overlay.align = view.overlay.align;
   patch.overlay = overlay;
+  patch.overlaySaved = saved;
   directionView.set(patch);
 }
 

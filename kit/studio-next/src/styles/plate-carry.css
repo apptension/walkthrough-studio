@@ -1,0 +1,139 @@
+/* —— Background continuity: a run of slides shares one backdrop on the stage —— */
+.fhd-canvas .plate-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.fhd-canvas .plate-backdrop[hidden] {
+  display: none;
+}
+.fhd-canvas #plateFrame {
+  position: relative;
+  z-index: 1;
+}
+/* The slide paints only its copy over the shared backdrop. */
+.fhd-canvas.is-carry #plateFrame {
+  background: transparent !important;
+}
+
+/* —— Inspector: does this join carry its background? —— */
+.tr-carry {
+  --carry-tone: var(--etl-plate, #f5a623);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 2px 0 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--carry-tone) 32%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--carry-tone) 14%, transparent), transparent 70%),
+    color-mix(in srgb, var(--panel, #111) 80%, transparent);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text, #e8e8e8);
+  animation: tr-carry-in 0.42s var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.tr-carry b {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.tr-carry em {
+  display: block;
+  font-style: normal;
+  color: var(--muted, #9aa0a6);
+}
+.tr-carry svg {
+  flex: none;
+  width: 30px;
+  height: 20px;
+  overflow: visible;
+}
+.tr-carry .cw-frame {
+  fill: none;
+  stroke: color-mix(in srgb, var(--carry-tone) 55%, transparent);
+  stroke-width: 1.25;
+}
+.tr-carry .cw-wave {
+  fill: none;
+  stroke: var(--carry-tone);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 5 3;
+  animation: tr-carry-flow 1.6s linear infinite;
+}
+.tr-carry .cw-card {
+  fill: color-mix(in srgb, var(--text, #fff) 70%, transparent);
+  animation: tr-carry-swap 3.2s var(--ease-in-out, cubic-bezier(0.65, 0, 0.35, 1)) infinite;
+  transform-origin: 15px 7px;
+}
+.tr-carry.is-off {
+  --carry-tone: var(--muted, #8a8f98);
+  background: color-mix(in srgb, var(--panel, #111) 70%, transparent);
+  border-style: dashed;
+}
+.tr-carry.is-off .cw-wave {
+  stroke-dasharray: 9 4;
+  animation: none;
+}
+.tr-carry.is-off .cw-wave + .cw-wave {
+  opacity: 0.5;
+}
+.tr-carry.is-off .cw-card {
+  animation: none;
+}
+.t-grid [data-carry-off],
+.lk-trs .lk-tile[data-carry-off] {
+  opacity: 0.5;
+}
+.t-grid [data-carry-off]:hover,
+.lk-trs .lk-tile[data-carry-off]:hover {
+  opacity: 0.8;
+}
+
+@keyframes tr-carry-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tr-carry-flow {
+  to { stroke-dashoffset: -16; }
+}
+@keyframes tr-carry-swap {
+  0%, 38% { opacity: 1; transform: none; }
+  48% { opacity: 0; transform: translateY(-2px) scale(0.92); }
+  52% { opacity: 0; transform: translateY(2px) scale(0.92); }
+  62%, 100% { opacity: 1; transform: none; }
+}
+
+/* —— Transition tile: the backdrop stays, only the copy changes —— */
+.lk-tr.tr-continue {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--etl-plate) 55%, #10141a), #10141a);
+}
+.lk-tr.tr-continue::before {
+  content: '';
+  position: absolute;
+  inset: -20% -40%;
+  background: radial-gradient(40% 60% at 30% 60%, color-mix(in srgb, var(--etl-plate) 55%, transparent), transparent 70%);
+  animation: tr-continue-drift 4.8s ease-in-out infinite alternate;
+}
+.lk-tr.tr-continue .pa,
+.lk-tr.tr-continue .pb {
+  background: none;
+  clip-path: none;
+  color: rgba(255, 255, 255, 0.85);
+}
+.tr-continue .pa { animation-name: tr-continue-a; }
+.tr-continue .pb { animation-name: tr-continue-b; }
+@keyframes tr-continue-a { 0%, 22% { opacity: 1; transform: none; } 40%, 100% { opacity: 0; transform: translateY(-4px); } }
+@keyframes tr-continue-b { 0%, 42% { opacity: 0; transform: translateY(4px); } 62%, 100% { opacity: 1; transform: none; } }
+@keyframes tr-continue-drift { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tr-carry,
+  .tr-carry .cw-wave,
+  .tr-carry .cw-card,
+  .lk-tr.tr-continue::before {
+    animation: none;
+  }
+}

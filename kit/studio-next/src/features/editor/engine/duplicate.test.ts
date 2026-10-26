@@ -138,6 +138,21 @@ describe('duplicateSelected', () => {
     expect(posts[0]).toMatchObject({ repeats: ['features+2'], order: ['open', 'features', 'features+2', 'live-0.00', 'live-20.00', 'close'] });
   });
 
+  it('a duplicated plate keeps its retiming, and loses it with the copy', async () => {
+    ed.deck = baseDeck({ plateTimes: [{ id: 'features', hold: 1.5, rate: 1.25 }] });
+    buildSeq();
+    const posts = captureEdits();
+    ed.sel = { type: 'clip', id: 'features' };
+    await duplicateSelected();
+    expect(posts[0]).toMatchObject({ repeats: ['features+2'], plateTimes: [{ id: 'features', hold: 1.5, rate: 1.25 }, { id: 'features+2', hold: 1.5, rate: 1.25 }] });
+
+    ed.deck = baseDeck({ repeats: ['features+2'], plateTimes: [{ id: 'features', hold: 1.5 }, { id: 'features+2', hold: 1.5 }] });
+    ed.deck.scenes!.splice(3, 0, { id: 'features+2', kind: 'plate', title: 'Features', plateId: 'features', type: 'features', dur: 5, repeatOf: 'features' });
+    buildSeq();
+    await omitClip('features+2');
+    expect(posts[1]).toMatchObject({ repeats: [], plateTimes: [{ id: 'features', hold: 1.5 }] });
+  });
+
   it('shows a card again after the original with the same copy', async () => {
     const posts = captureEdits();
     ed.sel = { type: 'card', key: 'caption:4.000:Open the thread', cardId: 'overlay:caption:1' };

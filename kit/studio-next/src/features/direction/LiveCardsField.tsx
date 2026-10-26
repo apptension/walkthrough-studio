@@ -1,12 +1,14 @@
-import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { useDesk } from '@/desk/store';
 import { useBusy } from '@/features/tools-panel/busy';
-import { HelpTip } from '@/ui/HelpTip';
 import { cn } from '@/lib/cn';
+import { Icon } from '@/ui/icons';
+import { cardPresetPreview, seatPreview } from '@/ui/look/previews';
+import { LookTile, PaneSection, PaneSub, SegButtons, SelectRow, TileGrid } from '@/ui/pane';
 
 import { applyOverlaysLook } from './actions';
-import { directionView, useDirectionView, type OverlayDraft, type OverlaySelect, type SelectChoice } from './view';
+import { directionView, overlayDirty, useDirectionView, type OverlayDraft, type OverlaySelect, type SelectChoice } from './view';
 
 const LIVE_CARDS_HELP =
   'Chapter cards and caption panels use kit templates (like plates). Pick a preset, then refine caption seat and atmosphere. Changes rebuild live HTML for Program preview and the next recording.';
@@ -23,131 +25,133 @@ const BACKDROPS: SelectChoice[] = [
   { id: 'auto', label: 'Auto' },
   { id: 'none', label: 'None' },
 ];
+const PRESETS = [
+  { id: 'plateMatch', label: 'Match plates', hint: 'Cards wear the plate look' },
+  { id: 'editorial', label: 'Editorial', hint: 'Quiet type on a paper panel' },
+  { id: 'punchy', label: 'Punchy', hint: 'Bold type, loud accent' },
+  { id: 'minimal', label: 'Minimal', hint: 'Just the words' },
+  { id: 'spotlight', label: 'Spotlight', hint: 'A lit panel over a dimmed take' },
+];
+const SEATS = [
+  { id: 'bottom-left', label: 'Left' },
+  { id: 'bottom-center', label: 'Center' },
+  { id: 'bottom-right', label: 'Right' },
+];
+const ALIGNS = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+];
 
 function edit(key: keyof OverlayDraft, value: string) {
   directionView.set((s) => ({ overlay: { ...s.overlay, [key]: value } }));
 }
 
-function Options({ choices }: { choices: SelectChoice[] }) {
+function OverlaySelectField({ id, label, aria, field, fallback, help }: { id: string; label: string; aria: string; field: OverlaySelect; fallback: SelectChoice[]; help?: string }) {
+  const value = useDirectionView((s) => s.overlay[field]);
+  const filled = useDirectionView((s) => s.overlayOptions[field]);
   return (
-    <>
-      {choices.map((c) => (
+    <SelectRow id={id} label={label} aria={aria} value={value} onChange={(v) => edit(field, v)} {...(help ? { help } : {})}>
+      {(filled ?? fallback).map((c) => (
         <option key={c.id} value={c.id}>
           {c.label}
         </option>
       ))}
-    </>
+    </SelectRow>
   );
 }
 
-interface OverlaySelectProps {
-  id: string;
-  label: string;
-  aria: string;
-  field: OverlaySelect;
-  fallback: SelectChoice[];
-  /** The HTML's own options carry this (a `[data-help]` the help decorator attached inside). */
-  help?: string;
-}
-
-function OverlaySelectField({ id, label, aria, field, fallback, help }: OverlaySelectProps) {
-  const value = useDirectionView((s) => s.overlay[field]);
-  const filled = useDirectionView((s) => s.overlayOptions[field]);
-  let body: ReactNode = <Options choices={filled ?? fallback} />;
-  if (!filled && help) {
-    body = (
-      <>
-        <Options choices={fallback} />
-        <HelpTip text={help} label="Auto None" />
-      </>
-    );
-  }
-  return (
-    <label className="effects-select">
-      <span>{label}</span>{' '}
-      <select
-        id={id}
-        aria-label={aria}
-        value={value}
-        onChange={(e) => edit(field, e.target.value)}
-        {...(help ? { 'data-help': help, className: 'has-help' } : {})}
-      >
-        {body}
-      </select>
-    </label>
-  );
-}
-
-export function LiveCardsField() {
-  const { preset, seat, align } = useDirectionView(
-    useShallow((s) => ({ preset: s.overlay.preset, seat: s.overlay.seat, align: s.overlay.align })),
-  );
+/** Apply saves the draft and rebuilds the cards; edits waiting on it are called out. */
+function ApplyBar() {
   const busy = useBusy('btnOverlaysApply');
+  const dirty = useDirectionView((s) => overlayDirty(s));
+  const revert = () => directionView.set((s) => (s.overlaySaved ? { overlay: { ...s.overlaySaved } } : {}));
   return (
-    <div className="field live-cards-field">
-      <span data-help={LIVE_CARDS_HELP} className="has-help">
-        Live cards
-        <HelpTip text={LIVE_CARDS_HELP} label="Live cards" />
-      </span>{' '}
-      <label className="effects-select">
-        <span>Preset</span>{' '}
-        <select id="overlayPreset" aria-label="Live card preset" value={preset} onChange={(e) => edit('preset', e.target.value)}>
-          <option value="plateMatch">Match plates</option>
-          <option value="editorial">Editorial</option>
-          <option value="punchy">Punchy</option>
-          <option value="minimal">Minimal</option>
-          <option value="spotlight">Spotlight</option>
-        </select>
-      </label>
-      <div className="effects-row" style={{ marginTop: '10px' }}>
-        <OverlaySelectField id="overlayChapterAtm" label="Chapter atm." aria="Chapter atmosphere" field="chapterAtm" fallback={ATMOSPHERES} />{' '}
-        <OverlaySelectField id="overlayCaptionAtm" label="Caption atm." aria="Caption atmosphere" field="captionAtm" fallback={ATMOSPHERES} />
-      </div>
-      <div className="effects-row" style={{ marginTop: '8px' }}>
-        <OverlaySelectField
-          id="overlayChapterBackdrop"
-          label="Chapter backdrop"
-          aria="Chapter backdrop colour behind the atmosphere"
-          field="chapterBackdrop"
-          fallback={BACKDROPS}
-          help={BACKDROP_HELP}
-        />{' '}
-        <OverlaySelectField
-          id="overlayCaptionBackdrop"
-          label="Caption backdrop"
-          aria="Caption backdrop colour behind the atmosphere"
-          field="captionBackdrop"
-          fallback={BACKDROPS}
-        />
-      </div>
-      <div className="effects-row" style={{ marginTop: '8px' }}>
-        <label className="effects-select">
-          <span>Caption seat</span>{' '}
-          <select id="overlayCaptionSeat" aria-label="Caption seat" value={seat} onChange={(e) => edit('seat', e.target.value)}>
-            <option value="bottom-center">Bottom center</option>
-            <option value="bottom-left">Bottom left</option>
-            <option value="bottom-right">Bottom right</option>
-          </select>
-        </label>{' '}
-        <label className="effects-select">
-          <span>Text</span>{' '}
-          <select id="overlayCaptionAlign" aria-label="Caption text align" value={align} onChange={(e) => edit('align', e.target.value)}>
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-          </select>
-        </label>
-      </div>
+    <div className={cn('dir-apply', dirty && 'is-dirty')} role="group" aria-label="Live card changes">
+      <span className="dir-apply-state" aria-live="polite">
+        <i aria-hidden="true" />
+        {dirty ? 'Unsaved changes' : 'Saved'}
+      </span>
+      {dirty ? (
+        <button type="button" className="ins-link" onClick={revert}>
+          Revert
+        </button>
+      ) : null}
       <button
         type="button"
         id="btnOverlaysApply"
-        className={cn('btn tiny', busy && 'busy')}
+        className={cn('ins-btn', dirty && 'primary', busy && 'busy')}
         disabled={busy}
-        style={{ marginTop: '10px' }}
         title="Save live-card look and rebuild previews"
         onClick={() => void applyOverlaysLook()}
       >
-        Apply live cards
+        <Icon name="check" size={13} />
+        <span>Apply live cards</span>
       </button>
     </div>
+  );
+}
+
+export function LiveCardsSection() {
+  const { preset, seat, align } = useDirectionView(useShallow((s) => ({ preset: s.overlay.preset, seat: s.overlay.seat, align: s.overlay.align })));
+  const catalog = useDesk((s) => s.video?.overlays?.catalog);
+  const presets = PRESETS.map((p) => ({ ...p, ...catalog?.presets?.find((c) => c.id === p.id) }));
+  const seats = catalog?.seats?.length ? SEATS.filter((s) => catalog.seats.includes(s.id)) : SEATS;
+  return (
+    <PaneSection icon="captions" title="Live cards" help={LIVE_CARDS_HELP} className="live-cards-field">
+      <PaneSub label="Preset">
+        <TileGrid label="Live card preset" id="overlayPreset">
+          {presets.map((p) => (
+            <LookTile
+              key={p.id}
+              preview={cardPresetPreview(p.id)}
+              label={p.label}
+              hint={`${p.label} — ${p.hint}`}
+              on={p.id === preset}
+              data={{ 'data-preset': p.id }}
+              onSelect={() => edit('preset', p.id)}
+            />
+          ))}
+        </TileGrid>
+      </PaneSub>
+      <PaneSub label="Chapter card">
+        <div className="pane-selects">
+          <OverlaySelectField id="overlayChapterAtm" label="Atmosphere" aria="Chapter atmosphere" field="chapterAtm" fallback={ATMOSPHERES} />
+          <OverlaySelectField
+            id="overlayChapterBackdrop"
+            label="Backdrop"
+            aria="Chapter backdrop colour behind the atmosphere"
+            field="chapterBackdrop"
+            fallback={BACKDROPS}
+            help={BACKDROP_HELP}
+          />
+        </div>
+      </PaneSub>
+      <PaneSub label="Caption" aside={<SegButtons label="Caption text align" id="overlayCaptionAlign" choices={ALIGNS} current={align} onSelect={(v) => edit('align', v)} />}>
+        <TileGrid label="Caption seat" id="overlayCaptionSeat">
+          {seats.map((s) => (
+            <LookTile
+              key={s.id}
+              preview={seatPreview(s.id, align)}
+              label={s.label}
+              hint={`Caption seat — bottom ${s.label.toLowerCase()}`}
+              on={s.id === seat}
+              data={{ 'data-seat': s.id }}
+              onSelect={() => edit('seat', s.id)}
+            />
+          ))}
+        </TileGrid>
+        <div className="pane-selects">
+          <OverlaySelectField id="overlayCaptionAtm" label="Atmosphere" aria="Caption atmosphere" field="captionAtm" fallback={ATMOSPHERES} />
+          <OverlaySelectField
+            id="overlayCaptionBackdrop"
+            label="Backdrop"
+            aria="Caption backdrop colour behind the atmosphere"
+            field="captionBackdrop"
+            fallback={BACKDROPS}
+          />
+        </div>
+      </PaneSub>
+      <ApplyBar />
+    </PaneSection>
   );
 }

@@ -1,21 +1,24 @@
 import { showRightTab } from '@/desk/panels';
 import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
+import { cardMarkDuration } from '@/logic/liveCardStage';
 import { clampZoomCenter } from '@/logic/zoomAim';
 import { neonFxHtml } from '@/ui/neonFx';
+import { clipPlayback, plateClockMs } from '@/logic/plateTiming';
 
 import { paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
+import { openPacePop } from './platePace';
 import { renderInspector } from './inspector';
-import { curClip, edToRec, recToEd, selectedLens } from './seq';
-import { renderFrame } from './stage';
+import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
+import { renderFrame, resolveLiveCard } from './stage';
 import { audioDesk, deckEdit, ed, liveH, liveW, type FxItem } from './state';
 import { paintTextMode } from './text';
-import { paintSelection, paintTools, renderAudioTracks, renderCardTracks, renderClipsTrack, renderFxTracks } from './timeline';
+import { fxSegments, paintSelection, paintTools, renderAudioTracks, renderCardTracks, renderClipsTrack, renderFxTracks } from './timeline';
 import { pause, seek } from './transport';
-import type { Deck, DeckLens, Lens, Selection, ZoomShot } from './types';
+import type { Clip, Deck, DeckLens, Lens, Selection, ZoomShot } from './types';
 import { $, ICONS, clamp, fmtRate, r3 } from './util';
 
 /** Edits (add / adopt / remove), toolbar tools, selection and the status pill from `kit/studio/editor.js`. */
@@ -29,9 +32,47 @@ export async function addRamp(from: number, to: number, rate: number): Promise<v
   }
 }
 
-export async function addZoomAt(t: number, dur = 3.5, zoom?: number): Promise<void> {
-  const c = ed.seq.find((x) => x.kind === 'live' && t >= x.recFrom && t <= x.recTo) || curClip();
-  if (!c || c.kind !== 'live' || !ed.deck) return;
+/**
+ * A plate's marks sit on the plate's own clock, so the moment comes from the playhead rather
+ * than the caller's recording time, and the aim is a fraction of the frame.
+ */
+async function addPlateZoom(c: Clip, dur: number, zoom?: number): Promise<void> {
+  const clip = fxClipId(c);
+  if (!clip || !ed.deck) return;
+  const pb = clipPlayback(c);
+  const min = ed.deck.ranges?.minZoomSec ?? 0;
+  const start = clamp(plateClockMs(c, ed.t) / 1000, 0, Math.max(0, pb.baseDur - min));
+  const length = clamp(dur, min, Math.max(min, pb.baseDur - start));
+  const level = zoom || ed.deck.zoomLevels?.[ed.deck.camera?.['zoom'] ?? ''] || 1.6;
+  const id = `z-${clip}-${Math.round(start * 10)}`;
+  const zooms = [...deckEdit().zooms.filter((z) => z.id !== id), { id, clip, t: r3(start), dur: r3(length), zoom: level, nx: 0.5, ny: 0.5 }];
+  const r = await postDeck({ zooms }, { hint: 'Zoom added — drag the box on the stage to aim it' });
+  if (r) {
+    select({ type: 'zoom', key: id });
+    seek(c.at + pb.toOutput(start + Math.min(1, length / 2)));
+  }
+}
+
+async function addPlateLens(c: Clip, dur: number): Promise<void> {
+  const clip = fxClipId(c);
+  if (!clip || !ed.deck) return;
+  const pb = clipPlayback(c);
+  const min = ed.deck.ranges?.minLensSec || 1;
+  const start = clamp(plateClockMs(c, ed.t) / 1000, 0, Math.max(0, pb.baseDur - min));
+  const length = clamp(dur, min, Math.max(min, pb.baseDur - start));
+  const id = `m-${clip}-${Math.round(start * 10)}`;
+  const lenses = [...deckEdit().lenses.filter((l) => l.id !== id), { id, clip, t: r3(start), dur: r3(length), nx: 0.5, ny: 0.5, nw: 0.13, nh: 0.055 }];
+  const r = await postDeck({ lenses }, { hint: 'Magnifier added — drag it on the stage to aim' });
+  if (r) {
+    select({ type: 'lens', key: `edit:${id}` });
+    seek(c.at + pb.toOutput(start + Math.min(1.1, length / 2)));
+  }
+}
+
+export async function addZoomAt(t: number, dur = 3.5, zoom?: number, on?: Clip | null): Promise<void> {
+  const c = on || ed.seq.find((x) => x.kind === 'live' && t >= x.recFrom && t <= x.recTo) || curClip();
+  if (!c || !ed.deck) return;
+  if (c.kind !== 'live') return addPlateZoom(c, dur, zoom);
   const levels = ed.deck.zoomLevels || {};
   const minZoomSec = ed.deck.ranges?.minZoomSec ?? 0;
   const level = zoom || levels[ed.deck.camera?.['zoom'] ?? ''] || 1.6;
@@ -47,9 +88,10 @@ export async function addZoomAt(t: number, dur = 3.5, zoom?: number): Promise<vo
 }
 
 /** A new magnifier, aimed at the nearest click or typing in the clip when there is one. */
-export async function addLensAt(t: number, dur = 2.6): Promise<void> {
-  const c = ed.seq.find((x) => x.kind === 'live' && t >= x.recFrom && t <= x.recTo) || curClip();
-  if (!c || c.kind !== 'live' || !ed.deck) return;
+export async function addLensAt(t: number, dur = 2.6, on?: Clip | null): Promise<void> {
+  const c = on || ed.seq.find((x) => x.kind === 'live' && t >= x.recFrom && t <= x.recTo) || curClip();
+  if (!c || !ed.deck) return;
+  if (c.kind !== 'live') return addPlateLens(c, dur);
   const min = ed.deck.ranges?.minLensSec || 1;
   const start = clamp(t, c.recFrom, Math.max(c.recFrom, c.recTo - min));
   const length = clamp(dur, min, Math.max(min, c.recTo - start));
@@ -72,20 +114,67 @@ export async function addLensAt(t: number, dur = 2.6): Promise<void> {
   }
 }
 
+/**
+ * A caption of your own over the recording. The script's captions come from `say()` calls, so
+ * this one is written on the cut instead and carries its own copy — edit it on the stage.
+ */
+export async function addCaptionAt(t: number, on?: Clip | null): Promise<void> {
+  const c = on || ed.seq.find((x) => x.kind === 'live' && t >= x.recFrom && t <= x.recTo) || curClip();
+  if (!c || !ed.deck) return;
+  if (c.kind !== 'live') {
+    toast('Captions sit on the recording — put the playhead over a recorded section');
+    return;
+  }
+  const dur = 2;
+  const start = r3(clamp(t, c.recFrom, Math.max(c.recFrom, c.recTo - dur)));
+  const cards = deckEdit().cards || [];
+  const key = `add:caption:${Math.round(start * 1000)}`;
+  if (cards.some((x) => x.key === key)) {
+    toast('There is already a caption here');
+    return;
+  }
+  const r = await postDeck(
+    { cards: [...cards, { key, kind: 'caption', t: start, dur, label: 'New caption' }] },
+    { hint: 'Caption added — click it on the stage to write it' },
+  );
+  if (r) {
+    const mark = (ed.deck?.marks || []).find((m) => m.key === key);
+    const card = mark ? resolveLiveCard(mark) : null;
+    select({
+      type: 'card',
+      key,
+      ...(card ? { cardId: card.id } : {}),
+      ...(mark ? { markT: mark.t, markDur: cardMarkDuration(mark) } : {}),
+    });
+    seek(recToEd(c, start + dur / 2));
+  }
+}
+
+export function toolCaption(): Promise<void> | void {
+  const s = ed.sel;
+  if (s?.type === 'range') return addCaptionAt(s.from ?? 0);
+  const c = curClip();
+  if (!c) return;
+  return addCaptionAt(c.kind === 'live' ? edToRec(c, ed.t) : 0, c);
+}
+
 export async function adoptLens(lens: Lens, over: Partial<DeckLens> = {}): Promise<void> {
   const t = r3(over.t ?? lens.t);
   const id = `m${Math.round(t * 10)}`;
   const d = deckEdit();
+  // A recorded loupe can be shorter than an edit may be; taking it over stretches it to the minimum.
+  const minDur = ed.deck?.ranges?.minLensSec || 1;
   const lenses: DeckLens[] = [
     ...d.lenses.filter((l) => l.id !== id),
     {
       id,
       t,
-      dur: r3(over.dur ?? lens.dur),
+      dur: r3(Math.max(minDur, over.dur ?? lens.dur)),
       x: Math.round(over.x ?? lens.rect.x + lens.rect.w / 2),
       y: Math.round(over.y ?? lens.rect.y + lens.rect.h / 2),
       w: Math.round(over.w ?? lens.rect.w),
       h: Math.round(over.h ?? lens.rect.h),
+      ...(over.zoom != null ? { zoom: over.zoom } : {}),
       ...(lens.label ? { label: lens.label } : {}),
     },
   ];
@@ -102,9 +191,10 @@ export async function adoptShot(shot: ZoomShot, over: { x?: number; y?: number; 
   const aim = clampZoomCenter(over.x ?? p.cx, over.y ?? p.cy, { zoom, width: W, height: H });
   const id = `z${Math.round((over.t ?? shot.start) * 10)}`;
   const d = deckEdit();
+  const minDur = ed.deck?.ranges?.minZoomSec ?? 0;
   const zooms = [
     ...d.zooms.filter((z) => z.id !== id),
-    { id, t: r3(over.t ?? shot.start), dur: r3(over.dur ?? shot.end - shot.start), zoom, x: aim.cx, y: aim.cy },
+    { id, t: r3(over.t ?? shot.start), dur: r3(Math.max(minDur, over.dur ?? shot.end - shot.start)), zoom, x: aim.cx, y: aim.cy },
   ];
   const zoomSkips = [...d.zoomSkips, { from: shot.start, to: shot.end }];
   const r = await postDeck({ zooms, zoomSkips }, { hint: 'That zoom is yours now' });
@@ -150,9 +240,10 @@ export async function removeSelected(): Promise<void> {
     return;
   }
   if (s.type === 'card') {
-    // Recorded cards stay (move or trim them); a duplicate goes.
-    if (!(d.cards || []).some((c) => c.key === s.key && c.copyOf)) return;
-    await postDeck({ cards: d.cards.filter((c) => c.key !== s.key) }, { hint: 'Duplicate card removed' });
+    // Recorded cards stay (move or trim them); a duplicate or one you wrote here goes.
+    const own = (d.cards || []).find((c) => c.key === s.key && (c.copyOf || c.label));
+    if (!own) return;
+    await postDeck({ cards: d.cards.filter((c) => c.key !== s.key) }, { hint: own.copyOf ? 'Duplicate card removed' : 'Caption removed' });
     const c = curClip();
     select(c ? { type: 'clip', id: c.id } : null);
     return;
@@ -214,6 +305,12 @@ export function toolSpeed(): Promise<void> | void {
   const s = ed.sel;
   if (s?.type === 'range') return addRamp(s.from ?? 0, s.to ?? 0, 2);
   const c = curClip();
+  if (c?.kind === 'plate') {
+    // A plate plays at one speed, so Speed opens its dial instead of dropping a ramp.
+    const anchor = $('etlAddSpeed');
+    if (anchor) openPacePop(anchor, c);
+    return;
+  }
   if (c?.kind !== 'live') return;
   const from = edToRec(c, ed.t);
   const to = Math.min(c.recTo, from + 4);
@@ -225,16 +322,16 @@ export function toolZoom(): Promise<void> | void {
   const s = ed.sel;
   if (s?.type === 'range') return addZoomAt(s.from ?? 0, (s.to ?? 0) - (s.from ?? 0));
   const c = curClip();
-  if (c?.kind !== 'live') return;
-  return addZoomAt(edToRec(c, ed.t));
+  if (!c) return;
+  return addZoomAt(c.kind === 'live' ? edToRec(c, ed.t) : 0, undefined, undefined, c);
 }
 
 export function toolLens(): Promise<void> | void {
   const s = ed.sel;
   if (s?.type === 'range') return addLensAt(s.from ?? 0, (s.to ?? 0) - (s.from ?? 0));
   const c = curClip();
-  if (c?.kind !== 'live') return;
-  return addLensAt(edToRec(c, ed.t));
+  if (!c) return;
+  return addLensAt(c.kind === 'live' ? edToRec(c, ed.t) : 0, undefined, c);
 }
 
 /** Create a blank ad-lib voice line at the playhead and select it. */
@@ -273,13 +370,35 @@ export function selectFx(item: FxItem): void {
   else if (item.kind === 'skip') select({ type: 'skip', ...(item.i != null ? { i: item.i } : {}) });
   else if (item.kind === 'lens') {
     select({ type: 'lens', ...(item.key != null ? { key: item.key } : {}) });
+    const clip = item.lens?.clip;
+    if (clip) return seekIntoPlateFx(item, clip, 1.1);
     const c = ed.seq.find((x) => x.kind === 'live' && item.from >= x.recFrom - 0.01 && item.from <= x.recTo);
     if (c) seek(recToEd(c, item.from + Math.min(1.1, (item.to - item.from) / 2)));
   } else {
     select({ type: 'zoom', ...(item.key != null ? { key: item.key } : {}) });
+    const clip = item.shot?.clip;
+    if (clip) return seekIntoPlateFx(item, clip, 1);
     const c = ed.seq.find((x) => x.kind === 'live' && item.from >= x.recFrom - 0.01 && item.from <= x.recTo);
     if (c) seek(recToEd(c, item.shot?.points?.[0]?.t ?? item.from + Math.min(1, (item.to - item.from) / 2)));
   }
+}
+
+/**
+ * A plate's mark shows on every copy of that plate. Stay on the copy under the playhead when
+ * there is one, so its stage editor comes up where you are looking.
+ */
+function seekIntoPlateFx(item: FxItem, clip: string, lead: number): void {
+  const segs = fxSegments(item.from, item.to, clip);
+  const seg = segs.find((s) => ed.t >= s.a - 0.01 && ed.t <= s.b + 0.01) || segs.find((s) => s.clip.at <= ed.t && ed.t < s.clip.at + s.clip.dur) || segs[0];
+  if (!seg) return;
+  if (ed.t >= seg.a && ed.t <= seg.b) return paintAims();
+  seek(seg.a + Math.min(lead, (seg.b - seg.a) / 2));
+}
+
+function paintAims(): void {
+  paintZoomBox();
+  paintLensBox();
+  renderFrame();
 }
 
 /** The legacy clicked `.tools-panel .ptab[data-right="inspector"]` when it was not already active. */

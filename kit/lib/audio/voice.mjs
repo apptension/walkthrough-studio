@@ -252,11 +252,16 @@ export async function buildVoice(video, { force = false } = {}) {
     slots.push({ key: 'intro', kind: 'intro', line: asLine(narration.intro), windowStart: openAt + INTRO_WINDOW.start, windowEnd: openYield + INTRO_WINDOW.pastOpen });
   }
 
-  // Interstitial plate narration (keyed by plate id or on-screen title)
+  // Interstitial plate narration (keyed by plate id, on-screen title, or the chapter it replaces)
+  const spokenByPlate = new Set();
   for (const seg of segments) {
     if (seg.kind === 'plate' && seg.interstitial && !seg.repeatOf) {
-      const raw = plateLines[seg.id] ?? narration.lines[seg.title] ?? narration.lines[seg.id];
+      const byLabel = [seg.title, seg.chapterLabel, seg.id].find((k) => k && narration.lines[k] !== undefined);
+      const raw = plateLines[seg.id] ?? (byLabel === undefined ? undefined : narration.lines[byLabel]);
       if (raw !== undefined) {
+        // A chapter plate speaks the chapter's line; the mark loop below must not say it again.
+        if (byLabel !== undefined) spokenByPlate.add(byLabel);
+        if (seg.chapterLabel) spokenByPlate.add(seg.chapterLabel);
         const inDur = seg.transitionIn?.dur || 0;
         slots.push({
           key: seg.id,
@@ -270,11 +275,11 @@ export async function buildVoice(video, { force = false } = {}) {
     }
   }
 
-  const used = new Set(slots.filter((s) => s.kind === 'interstitial').map((s) => s.key));
+  const used = new Set([...slots.filter((s) => s.kind === 'interstitial').map((s) => s.key), ...spokenByPlate]);
   timeline.forEach((mark, i) => {
     if ((mark.kind !== 'caption' && mark.kind !== 'chapter') || mark.copyOf) return;
     const raw = narration.lines[mark.label];
-    if (raw === undefined) return;
+    if (raw === undefined || spokenByPlate.has(mark.label)) return;
     used.add(mark.label);
     const next = timeline
       .slice(i + 1)

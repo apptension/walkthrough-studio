@@ -183,6 +183,8 @@ async function repeatSection(c: Clip, stretch: { from: number; to: number } | nu
   } else if (own) {
     patch['trims'] = [...(d.trims || []).filter((t) => t.id !== id), { ...own, id }];
   }
+  const ownTime = c.kind === 'plate' ? (d.plateTimes || []).find((t) => t.id === c.id) : null;
+  if (ownTime) patch['plateTimes'] = [...(d.plateTimes || []).filter((t) => t.id !== id), { ...ownTime, id }];
   const what = stretch ? 'That stretch plays again' : c.kind === 'plate' ? 'Plate plays again — copy edits change both' : 'Section plays again';
   const r = await postDeck(patch, { hint: `${what} right after “${c.title}”` });
   if (r) {
@@ -211,6 +213,7 @@ export async function dropRepeat(c: Clip): Promise<Deck | null> {
       repeats: (d.repeats || []).filter((x) => x !== id),
       order: (d.order || []).filter((x) => x !== id && x !== c.id),
       trims: (d.trims || []).filter((t) => t.id !== id),
+      plateTimes: (d.plateTimes || []).filter((t) => t.id !== id),
     },
     { hint: 'Duplicate removed' },
   );

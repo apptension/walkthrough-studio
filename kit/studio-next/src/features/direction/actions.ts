@@ -285,8 +285,20 @@ export async function syncEditorAfterDirection({ plates = false } = {}): Promise
 /** Camera keys that reshape the Editor's live inset frame (not just the next recording). */
 const FRAME_CAMERA_KEYS = new Set(['frame', 'background', 'padding', 'corners', 'shadow']);
 
+/** Mark a direction pick at once; the save repaints it and a failure puts the saved one back. */
+async function savePick(mark: (d: Direction) => Direction, patch: Record<string, unknown>): Promise<DirectionResponse> {
+  const d = directionView.get().direction;
+  if (d) directionView.set({ direction: mark(d) });
+  try {
+    return await saveDirection(patch, { quiet: true });
+  } catch (err) {
+    renderDirection(desk.get().video?.direction);
+    throw err;
+  }
+}
+
 export async function pickPalette(scale: string): Promise<void> {
-  const r = await saveDirection({ scale }, { quiet: true });
+  const r = await savePick((d) => ({ ...d, scale }), { scale });
   await syncEditorAfterDirection({ plates: true });
   toast('Color scale set', `${r.direction.scale} · five plate roles updated`, 'ok');
 }
@@ -298,7 +310,7 @@ export async function setScaleColors(colors: Record<string, string>): Promise<vo
 }
 
 export async function pickLogo(logo: string): Promise<void> {
-  const r = await saveDirection({ logo }, { quiet: true });
+  const r = await savePick((d) => ({ ...d, logo }), { logo });
   await syncEditorAfterDirection({ plates: true });
   toast('Logo set', r.direction.logo, 'ok');
 }
@@ -355,7 +367,7 @@ export function pickFocus(focus: string): void {
 }
 
 export async function pickLook(look: string): Promise<void> {
-  const r = await saveDirection({ look }, { quiet: true });
+  const r = await savePick((d) => ({ ...d, look }), { look });
   // Look presets reshape the inset frame on the Editor stage immediately.
   await syncEditorAfterDirection();
   toast('Look applied', `${r.direction.looks[r.direction.look]?.label} · live on the stage`, 'ok');
@@ -363,7 +375,10 @@ export async function pickLook(look: string): Promise<void> {
 
 export async function pickCamera(group: { camera?: string; cursor?: string }, value: string): Promise<void> {
   const patch = group.camera ? { camera: { [group.camera]: value } } : { cursor: { [group.cursor ?? '']: value } };
-  const r = await saveDirection(patch, { quiet: true });
+  const r = await savePick(
+    (d) => (group.camera ? { ...d, camera: { ...d.camera, [group.camera]: value } } : { ...d, cursor: { ...d.cursor, [group.cursor ?? '']: value } }),
+    patch,
+  );
   const cam = r.direction.camera;
   if (group.camera && FRAME_CAMERA_KEYS.has(group.camera)) {
     await syncEditorAfterDirection();
@@ -400,7 +415,10 @@ export async function toggleCursor(key: 'glide' | 'hand' | 'hideIdle' | 'loop', 
 
 export async function setPace(value: string): Promise<void> {
   if (!value) return;
-  const r = await saveDirection({ pace: value }, { quiet: true });
+  const r = await savePick((d) => {
+    const preset = d.paces?.[value];
+    return preset ? { ...d, pace: { ...d.pace, ...preset, id: value, custom: false } } : d;
+  }, { pace: value });
   if (r) toast('Live pace set', `${r.direction.pace.label} · ${r.direction.pace.tempo}× — re-record to apply`, 'ok');
 }
 
@@ -448,6 +466,15 @@ export async function saveCaptureSize(body: Record<string, unknown>): Promise<Ca
     toast('Could not change the size', errMessage(err) || String(err), 'warn');
     return null;
   }
+}
+
+/** `#shapeSeg`: the video's shape, marked at once and put back if the save fails. */
+export async function pickShape(format: string): Promise<void> {
+  const before = directionView.get().capture;
+  const output = before?.outputs.find((o) => o.format === format);
+  if (before && output) directionView.set({ capture: { ...before, output } });
+  const r = await saveCaptureSize({ output: format });
+  if (!r && before) directionView.set({ capture: before });
 }
 
 /** `#sizeOptions` click: a preset row, or open the custom form. */

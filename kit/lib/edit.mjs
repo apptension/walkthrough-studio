@@ -16,11 +16,14 @@ import { join } from 'node:path';
 import { keyCardMarks, loadRawTimeline } from './cardMarks.mjs';
 import { duration } from './media.mjs';
 import { FPS } from './motion.mjs';
-import { platePaths } from './plates.mjs';
+import { plateBackdrops, platePaths } from './plates.mjs';
+import { CARRY_STYLE, carryCheck, markCarryRuns } from './plateCarry.mjs';
+import { chapterCoverage } from './chapterPlates.mjs';
 import { takeSpace } from './stage.mjs';
 import { extendCloseForVoice, narrationSeconds, outroFromNarrationSource } from '../studio/voiceHold.js';
 import {
   applyCardEdits,
+  applyPlateTimes,
   applySegmentCuts,
   applySegmentOmit,
   applySegmentOrder,
@@ -63,6 +66,9 @@ export const TRANSITION_STYLES = Object.freeze({
   radial: { label: 'Radial', xfade: 'radial', hint: 'A clock-hand sweep that reveals the next scene' },
   slice: { label: 'Slice', xfade: 'hlslice', hint: 'Horizontal slats peel the scene away' },
   diagonal: { label: 'Diagonal', xfade: 'diagtl', hint: 'A corner-to-corner reveal with real momentum' },
+  // Two slides with the same background: the backdrop keeps moving and only the copy changes
+  // (plateCarry.mjs). Any other join falls back to a dissolve.
+  [CARRY_STYLE]: { label: 'Continuous', xfade: 'fade', hint: 'Same background carries on — only the content changes' },
 });
 
 const snap = (s) => Math.round(s * FPS) / FPS;
@@ -185,13 +191,21 @@ function settledEnd(video, livePath, start, end, map = null) {
   return out;
 }
 
-/** Seconds into a plate after which only the brand background remains (exits done). */
-function plateClearAt(htmlPath, dur) {
-  if (!htmlPath || !existsSync(htmlPath)) return Math.max(0, dur - 0.4);
+/** When a plate's exits begin (`--black-out`); the frame just before it is fully composed. */
+export function plateBlackOut(htmlPath, dur) {
+  if (!htmlPath || !existsSync(htmlPath)) return Math.max(0, dur - 0.7);
   const m = readFileSync(htmlPath, 'utf8').match(/--black-out:\s*([\d.]+)s/);
-  const blackOut = m ? Number(m[1]) : dur - 0.7;
-  return Math.min(dur, blackOut + EXIT_CLEAR);
+  return Math.min(dur, m ? Number(m[1]) : dur - 0.7);
 }
+
+/** Seconds into a plate after which only the brand background remains (exits done). */
+export function plateClearAt(htmlPath, dur) {
+  if (!htmlPath || !existsSync(htmlPath)) return Math.max(0, dur - 0.4);
+  return Math.min(dur, plateBlackOut(htmlPath, dur) + EXIT_CLEAR);
+}
+
+/** The settled frame an extended plate holds: a beat before its exits start. */
+export const plateHoldAt = (htmlPath, dur) => Math.max(0, snap(plateBlackOut(htmlPath, dur) - 0.1));
 
 function chapterTime(timeline, title) {
   const m = timeline.find((e) => e.kind === 'chapter' && e.label === title);
@@ -203,7 +217,7 @@ function chapterTime(timeline, title) {
  * Break a live slice at chapter marks so each chapter is a named, reorderable section
  * (same order/omit machinery as plates). Captions stay as marks on those slices.
  */
-function splitLiveAtChapters(seg, chapters) {
+function splitLiveAtChapters(seg, chapters, plateByKey = null) {
   const inside = (chapters || [])
     .filter((c) => c.t >= seg.start - 0.02 && c.t < seg.end - 0.35)
     .slice()
@@ -219,6 +233,19 @@ function splitLiveAtChapters(seg, chapters) {
     if (chStart > cursor + 0.35) {
       out.push({ kind: 'live', start: cursor, end: chStart });
       cursor = chStart;
+    }
+    const plate = plateByKey?.get(ch.key);
+    if (plate) {
+      // The chapter plays as a slide of its own. The recording held still under the old card for
+      // `plate.hold` seconds (story.chapter awaits it), so the plate stands in for exactly that
+      // stretch — nothing anyone watched is lost and the recording picks up where it moved again.
+      const resume = snap(Math.min(nextT, Math.max(chStart, chStart + plate.hold)));
+      if (plate.segment) out.push({ ...plate.segment });
+      cursor = resume;
+      if (cursor >= nextT - 0.05) continue;
+      out.push({ kind: 'live', start: cursor, end: nextT, title: ch.label });
+      cursor = nextT;
+      continue;
     }
     const start = cursor < chStart ? cursor : chStart;
     out.push({
@@ -269,18 +296,57 @@ export function buildEditPlan(video) {
   // A duplicated chapter card shows again; it does not start a new section.
   const chapters = timeline.filter((m) => m.kind === 'chapter' && !m.copyOf);
 
-  const interstitials = [...(video.config.interstitials || [])].map((it) => {
-    if (!it.id || !it.type || !it.before) {
-      throw new Error('Each interstitial needs id, type, and before (chapter title)');
-    }
-    const at = chapterTime(timeline, it.before);
-    const file = paths.interstitial[it.id]?.mp4;
+  // Every chapter plays as a plate unless the editor sent it back to being an overlay card.
+  // The rows are derived from the same marks the split below walks, so ids line up.
+  const coverage = chapterCoverage(video.config, chapters, { chapterCards: deck.chapterCards });
+  const chapterPlateByKey = new Map();
+  // An authored plate introducing this chapter stands in for it: no slide of our own, but the
+  // recording still skips the seconds it spent holding under a card nobody will see.
+  const absorbedLabel = new Map();
+  for (const [key, a] of coverage.absorbed) {
+    chapterPlateByKey.set(key, { hold: a.hold, segment: null });
+    absorbedLabel.set(a.by, a.label);
+  }
+  for (const row of coverage.rows) {
+    const file = paths.interstitial[row.id]?.mp4;
+    const html = paths.interstitial[row.id]?.html;
     if (!file || !existsSync(file)) {
-      throw new Error(`Missing interstitial plate for "${it.id}" — run: node cli.mjs plates ${video.slug}`);
+      throw new Error(`Missing chapter plate for "${row.id}" — run: node cli.mjs plates ${video.slug}`);
     }
     const dur = snap(duration(file));
-    return { ...it, liveAt: at, file, dur, clearAt: plateClearAt(paths.interstitial[it.id].html, dur) };
-  });
+    chapterPlateByKey.set(row.chapter, {
+      hold: row.hold,
+      segment: {
+        kind: 'plate',
+        id: row.id,
+        file,
+        dur,
+        clearAt: plateClearAt(html, dur),
+        holdAt: plateHoldAt(html, dur),
+        title: row.title || row.id,
+        interstitial: true,
+        chapter: row.chapter,
+        chapterLabel: row.chapterLabel,
+        type: row.type,
+      },
+    });
+  }
+
+  const interstitials = [...(video.config.interstitials || [])]
+    .filter((it) => !it.chapter)
+    .map((it) => {
+      if (!it.id || !it.type || !it.before) {
+        throw new Error('Each interstitial needs id, type, and before (chapter title)');
+      }
+      const at = chapterTime(timeline, it.before);
+      const file = paths.interstitial[it.id]?.mp4;
+      if (!file || !existsSync(file)) {
+        throw new Error(`Missing interstitial plate for "${it.id}" — run: node cli.mjs plates ${video.slug}`);
+      }
+      const dur = snap(duration(file));
+      const html = paths.interstitial[it.id].html;
+      return { ...it, liveAt: at, file, dur, clearAt: plateClearAt(html, dur), holdAt: plateHoldAt(html, dur) };
+    });
   interstitials.sort((a, b) => a.liveAt - b.liveAt || a.id.localeCompare(b.id));
 
   const raw = [];
@@ -290,6 +356,7 @@ export function buildEditPlan(video) {
     file: paths.open.mp4,
     dur: openDur,
     clearAt: plateClearAt(paths.open.html, openDur),
+    holdAt: plateHoldAt(paths.open.html, openDur),
     title: 'Introduction',
   });
   let cursor = 0;
@@ -308,14 +375,17 @@ export function buildEditPlan(video) {
       file: it.file,
       dur: it.dur,
       clearAt: it.clearAt,
+      holdAt: it.holdAt,
       title: it.title || it.id,
       interstitial: true,
+      // This plate stands in for the chapter it was placed before, so it also speaks its line.
+      ...(absorbedLabel.has(it.id) ? { chapterLabel: absorbedLabel.get(it.id) } : {}),
       type: it.type,
     });
     cursor = snap(it.liveAt);
   }
   if (cursor < dLive - 0.05) raw.push({ kind: 'live', start: cursor, end: dLive });
-  raw.push({ kind: 'plate', id: 'close', file: paths.close.mp4, dur: closeDur, title: 'Summary' });
+  raw.push({ kind: 'plate', id: 'close', file: paths.close.mp4, dur: closeDur, holdAt: plateHoldAt(paths.close.html, closeDur), title: 'Summary' });
 
   // Split live slices at chapter marks so each chapter is its own rearrangeable section on the cut.
   const split = [];
@@ -324,7 +394,7 @@ export function buildEditPlan(video) {
       split.push(seg);
       continue;
     }
-    split.push(...splitLiveAtChapters(seg, chapters));
+    split.push(...splitLiveAtChapters(seg, chapters, chapterPlateByKey));
   }
   raw.length = 0;
   raw.push(...split);
@@ -333,7 +403,8 @@ export function buildEditPlan(video) {
   for (let i = 1; i < raw.length; i++) {
     const seg = raw[i];
     if (seg.kind !== 'live' || raw[i - 1].kind !== 'plate') continue;
-    const card = chapters.find((m) => m.t >= seg.start - 0.02 && m.t <= seg.start + CARD_AT_START);
+    // A chapter that plays as a plate has no card fading in over the UI to wait for.
+    const card = chapters.find((m) => m.t >= seg.start - 0.02 && m.t <= seg.start + CARD_AT_START && !chapterPlateByKey.has(m.key));
     if (!card) continue;
     const start = snap(card.t + CARD_COVER);
     if (start < seg.end - 1) {
@@ -378,17 +449,18 @@ export function buildEditPlan(video) {
       ...(cleanTail ? { trimEnd: cleanTail } : {}),
     };
   });
-  const segments = applySegmentCuts(
-    applySegmentTrims(applySegmentOmit(applySegmentOrder(raw, deck.order), deck.omit), trimsClean),
-    deck.cuts,
-    liveMap
+  const segments = applyPlateTimes(
+    applySegmentCuts(applySegmentTrims(applySegmentOmit(applySegmentOrder(raw, deck.order), deck.omit), trimsClean), deck.cuts, liveMap),
+    deck.plateTimes
   ).map((seg) => ({
     ...seg,
-    baseDur: seg.dur,
+    ...(seg.timing ? { dur: snap(seg.dur) } : {}),
+    baseDur: seg.timing ? snap(seg.dur) : seg.dur,
     padOut: 0,
   }));
   segments[0].at = 0;
   segments[0].transitionIn = null;
+  const backdrops = plateBackdrops(video);
   for (let i = 1; i < segments.length; i++) {
     const prev = segments[i - 1];
     const seg = segments[i];
@@ -409,7 +481,11 @@ export function buildEditPlan(video) {
     }
     // Dark plate → dark chapter card always dissolves; movement reads as noise between two dark frames.
     const selected = transitionFor(style, prev, seg);
-    const type = card && selected !== 'dip' && !pinned?.style ? 'dissolve' : selected;
+    let type = card && selected !== 'dip' && !pinned?.style ? 'dissolve' : selected;
+    // Same background on both slides: it carries through unless the join is pinned to a hard style.
+    const carry = !hard && carryCheck(prev, seg, { backdrops, deck, style }).ok;
+    if (carry) type = CARRY_STYLE;
+    else if (type === CARRY_STYLE) type = 'dissolve';
     seg.at = snap(prev.at + prev.dur - dur);
     seg.join = key;
     seg.transitionIn = {
@@ -421,6 +497,7 @@ export function buildEditPlan(video) {
       ...(pinned ? { pinned: true } : {}),
     };
   }
+  markCarryRuns(segments);
   const lastSeg = segments[segments.length - 1];
   const at = lastSeg.at + lastSeg.dur;
   const total = snap(at);

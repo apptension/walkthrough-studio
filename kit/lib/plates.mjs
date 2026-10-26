@@ -11,7 +11,8 @@
 import { chromium } from 'playwright';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DELIVERY, outputFrame } from './format.mjs';
@@ -21,11 +22,14 @@ import { revealMarkup } from './titleReveal.mjs';
 import { TEMPLATES, brandReadiness } from './project.mjs';
 import { logoTileTone } from './logoTone.mjs';
 import { injectAtmosphere } from './atmosphere.mjs';
+import { withPlateColors } from './plateColors.mjs';
+import { carryFrameClock, plateBackdrop } from './plateCarry.mjs';
 import { assertX264Args, BT709_TAGS, lossyX264, plateJpegQ, QUALITY, toBt709 } from './encode.mjs';
 import { brandCssVars, emphasize, esc } from './text.mjs';
 import { copyContextFor, normalizeCopy, normalizePlateCopy, normalizeTitle } from './copyCase.mjs';
-import { injectStyle, patchStyle } from './editDeck.mjs';
+import { injectStyle, patchStyle, platePlayback } from './editDeck.mjs';
 import { PLATE_TYPE_IDS, PLATE_TYPE_SET } from './plateTypes.mjs';
+import { videoChapterPlates } from './chapterPlates.mjs';
 import { normalizeLayout, resolveLayout } from './plateLayouts.mjs';
 
 /** Attribute-safe raw source for Studio inline edit (newlines → &#10;). */
@@ -172,11 +176,18 @@ const fill = (tpl, values) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] 
  * Merges onto brand motion so one plate can run punchy, flat or with its own title reveal
  * without changing the pack. Returns the fill values plus the resolved motion for builders.
  */
-function interstitialBrandVars(common, brand, it) {
+function plateLookBrand(brand, it, videoColors = null) {
   const overlay = it?.motion && typeof it.motion === 'object' ? it.motion : {};
   // Layout flags stay on the interstitial; only timing/energy tokens merge into brand motion.
   const { cascade: _cascade, carousel: _carousel, ...motionOverlay } = overlay;
-  const merged = withMotion(brand, motionOverlay);
+  // Background colours (video.config.plateColors, then the plate's own `colors`) recolour both the CSS and the field.
+  return { brand: withPlateColors(brand, videoColors, it?.colors), motionOverlay };
+}
+
+function interstitialBrandVars(common, brand, it, videoColors = null) {
+  const look = plateLookBrand(brand, it, videoColors);
+  brand = look.brand;
+  const merged = withMotion(brand, look.motionOverlay);
   const motion = resolveMotion(merged);
   return {
     ...common,
@@ -1039,14 +1050,50 @@ function teamItems(items, brand) {
     .join('\n        ');
 }
 
+/**
+ * Every plate the render pipeline draws besides open and close: the authored interstitials plus
+ * one plate per chapter mark (see chapterPlates.mjs). Authoring surfaces — the script sheet, the
+ * critic, the agent prompts — stay on `config.interstitials`, because a chapter plate is derived
+ * from the recording, not written by hand.
+ */
+export function plateRows(video) {
+  const authored = video.config?.interstitials || [];
+  let chapters = [];
+  try {
+    chapters = videoChapterPlates(video);
+  } catch {
+    /* no recording yet (or an unreadable timeline): only the authored plates exist */
+  }
+  const ids = new Set(authored.map((i) => i.id));
+  return [...authored, ...chapters.filter((c) => !ids.has(c.id) || c.chapter)];
+}
+
+/**
+ * The backdrop every plate paints (plateCarry.plateBackdrop), keyed by plate id. Two plates with
+ * the same `key` share one continuous background when they meet.
+ */
+export function plateBackdrops(video) {
+  const { config, brand } = video;
+  const out = {};
+  const add = (id, it) => {
+    const look = plateLookBrand(brand, it, config.plateColors);
+    out[id] = plateBackdrop(withMotion(look.brand, look.motionOverlay), plateStyle(it, id));
+  };
+  add('open', config.open || {});
+  add('close', config.close || {});
+  for (const it of plateRows(video)) if (it?.id) add(it.id, it);
+  return out;
+}
+
 export function platePaths(video) {
   const dir = join(video.out, 'plates');
   const interstitial = {};
-  for (const it of video.config.interstitials || []) {
+  for (const it of plateRows(video)) {
     interstitial[it.id] = {
       html: join(dir, `${it.id}.html`),
       mp4: join(video.out, `plate-${it.id}.mp4`),
       type: it.type,
+      ...(it.chapter ? { chapter: it.chapter } : {}),
     };
   }
   return {
@@ -1066,7 +1113,7 @@ function buildInterstitial(video, it, paths, common) {
   const tpl = readFileSync(join(TEMPLATES, `${it.type}.html`), 'utf8');
   const brand = video.brand;
   // Per-plate motion overlay (energy, depth, sheen, title reveal, atmosphere tuning).
-  const { motion, plateBrand, ...plateCommon } = interstitialBrandVars(common, brand, it);
+  const { motion, plateBrand, ...plateCommon } = interstitialBrandVars(common, brand, it, video.config?.plateColors);
   const title = (t) => titleEditFields(t || '', { reveal: motion.titleReveal });
   const eyebrow = (fallback) => ({
     EYEBROW: emphasize(it.eyebrow || fallback),
@@ -1363,6 +1410,39 @@ export function writePreviewPlate(brand, plate, dir, { frame = DELIVERY } = {}) 
   return paths.interstitial[it.id].html;
 }
 
+/**
+ * Throws the builder's own complaint when `row` would not make a plate (too few rows, a title
+ * too long…) — checked off to the side, so nothing in the video is touched.
+ */
+export function checkPlate(brand, row) {
+  const dir = mkdtempSync(join(tmpdir(), 'plate-check-'));
+  try {
+    writePreviewPlate(brand, { ...row, id: row.id || row.type }, dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Write one interstitial's HTML. A plate just swapped or added shows on the stage even while
+ * another plate in the video has a problem that stops the full rebuild.
+ */
+export function buildPlateHtml(video, plateId) {
+  const it = plateRows(video).find((r) => r.id === plateId);
+  if (!it) throw new Error(`No plate "${plateId}"`);
+  const paths = platePaths(video);
+  mkdirSync(paths.dir, { recursive: true });
+  copyFileSync(join(TEMPLATES, 'plates.css'), join(paths.dir, 'plates.css'));
+  const brandMotion = resolveMotion(video.brand);
+  buildInterstitial(video, it, paths, {
+    FONT_CSS: video.brand.font?.css || '',
+    BRAND_VARS: `${brandCssVars(video.brand)}\n      ${motionCssVars(video.brand)}`,
+    LOGO: video.brand.logoHtml || '',
+    TITLE_REVEAL: brandMotion.titleReveal,
+  });
+  return paths.interstitial[plateId].html;
+}
+
 /** Writes plate HTML for open, close, and every interstitial. */
 export function buildPlates(video) {
   const { config, brand } = video;
@@ -1388,7 +1468,7 @@ export function buildPlates(video) {
   const openLines = Array.isArray(open.title) ? open.title : [open.title || normalizeTitle(config.title, copy)];
   const openEyebrow = open.eyebrow || 'Product walkthrough';
   const openSubRaw = open.sub || '';
-  const { motion: openMotion, plateBrand: openBrand, ...openCommon } = interstitialBrandVars(common, brand, open);
+  const { motion: openMotion, plateBrand: openBrand, ...openCommon } = interstitialBrandVars(common, brand, open, config.plateColors);
   const openLayout = resolveLayout('open', normalizeLayout('open', open.layout));
   const ot = OPEN_TIMING[openLayout];
   writePlateHtml(
@@ -1419,7 +1499,7 @@ export function buildPlates(video) {
   const closeTitle = close.title || [];
   const platform = close.tagline ?? normalizeCopy(brand.platform ?? '', 'label', copy);
   // Per-plate motion (energy / pushScale / timing) — same overlay path as interstitials.
-  const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close);
+  const { motion: closeMotion, plateBrand: closeBrand, ...closeCommon } = interstitialBrandVars(common, brand, close, config.plateColors);
   const closeLayout = resolveLayout('close', normalizeLayout('close', close.layout));
   const closeTitleAt = CLOSE_TITLE_AT[closeLayout];
   writePlateHtml(
@@ -1441,7 +1521,7 @@ export function buildPlates(video) {
     outputFrame(config)
   );
 
-  for (const it of config.interstitials || []) {
+  for (const it of plateRows(video)) {
     if (!it.id || !/^[a-z0-9-]+$/.test(it.id)) throw new Error(`interstitial id must be kebab-case (got ${it.id})`);
     buildInterstitial(video, it, paths, common);
   }
@@ -1661,7 +1741,7 @@ function assessPlateQc({ frames, snapped, reused, holdFrom, holdUntil, maxStuckO
  * Every motion frame is captured unless inside a probed-stable settle-hold window.
  * Fails hard if capture looks stuck or under-snapped (Studio/CLI cannot cache a bad plate).
  */
-async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '', frame = DELIVERY) {
+async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4Path, '.mp4'), raster = '', frame = DELIVERY, carry = null) {
   const viewport = { width: frame.width, height: frame.height };
   const page = await browser.newPage({
     viewport,
@@ -1747,8 +1827,12 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
         typeFit,
       };
     }, brand.font.family);
-    durationSec = meta.durationSec;
+    durationSec = carry ? carry.clock.length / FPS : meta.durationSec;
     typeFit = meta.typeFit || typeFit;
+    if (carry) {
+      const armed = await page.evaluate((o) => Boolean(window.__plateCarry?.set(o)), { in: carry.in, out: carry.out });
+      if (!armed) throw new Error(`${basename(htmlPath)} has no background-continuity runtime — rebuild the plate HTML`);
+    }
     const requested = resolveHoldWindow(meta);
     const cdp = await page.context().newCDPSession(page);
     const snap = async () => {
@@ -1781,17 +1865,46 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
           .join('|');
       }, ms);
 
+    /**
+     * Continuous background: the copy on the plate's clock, the backdrop on the run's. The
+     * fingerprint covers the copy only — a slow backdrop drift can leave two frames
+     * pixel-identical without anything being stuck.
+     */
+    const setCarryTime = (contentMs, bgMs) =>
+      page.evaluate(
+        ([c, b]) => {
+          window.__plateCarry.seek(c, b);
+          const back = document.querySelector('.wt-backdrop');
+          const front = document.querySelector('.wt-frontdrop');
+          return document
+            .getAnimations()
+            .filter((a) => {
+              const t = a.effect?.target;
+              return !(t && ((back && back.contains(t)) || (front && front.contains(t))));
+            })
+            .map((a) => {
+              const timing = a.effect?.getComputedTiming?.() || {};
+              return `${Number(timing.progress ?? -1).toFixed(4)}:${timing.currentIteration ?? '-'}`;
+            })
+            .join('|');
+        },
+        [contentMs, bgMs]
+      );
+
     const liveField = await page.evaluate(() => {
       const field = document.querySelector('.plate-field')?.getAttribute('data-field') || '';
       return Boolean(field && field !== 'none');
     });
-    holdMeta = liveField
-      ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'live-field' }
-      : await probeHoldSafety(page, setTime, snap, requested);
+    holdMeta = carry
+      ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'carry' }
+      : liveField
+        ? { holdFrom: 0, holdUntil: 0, source: 'off', note: 'live-field' }
+        : await probeHoldSafety(page, setTime, snap, requested);
     holdFrom = holdMeta.holdFrom;
     holdUntil = holdMeta.holdUntil;
 
-    frames = Math.round(durationSec * FPS);
+    frames = carry ? carry.clock.length : Math.round(durationSec * FPS);
+    const stepTo = carry ? (f) => setCarryTime(carry.clock[f][0], carry.clock[f][1]) : (f) => setTime((f * 1000) / FPS);
     console.log(`» plate · ${label} · frame 0 of ${frames}`);
     let holdBuf = null;
     let prevSig = null;
@@ -1812,13 +1925,13 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
         await enc.write(holdBuf);
         reused += 1;
       } else {
-        let fp = await setTime((f * 1000) / FPS);
+        let fp = await stepTo(f);
         let buf = await snap();
         let sig = frameSig(buf);
         // Paint stall: animations advanced but pixels did not — retry once
         const paintStall = prevSig && sig === prevSig && prevFp && fp !== prevFp;
         if (paintStall) {
-          fp = await setTime((f * 1000) / FPS);
+          fp = await stepTo(f);
           buf = await snap();
           sig = frameSig(buf);
         }
@@ -1874,6 +1987,7 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
     hold: holdMeta,
     snapped,
     reused,
+    ...(carry ? { carry: carry.key } : {}),
     renderSec: Number(sec),
     qc,
     typeFit,
@@ -1907,6 +2021,37 @@ async function renderOne(browser, htmlPath, mp4Path, brand, label = basename(mp4
   );
 }
 
+/**
+ * Whether an mp4 is whole: its top-level boxes add up to the file and one is the `moov` index.
+ * A write cut short leaves the media data without an index — unplayable, yet next to a sidecar
+ * that still says the render passed.
+ */
+export function mp4Complete(mp4Path) {
+  let fd;
+  try {
+    const size = statSync(mp4Path).size;
+    fd = openSync(mp4Path, 'r');
+    const head = Buffer.alloc(16);
+    let at = 0;
+    let moov = false;
+    while (at + 8 <= size) {
+      readSync(fd, head, 0, 16, at);
+      let len = head.readUInt32BE(0);
+      const type = head.toString('latin1', 4, 8);
+      if (len === 1) len = Number(head.readBigUInt64BE(8));
+      else if (len === 0) len = size - at;
+      if (len < 8) return false;
+      if (type === 'moov') moov = true;
+      at += len;
+    }
+    return moov && at === size;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 /** Read plate encode sidecar (pipeline, hold, QC). */
 export function readPlateRenderMeta(mp4Path) {
   const metaPath = mp4Path.replace(/\.mp4$/, '.render.json');
@@ -1927,6 +2072,7 @@ export function plateCacheFresh(mp4Path, htmlPath, { cssHash, raster, jpegQ } = 
   if (!existsSync(mp4Path) || !existsSync(htmlPath)) return false;
   const meta = readPlateRenderMeta(mp4Path);
   if (!meta) return false;
+  if (!mp4Complete(mp4Path)) return false;
   if (meta.pipeline !== RENDER_PIPELINE) return false;
   if (!meta.qc?.ok) return false;
   if (meta.htmlHash !== contentHash(readFileSync(htmlPath))) return false;
@@ -1945,7 +2091,16 @@ function expectedRaster() {
 
 /** Renders plates whose sources changed (or all with force). */
 export async function renderPlates(video, { force = false, only } = {}) {
-  const paths = buildPlates(video);
+  let paths;
+  try {
+    paths = buildPlates(video);
+  } catch (err) {
+    // Asked for one plate: another plate's problem shouldn't stop it rendering.
+    if (!only?.startsWith('plate:')) throw err;
+    console.warn(`· ${err.message || err} — rendering ${only.slice('plate:'.length)} on its own`);
+    buildPlateHtml(video, only.slice('plate:'.length));
+    paths = platePaths(video);
+  }
   try {
     const { buildLiveCards } = await import('./liveCards.mjs');
     const live = buildLiveCards(video);
@@ -1962,7 +2117,7 @@ export async function renderPlates(video, { force = false, only } = {}) {
     if (key === 'open') return plainTitle(video.config.open?.title) || 'Introduction';
     if (key === 'close') return plainTitle(video.config.close?.title) || 'Close';
     const id = key.slice('plate:'.length);
-    const it = (video.config.interstitials || []).find((x) => x.id === id);
+    const it = plateRows(video).find((x) => x.id === id);
     return plainTitle(it?.title) || plainTitle(it?.eyebrow) || id;
   };
   const jobs = [];
@@ -1977,9 +2132,9 @@ export async function renderPlates(video, { force = false, only } = {}) {
 
   consider('open', paths.open.html, paths.open.mp4);
   consider('close', paths.close.html, paths.close.mp4);
-  for (const it of video.config.interstitials || []) {
+  for (const it of plateRows(video)) {
     const dest = paths.interstitial[it.id];
-    consider(`plate:${it.id}`, dest.html, dest.mp4);
+    if (dest) consider(`plate:${it.id}`, dest.html, dest.mp4);
   }
 
   if (!jobs.length) {
@@ -2015,6 +2170,74 @@ export async function renderPlates(video, { force = false, only } = {}) {
     await browser.close();
   }
   return paths;
+}
+
+/**
+ * Plates inside a continuous-background run (plateCarry.markCarryRuns), drawn on two clocks at
+ * their planned length. Each segment's `file` moves to its carried render and `carryBaked` tells
+ * produce the retime and the pad are already in the frames. Cached on the plate HTML, the shared
+ * CSS and the exact clock, so an untouched run never redraws.
+ */
+export async function renderCarryPlates(video, segments, { force = false } = {}) {
+  const carried = (segments || []).filter((s) => s.kind === 'plate' && s.carry && s.file);
+  const dir = join(video.out, 'plates-carry');
+  if (!carried.length) {
+    rmSync(dir, { recursive: true, force: true });
+    return 0;
+  }
+  mkdirSync(dir, { recursive: true });
+  const paths = platePaths(video);
+  const cssHash = contentHash(readFileSync(join(TEMPLATES, 'plates.css'), 'utf8'));
+  const cacheOpts = { cssHash, raster: expectedRaster(), jpegQ: JPEG_Q };
+  const jobs = new Map();
+  const rows = [];
+  for (const seg of carried) {
+    const id = seg.repeatOf || seg.id;
+    const html = id === 'open' ? paths.open.html : id === 'close' ? paths.close.html : paths.interstitial[id]?.html;
+    if (!html || !existsSync(html)) continue;
+    const natural = Number(seg.timing?.baseDur ?? seg.baseDur) || seg.dur;
+    const playback = seg.timing ? platePlayback(seg.timing, seg.timing.baseDur, seg.timing.holdAt) : null;
+    const clock = carryFrameClock({ dur: seg.dur, bgAt: seg.carry.bgAt, fps: FPS, playback, baseDur: natural });
+    const key = contentHash(
+      JSON.stringify({
+        html: contentHash(readFileSync(html)),
+        cssHash,
+        pipeline: RENDER_PIPELINE,
+        in: seg.carry.in,
+        out: seg.carry.out,
+        clock,
+      })
+    );
+    const mp4 = join(dir, `${id}-${key}.mp4`);
+    rows.push({ seg, mp4 });
+    if (jobs.has(mp4)) continue;
+    const fresh = !force && plateCacheFresh(mp4, html, cacheOpts) && readPlateRenderMeta(mp4)?.carry === key;
+    jobs.set(mp4, { fresh, html, mp4, label: `${plainTitle(seg.title) || id} · continuous`, carry: { in: seg.carry.in, out: seg.carry.out, clock, key } });
+  }
+  const todo = [...jobs.values()].filter((j) => !j.fresh);
+  console.log(`» plates · Continuous background · ${rows.length} plate(s) · ${todo.length ? `drawing ${todo.length}` : 'every one already matches'}`);
+  if (todo.length) {
+    const browser = await chromium.launch({ headless: true, args: plateBrowserArgs() });
+    try {
+      const raster = await rasterBackend(browser);
+      const queue = [...todo];
+      const worker = async () => {
+        for (let j = queue.shift(); j; j = queue.shift()) {
+          await renderOne(browser, j.html, j.mp4, video.brand, j.label, raster, outputFrame(video.config), j.carry);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(PLATE_CONCURRENCY, todo.length) }, worker));
+    } finally {
+      await browser.close();
+    }
+  }
+  for (const { seg, mp4 } of rows) {
+    seg.file = mp4;
+    seg.carryBaked = true;
+  }
+  const keep = new Set([...jobs.keys()].flatMap((m) => [basename(m), basename(m).replace(/\.mp4$/, '.render.json')]));
+  for (const name of readdirSync(dir)) if (!keep.has(name)) rmSync(join(dir, name), { force: true });
+  return rows.length;
 }
 
 /** Plate mp4s the edit plan reads (open, close, every interstitial) that are not on disk. */

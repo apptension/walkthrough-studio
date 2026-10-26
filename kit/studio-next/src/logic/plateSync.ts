@@ -85,6 +85,18 @@ export function canReloadPlateFrame({
   return activePlateId === plateId || playheadPlateId === plateId;
 }
 
+/**
+ * A look or background rebuild of the plate already on stage. The new HTML arms off-screen
+ * and swaps in, so the corner loader (a wait with nothing to show) would only flash.
+ */
+export function stageReloadIsQuiet(
+  activePlateId: string | null | undefined,
+  readyId: string | null | undefined,
+  loadingId: string | null | undefined,
+): boolean {
+  return Boolean(loadingId && activePlateId === loadingId && readyId === loadingId);
+}
+
 function clipIndexAt(seq: TimelineClip[] | null | undefined, t: number): number {
   const list = seq || [];
   for (let i = list.length - 1; i >= 0; i--) if ((list[i] as TimelineClip).at <= t + 1e-4) return i;

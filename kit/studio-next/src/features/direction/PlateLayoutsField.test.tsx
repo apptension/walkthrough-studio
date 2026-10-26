@@ -46,15 +46,15 @@ describe('PlateLayoutsField', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows opener and closer radios with the current pick checked', () => {
+  it('shows opener and closer layout tiles with the current pick checked', () => {
     desk.set({ slug: 'demo', video: video() });
     render(<PlateLayoutsField />);
     const open = radios('openLayoutGrid');
     expect(open.map((b) => b.dataset.plateLayout)).toEqual(['classic', 'split', 'kinetic']);
     expect(open.map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
-    expect(open[0]).toHaveClass('active');
+    expect(open[0]).toHaveClass('on');
     const close = radios('closeLayoutGrid');
-    expect(close.find((b) => b.classList.contains('active'))?.dataset.plateLayout).toBe('cards');
+    expect(close.find((b) => b.classList.contains('on'))?.dataset.plateLayout).toBe('cards');
     expect(open[1]).toHaveTextContent('Split hero');
     expect(open[1]).toHaveAttribute('title', 'Lockup on a panel');
   });
@@ -73,7 +73,7 @@ describe('PlateLayoutsField', () => {
     await waitFor(() => expect(desk.get().video?.plateLayouts?.open).toBe('kinetic'));
     expect(body).toEqual({ id: 'open', layout: 'kinetic' });
     expect(show).toHaveBeenCalledWith('open');
-    expect(radios('openLayoutGrid')[2]).toHaveClass('active');
+    expect(radios('openLayoutGrid')[2]).toHaveClass('on');
     expect(desk.get().toasts.at(-1)?.title).toBe('Layout set');
   });
 

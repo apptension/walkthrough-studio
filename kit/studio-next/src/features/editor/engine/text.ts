@@ -1,6 +1,7 @@
 import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { cardEditLandingEd, cardMarkInClip, cardMarkKey } from '@/logic/liveCardStage';
+import { plateClockMs } from '@/logic/plateTiming';
 import { neonFxHtml } from '@/ui/neonFx';
 
 import { select, showInspectorTab } from './edits';
@@ -11,9 +12,11 @@ import { plateEditPeakSec } from './plateCss';
 import { curClip, recToEd } from './seq';
 import { ensureLiveCards, liveCardAtPlayhead, liveHitAtPlayhead, paintClipChip, plateReady, renderFrame, requestPlate, resolveLiveCard } from './stage';
 import { ed, htmlPlates, timers, type PlateFieldState } from './state';
+import { COLLAPSE_ICON, PANEL_MOVE_HELP, layoutPanels, panelHelpHtml, schedulePanelLayout, setTextPrefersTop, showPanel, type HelpRow } from './stagePanels';
 import { flashHint } from './timeline';
 import { pause, seek } from './transport';
 import type { Clip, FieldDetail } from './types';
+import { copyClipCallout, copyClipFieldNote, parseCopyClips, type CopyClip } from './copyFit';
 import { $, ICONS, clamp, escapeHtml, fieldLabel, hotkeyMod, icon } from './util';
 
 /** Text editing on plates and live cards, plus the stage tip (#edTextBar), from `kit/studio/editor.js`. */
@@ -211,7 +214,7 @@ export function exitText(): void {
   if (ed.needsPlateResync) flushPlateResync();
   else if (P.ready() && !wasLiveCard) {
     const c = curClip();
-    const ms = c?.kind === 'plate' && c.plateId === P.ready() ? Math.max(0, (ed.t - c.at) * 1000) : 0;
+    const ms = c?.kind === 'plate' && c.plateId === P.ready() ? plateClockMs(c, ed.t) : 0;
     P.restart?.(ms);
   }
   // Live cards: renderFrame re-composites and seeks the card under the playhead.
@@ -284,6 +287,7 @@ export function paintFieldPanelLive(): void {
   if (!f) {
     if (empty) empty.hidden = false;
     if (editor) editor.hidden = true;
+    paintCopyLong(null);
     return;
   }
   if (empty) empty.hidden = true;
@@ -295,29 +299,54 @@ export function paintFieldPanelLive(): void {
     ta.value = f.source ?? '';
     ta.rows = f.kind === 'lines' ? 4 : 2;
   }
+  paintCopyLong(f.path);
 }
 
-export function renderPlateFields(): string {
+/** The line under the textarea follows whichever field is open. */
+function paintCopyLong(path: string | null): void {
+  const note = document.querySelector<HTMLElement>('#inspectorRoot [data-copy-long]');
+  const paths = (note?.dataset['paths'] || '').split('|').filter(Boolean);
+  const hit = Boolean(path && paths.includes(path));
+  if (note) note.hidden = !hit;
+  document.querySelector('#inspectorRoot [data-field-editor]')?.classList.toggle('is-long', hit);
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .copy-long-row[data-field]').forEach((btn) => {
+    btn.classList.toggle('on', btn.dataset['field'] === path);
+  });
+}
+
+/** Copy the last render measured as clipping, for the plate this panel is about. */
+function copyClipsFor(plateId: string | null | undefined): CopyClip[] {
+  if (!plateId) return [];
+  const row = htmlPlates().find((p) => p.id === plateId);
+  return parseCopyClips(row?.encode?.notes);
+}
+
+export function renderPlateFields(plateId?: string | null): string {
   const fields = P.fields?.() || [];
   const active = ed.plateField;
   const editing = ed.textMode;
   const mod = hotkeyMod();
+  const id = plateId || ed.liveCardId || (curClip()?.kind === 'plate' ? curClip()?.plateId : null);
+  const clips = copyClipsFor(id);
+  const long = new Set(clips.map((c) => c.path));
+  const callout = copyClipCallout(clips, new Set(fields.map((f) => f.path)), active?.path || null);
   const chips = fields.length
     ? `<div class="ins-field-nav" role="tablist" aria-label="Plate fields">${fields
-        .map(
-          (f) =>
-            `<button type="button" role="tab" class="ins-field-tab${active?.path === f.path ? ' on' : ''}${f.dirty ? ' dirty' : ''}" data-field="${escapeHtml(f.path)}" aria-selected="${active?.path === f.path ? 'true' : 'false'}" title="${escapeHtml(f.path)}"><span>${escapeHtml(fieldLabel(f.path))}</span></button>`,
-        )
+        .map((f) => {
+          const clip = long.has(f.path);
+          return `<button type="button" role="tab" class="ins-field-tab${active?.path === f.path ? ' on' : ''}${f.dirty ? ' dirty' : ''}${clip ? ' is-long' : ''}" data-field="${escapeHtml(f.path)}" aria-selected="${active?.path === f.path ? 'true' : 'false'}" title="${escapeHtml(f.path)}${clip ? ' · clips at the smallest size' : ''}"><span>${escapeHtml(fieldLabel(f.path))}</span></button>`;
+        })
         .join('')}</div>`
     : `<p class="ins-note subtle">This plate has no editable fields yet.</p>`;
   const editor = active
-    ? `<div class="ins-field-panel" data-field-editor>
+    ? `<div class="ins-field-panel${long.has(active.path) ? ' is-long' : ''}" data-field-editor>
           <header class="ins-field-panel-head">
             <strong data-field-label>${escapeHtml(fieldLabel(active.path))}</strong>
             <em data-field-kind>${active.kind === 'lines' ? 'Multi-line' : 'Single line'}</em>
           </header>
           <code class="sr-only" data-field-path>${escapeHtml(active.path)}</code>
           <textarea class="ins-textarea" data-field-src rows="${active.kind === 'lines' ? 4 : 2}" spellcheck="true" aria-label="${escapeHtml(fieldLabel(active.path))} copy">${escapeHtml(active.source || '')}</textarea>
+          ${copyClipFieldNote(clips, active.path)}
           <div class="ins-field-tools">
             <button type="button" class="ins-btn" data-act="field-accent" title="Accent selected words (${mod}B)">${ICONS['sparkle']}Accent</button>
             <button type="button" class="ins-btn ghost" data-act="field-focus">${ICONS['target']}Show on stage</button>
@@ -338,36 +367,14 @@ export function renderPlateFields(): string {
   return section(
     'text',
     'Plate copy',
-    `${chips}${editor}${keys}`,
+    `${callout}${chips}${editor}${keys}`,
     `<button type="button" class="ins-link${editing ? ' is-on' : ''}" data-act="text" aria-pressed="${editing ? 'true' : 'false'}">${
       editing ? 'Done editing' : 'Edit on stage'
     }</button>`,
   );
 }
 
-export const TB_POS_KEY = 'wts.edTextBar.pos';
 export const TB_HIDE_KEY = 'wts.edTextBar.coachHidden';
-let textBarDrag: { dx: number; dy: number; host: HTMLElement } | null = null;
-
-export function textBarPos(): { x: number; y: number } | null {
-  try {
-    const raw = localStorage.getItem(TB_POS_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as { x?: unknown; y?: unknown } | null;
-    if (Number.isFinite(p?.x) && Number.isFinite(p?.y)) return { x: p?.x as number, y: p?.y as number };
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-export function saveTextBarPos(x: number, y: number): void {
-  try {
-    localStorage.setItem(TB_POS_KEY, JSON.stringify({ x: Math.round(x), y: Math.round(y) }));
-  } catch {
-    /* ignore */
-  }
-}
 
 export function coachHidden(): boolean {
   try {
@@ -384,146 +391,6 @@ export function setCoachHidden(on: boolean): void {
   } catch {
     /* ignore */
   }
-}
-
-/** Tip lives in #playerPlate (overflow clipped) — not inside .fhd-fit. */
-export function textBarHost(bar: HTMLElement | null = $('edTextBar')): HTMLElement | null {
-  return bar?.parentElement || null;
-}
-
-/** Keep a dragged tip inside the stage when the window / panels / timeline resize. */
-export function clampTextBarIntoHost(bar: HTMLElement | null = $('edTextBar'), { persist = true }: { persist?: boolean } = {}): void {
-  if (!bar || bar.hidden || textBarDrag || !bar.classList.contains('is-placed')) return;
-  const host = textBarHost(bar);
-  if (!host || host.clientWidth < 40 || host.clientHeight < 40) return;
-  const w = bar.offsetWidth || 240;
-  const h = bar.offsetHeight || 36;
-  const saved = textBarPos();
-  let x: number | undefined = parseFloat(bar.style.getPropertyValue('--ed-tb-x'));
-  let y: number | undefined = parseFloat(bar.style.getPropertyValue('--ed-tb-y'));
-  if (!Number.isFinite(x)) x = saved?.x;
-  if (!Number.isFinite(y)) y = saved?.y;
-  if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return;
-  const nextX = clamp(x, 8, Math.max(8, host.clientWidth - w - 8));
-  const nextY = clamp(y, 8, Math.max(8, host.clientHeight - h - 8));
-  if (nextX === x && nextY === y) return;
-  bar.style.setProperty('--ed-tb-x', `${nextX}px`);
-  bar.style.setProperty('--ed-tb-y', `${nextY}px`);
-  if (persist) saveTextBarPos(nextX, nextY);
-}
-
-export function applyTextBarPlacement(bar: HTMLElement | null, { preferTop = false }: { preferTop?: boolean } = {}): void {
-  if (!bar) return;
-  const placed = textBarPos();
-  bar.classList.toggle('is-placed', Boolean(placed));
-  bar.classList.toggle('is-dock-top', !placed && preferTop);
-  if (placed) {
-    bar.style.setProperty('--ed-tb-x', `${placed.x}px`);
-    bar.style.setProperty('--ed-tb-y', `${placed.y}px`);
-    requestAnimationFrame(() => clampTextBarIntoHost(bar));
-  } else {
-    bar.style.removeProperty('--ed-tb-x');
-    bar.style.removeProperty('--ed-tb-y');
-  }
-}
-
-/** Drag / double-click-reset for the stage tip. Unbinds through `signal` (the legacy wired once). */
-export function wireTextBarChrome(signal: AbortSignal): void {
-  const bar = $('edTextBar');
-  if (!bar || bar.dataset['tbWired']) return;
-  bar.dataset['tbWired'] = '1';
-  signal.addEventListener('abort', () => {
-    delete bar.dataset['tbWired'];
-    textBarDrag = null;
-  });
-  const hostEl = () => textBarHost(bar);
-  bar.addEventListener(
-    'pointerdown',
-    (e) => {
-      const target = e.target as HTMLElement;
-      const grip = target.closest('[data-tb-grip]');
-      // Allow dragging from the grip, or from empty tip chrome (not buttons/fields).
-      const fromChrome =
-        grip ||
-        target === bar ||
-        target.classList?.contains('ed-tb-badge') ||
-        target.classList?.contains('ed-tb-msg') ||
-        target.classList?.contains('ed-tb-field');
-      if (!fromChrome || target.closest('button:not([data-tb-grip])')) return;
-      e.preventDefault();
-      const host = hostEl();
-      const hr = host?.getBoundingClientRect();
-      const br = bar.getBoundingClientRect();
-      if (!host || !hr) return;
-      textBarDrag = {
-        dx: e.clientX - br.left,
-        dy: e.clientY - br.top,
-        host,
-      };
-      bar.classList.add('is-dragging', 'is-placed');
-      bar.classList.remove('is-dock-top');
-      try {
-        bar.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-    },
-    { signal },
-  );
-  bar.addEventListener(
-    'pointermove',
-    (e) => {
-      if (!textBarDrag) return;
-      const hr = textBarDrag.host.getBoundingClientRect();
-      const w = bar.offsetWidth;
-      const h = bar.offsetHeight;
-      const x = clamp(e.clientX - hr.left - textBarDrag.dx, 8, Math.max(8, hr.width - w - 8));
-      const y = clamp(e.clientY - hr.top - textBarDrag.dy, 8, Math.max(8, hr.height - h - 8));
-      bar.style.setProperty('--ed-tb-x', `${x}px`);
-      bar.style.setProperty('--ed-tb-y', `${y}px`);
-    },
-    { signal },
-  );
-  const endDrag = (e: PointerEvent) => {
-    if (!textBarDrag) return;
-    const x = parseFloat(bar.style.getPropertyValue('--ed-tb-x'));
-    const y = parseFloat(bar.style.getPropertyValue('--ed-tb-y'));
-    if (Number.isFinite(x) && Number.isFinite(y)) saveTextBarPos(x, y);
-    bar.classList.remove('is-dragging');
-    textBarDrag = null;
-    clampTextBarIntoHost(bar);
-    try {
-      bar.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-  };
-  bar.addEventListener('pointerup', endDrag, { signal });
-  bar.addEventListener('pointercancel', endDrag, { signal });
-  bar.addEventListener(
-    'dblclick',
-    (e) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-tb-grip]') && target !== bar) return;
-      try {
-        localStorage.removeItem(TB_POS_KEY);
-      } catch {
-        /* ignore */
-      }
-      bar.classList.remove('is-placed');
-      bar.style.removeProperty('--ed-tb-x');
-      bar.style.removeProperty('--ed-tb-y');
-      paintTextMode();
-    },
-    { signal },
-  );
-  const host = hostEl();
-  if (host && typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => clampTextBarIntoHost(bar));
-    ro.observe(host);
-    signal.addEventListener('abort', () => ro.disconnect());
-  }
-  window.addEventListener('resize', () => clampTextBarIntoHost(bar), { signal });
 }
 
 export function cardKindAtPlayhead(): 'chapter' | 'caption' | null {
@@ -552,12 +419,13 @@ export function paintTextMode(): void {
     const onCard = Boolean(ed.liveCardId || liveCard || cardSel);
     const cardKind = cardKindAtPlayhead();
     const hideCoach = coachHidden();
-    const coach = !editing && !dirty && !ed.playing && !hideCoach && (plateClip || Boolean(liveCard) || cardSel);
-    bar.hidden = !(editing || dirty || coach);
+    // A zoom or magnifier on stage owns the frame; the copy tip would sit on top of its editor.
+    const aiming = ed.sel?.type === 'zoom' || ed.sel?.type === 'lens';
+    const coach = !editing && !dirty && !ed.playing && !hideCoach && !aiming && (plateClip || Boolean(liveCard) || cardSel);
+    const show = editing || dirty || coach;
     bar.classList.toggle('is-dirty', dirty);
     bar.classList.toggle('is-editing', editing);
     bar.classList.toggle('is-coach', coach && !editing && !dirty);
-    applyTextBarPlacement(bar, { preferTop: onCard && cardKind === 'caption' });
     const mod = hotkeyMod();
     const fieldName = ed.plateField?.path ? fieldLabel(ed.plateField.path) : '';
     const kindLabel = cardKind === 'chapter' ? 'chapter' : cardKind === 'caption' ? 'caption' : 'card';
@@ -575,7 +443,17 @@ export function paintTextMode(): void {
         : onCard
           ? `Edit the ${kindLabel} copy · drag this tip if it covers text`
           : 'Click text on the plate to edit';
-    const grip = `<button type="button" class="ed-tb-grip sp-icon-btn is-grip" data-tb-grip title="Drag to move" aria-label="Drag tip">${icon('grip')}</button><span class="sp-ico" aria-hidden="true">${ICONS['text']}</span>`;
+    const grip = `<button type="button" class="sp-icon-btn is-grip" data-sp-grip title="Drag to move · edges dock · double-click to put it back" aria-label="Move text tools (arrow keys nudge, Home or End docks)">${icon('grip')}</button><span class="sp-ico" aria-hidden="true">${ICONS['text']}</span>`;
+    const collapseBtn = `<button type="button" class="sp-icon-btn sp-collapse" data-sp-collapse aria-expanded="true" title="Collapse to a pill" aria-label="Collapse text tools to a pill">${COLLAPSE_ICON}</button>`;
+    const state = dirty ? 'dirty' : editing ? 'editing' : 'tip';
+    const stateLabel = dirty ? 'unsaved changes' : editing ? 'editing' : 'tip';
+    const pillLabel = dirty ? 'Unsaved' : editing ? 'Editing' : 'Text';
+    const pillAct = dirty
+      ? `<button type="button" class="sp-pill-act is-save" data-text="save" title="Save the copy" aria-label="Save the copy">${ICONS['check']}</button>`
+      : editing
+        ? `<button type="button" class="sp-pill-act" data-text="done" title="Done (Esc)" aria-label="Done editing">${ICONS['check']}</button>`
+        : '';
+    const mini = `<div class="sp-mini"><button type="button" class="sp-pill" data-sp-expand aria-expanded="false" title="Expand text tools · drag to move" aria-label="Expand text tools (${stateLabel})"><span class="sp-ico" aria-hidden="true">${ICONS['text']}<i class="sp-pill-dot" data-state="${state}" aria-hidden="true"></i></span><span class="sp-pill-label">${pillLabel}</span></button>${pillAct}</div>`;
     const close =
       coach && !editing && !dirty
         ? `<button type="button" class="ed-tb-close sp-icon-btn" data-text="dismiss" title="Hide tip" aria-label="Hide tip">${ICONS['x']}</button>`
@@ -584,25 +462,39 @@ export function paintTextMode(): void {
       !editing && !dirty && onCard
         ? `<button type="button" class="ed-pill-btn primary" data-text="edit-card" title="Edit ${kindLabel} copy on stage">${neonFxHtml()}${ICONS['plate']}<span>Edit copy</span></button>`
         : '';
-    const html = `${grip}<span class="ed-tb-badge">${badge}</span>${
+    const keys: HelpRow[] = editing
+      ? [
+          { keys: ['Tab'], label: 'next field' },
+          { keys: ['⇧', 'Tab'], label: 'previous field' },
+          { keys: [`${mod}B`], label: 'accent the selection' },
+          { keys: ['Esc'], label: 'done' },
+        ]
+      : [{ keys: ['Click'], label: onCard ? `a word on the ${kindLabel} to edit it` : 'a word on the slide to edit it' }];
+    const help = `<span class="sp-help">${panelHelpHtml('Text', [...keys, ...PANEL_MOVE_HELP])}</span>`;
+    const html = `<div class="sp-full">${grip}<span class="ed-tb-badge">${badge}</span>${
       editing && fieldName ? `<span class="ed-tb-field">${escapeHtml(fieldName)}</span>` : ''
     }${msg ? `<span class="ed-tb-msg">${msg}</span>` : '<span class="ed-tb-spacer"></span>'}${
       editing
-        ? `<span class="ed-tb-keys" aria-hidden="true"><i title="Next field"><kbd>Tab</kbd></i><i title="Accent selection"><kbd>${mod}B</kbd></i><i title="Done"><kbd>Esc</kbd></i></span>
-             <button type="button" class="ed-pill-btn ed-accent-btn" data-text="accent" aria-pressed="false" disabled title="Accent the selected words (${mod}B)">${ICONS['sparkle']}<span>Accent</span></button>`
+        ? `<button type="button" class="ed-pill-btn ed-accent-btn" data-text="accent" aria-pressed="false" disabled title="Accent the selected words (${mod}B)">${ICONS['sparkle']}<span>Accent</span></button>`
         : ''
     }${editBtn}${
       dirty
         ? `<span class="sp-sep" aria-hidden="true"></span><button type="button" class="ed-pill-btn" data-text="discard" title="Throw away unsaved copy">${ICONS['undo']}<span>Discard</span></button><button type="button" class="ed-pill-btn primary" data-text="save" title="Save the copy">${neonFxHtml()}${ICONS['check']}<span>Save</span></button>`
         : ''
-    }${editing ? `<button type="button" class="ed-pill-btn primary" data-text="done" title="Done (Esc)">${neonFxHtml()}${ICONS['check']}<span>Done</span></button>` : ''}${close}`;
+    }${editing ? `<button type="button" class="ed-pill-btn primary" data-text="done" title="Done (Esc)">${neonFxHtml()}${ICONS['check']}<span>Done</span></button>` : ''}<span class="sp-sep" aria-hidden="true"></span>${help}${collapseBtn}${close}</div>${mini}`;
     // Avoid rewriting the tip on every paint (resize/scrub) — that flickers like a hide.
-    if (bar.dataset['tbHtml'] !== html) {
+    // A leaving bar keeps its last copy so the exit doesn't flash the next state.
+    if (show && bar.dataset['tbHtml'] !== html) {
       bar.dataset['tbHtml'] = html;
       bar.innerHTML = html;
     }
+    const topChanged = setTextPrefersTop(onCard && cardKind === 'caption');
+    const entering = showPanel('text', show);
     paintAccentButton(ed.plateField || P.selection?.() || P.accentState?.() || null);
-    if (!bar.hidden) requestAnimationFrame(() => clampTextBarIntoHost(bar));
+    if (show && !entering) {
+      if (topChanged) layoutPanels();
+      else schedulePanelLayout();
+    }
   }
   const transport = $('edEditText');
   if (transport) {

@@ -9,6 +9,7 @@ import {
   listPlateFields,
   loadPlateFrame,
   plateMotionMode,
+  preloadPlateFrame,
   plateRestart,
   plateSeek,
   plateSelectionDetail,
@@ -21,8 +22,10 @@ import {
 
 /** `ctx.plate` — the plate controller `kit/studio/app.js#initStages` handed the editor. */
 export const P = {
-  load: (id: string, opts?: { force?: boolean }) => loadPlateFrame(id, opts),
+  load: (id: string, opts?: { force?: boolean; motionAt?: number }) => loadPlateFrame(id, opts),
   ready: (): string | null => frameReady(),
+  /** Arm the next document off-stage so its cut is a swap, not a load. */
+  preload: preloadPlateFrame,
   motion: plateMotionMode,
   seek: plateSeek,
   restart: plateRestart,

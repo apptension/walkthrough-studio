@@ -5,7 +5,7 @@ import { desk } from '@/desk/store';
 import { makeVideo } from '@/test/factories';
 import { server } from '@/test/msw/server';
 
-import { renderLook } from './inspector';
+import { inspectorStaysPut, renderLook } from './inspector';
 import { plateApi } from './look';
 import { ed, resetEdForTests } from './state';
 import type { DeckPlate } from './types';
@@ -22,11 +22,12 @@ const LAYOUTS = {
   ],
 };
 
-const select = (html: string) => {
+const tiles = (html: string) => {
   const host = document.createElement('div');
   host.innerHTML = html;
-  return host.querySelector<HTMLSelectElement>('select[data-plate-layout]');
+  return [...host.querySelectorAll<HTMLButtonElement>('button[data-plate-layout]')];
 };
+const picked = (list: HTMLButtonElement[]) => list.find((b) => b.classList.contains('on'))?.dataset['plateLayout'];
 
 beforeEach(() => {
   desk.reset();
@@ -35,22 +36,32 @@ beforeEach(() => {
 });
 
 describe('inspector Layout row', () => {
-  it('offers the layouts of the plate kind with the current one selected', () => {
-    const sel = select(renderLook({ id: 'modes', type: 'features', layout: 'bento' }));
-    expect(sel).not.toBeNull();
-    expect([...sel!.options].map((o) => o.value)).toEqual(['grid', 'bento']);
-    expect(sel!.value).toBe('bento');
+  it('offers the layouts of the plate kind as tiles with the current one picked', () => {
+    const list = tiles(renderLook({ id: 'modes', type: 'features', layout: 'bento' }));
+    expect(list.map((b) => b.dataset['plateLayout'])).toEqual(['grid', 'bento']);
+    expect(picked(list)).toBe('bento');
+    expect(list[0]!.querySelector('svg.lk-wire')).not.toBeNull();
   });
 
   it('keys open/close plates by id and falls back to the default layout', () => {
-    const sel = select(renderLook({ id: 'open', type: 'open' }));
-    expect(sel!.value).toBe('classic');
-    expect(sel!.options[1]).toHaveAttribute('title', 'Mesh irises open');
+    const list = tiles(renderLook({ id: 'open', type: 'open' }));
+    expect(picked(list)).toBe('classic');
+    expect(list[1]).toHaveAttribute('title', 'Mesh irises open');
   });
 
   it('is absent for kinds with one composition', () => {
-    expect(select(renderLook({ id: 'q', type: 'quote' }))).toBeNull();
-    expect(select(renderLook(null))).toBeNull();
+    expect(tiles(renderLook({ id: 'q', type: 'quote' }))).toEqual([]);
+    expect(tiles(renderLook(null))).toEqual([]);
+  });
+
+  it('draws every look option as a tile, with the video default first', () => {
+    const host = document.createElement('div');
+    host.innerHTML = renderLook({ id: 'modes', type: 'features', motion: { energy: 'punchy' } });
+    const energy = [...host.querySelectorAll<HTMLButtonElement>('[data-look-key="energy"]')];
+    expect(energy[0]!.dataset['look']).toBe('');
+    expect(energy.find((b) => b.classList.contains('on'))?.dataset['look']).toBe('punchy');
+    const reveal = host.querySelectorAll('[data-look-key="titleReveal"] .lk-rv');
+    expect(reveal.length).toBeGreaterThan(1);
   });
 
   it('plateApi stores the saved layout on the deck plate', async () => {
@@ -68,5 +79,17 @@ describe('inspector Layout row', () => {
     expect(posted).toEqual({ layout: 'bento' });
     expect(plate.layout).toBe('bento');
     expect(plate.style).toEqual({ '--x': '1' });
+  });
+});
+
+describe('inspectorStaysPut', () => {
+  it('keeps the open inspector still when the same slide repaints', () => {
+    expect(inspectorStaysPut('clip:open:', 'clip:open:', true)).toBe(true);
+  });
+
+  it('animates in when the selection changes or the pane was empty', () => {
+    expect(inspectorStaysPut('clip:open:', 'clip:close:', true)).toBe(false);
+    expect(inspectorStaysPut('', 'clip:open:', true)).toBe(false);
+    expect(inspectorStaysPut('clip:open:', 'clip:open:', false)).toBe(false);
   });
 });

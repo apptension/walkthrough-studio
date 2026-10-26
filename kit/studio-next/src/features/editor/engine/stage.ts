@@ -10,15 +10,22 @@ import {
   shouldBlacklistPlateLoad,
   soloJoinFocus,
   stagePointerOwner,
+  stageReloadIsQuiet,
 } from '@/logic/plateSync';
+import { getMarkMode, setMarkMode } from '@/logic/mark';
+import { isCarryJoin } from '@/logic/plateCarry';
+import { nextStageSurface } from '@/logic/platePreload';
+import { clipPlayback, plateClockMs } from '@/logic/plateTiming';
 import { stageLayout } from '@/logic/stageLayout';
 import { sectionAtPlayhead } from './layoutPreview';
 import { zoomPreviewStyle } from '@/logic/zoomAim';
 
-import { paintLensBox, paintZoomBox, selectedShot } from './aim';
+import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
+import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { P } from './plateCtl';
+import { onPlateGlassChange, placePlateGlass, plateGlassReady, syncPlateGlass, type GlassGeom } from './plateGlass';
 import { clipIndexAt, curClip, edToRec, rateAt, selectedLens } from './seq';
 import { ed, htmlPlates, live, liveH, liveW, setHtmlPlates, slug, video } from './state';
 import { flushPlateResync, markPlateResync, paintTextMode } from './text';
@@ -119,18 +126,30 @@ export const plateHolds = (id: string | null | undefined): boolean => Boolean(id
 // A stale frame counts as ready only while it holds unsaved copy — a forced reload would drop that.
 export const plateReady = (id: string | null | undefined): boolean => plateHolds(id) && !(ed.stalePlates.has(id || '') && !P.dirty());
 
+/**
+ * A caption written in the Editor has a mark immediately, but its overlay HTML arrives on the
+ * next plates list. "Some live card exists" is not enough — that list is the script's cards.
+ */
+function addedCardUnresolved(): boolean {
+  const marks = ed.deck?.marks;
+  if (!marks?.length) return false;
+  const plates = htmlPlates() || [];
+  return marks.some(
+    (m) => m.added && (m.kind === 'chapter' || m.kind === 'caption') && !resolveLiveCardFromPlates(m, plates, marks),
+  );
+}
+
 /** Ensure Program live-card HTML rows exist (rebuild if Studio loaded before Apply live cards). */
 export async function ensureLiveCards(cardId: string | null = null): Promise<boolean> {
   const has = (id: string) => (htmlPlates() || []).some((p) => p.id === id && p.htmlUrl);
   const anyLive = () => (htmlPlates() || []).some((p) => p.liveCard && p.htmlUrl);
-  if (cardId && has(cardId)) return true;
-  if (!cardId && anyLive()) return true;
+  const listed = (): boolean => (cardId ? has(cardId) : anyLive() && !addedCardUnresolved());
+  if (listed()) return true;
   // Prefer in-memory video payload before hitting the network.
   const fromVideo = desk.get().video?.htmlPlates as unknown as PlateRow[] | undefined;
   if (fromVideo?.length) {
     setHtmlPlates(fromVideo, { video: false });
-    if (cardId && has(cardId)) return true;
-    if (!cardId && anyLive()) return true;
+    if (listed()) return true;
   }
   try {
     const r = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates`);
@@ -138,15 +157,14 @@ export async function ensureLiveCards(cardId: string | null = null): Promise<boo
   } catch {
     /* ignore */
   }
-  if (cardId && has(cardId)) return true;
-  if (!cardId && anyLive()) return true;
+  if (listed()) return true;
   try {
     const r = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates/rebuild-html`, { method: 'POST', body: {} });
     if (r?.plates) setHtmlPlates(r.plates);
   } catch {
     /* ignore */
   }
-  return cardId ? has(cardId) : anyLive();
+  return listed();
 }
 
 export function plateHtmlKnown(id: string): boolean {
@@ -205,7 +223,7 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
       if (String(id).startsWith('overlay:')) P.composite(true);
       if (ed.needsPlateResync === id) {
         const c = curClip();
-        const ms = c && playheadOnPlate(c, id) ? Math.max(0, (ed.t - c.at) * 1000) : 0;
+        const ms = c && playheadOnPlate(c, id) ? plateClockMs(c, ed.t) : 0;
         P.restart(ms);
         ed.needsPlateResync = null;
       }
@@ -220,6 +238,7 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
 
 export function joinStyle(c: Clip): string {
   const j = c.join;
+  if (j?.type === 'continue') return 'continue';
   const pinned = j?.pinned?.style;
   const st = pinned && pinned !== 'directed' ? pinned : j?.type || ed.deck?.transitions?.style || 'dissolve';
   if (j?.card && st !== 'dip') return 'dissolve';
@@ -284,17 +303,19 @@ export function drawLive(c: Clip, { outgoing = false }: { outgoing?: boolean } =
 }
 
 // ─── Magnifier (canvas loupe over the recording; not scaled by the camera zoom) ──────────
-export function lensAt(rec: number | null): Lens | null {
+export function lensAt(rec: number | null, clip: string | null = null): Lens | null {
   if (rec == null || !ed.fx) return null;
   const sel = selectedLens();
-  const list = (ed.deck?.lenses || []).filter((l) => rec >= l.t && rec <= l.t + l.dur);
+  // `rec` is the recording clock for a recording and the plate's own clock for a plate, so a
+  // mark only answers for the surface it was written on.
+  const list = (ed.deck?.lenses || []).filter((l) => (l.clip || null) === clip && rec >= l.t && rec <= l.t + l.dur);
   // While aiming, the selected lens shows where it is going to be.
   if (sel && sel.source !== 'off' && ed.lensAim && !ed.playing) return { ...sel, ...lensShape(sel, ed.lensAim) };
   return list.find((l) => l.key === sel?.key) || list[list.length - 1] || null;
 }
 
 /** Geometry of a lens with its target moved/resized (same sizing rules as lensGeometry). */
-export function lensShape(_lens: Lens, aim: { x: number; y: number; w: number; h: number; zoom?: number | undefined }): {
+export function lensShape(lens: Lens, aim: { x: number; y: number; w: number; h: number; zoom?: number | undefined }): {
   rect: { x: number; y: number; w: number; h: number };
   path: null;
   zoom: number;
@@ -302,7 +323,7 @@ export function lensShape(_lens: Lens, aim: { x: number; y: number; w: number; h
   S: number;
 } {
   const rect = { x: aim.x - aim.w / 2, y: aim.y - aim.h / 2, w: aim.w, h: aim.h };
-  const { zoom, diameter, S } = lensLoupe(Math.max(rect.w, rect.h), aim.zoom);
+  const { zoom, diameter, S } = lensLoupe(Math.max(rect.w, rect.h), aim.zoom, aimSpace(lens.clip));
   return { rect, path: null, zoom, diameter, S };
 }
 
@@ -340,11 +361,38 @@ export function loupeSourceCanvas(v: HTMLVideoElement, cx: number, cy: number, c
   return buf;
 }
 
-export function drawLens(rec: number | null): Lens | null {
-  const cv = $<HTMLCanvasElement>('liveLens');
-  const v = video();
-  if (!cv || !v) return null;
-  const lens = lensAt(rec);
+export interface LoupeSource {
+  el?: HTMLVideoElement | null;
+  width?: number;
+  height?: number;
+  clip?: string | null;
+  /** The canvas to paint on, and the element whose box the glass is scaled onto. */
+  canvas?: string;
+  over?: string;
+  /** A live picture placed under the canvas instead of sampled pixels; the canvas paints only the glass. */
+  glass?: ((g: GlassGeom | null) => void) | null;
+}
+
+export function drawLens(rec: number | null, src: LoupeSource = {}): Lens | null {
+  const glass = src.glass ?? null;
+  let placed = false;
+  try {
+    const lens = paintLens(rec, src, (g) => {
+      placed = true;
+      glass?.(g);
+    });
+    return lens;
+  } finally {
+    if (glass && !placed) glass(null);
+  }
+}
+
+function paintLens(rec: number | null, src: LoupeSource, place: (g: GlassGeom) => void): Lens | null {
+  const cv = $<HTMLCanvasElement>(src.canvas || 'liveLens');
+  const live = Boolean(src.glass);
+  const v = live ? null : (src.el ?? video());
+  if (!cv || (!v && !live)) return null;
+  const lens = lensAt(rec, src.clip ?? null);
   const selected = selectedLens();
   const hold = planFrameEditor({
     selected: Boolean(selected) && selected?.source !== 'off',
@@ -353,17 +401,27 @@ export function drawLens(rec: number | null): Lens | null {
     playhead: rec,
     playing: ed.playing,
   }).visible;
-  const vp = $('liveViewport');
-  const cssW = vp?.clientWidth || 0;
+  const vp = $(src.over || 'liveViewport');
+  // A plate's frame is scaled to fit inside its pane, so the glass follows that box rather than
+  // the pane: `getBoundingClientRect` already has the fit transform baked in.
+  const box = src.over ? vp?.getBoundingClientRect() : null;
+  const cssW = (box ? box.width : vp?.clientWidth) || 0;
+  const cssH = (box ? box.height : vp?.clientHeight) || 0;
   const cw = Math.round(cssW * (window.devicePixelRatio || 1));
-  const ch = Math.round((vp?.clientHeight || 0) * (window.devicePixelRatio || 1));
+  const ch = Math.round(cssH * (window.devicePixelRatio || 1));
   if (cv.width !== cw || cv.height !== ch) {
     cv.width = cw;
     cv.height = ch;
   }
+  if (box) {
+    const host = cv.offsetParent?.getBoundingClientRect();
+    cv.style.width = `${cssW}px`;
+    cv.style.height = `${cssH}px`;
+    cv.style.transform = `translate(${Math.round(box.left - (host?.left ?? 0))}px, ${Math.round(box.top - (host?.top ?? 0))}px)`;
+  }
   const g = cv.getContext('2d');
   if (!g) return null;
-  const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v.readyState, hold });
+  const paint = planLensPaint({ hasLens: Boolean(lens), viewportCssPx: cssW, readyState: v ? v.readyState : 4, hold });
   if (paint.action === 'clear') {
     g.clearRect(0, 0, cv.width, cv.height);
     return null;
@@ -371,8 +429,8 @@ export function drawLens(rec: number | null): Lens | null {
   // Mid-seek the decoder often dips below HAVE_CURRENT_DATA — keep the last loupe.
   if (paint.action === 'keep' || !lens || rec == null) return lens;
   g.clearRect(0, 0, cv.width, cv.height);
-  const W = liveW();
-  const H = liveH();
+  const W = src.width || liveW();
+  const H = src.height || liveH();
   const k = cw / W;
   const aiming = ed.lensAim && !ed.playing && lens.key === ed.sel?.key;
   const T = rec - lens.t;
@@ -403,6 +461,27 @@ export function drawLens(rec: number | null): Lens | null {
   g.fillStyle = '#000';
   g.fill();
   g.restore();
+  if (!v) {
+    // The live picture sits under this canvas: open the disc the shadow just filled and put it there.
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.globalAlpha = 1;
+    g.beginPath();
+    g.arc(mx, my, Rk, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+    const host = cv.offsetParent?.getBoundingClientRect();
+    const kc = cssW / W;
+    place({
+      left: (box ? box.left - (host?.left ?? 0) : 0) + cx * kc,
+      top: (box ? box.top - (host?.top ?? 0) : 0) + cy * kc,
+      r: R * kc,
+      cx,
+      cy,
+      scale: kc * lens.zoom * st.swell,
+      alpha: st.alpha,
+    });
+  }
   // Glass: concentric bands, each drawing the magnified frame at that radius' sampling factor
   // (outer bands squeeze toward the bevel, the centre stays flat) — the canvas take on geq's
   // per-pixel refraction.
@@ -411,9 +490,9 @@ export function drawLens(rec: number | null): Lens | null {
   g.arc(mx, my, Rk, 0, Math.PI * 2);
   g.clip();
   try {
-    const src = loupeSourceCanvas(v, cx, cy, crop, W, H);
-    const full = src.width * lens.zoom * k; // on-screen size of the source at full magnification
-    const bands = 14;
+    const src = v ? loupeSourceCanvas(v, cx, cy, crop, W, H) : null;
+    const full = (src?.width ?? 0) * lens.zoom * k; // on-screen size of the source at full magnification
+    const bands = src ? 14 : 0;
     for (let i = bands - 1; i >= 0; i--) {
       const d1 = (i + 1) / bands;
       const dm = (i + 0.5) / bands;
@@ -425,7 +504,7 @@ export function drawLens(rec: number | null): Lens | null {
         g.clip();
       }
       const size = full / gF;
-      g.drawImage(src, mx - size / 2, my - size / 2, size, size);
+      if (src) g.drawImage(src, mx - size / 2, my - size / 2, size, size);
       if (i < bands - 1) g.restore();
     }
   } catch {
@@ -483,14 +562,141 @@ export function drawLens(rec: number | null): Lens | null {
   return lens;
 }
 
+/**
+ * The plate's rendered mp4, held off-DOM and seeked alongside the iframe.
+ *
+ * The stage shows a plate as a live page, which a canvas cannot sample. The loupe needs real
+ * pixels, so it reads the same frame out of the plate's render — the picture the cut will use.
+ */
+function plateLoupeSource(c: Clip, at: number): HTMLVideoElement | null {
+  const url = (ed.deck?.plates || []).find((p) => p.id === (c.repeatOf || c.plateId))?.mp4Url;
+  if (!url) return null;
+  let v = ed.plateLoupe;
+  if (!v) {
+    v = document.createElement('video');
+    v.muted = true;
+    v.preload = 'auto';
+    v.playsInline = true;
+    // A video has to be in the document for Chromium to decode frames a canvas can read, so it
+    // sits in the plate pane at one pixel: present to the decoder, invisible on stage.
+    v.className = 'plate-loupe-src';
+    // The first frame and every seek land after this call — repaint so the glass catches up.
+    const again = () => renderFrame();
+    v.addEventListener('loadeddata', again);
+    v.addEventListener('seeked', again);
+    ($('fhdFit') || document.body).appendChild(v);
+    ed.plateLoupe = v;
+  }
+  if (v.getAttribute('src') !== url) {
+    v.setAttribute('src', url);
+    v.load();
+  }
+  if (v.readyState < 1) return v;
+  const clip = c.repeatOf || c.plateId || c.id;
+  const sel = selectedLens();
+  const needed = Boolean(lensAt(at, clip) || (sel && sel.clip === clip));
+  const lag = at - (v.currentTime || 0);
+  const drift = Math.abs(lag);
+  if (!needed) {
+    if (!v.paused) v.pause();
+    return v;
+  }
+  if (ed.playing) {
+    // Seeking every frame starves the decoder and the glass stutters, so the source plays with
+    // the preview at the plate's own speed and pauses through holds. Small drift is steered
+    // out with the playback rate, like a clock locking on; only a big jump seeks.
+    const pb = clipPlayback(c);
+    const u = ed.t - c.at;
+    const holding = u > pb.head && u < pb.head + pb.hold;
+    if (holding) {
+      if (!v.paused) v.pause();
+      if (drift > 1 / 60 && !v.seeking) v.currentTime = at;
+      return v;
+    }
+    if (drift > 0.6 && !v.seeking) v.currentTime = at;
+    const steer = drift > 0.6 ? 1 : 1 + clamp(lag * 0.8, -0.3, 0.3);
+    const rate = clamp(pb.rate * steer, 0.25, 4);
+    if (Math.abs(v.playbackRate - rate) > 0.01) v.playbackRate = rate;
+    if (v.paused) void v.play().catch(() => undefined);
+    return v;
+  }
+  if (Math.abs(v.playbackRate - 1) > 0.001) v.playbackRate = 1;
+  if (!v.paused) v.pause();
+  if (drift > 1 / 60) v.currentTime = at;
+  return v;
+}
+
+/** The continuous-background state of the slide drawn this frame (null outside a run). */
+let carryNow: CarryFrame | null = null;
+
 export function drawPlate(c: Clip): boolean {
-  if (!plateReady(c.plateId)) {
+  const ready = plateReady(c.plateId);
+  carryNow = syncCarry(c, plateHolds(c.plateId));
+  if (!ready) {
     void requestPlate(c.plateId);
     return false;
   }
-  if (!ed.textMode) P.seek(Math.max(0, (ed.t - c.at) * 1000));
+  const at = plateClockMs(c, ed.t) / 1000;
+  if (!ed.textMode) P.seek(Math.round(at * 1000), carryNow?.bgMs);
+  paintPlateFx(c, at);
   return true;
 }
+
+function clearPlateZoom(): void {
+  if (ed.plateLoupe && !ed.plateLoupe.paused) ed.plateLoupe.pause();
+  const glass = $<HTMLCanvasElement>('plateLens');
+  if (glass?.width) glass.getContext('2d')?.clearRect(0, 0, glass.width, glass.height);
+  placePlateGlass(null);
+  const layer = $('plateFrame');
+  if (!layer || !layer.style.transform) return;
+  layer.style.transform = '';
+  layer.style.transformOrigin = '';
+}
+
+/** Camera move and magnifier on a plate — the stage twin of the plate's chain in `produce`. */
+function paintPlateFx(c: Clip, at: number): void {
+  // The zoom rides the iframe: #fhdCanvas carries the stage fit and #fhdFit carries transitions,
+  // so pushing in here composes with both instead of fighting them.
+  const layer = $('plateFrame');
+  const clip = c.repeatOf || c.plateId || c.id;
+  const frame = ed.deck?.plateFrame || { width: liveW(), height: liveH() };
+  const shot = !ed.playing && ed.sel?.type === 'zoom' ? selectedShot() : null;
+  const live = (ed.deck?.plateZooms || []).find((z) => z.clip === clip && at >= z.t && at <= z.t + z.dur);
+  const aimed = shot?.clip === clip ? shot : null;
+  if (layer) {
+    const zoom = aimed ? ed.aimZoom || aimed.zoom : ed.fx && live ? live.zoom : 1;
+    if (zoom > 1.001) {
+      const p = (aimed && ed.aim) || aimed?.points?.[0] || { cx: (live?.nx ?? 0.5) * frame.width, cy: (live?.ny ?? 0.5) * frame.height };
+      const style = zoomPreviewStyle(p.cx, p.cy, { zoom, width: frame.width, height: frame.height });
+      layer.style.transformOrigin = style.transformOrigin;
+      layer.style.transform = style.transform;
+    } else {
+      layer.style.transform = '';
+      layer.style.transformOrigin = '';
+    }
+  }
+  // The glass shows the live slide — the copy and look on stage right now, saved or not. The
+  // rendered mp4 only stands in while the live mirror loads.
+  const sel = selectedLens();
+  const needed = Boolean(lensAt(at, clip) || (sel && sel.clip === clip));
+  const mirrored = needed && plateGlassReady($<HTMLIFrameElement>('plateFrame'));
+  if (mirrored) {
+    if (ed.plateLoupe && !ed.plateLoupe.paused) ed.plateLoupe.pause();
+    syncPlateGlass($<HTMLIFrameElement>('plateFrame'), Math.round(at * 1000), carryNow?.bgMs);
+  }
+  const lens = drawLens(at, {
+    ...(mirrored ? { glass: placePlateGlass } : { el: plateLoupeSource(c, at), glass: null }),
+    width: frame.width,
+    height: frame.height,
+    clip,
+    canvas: 'plateLens',
+    over: 'fhdCanvas',
+  });
+  ed.hud = { rate: clipPlayback(c).rate, zoom: aimed ? ed.aimZoom || aimed.zoom : live?.zoom || 1, lens };
+}
+
+onCarryBackdropReady(() => renderFrame());
+onPlateGlassChange(() => renderFrame());
 
 export function renderFrame(): void {
   if (!ed.active || !ed.seq.length) return;
@@ -513,7 +719,10 @@ export function renderFrame(): void {
   const frameOwner = inJoin ? joinFrameOwner(prev, c, joinP, { curNeedsCard: wantsCard, lockCard: editingCard }) : null;
   const trans = inJoin && frameOwner !== 'card';
   // One surface: plate→plate / live→live cannot dual-draw. Focus one clip (avoids omitted-middle flash).
-  const soloFocus = trans ? soloJoinFocus(prev, c, joinP) : null;
+  // A continuous join hands the copy to the incoming slide at once: the outgoing copy has already
+  // cleared, and the shared backdrop covers the frame while the next slide loads.
+  const carryJoin = trans && isCarryJoin(prev, c);
+  const soloFocus = trans ? (carryJoin ? c : soloJoinFocus(prev, c, joinP)) : null;
   const plateFocus = soloFocus?.kind === 'plate' ? soloFocus : null;
   const liveFocus = soloFocus?.kind === 'live' ? soloFocus : null;
   const plateL = $('fhdFit');
@@ -537,10 +746,23 @@ export function renderFrame(): void {
   // document left over from the previous frame (an omitted plate, the next card…).
   const platePartner = stagePlate || (outL === plateL ? prev : null);
   const plateContentReady = Boolean(platePartner && plateHolds(platePartner.plateId));
+  carryNow = null;
+  if (!stagePlate) syncCarry(null, false);
+  // While the next slide arms off-stage, keep the slide already in the frame: a held frame reads
+  // as part of the cut, a black one as a glitch. A transparent card never stands in for a slide.
+  const held = P.ready();
+  const holdSlide = Boolean(
+    stagePlate && !plateContentReady && held && !held.startsWith('overlay:') && !ed.missing.has(stagePlate.plateId || ''),
+  );
   const plateWasHidden = plateL.hidden;
-  plateL.hidden = !(showCardLayer || plateContentReady);
+  plateL.hidden = !(showCardLayer || plateContentReady || holdSlide);
   if (plateWasHidden && !plateL.hidden) P.fit();
-  liveL.hidden = !(inL === liveL || outL === liveL || liveFocus);
+  // No slide to hold (the frame had a card up): the take's last frame stands in instead of black.
+  const v0 = video();
+  const holdTake = Boolean(
+    stagePlate && !plateContentReady && !holdSlide && !ed.missing.has(stagePlate.plateId || '') && v0 && v0.readyState >= 2,
+  );
+  liveL.hidden = !(inL === liveL || outL === liveL || liveFocus || holdTake);
   if (document.body.classList.contains('is-live-card') !== showLiveCard) {
     document.body.classList.toggle('is-live-card', showLiveCard);
     P.fit();
@@ -562,8 +784,24 @@ export function renderFrame(): void {
   }
 
   let ready = true;
+  // The iframe is shared with live cards, so a plate's zoom must not outlive the plate.
+  if (!stagePlate && !(trans && !soloFocus && prev?.kind === 'plate')) clearPlateZoom();
   if (stagePlate) {
     ready = drawPlate(stagePlate) && plateContentReady;
+    // Inside a run the shared backdrop holds the frame: the stage shows while the slide's copy
+    // loads over it, and the opening beat (no copy yet) never stalls playback.
+    const contentFrame = $('plateFrame');
+    const carry = carryNow as CarryFrame | null;
+    if (carry?.backdropUp) {
+      if (plateL.hidden) {
+        plateL.hidden = false;
+        P.fit();
+      }
+      if (contentFrame) contentFrame.style.visibility = plateContentReady ? '' : 'hidden';
+      if (!ready && carry.contentMs < 350) ready = true;
+    } else if (contentFrame?.style.visibility) {
+      contentFrame.style.visibility = '';
+    }
   } else if (liveFocus) {
     drawLive(liveFocus, { outgoing: liveFocus === prev });
     if (showLiveCard && liveFocus === c) syncLiveCardComposite(liveHit);
@@ -572,8 +810,9 @@ export function renderFrame(): void {
     if (showLiveCard) syncLiveCardComposite(liveHit);
   }
   if (trans && soloFocus) {
-    // Solo surface: dip the one layer (paintTransition handles inL === outL).
-    paintTransition(joinStyle(c), joinP, layer(soloFocus.kind), layer(soloFocus.kind));
+    // Solo surface: dip the one layer (paintTransition handles inL === outL). A continuous join
+    // never dips — the backdrop runs straight through.
+    if (!carryJoin) paintTransition(joinStyle(c), joinP, layer(soloFocus.kind), layer(soloFocus.kind));
     // Hide while seeking across an omitted hole so middle recording frames never paint.
     if (liveFocus && liveRecDiscontinuous(prev, c)) {
       const v = video();
@@ -593,13 +832,10 @@ export function renderFrame(): void {
   const empty = $('plateEmpty');
   if (empty) empty.hidden = !(stagePlate && ed.missing.has(stagePlate.plateId || ''));
 
-  // Get the next surface ready so the cut never waits (skip while editing — don't stomp the frame).
+  // Get the next surface ready so the cut never waits.
+  preloadNextSurface(c, i);
   const n = ed.seq[i + 1];
   if (n && !ed.textMode) {
-    // Prefetch only — must not unload a live card currently composited in the plate iframe.
-    if (c.kind === 'live' && n.kind === 'plate' && ed.t > c.at + c.overlap && n.at - ed.t < 2.5) {
-      void requestPlate(n.plateId, { reason: 'prefetch' });
-    }
     if (c.kind === 'plate' && n.kind === 'live' && !trans) {
       const v = video();
       if (v && v.paused && ed.preSeek !== n.id && Math.abs(v.currentTime - n.recFrom) > 0.05) {
@@ -644,14 +880,115 @@ export function paintHud(_c: Clip, transition: string | null): void {
   if (hud.innerHTML !== html) hud.innerHTML = html;
 }
 
+let lastPreloadAt = 0;
+
+function preloadNextSurface(c: Clip, i: number): void {
+  if (ed.textMode || ed.loadingPlate) return;
+  const now = performance.now();
+  if (now - lastPreloadAt < 160) return;
+  lastPreloadAt = now;
+  const carried = carriedChapterKeys();
+  const id = nextStageSurface({
+    cur: c,
+    next: ed.seq[i + 1],
+    recNow: c.kind === 'live' ? edToRec(c, ed.t) : 0,
+    marks: ed.deck?.marks,
+    holding: P.ready(),
+    cardFor: (m) => (m.kind === 'chapter' && carried.has(m.key || cardMarkKey(m)) ? null : resolveLiveCard(m)?.id || null),
+  });
+  if (!id || ed.missing.has(id)) return;
+  const stale = ed.stalePlates.has(id);
+  // The preload fetches the current build, which settles the stale mark it was carrying.
+  if (P.preload(id, { fresh: stale }) && stale) ed.stalePlates.delete(id);
+}
+
+/** What the stage is waiting on: the slide or card it needs is still loading. */
+function stageWaitingOn(): 'slide' | 'card' | null {
+  if (!ed.loadingPlate) return null;
+  // Rebuilding the plate already showing (Look, Use video look, Background) swaps in off-stage.
+  if (stageReloadIsQuiet(desk.get().activePlateId, P.ready(), ed.loadingPlate)) return null;
+  const c = curClip();
+  if (c?.kind === 'plate' && c.plateId === ed.loadingPlate) return 'slide';
+  const previewId = ed.liveCardId || ed.compositeCardId || liveCardAtPlayhead()?.id;
+  return previewId && ed.loadingPlate === previewId ? 'card' : null;
+}
+
+/* Quick loads (most of them, with the next surface preloaded) never show a loader; a slow one
+   gets the mark in the stage corner, and the studio mark in the header follows. */
+const LOADER_DELAY_MS = 240;
+const LOADER_SCRUB_DELAY_MS = 700;
+const LOADER_LABEL_MS = 1100;
+const LOADER_MIN_MS = 420;
+const LOADER_OUT_MS = 200;
+const loader = {
+  showTimer: 0 as ReturnType<typeof setTimeout> | 0,
+  labelTimer: 0 as ReturnType<typeof setTimeout> | 0,
+  hideTimer: 0 as ReturnType<typeof setTimeout> | 0,
+  waitSince: 0,
+  shownAt: 0,
+  ownsMark: false,
+};
+
+function markBusy(on: boolean): void {
+  if (on) {
+    if (getMarkMode() !== 'idle') return;
+    setMarkMode('loading');
+    loader.ownsMark = true;
+    return;
+  }
+  if (!loader.ownsMark) return;
+  loader.ownsMark = false;
+  if (getMarkMode() === 'loading') setMarkMode('idle');
+}
+
+function showLoader(el: HTMLElement): void {
+  loader.showTimer = 0;
+  const kind = stageWaitingOn();
+  if (!kind) return;
+  el.dataset['kind'] = kind;
+  el.classList.remove('is-out');
+  if (el.hidden) {
+    el.hidden = false;
+    void el.offsetWidth;
+  }
+  el.classList.add('is-on');
+  loader.shownAt = performance.now();
+  loader.labelTimer = setTimeout(() => el.classList.add('is-long'), Math.max(0, LOADER_LABEL_MS - (performance.now() - loader.waitSince)));
+  markBusy(true);
+}
+
+function hideLoader(el: HTMLElement): void {
+  loader.hideTimer = 0;
+  if (stageWaitingOn()) return;
+  clearTimeout(loader.labelTimer);
+  el.classList.remove('is-on', 'is-long');
+  el.classList.add('is-out');
+  markBusy(false);
+  setTimeout(() => {
+    if (el.classList.contains('is-on')) return;
+    el.hidden = true;
+    el.classList.remove('is-out');
+  }, LOADER_OUT_MS);
+}
+
 export function paintLoading(): void {
   const el = $('edLoading');
   if (!el) return;
-  const c = curClip();
-  const forPlate = ed.loadingPlate && c?.kind === 'plate' && c.plateId === ed.loadingPlate;
-  const previewId = ed.liveCardId || ed.compositeCardId || liveCardAtPlayhead()?.id;
-  const forCard = ed.loadingPlate && previewId && ed.loadingPlate === previewId;
-  el.hidden = !(forPlate || forCard);
+  if (stageWaitingOn()) {
+    if (loader.hideTimer) clearTimeout(loader.hideTimer);
+    loader.hideTimer = 0;
+    // Mid-scrub the held frame already says "on its way"; only a real wait earns the mark.
+    const delay = ed.drag?.type === 'scrub' || desk.get().scrubbing ? LOADER_SCRUB_DELAY_MS : LOADER_DELAY_MS;
+    if (!el.classList.contains('is-on') && !loader.showTimer) {
+      loader.waitSince = performance.now();
+      loader.showTimer = setTimeout(() => showLoader(el), delay);
+    }
+    return;
+  }
+  if (loader.showTimer) clearTimeout(loader.showTimer);
+  loader.showTimer = 0;
+  if (!el.classList.contains('is-on') || loader.hideTimer) return;
+  loader.hideTimer = setTimeout(() => hideLoader(el), Math.max(0, LOADER_MIN_MS - (performance.now() - loader.shownAt)));
 }
 
 export const resolveLiveCard = (mark: DeckMark | null | undefined): PlateRow | null =>
@@ -663,12 +1000,15 @@ export interface LiveHit {
   recT: number;
 }
 
+/** Chapters a section layout carries on its own text — they never composite a card. */
+const carriedChapterKeys = (): Set<string> => new Set((ed.deck?.layouts?.sections || []).filter((s) => s.textOn).map((s) => s.key));
+
 /** Active chapter/caption under the playhead: mark + card + recording clock. */
 export function liveHitAtPlayhead(): LiveHit | null {
   const c = curClip();
   if (c?.kind !== 'live') return null;
   const recT = edToRec(c, ed.t);
-  const carried = new Set((ed.deck?.layouts?.sections || []).filter((s) => s.textOn).map((s) => s.key));
+  const carried = carriedChapterKeys();
   const hits = liveMarksAtRecTime(ed.deck?.marks, recT, { recFrom: c.recFrom, recTo: c.recTo }).filter(
     (m) => !(m.kind === 'chapter' && carried.has(m.key || cardMarkKey(m))),
   );

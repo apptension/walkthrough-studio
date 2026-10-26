@@ -1,23 +1,24 @@
-import { act, render } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, render, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { bridges, type PlateBridge } from '@/desk/bridge';
 import { toggleTl } from '@/desk/layout';
-import { seekTo } from '@/desk/monitor';
-import { runtime } from '@/desk/runtime';
+import { seekTo, setMonitorMode } from '@/desk/monitor';
 import { desk } from '@/desk/store';
+import { ed, resetEdForTests } from '@/features/editor/engine/state';
+import type { Deck } from '@/features/editor/engine/types';
 import { makeScene, makeVideo } from '@/test/factories';
+import { server } from '@/test/msw/server';
 
 import type * as LayoutModule from '@/desk/layout';
 import type * as MonitorModule from '@/desk/monitor';
 
-import { ChapterStrip } from '@/features/review/ChapterStrip';
 import { TimelineShell } from './TimelineShell';
 
 vi.mock('@/desk/monitor', async (importOriginal) => ({
   ...(await importOriginal<typeof MonitorModule>()),
   seekTo: vi.fn(),
+  setMonitorMode: vi.fn(),
 }));
 
 vi.mock('@/desk/layout', async (importOriginal) => ({
@@ -31,8 +32,6 @@ const $ = (id: string) => {
   return el;
 };
 
-const lastToast = () => desk.get().toasts.at(-1);
-
 /** jsdom has no PointerEvent; a MouseEvent of the pointer type carries `clientX`. */
 function pointer(type: 'pointerdown' | 'pointermove' | 'pointerup', target: EventTarget, clientX = 0) {
   act(() => {
@@ -40,244 +39,151 @@ function pointer(type: 'pointerdown' | 'pointermove' | 'pointerup', target: Even
   });
 }
 
-const plate = makeScene({ id: 'open', kind: 'plate', title: 'Intro', start: 0, end: 5, dur: 5, editable: true, plateId: 'open' });
-const live = makeScene({ id: 'live-0', kind: 'live', title: 'Tour', start: 5, end: 20, dur: 15, editable: false, plateId: null });
+const deck = (): Deck => ({
+  slug: 'demo',
+  deck: { speed: [], zooms: [], zoomSkips: [], lenses: [], lensOff: [], transitions: {}, audio: null, cards: [], layouts: [], order: [], omit: [], repeats: [], trims: [], cuts: [] },
+  live: { exists: true, durationSec: 40, pieces: [] },
+  space: { cssW: 440, cssH: 950 },
+  naturalIds: ['open', 'live-0'],
+  scenes: [
+    { id: 'open', kind: 'plate', title: 'Opening', plateId: 'open', type: 'open', dur: 4 },
+    { id: 'live-0', kind: 'live', title: 'Feed', recFrom: 0, recTo: 40, dur: 40 },
+  ],
+  joins: [],
+  marks: [{ kind: 'chapter', t: 10, label: 'Tour', key: 'ch:10' }],
+  zoomShots: [],
+  lenses: [],
+});
 
-function loaded(over: Partial<ReturnType<typeof desk.get>> = {}) {
+async function openProgram() {
+  server.use(http.get('/api/video/:slug/edit', () => HttpResponse.json(deck())));
   desk.set({
+    slug: 'demo',
     video: makeVideo(),
-    duration: 20,
-    scenes: [plate, live],
-    chapters: [
-      { title: 'Intro', start: 0 },
-      { title: 'Tour', start: 10 },
+    duration: 44,
+    monitorMode: 'program',
+    scenes: [
+      makeScene({ id: 'open', kind: 'plate', start: 0, end: 4, dur: 4 }),
+      makeScene({ id: 'live-0', kind: 'live', start: 4, end: 44, dur: 40 }),
     ],
-    cues: [{ start: 2, end: 4, text: 'Hello' }],
-    ...over,
+    chapters: [{ title: 'Tour', start: 14 }],
   });
-}
-
-function stubTrackRect() {
-  vi.spyOn($('timelineTrack'), 'getBoundingClientRect').mockReturnValue({ left: 100, width: 200, top: 0, height: 10, right: 300, bottom: 10, x: 100, y: 0, toJSON: () => ({}) });
-  vi.spyOn($('timeline'), 'getBoundingClientRect').mockReturnValue({ left: 60, width: 300, top: 0, height: 80, right: 360, bottom: 80, x: 60, y: 0, toJSON: () => ({}) });
+  render(<TimelineShell />);
+  await waitFor(() => expect(document.querySelectorAll('#etlClips .etl-clip')).toHaveLength(2));
 }
 
 beforeEach(() => {
   desk.reset();
+  resetEdForTests();
   vi.clearAllMocks();
-  bridges.plate = null;
 });
 
-describe('TimelineShell markup', () => {
-  it('renders the legacy toolbar and empty lanes before a sequence loads', () => {
+describe('TimelineShell', () => {
+  it('holds the one timeline', () => {
     render(<TimelineShell />);
-    expect(document.querySelector('footer.timeline-shell')).toHaveAttribute('aria-label', 'Timeline');
-    expect($('tlLabel')).toHaveAttribute('aria-expanded', 'true');
-    expect($('tlLabel')).toHaveAttribute('aria-controls', 'timeline');
-    expect($('tlLabel')).toHaveAttribute('title', 'Collapse the timeline');
-    expect($('tlLabel').querySelector('span')).toHaveTextContent('Timeline');
-    expect($('tlDuration')).toHaveTextContent('—');
-    expect($('timeline')).toHaveAttribute('role', 'slider');
-    expect($('timeline')).toHaveAttribute('tabindex', '0');
-    expect($('scrubTip')).toHaveAttribute('hidden');
-    for (const id of ['timelineRuler', 'timelineRegions', 'timelineMarks', 'timelineChapters', 'timelineCues']) expect($(id)).toBeEmptyDOMElement();
-    expect($('clock').textContent).toBe('0:00 / 0:00');
+    const shell = document.querySelector('footer.timeline-shell');
+    expect(shell).toHaveAttribute('aria-label', 'Timeline');
+    expect(shell?.querySelector('#edTimeline')).not.toBeNull();
+    expect(document.getElementById('timeline')).toBeNull();
+    expect($('etlOpen')).toHaveTextContent('Edit');
   });
 
-  it('folds through toggleTl and reflects tlCollapsed', async () => {
+  it('folds from the bar toggle', () => {
     render(<TimelineShell />);
-    await userEvent.click($('tlLabel'));
-    expect(toggleTl).toHaveBeenCalled();
-    act(() => desk.set({ tlCollapsed: true }));
-    expect($('tlLabel')).toHaveAttribute('aria-expanded', 'false');
-    expect($('tlLabel')).toHaveAttribute('title', 'Expand the timeline');
-  });
-
-  it('locks in the Editor', () => {
-    render(<TimelineShell />);
-    act(() => desk.set({ monitorMode: 'plate' }));
-    expect(document.querySelector('footer')).toHaveClass('timeline-shell', 'is-plate-locked');
-    expect($('tlLabel').querySelector('span')).toHaveTextContent('Editor');
-    expect($('timeline')).toHaveAttribute('aria-disabled', 'true');
-    expect($('timeline')).toHaveAttribute('tabindex', '-1');
+    act(() => $('etlToggle').click());
+    expect(toggleTl).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('renderTimeline', () => {
-  it('draws the ruler, regions, marks and lanes once the sequence loads', () => {
-    loaded();
-    render(<TimelineShell />);
-    expect($('tlDuration')).toHaveTextContent('0:20');
-    expect($('timelineRuler').querySelectorAll('.tl-tick')).toHaveLength(5);
-    expect($('timelineRegions')).toHaveClass('tl-regions', 'is-edit');
-    const regions = $('timelineRegions').querySelectorAll('.tl-region');
-    expect(regions).toHaveLength(2);
-    expect(regions[0]).toHaveClass('tl-region', 'plate', 'is-clickable');
-    expect(regions[0]).toHaveAttribute('data-plate-id', 'open');
-    expect(regions[0]).toHaveAttribute('data-scene-id', 'open');
-    expect(regions[0]).toHaveStyle({ left: '0%', width: '25%' });
-    expect(regions[1]).not.toHaveAttribute('data-plate-id');
-    expect($('timelineMarks').querySelectorAll('.tl-mark')[1]).toHaveAttribute('title', 'Tour');
-    expect($('timelineChapters').querySelectorAll('.tl-ch-clip')[1]).toHaveTextContent('Tour');
-    expect($('timelineCues').querySelector('.tl-cue-clip')).toHaveAttribute('title', 'Hello');
+describe('Program overview', () => {
+  it('draws the cut as one slider with an invitation to edit', async () => {
+    await openProgram();
+    const scroll = $('etlScroll');
+    expect(scroll).toHaveAttribute('role', 'slider');
+    expect(scroll).toHaveAttribute('tabindex', '0');
+    expect($('etlContext')).toHaveTextContent('Click a clip, chapter or caption to edit it');
+    expect(document.querySelector('#etlChapters .ec-card')).toHaveTextContent('Tour');
+    // Native tooltips step aside for the scrub tip.
+    expect(document.querySelector('#etlClips .etl-clip')).not.toHaveAttribute('title');
+    expect(document.querySelector('#etlClips .etl-clip')).toHaveAttribute('aria-label');
   });
 
-  it('highlights the plate being edited', () => {
-    loaded({ monitorMode: 'plate', activePlateId: 'open' });
+  it('says so when Program still plays an older render', async () => {
+    server.use(http.get('/api/video/:slug/edit', () => HttpResponse.json({ ...deck(), stale: true })));
+    desk.set({ slug: 'demo', video: makeVideo(), duration: 44 });
     render(<TimelineShell />);
-    expect($('timelineRegions').querySelector('[data-plate-id="open"]')).toHaveClass('is-active');
+    await waitFor(() => expect($('etlContext')).toHaveTextContent('Program still plays the last render'));
   });
 
-  it('moves the playhead, fill, buffer and clock with the transport', () => {
-    loaded();
-    render(<TimelineShell />);
-    act(() => desk.set({ transport: { t: 18, d: 20, playing: true, buffered: 10 } }));
-    expect($('timelinePlayhead')).toHaveStyle({ left: '90%' });
-    expect($('timelinePlayhead')).toHaveClass('tl-head', 'is-flip');
-    expect($('timelineFill')).toHaveStyle({ width: '90%' });
-    expect($('timelineBuf')).toHaveStyle({ width: '50%' });
-    expect($('clock').textContent).toBe('0:18 / 0:20');
+  it('keeps the playhead on the Program clock', async () => {
+    await openProgram();
+    act(() => desk.set({ transport: { t: 10, d: 44, playing: false, buffered: 0 } }));
+    expect(ed.t).toBeCloseTo(10);
+    expect($('edClock')).toHaveTextContent('0:10 / 0:44');
+    expect($('etlScroll')).toHaveAttribute('aria-valuetext', '0:10 of 0:44');
   });
 
-  it('opens the editor from a plate region; live regions wait for the Editor', async () => {
-    const editCurrentPlate = vi.fn();
-    bridges.plate = { editCurrentPlate } as unknown as PlateBridge;
-    loaded();
-    render(<TimelineShell />);
-    const [plateEl, liveEl] = $('timelineRegions').querySelectorAll('.tl-region');
-    await userEvent.click(liveEl as Element);
-    expect(editCurrentPlate).not.toHaveBeenCalled();
-    await userEvent.click(plateEl as Element);
-    expect(editCurrentPlate).toHaveBeenCalledWith(plate);
-    act(() => desk.set({ monitorMode: 'plate' }));
-    await userEvent.click(liveEl as Element);
-    expect(editCurrentPlate).toHaveBeenLastCalledWith(live);
-  });
-});
-
-describe('scrubbing', () => {
-  it('seeks on press, shows the tip while dragging, and stops on release', () => {
-    loaded();
-    render(<TimelineShell />);
-    stubTrackRect();
-    pointer('pointerdown', $('timeline'), 150);
-    expect(seekTo).toHaveBeenLastCalledWith(5);
+  it('scrubs Program from anywhere off a block', async () => {
+    await openProgram();
+    // jsdom: the canvas sits at x 0 and the fit is 200px for 44s.
+    pointer('pointerdown', $('etlRuler'), 100);
+    expect(seekTo).toHaveBeenLastCalledWith(expect.closeTo(22, 1));
     expect(desk.get().scrubbing).toBe(true);
-    expect($('timeline')).toHaveClass('timeline', 'is-scrubbing');
-    pointer('pointermove', window, 200);
-    expect(seekTo).toHaveBeenLastCalledWith(10);
-    expect($('scrubTip')).not.toHaveAttribute('hidden');
-    expect($('scrubTip')).toHaveTextContent('0:10');
-    expect($('scrubTip')).toHaveStyle({ left: '140px' });
-    pointer('pointerup', window);
+    pointer('pointermove', $('etlRuler'), 150);
+    expect(seekTo).toHaveBeenLastCalledWith(expect.closeTo(33, 1));
+    pointer('pointerup', $('etlRuler'), 150);
     expect(desk.get().scrubbing).toBe(false);
-    expect($('scrubTip')).toHaveAttribute('hidden');
-    pointer('pointermove', window, 250);
-    expect(seekTo).toHaveBeenCalledTimes(2);
+    expect(setMonitorMode).not.toHaveBeenCalled();
   });
 
-  it('uses the active player duration when it has one', () => {
-    loaded();
-    render(<TimelineShell />);
-    stubTrackRect();
-    const player = document.createElement('video');
-    Object.defineProperty(player, 'duration', { value: 40 });
-    runtime.player = player;
-    pointer('pointerdown', $('timeline'), 150);
-    expect(seekTo).toHaveBeenLastCalledWith(10);
-    runtime.player = null;
-    pointer('pointerup', window);
+  it('opens the Editor on a clicked clip', async () => {
+    await openProgram();
+    const clip = document.querySelector<HTMLElement>('#etlClips .etl-clip[data-id="live-0"]')!;
+    pointer('pointerdown', clip, 100);
+    pointer('pointerup', clip, 100);
+    expect(setMonitorMode).toHaveBeenCalledWith('plate');
+    expect(ed.focus?.sel).toEqual({ type: 'clip', id: 'live-0' });
+    expect(ed.focus?.t).toBeCloseTo(22, 0);
+    expect(seekTo).not.toHaveBeenCalled();
   });
 
-  it('snaps onto a chapter start while dragging, and scrubs freely with ⌥', () => {
-    loaded();
-    render(<TimelineShell />);
-    stubTrackRect();
-    pointer('pointerdown', $('timeline'), 150);
-    pointer('pointermove', window, 204);
-    expect(seekTo).toHaveBeenLastCalledWith(10);
-    expect($('scrubTip')).toHaveClass('is-scrub', 'is-snap');
-    expect($('scrubTip')).toHaveTextContent('0:10.0Tour');
+  it('opens the Editor on a clicked chapter, selected', async () => {
+    await openProgram();
+    const card = document.querySelector<HTMLElement>('#etlChapters .ec-card')!;
+    pointer('pointerdown', card, 70);
+    pointer('pointerup', card, 70);
+    expect(setMonitorMode).toHaveBeenCalledWith('plate');
+    expect(ed.focus?.sel).toMatchObject({ type: 'card', key: 'ch:10', markT: 10, clipId: 'live-0' });
+  });
+
+  it('turns a drag that starts on a block into a scrub', async () => {
+    await openProgram();
+    const clip = document.querySelector<HTMLElement>('#etlClips .etl-clip[data-id="live-0"]')!;
+    pointer('pointerdown', clip, 100);
+    pointer('pointermove', clip, 120);
+    pointer('pointerup', clip, 120);
+    expect(seekTo).toHaveBeenCalled();
+    expect(setMonitorMode).not.toHaveBeenCalled();
+  });
+
+  it('seeks from the keyboard and opens the Editor on Enter', async () => {
+    await openProgram();
+    act(() => desk.set({ transport: { t: 10, d: 44, playing: false, buffered: 0 } }));
+    const scroll = $('etlScroll');
     act(() => {
-      window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 204, altKey: true }));
+      scroll.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(seekTo).toHaveBeenLastCalledWith(10.4);
-    expect($('scrubTip')).not.toHaveClass('is-snap');
-    pointer('pointerup', window);
-  });
-
-  it('previews the landing time on hover without seeking', () => {
-    loaded();
-    render(<TimelineShell />);
-    stubTrackRect();
-    pointer('pointermove', $('timeline'), 250);
-    expect(seekTo).not.toHaveBeenCalled();
-    expect($('scrubTip')).toHaveClass('is-hover');
-    expect($('scrubTip')).toHaveTextContent('0:15');
-    expect(document.querySelector('.tl-ghost')).not.toHaveAttribute('hidden');
-    expect($('timeline')).toHaveClass('is-hovering');
+    expect(seekTo).toHaveBeenLastCalledWith(11);
     act(() => {
-      $('timeline').dispatchEvent(new MouseEvent('pointerout', { bubbles: true, relatedTarget: document.body }));
+      scroll.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
-    expect($('scrubTip')).toHaveAttribute('hidden');
+    expect(setMonitorMode).toHaveBeenCalledWith('plate');
+    expect(ed.focus).toBeNull();
   });
 
-  it('seeks from the keyboard and reports its value', async () => {
-    loaded({ transport: { t: 12, d: 20, playing: false, buffered: 0 } });
-    render(<TimelineShell />);
-    const slider = $('timeline');
-    expect(slider).toHaveAttribute('aria-valuenow', '12');
-    expect(slider).toHaveAttribute('aria-valuemax', '20');
-    expect(slider).toHaveAttribute('aria-valuetext', '0:12 of 0:20');
-    slider.focus();
-    await userEvent.keyboard('{ArrowRight}');
-    expect(seekTo).toHaveBeenLastCalledWith(13);
-    await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
-    expect(seekTo).toHaveBeenLastCalledWith(7);
-    await userEvent.keyboard('{PageUp}');
-    expect(seekTo).toHaveBeenLastCalledWith(10);
-    await userEvent.keyboard('{End}');
-    expect(seekTo).toHaveBeenLastCalledWith(20);
-  });
-
-  it('refuses to scrub in the Editor except on a plate tip', () => {
-    loaded({ monitorMode: 'plate' });
-    render(<TimelineShell />);
-    pointer('pointerdown', $('timelineRuler'), 150);
-    expect(seekTo).not.toHaveBeenCalled();
-    expect(lastToast()).toMatchObject({ title: 'Timeline locked', detail: 'Exit Plate HTML (Program) to scrub · or click another plate tip', kind: 'warn' });
-    const before = desk.get().toasts.length;
-    pointer('pointerdown', $('timelineRegions').querySelector('.tl-region') as Element, 150);
-    expect(desk.get().toasts).toHaveLength(before);
-  });
-});
-
-describe('ChapterStrip', () => {
-  it('lists chapters, marks the current one and jumps on click', async () => {
-    loaded();
-    const player = document.createElement('video');
-    const play = vi.spyOn(player, 'play').mockResolvedValue(undefined);
-    runtime.player = player;
-    render(<ChapterStrip />);
-    const buttons = $('chapterStrip').querySelectorAll('button');
-    expect(buttons).toHaveLength(2);
-    expect(buttons[1]).toHaveAttribute('data-start', '10');
-    expect(buttons[1]?.querySelector('.t')).toHaveTextContent('0:10');
-    expect(buttons[1]?.querySelector('.ch-title')).toHaveTextContent('Tour');
-    act(() => desk.set({ transport: { t: 12, d: 20, playing: false, buffered: 0 } }));
-    expect(buttons[1]).toHaveClass('active');
-    expect(buttons[0]).not.toHaveClass('active');
-    await userEvent.click(buttons[0] as Element);
-    expect(seekTo).toHaveBeenCalledWith(0);
-    expect(play).toHaveBeenCalled();
-    runtime.player = null;
-  });
-
-  it('refuses to jump in the Editor', async () => {
-    loaded({ monitorMode: 'plate' });
-    render(<ChapterStrip />);
-    await userEvent.click($('chapterStrip').querySelector('button') as Element);
-    expect(seekTo).not.toHaveBeenCalled();
-    expect(lastToast()).toMatchObject({ title: 'Timeline locked', detail: 'Exit to Program to jump chapters' });
+  it('opens the Editor where Program is from the Edit button', async () => {
+    await openProgram();
+    act(() => $('etlOpen').click());
+    expect(setMonitorMode).toHaveBeenCalledWith('plate');
   });
 });
