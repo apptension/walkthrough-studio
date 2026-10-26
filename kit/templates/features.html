@@ -67,7 +67,7 @@
         opacity: 0;
         transform-origin: 50% 80%;
         animation: fxLand var(--card-in) var(--s) var(--expo) both;
-        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
         will-change: transform, opacity, filter;
       }
       .cards[data-n="3"] .card { min-height: 360px; }
@@ -104,7 +104,7 @@
       .icon svg { width: 34px; height: 34px; }
       .num {
         position: absolute; top: 18px; right: 22px;
-        font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted);
+        font-size: 16px; font-weight: 700; letter-spacing: 0.12em; color: var(--muted); font-variant-numeric: tabular-nums;
         opacity: 0; animation: fadeIn 0.5s calc(var(--s) + 0.35s) ease-out both;
       }
       .label {
@@ -172,12 +172,18 @@
       html:not([data-frame='portrait']) body[data-layout='stack'] .cards[data-n] .card {
         --k: calc(var(--i) - var(--mid));
         position: absolute; left: 50%; top: 0; width: 380px; min-height: 410px; margin-left: -190px;
-        justify-content: center; z-index: calc(var(--i) + 1);
+        justify-content: space-between; align-items: flex-start; text-align: left; padding: 36px 32px 34px; z-index: calc(var(--i) + 1);
         background: linear-gradient(165deg, color-mix(in srgb, var(--surface) 86%, var(--gold)) 0%, var(--surface) 52%, color-mix(in srgb, var(--surface) 82%, var(--ink)) 100%);
         transform-origin: 50% 130%;
         transform: translateX(calc(var(--k) * var(--spread))) translateY(calc(var(--k) * var(--k) * 12px)) rotate(calc(var(--k) * 3.5deg));
         animation: dealIn var(--card-in) var(--s) var(--expo) both;
       }
+      /* The next card covers this one's right side: copy lives in the visible strip. */
+      html:not([data-frame='portrait']) body[data-layout='stack'] .card .icon { margin: 0 0 auto; }
+      html:not([data-frame='portrait']) body[data-layout='stack'] .card .label { margin-top: 28px; max-width: calc(min(var(--spread), 380px) - 70px); }
+      html:not([data-frame='portrait']) body[data-layout='stack'] .card .note { margin-top: 10px; max-width: calc(min(var(--spread), 380px) - 70px); text-wrap: pretty; }
+      html:not([data-frame='portrait']) body[data-layout='stack'] .card:last-child .label,
+      html:not([data-frame='portrait']) body[data-layout='stack'] .card:last-child .note { max-width: 300px; }
       @keyframes dealIn {
         0% { opacity: 0; transform: translateX(0) translateY(420px) rotate(calc(var(--k) * -14deg)) scale(0.92); filter: blur(6px); }
         45% { opacity: 1; filter: blur(0); }
@@ -221,6 +227,15 @@
       }
       html[data-frame='portrait'] .icon { margin: 0; grid-row: span 2; width: 64px; height: 64px; border-radius: 18px; }
       html[data-frame='portrait'] .note { margin-top: 6px; max-width: none; text-wrap: pretty; }
+      html[data-frame='portrait'] .label { padding-right: 44px; }
+      html[data-frame='portrait'] .cards[data-n="3"] .card,
+      html[data-frame='portrait'] .cards[data-n="4"] .card { padding: 34px 30px; grid-template-columns: 76px 1fr; column-gap: 26px; }
+      html[data-frame='portrait'] .cards[data-n="3"] .icon,
+      html[data-frame='portrait'] .cards[data-n="4"] .icon { width: 76px; height: 76px; border-radius: 22px; }
+      html[data-frame='portrait'] .cards[data-n="3"] .label,
+      html[data-frame='portrait'] .cards[data-n="4"] .label { font-size: 32px; }
+      html[data-frame='portrait'] .cards[data-n="3"] .note,
+      html[data-frame='portrait'] .cards[data-n="4"] .note { font-size: 20px; }
       html[data-frame='portrait'] .corner-logo { align-self: flex-start; }
       html[data-frame='portrait'] .bloom { left: 50%; top: 55%; width: 1000px; height: 1300px; margin: -650px 0 0 -500px; }
     </style>

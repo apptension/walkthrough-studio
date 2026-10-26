@@ -20,6 +20,7 @@
 import { parseCssHex } from './text.mjs';
 import { ATMOSPHERE_IDS, resolveMotion } from './plateMotion.mjs';
 import { countUpRuntimeSource } from './countUp.mjs';
+import { frameFitRuntimeSource } from './frameFit.mjs';
 import { typeFitRuntimeSource } from './typeFit.mjs';
 import { titleRevealRuntimeSource } from './titleReveal.mjs';
 import { GLSL_PREAMBLE } from './atmosphereGlsl.mjs';
@@ -543,6 +544,9 @@ ${
     withHooks
       ? `<script>
 ${countUpRuntimeSource()}
+</script>
+<script>
+${frameFitRuntimeSource()}
 </script>
 <script>
 ${typeFitRuntimeSource()}

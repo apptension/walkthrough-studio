@@ -59,8 +59,8 @@
       }
       .pr-badge {
         position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-        padding: 8px 18px; border-radius: 999px; white-space: nowrap;
-        font-size: 12px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;
+        padding: 9px 20px; border-radius: 999px; white-space: nowrap;
+        font-size: 15px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
         color: var(--on-accent, #041004); background: linear-gradient(140deg, var(--gold), var(--amber));
         box-shadow: 0 10px 26px color-mix(in srgb, var(--gold) 45%, transparent);
         opacity: 0; animation: badgeIn 0.6s calc(var(--s) + 0.45s) var(--pop) both;
@@ -124,7 +124,8 @@
       html[data-frame='portrait'] .pr-lines { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; padding-top: 0; padding-left: 22px; border-top: 0; border-left: 1px solid color-mix(in srgb, var(--muted) 16%, transparent); gap: 10px; }
       html[data-frame='portrait'] .featured .pr-lines { border-left-color: color-mix(in srgb, var(--gold) 26%, transparent); }
       html[data-frame='portrait'] .pr-card.featured { margin: 10px 0 0; padding-top: 34px; padding-bottom: 26px; }
-      html[data-frame='portrait'] .pr-badge { left: 28px; transform: none; }
+      html[data-frame='portrait'] .pr-badge { left: 28px; top: -17px; transform: none; animation-name: badgeInFlat; font-size: 15.5px; }
+      @keyframes badgeInFlat { from { opacity: 0; transform: translateY(10px) scale(0.8); } to { opacity: 1; transform: none; } }
       html[data-frame='portrait'] .pr-value { font-size: 60px; }
       html[data-frame='portrait'] .pr-price { margin-top: 12px; }
       html[data-frame='portrait'] .pr-line { font-size: 18px; }

@@ -54,7 +54,7 @@
       }
       .m-face {
         position: relative; z-index: 1; display: grid; place-items: center; text-align: center;
-        width: 380px;
+        width: 360px;
       }
       .value {
         font-size: {{VALUE_SIZE}}px; font-weight: 700; letter-spacing: -0.055em; line-height: 1;
@@ -68,7 +68,7 @@
         opacity: 0; animation: fadeUp 0.7s 1.05s var(--expo) both;
       }
       .m-copy {
-        flex: 0 1 760px; display: flex; flex-direction: column; justify-content: center;
+        flex: 0 1 auto; max-width: 760px; min-width: 520px; display: flex; flex-direction: column; justify-content: center;
       }
       .eyebrow {
         opacity: 0; animation: fadeUp 0.75s 0.5s var(--expo) both;
@@ -106,8 +106,11 @@
       /* Vertical master */
       html[data-frame='portrait'] .compose { align-items: center; gap: 56px; }
       html[data-frame='portrait'] .m-card { width: 420px; height: 420px; }
-      html[data-frame='portrait'] .m-face { width: 320px; }
-      html[data-frame='portrait'] .m-copy { flex: none; align-self: stretch; }
+      html[data-frame='portrait'] .m-face { width: 296px; }
+      html[data-frame='portrait'] .m-copy { flex: none; align-self: stretch; min-width: 0; max-width: none; align-items: center; text-align: center; }
+      html[data-frame='portrait'] .title { text-wrap: balance; }
+      html[data-frame='portrait'] .note { margin-left: auto; margin-right: auto; text-wrap: balance; }
+      html[data-frame='portrait'] .pills { justify-content: center; }
       html[data-frame='portrait'] .bloom { left: 50%; top: 36%; width: 1000px; height: 1000px; margin: -500px 0 0 -500px; }
     </style>
   </head>

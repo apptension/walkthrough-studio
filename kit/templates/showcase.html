@@ -70,10 +70,10 @@
       .chrome i { width: 11px; height: 11px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, var(--surface)); }
       .chrome i:first-child { background: color-mix(in srgb, var(--gold) 80%, var(--surface)); }
       .chrome .url {
-        margin-left: 14px; flex: 1; height: 22px; border-radius: 6px;
+        margin-left: 14px; flex: 1; height: 28px; border-radius: 8px;
         background: color-mix(in srgb, var(--text) 6%, transparent);
         display: flex; align-items: center; padding: 0 12px;
-        font-size: 12px; color: var(--muted); letter-spacing: 0.02em;
+        font-size: 16px; color: var(--muted); letter-spacing: 0.01em;
         overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
       }
       .shot {
@@ -186,7 +186,26 @@
       html[data-frame='portrait'] .scene { min-height: 900px; perspective-origin: 50% 0%; }
       html[data-frame='portrait'] .chrome .url { display: none; }
       html[data-frame='portrait'] .pin .tag { font-size: 20px; }
-      html[data-frame='portrait'] body[data-layout='split'] .compose { flex-direction: column; }
+      html[data-frame='portrait'] body[data-layout='split'] .compose { flex-direction: column; align-items: stretch; padding: 110px 48px 140px; gap: 36px; }
+      html[data-frame='portrait'] body[data-layout='split'] .head { flex: none; }
+      html[data-frame='portrait'] body[data-layout='split'] .head .title { font-size: 56px; }
+      html[data-frame='portrait'] body[data-layout='split'] .scene { flex: 1; height: auto; perspective-origin: 50% 0%; }
+      html[data-frame='portrait'] body[data-layout='split'] .device { transform-origin: 50% 0%; }
+      /* Spotlight bleeds on purpose: the frame-fit pass leaves it alone, a floor scrim carries the words. */
+      body[data-layout='spotlight'] .compose { --fill-mode: none; }
+      body[data-layout='spotlight'] .scene::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 52%; z-index: 6; pointer-events: none;
+        background: linear-gradient(0deg, color-mix(in srgb, var(--ink) 92%, transparent) 0%, color-mix(in srgb, var(--ink) 55%, transparent) 45%, transparent 100%);
+        opacity: 0; animation: fadeIn 1.2s 0.9s ease-out both;
+      }
+      body[data-layout='spotlight'] .head .sub { font-size: 22px; color: color-mix(in srgb, var(--text) 78%, var(--muted)); }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .head { left: 64px; right: 64px; bottom: 140px; max-width: none; }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .head .title { font-size: 58px; text-wrap: balance; }
+      html[data-frame='portrait'] body[data-layout='spotlight'] .scene::after { height: 46%; }
+      /* Pins under the words: the head moves to the top and the scrim follows it. */
+      body[data-layout='spotlight'][data-head='top'] .head { top: 84px; bottom: auto; }
+      html[data-frame='portrait'] body[data-layout='spotlight'][data-head='top'] .head { top: 120px; }
+      body[data-layout='spotlight'][data-head='top'] .scene::after { top: 0; bottom: auto; background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 92%, transparent) 0%, color-mix(in srgb, var(--ink) 55%, transparent) 45%, transparent 100%); }
     </style>
   </head>
   <body data-duration="6.6" data-layout="{{LAYOUT}}">
@@ -219,5 +238,19 @@
     </div>
     <div class="grain"></div>
     <div class="black"></div>
+    <script>
+      (function placeSpotlightHead() {
+        if (document.body.dataset.layout !== 'spotlight') return;
+        const head = document.querySelector('.head');
+        if (!head) return;
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        const h = head.getBoundingClientRect();
+        const pins = [...document.querySelectorAll('.pin')].map((p) => p.getBoundingClientRect());
+        if (!pins.some((p) => hit(h, p))) return;
+        document.body.dataset.head = 'top';
+        const top = head.getBoundingClientRect();
+        if (pins.filter((p) => hit(top, p)).length >= pins.filter((p) => hit(h, p)).length) delete document.body.dataset.head;
+      })();
+    </script>
   </body>
 </html>

@@ -97,7 +97,7 @@ test('statement, process, timeline and checklist builders shape their content', 
   const how = html('how');
   assert.equal((how.match(/class="p-step"/g) || []).length, 3);
   assert.equal((how.match(/class="p-rail"/g) || []).length, 2, 'rail between steps, none after the last');
-  assert.match(how, /<span class="p-ghost">03<\/span>/);
+  assert.match(how, /<span class="p-ghost" aria-hidden="true">03<\/span>/);
   assert.match(how, /data-edit="steps\.0\.note"[^>]*>Link tools</);
 
   const road = html('road');

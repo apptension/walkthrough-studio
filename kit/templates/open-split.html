@@ -84,7 +84,7 @@
       .eyebrow-exit { --xe: 0.3s; }
       .eyebrow {
         display: flex; align-items: center; gap: 14px;
-        font-size: 15px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
+        font-size: var(--eyebrow-size); font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold);
         opacity: 0;
         animation: eyebrowIn 0.95s var(--t-eyebrow) var(--expo) both;
       }
@@ -120,7 +120,7 @@
       html[data-frame='portrait'] .copy-exit { left: 80px; right: 72px; top: 1000px; transform: none; }
       html[data-frame='portrait'] .title { font-size: calc({{TITLE_SIZE}}px * 0.86); max-width: none; }
       html[data-frame='portrait'] .sub { font-size: 32px; max-width: none; }
-      html[data-frame='portrait'] .eyebrow { font-size: 20px; }
+      html[data-frame='portrait'] .eyebrow { font-size: 23px; }
       html[data-frame='portrait'] .lockup-exit { width: clamp(300px, calc(var(--open-logo-width, 820px) * 1.1), 640px); }
     </style>
   </head>

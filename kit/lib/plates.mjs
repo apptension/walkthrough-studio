@@ -410,7 +410,7 @@ function calloutBullets(bullets = []) {
 
 /**
  * Build testimonial flood cards.
- * - `cascade`: 3 unique quotes → dual-wave of 6 slots (heroes dissolve, echoes rise).
+ * - `cascade`: 3 unique quotes → dual-wave of 6 slots (heroes hand their cells to the next quote).
  * - `carousel`: 6–16 unique quotes → 3-up waves that roll through (content-sized cards).
  */
 function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
@@ -515,16 +515,13 @@ function testimonialsItems(items, { cascade = false, carousel = false } = {}) {
                       ? 17
                       : 15;
 
-      // Wave 1: hero row. Wave 2: lower row enters just after (dense flood from ~0.6s),
-      // then heroes dissolve mid-plate while echoes keep floating — no empty half-frame.
-      const enter =
-        wave === 1
-          ? 0.32 + index * span
-          : 0.62 + index * Math.min(0.14, span * 0.75);
+      // Wave 1: full-height heroes. Wave 2 takes over the same cells as each hero dissolves
+      // (testimonials.html cascade: 3.55s + xd), so the frame always holds three quotes.
+      const xd = (wave1Count - 1 - index) * 0.07;
+      const enter = wave === 1 ? 0.32 + index * span : 3.9 + xd;
       const rot = ((index % 5) - 2) * (wave === 1 ? 0.45 : 0.7);
       const amp = wave === 1 ? -(6 + (index % 3) * 2) : -(5 + ((index + 1) % 3) * 2);
       const dx = (index - 1) * (wave === 1 ? 4 : -5);
-      const xd = (wave1Count - 1 - index) * 0.07;
       const editable = wave === 1;
 
       const starsHtml = star
@@ -764,16 +761,22 @@ function metricProgress(it) {
 
 /**
  * Orbit seats: up to four marks on the inner ring, the rest on the outer ring, both evenly
- * spaced and offset so no tile sits straight above or below the lockup.
+ * spaced. Inner marks are offset so none sits straight above or below the lockup; outer marks
+ * start in the gaps between them, ahead by the drift, so the counter-rotating rings never cross
+ * two tiles over the plate (orbit.html --spin: 16deg per ring).
  */
+const ORBIT_DRIFT_DEG = 16;
+
 function orbitItems(items, brand) {
   const inner = items.slice(0, Math.min(4, items.length));
   const outer = items.slice(inner.length);
   const seat = (it, i, ring) => {
     const idx = ring === 'inner' ? i : inner.length + i;
     const count = ring === 'inner' ? inner.length : outer.length;
-    const r = ring === 'inner' ? 260 : 400;
-    const offset = ring === 'inner' ? -90 + 180 / count : -90 + 180 / count + 30;
+    const r = ring === 'inner' ? 250 : 410;
+    const innerStep = 360 / Math.max(1, inner.length);
+    const innerOffset = -90 + innerStep / 2;
+    const offset = ring === 'inner' ? innerOffset : innerOffset + innerStep / 2 + ORBIT_DRIFT_DEG;
     const a = offset + (360 / count) * i;
     const { src, tone, label } = resolveLogoPresentation(brand, it);
     const s = (ring === 'inner' ? 0.95 : 1.25) + i * 0.11;
@@ -867,7 +870,7 @@ function processItems(items) {
       const s = 0.85 + i * step;
       return `<div class="p-step" data-slot="steps.${i}" style="--s: ${s.toFixed(2)}s">
           <div class="p-num">
-            <span class="p-ghost">${String(i + 1).padStart(2, '0')}</span>
+            <span class="p-ghost" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
             <span class="p-dot"></span>
             ${i < n - 1 ? '<span class="p-rail"></span>' : ''}
           </div>
@@ -1170,7 +1173,7 @@ function buildInterstitial(video, it, paths, common) {
     } else if (items.length < 3 || items.length > 8) {
       throw new Error(`testimonials plate "${it.id}" needs 3–8 quotes (got ${items.length})`);
     }
-    // Dual-wave cascade: 3 real quotes → 6 slots (heroes dissolve, echoes rise below).
+    // Dual-wave cascade: 3 real quotes → 6 slots (each hero hands its cell to the next quote).
     // Opt out with motion.cascade === false; force with true when 4–5 quotes want denser feel.
     // Carousel wins over cascade when both are set.
     const cascade =

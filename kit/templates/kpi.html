@@ -111,8 +111,34 @@
       body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-note { display: none; }
       body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-spark { order: 3; margin: 0; padding: 0; height: 48px; width: 110px; flex: none; }
       body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-spark i { height: calc(var(--h) * 40px); }
-      html[data-frame='portrait'] body[data-layout='ticker'] .compose { flex-direction: column; }
-      html[data-frame='portrait'] body[data-layout='ticker'] .board, html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n] { grid-template-columns: 1fr; grid-template-rows: 1.6fr repeat(calc(var(--n) - 1), 1fr); }
+      html[data-frame='portrait'] .board, html[data-frame='portrait'] .board[data-n] { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      html[data-frame='portrait'] .board[data-n] .k-tile { grid-column: auto; min-height: 0; padding: 24px 24px 20px; }
+      html[data-frame='portrait'] .board[data-n="3"] .k-tile:first-child,
+      html[data-frame='portrait'] .board[data-n="5"] .k-tile:first-child { grid-column: 1 / -1; }
+      html[data-frame='portrait'] .board[data-n="3"] .k-tile:first-child .k-value,
+      html[data-frame='portrait'] .board[data-n="5"] .k-tile:first-child .k-value { font-size: 96px; }
+      html[data-frame='portrait'] .k-top { flex-wrap: wrap; row-gap: 10px; }
+      html[data-frame='portrait'] body:not([data-layout='ticker']) .board[data-n] .k-tile { min-height: 290px; }
+      html[data-frame='portrait'] body:not([data-layout='ticker']) .board[data-n="3"] .k-tile:first-child,
+      html[data-frame='portrait'] body:not([data-layout='ticker']) .board[data-n="5"] .k-tile:first-child { min-height: 380px; }
+      html[data-frame='portrait'] .board .k-value { font-size: 64px; }
+      html[data-frame='portrait'] .k-spark { height: 60px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .compose { flex-direction: column; justify-content: center; gap: 36px; padding: 120px 52px 132px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .head { flex: none; text-align: center; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .head .title { font-size: 50px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board, html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n] { flex: none; grid-template-columns: 1fr; grid-template-rows: auto; gap: 12px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child { padding: 32px 32px 28px; min-height: 520px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child .k-value { font-size: 120px; margin-top: auto; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child .k-spark { height: 96px; margin-top: auto; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child .k-spark i { height: calc(var(--h) * 66px); }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:not(:first-child) { padding: 18px 24px; min-height: 112px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:not(:first-child) .k-value { font-size: 44px; min-width: 132px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n="5"] .k-tile:first-child,
+      html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n="6"] .k-tile:first-child { min-height: 420px; }
+      html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n="5"] .k-tile:not(:first-child),
+      html[data-frame='portrait'] body[data-layout='ticker'] .board[data-n="6"] .k-tile:not(:first-child) { min-height: 0; padding: 14px 22px; }
+      html[data-frame='portrait'] .k-label { font-size: 15.5px; }
+      html[data-frame='portrait'] .k-delta { font-size: 15.5px; }
       html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:first-child { grid-column: 1; grid-row: 1; }
       html[data-frame='portrait'] body[data-layout='ticker'] .board .k-tile:not(:first-child) { grid-column: 1; }
       .bloom {

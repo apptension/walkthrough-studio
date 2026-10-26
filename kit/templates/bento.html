@@ -86,12 +86,12 @@
       /* Quote tile */
       .tile.quote { grid-column: 4 / 5; grid-row: 1 / 3; padding: 34px 32px; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
       .tile.quote .mark { font-size: 86px; line-height: 0.6; color: var(--gold); font-weight: 700; opacity: 0.9; }
-      .tile.quote .q { font-size: 26px; font-weight: 500; line-height: 1.32; letter-spacing: -0.02em; text-wrap: pretty; }
-      .tile.quote .who { font-size: 15px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+      .tile.quote .q { font-size: 28px; font-weight: 500; line-height: 1.32; letter-spacing: -0.02em; text-wrap: pretty; }
+      .tile.quote .who { font-size: 16px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
       .tile.quote .who:empty { display: none; }
       /* Logos tile */
       .tile.logos { grid-column: 3 / 4; grid-row: 2 / 3; padding: 26px 28px; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
-      .tile.logos .eyebrow { font-size: 12px; letter-spacing: 0.26em; opacity: 1; animation: none; }
+      .tile.logos .eyebrow { font-size: var(--eyebrow-size); letter-spacing: 0.26em; opacity: 1; animation: none; }
       .tile.logos .strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
       .tile.logos .mini {
         height: 70px; border-radius: 16px; display: grid; place-items: center; padding: 14px 18px;
@@ -119,8 +119,24 @@
       body[data-layout='editorial'] .board[data-logos='0'] .tile.num { grid-row: 1 / 2; }
       body[data-layout='editorial'] .board[data-logos='0'] .tile.num .value { font-size: 92px; }
       /* Vertical master */
-      html[data-frame='portrait'] .head { text-align: left; }
-      html[data-frame='portrait'] .board { grid-template-columns: repeat(2, 1fr); grid-template-rows: 520px 300px 300px; gap: 16px; }
+      body[data-layout='editorial'] .tile.logos { justify-content: space-between; }
+      body[data-layout='editorial'] .tile.logos .mini { height: 92px; }
+      body[data-layout='editorial'] .tile.logos .mini img { max-height: 48px; }
+      body[data-layout='editorial'] .tile.quote .q { font-size: 25px; }
+      html[data-frame='portrait'] .head,
+      html[data-frame='portrait'] body[data-layout='editorial'] .head { flex: none; text-align: left; align-self: stretch; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .compose { flex-direction: column; align-items: stretch; gap: 36px; padding: 120px 52px 132px; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .head .title { font-size: 56px; }
+      html[data-frame='portrait'] .board,
+      html[data-frame='portrait'] body[data-layout='editorial'] .board { flex: 1; height: auto; max-height: 1040px; grid-template-columns: repeat(2, 1fr); grid-template-rows: 1.45fr 1fr 1fr; gap: 16px; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .tile.shot { grid-column: 1 / 3; grid-row: 1 / 2; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .tile.num { grid-column: 1 / 2; grid-row: 2 / 3; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .tile.quote { grid-column: 2 / 3; grid-row: 2 / 4; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .tile.logos { grid-column: 1 / 2; grid-row: 3 / 4; }
+      html[data-frame='portrait'] body[data-layout='editorial'] .tile.logos .strip { grid-template-columns: repeat(2, 1fr); }
+      html[data-frame='portrait'] .tile.logos .mini { height: 64px; }
+      html[data-frame='portrait'] .tile.quote .q { font-size: 24px; }
+      html[data-frame='portrait'] .tile.num .value { font-size: 84px; }
       html[data-frame='portrait'] .tile.shot { grid-column: 1 / 3; grid-row: 1 / 2; }
       html[data-frame='portrait'] .tile.num { grid-column: 1 / 2; grid-row: 2 / 3; }
       html[data-frame='portrait'] .tile.quote { grid-column: 2 / 3; grid-row: 2 / 4; }

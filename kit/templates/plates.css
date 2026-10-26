@@ -32,7 +32,7 @@
 /* House kicker: copy is authored in sentence case (kit/lib/copyCase.mjs); the capitals and the
    tracking come only from here, so every plate's eyebrow reads the same. */
 :root {
-  --eyebrow-size: 15px;
+  --eyebrow-size: 16px;
   --eyebrow-weight: 600;
   --eyebrow-track: 0.32em;
 }
@@ -48,6 +48,7 @@
 html[data-frame='portrait'] {
   --wt-frame-w: 1080px;
   --wt-frame-h: 1920px;
+  --eyebrow-size: 17px;
 }
 /* Vertical videos are watched on phones: the composition lays out on a narrower virtual canvas
    and is zoomed up, so type reads at phone size. Templates stack their rows under this rule. */

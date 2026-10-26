@@ -53,7 +53,7 @@
       .logo { filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--amber) 22%, transparent)); }
       .platform {
         margin-top: 18px; white-space: nowrap;
-        font-size: 13px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted);
+        font-size: 15px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted);
         opacity: 0; animation: fadeUp 0.9s 2.7s var(--expo) both;
       }
       .steps-exit {
@@ -101,9 +101,10 @@
       html[data-frame='portrait'] .title { font-size: 96px; }
       html[data-frame='portrait'] .steps-exit { left: 72px; right: 72px; top: 54%; }
       html[data-frame='portrait'] .step-label { font-size: 36px; }
+      html[data-frame='portrait'] .dot { width: 64px; height: 64px; font-size: 24px; }
       html[data-frame='portrait'] .step-note { font-size: 24px; }
       html[data-frame='portrait'] .lockup-exit { width: min(calc(var(--close-logo-width, 480px) * 0.9), 440px); }
-      html[data-frame='portrait'] .platform { font-size: 18px; white-space: normal; }
+      html[data-frame='portrait'] .platform { font-size: 22px; letter-spacing: 0.22em; white-space: normal; }
     </style>
   </head>
   <body data-duration="6.2" data-layout="{{LAYOUT}}">
