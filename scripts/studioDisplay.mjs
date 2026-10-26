@@ -205,8 +205,8 @@ export function parseStudioBoot(text) {
       .map((part) => part.trim())
       .filter(Boolean).length;
   }
-  const deskWord = text.match(/desk:\s*(new|classic)/)?.[1] || null;
-  const desk = deskWord === 'new' ? 'next' : deskWord === 'classic' ? 'legacy' : null;
+  const deskWord = text.match(/desk:\s*(studio|new|classic)/)?.[1] || null;
+  const desk = deskWord === 'studio' || deskWord === 'new' ? 'studio' : deskWord === 'classic' ? 'legacy' : null;
   const complete = Boolean(url && agentLine && videosLine !== null);
   return { url, agentLine, videoCount, desk, complete };
 }

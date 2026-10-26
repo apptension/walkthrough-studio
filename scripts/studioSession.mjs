@@ -22,8 +22,7 @@ export async function launchStudio(ctx) {
   const {
     port: requestedPort,
     uiPort: requestedUiPort = 4748,
-    desk = 'next',
-    studioNext = null,
+    studioDir = null,
     dev,
     noOpen,
     openSlug,
@@ -59,7 +58,7 @@ export async function launchStudio(ctx) {
     portFree,
   });
 
-  const useVite = Boolean(dev && desk === 'next' && studioNext);
+  const useVite = Boolean(dev && studioDir);
   let uiPort = requestedUiPort;
   if (useVite) {
     uiPort = await ensurePortFree({
@@ -197,19 +196,17 @@ export async function launchStudio(ctx) {
   const childArgs = () => {
     const list = ['cli.mjs', 'studio', '--port', String(port)];
     if (dev) list.push('--dev');
-    if (desk === 'legacy') list.push('--legacy');
     if (openSlug) list.push(openSlug);
     return list;
   };
 
   const readyRows = (info) => {
     const rows = [];
-    const served = info.desk || desk;
     if (useVite) {
       rows.push({ label: 'Desk', value: `Vite · 127.0.0.1:${uiPort}`, tone: 'ok' });
       rows.push({ label: 'API', value: `127.0.0.1:${port}` });
-    } else if (served === 'legacy') {
-      rows.push({ label: 'Desk', value: 'classic · retiring', tone: 'warn' });
+    } else {
+      rows.push({ label: 'Desk', value: `127.0.0.1:${port}`, tone: 'ok' });
     }
     if (openSlug) rows.push({ label: 'Project', value: openSlug });
     rows.push({ label: 'Videos', value: String(info.videoCount ?? 0) });
@@ -218,21 +215,19 @@ export async function launchStudio(ctx) {
     rows.push(...agentRows(getAgentCheck()));
     rows.push({ label: 'Stop', value: 'Ctrl+C' });
     if (dev) {
-      rows.push({ label: 'UI', value: useVite ? 'kit/studio-next hot reload' : 'kit/studio reloads on save' });
+      rows.push({ label: 'UI', value: 'kit/studio hot reload' });
       rows.push({ label: 'Server', value: 'kit/lib and cli.mjs restart' });
-      if (!useVite) rows.push({ label: 'Browser', value: 'errors and warnings' });
     } else {
       rows.push({ label: 'Dev', value: './studio --dev' });
-      if (served === 'legacy') rows.push({ label: 'New desk', value: './studio --v2' });
     }
     return rows;
   };
 
   const viteBin = () => {
-    if (!studioNext) return null;
+    if (!studioDir) return null;
     const candidates = [
-      join(studioNext, 'node_modules', 'vite', 'bin', 'vite.js'),
-      join(studioNext, 'node_modules', 'vite', 'bin', 'vite.mjs'),
+      join(studioDir, 'node_modules', 'vite', 'bin', 'vite.js'),
+      join(studioDir, 'node_modules', 'vite', 'bin', 'vite.mjs'),
     ];
     return candidates.find((path) => existsSync(path)) || null;
   };
@@ -246,7 +241,7 @@ export async function launchStudio(ctx) {
 
       const bin = viteBin();
       if (!bin) {
-        reject(new Error('vite binary missing — run npm install in kit/studio-next'));
+        reject(new Error('vite binary missing — run npm install in kit/studio'));
         return;
       }
 
@@ -255,7 +250,7 @@ export async function launchStudio(ctx) {
         nodePath,
         [bin, '--host', '127.0.0.1', '--port', String(uiPort), '--strictPort'],
         {
-          cwd: studioNext,
+          cwd: studioDir,
           stdio: ['ignore', 'pipe', 'pipe'],
           env: { ...process.env, STUDIO_ORIGIN: origin },
         }
@@ -328,7 +323,7 @@ export async function launchStudio(ctx) {
         stopSpinner('desk', 'bad', err.message || 'failed');
         footerFail([
           String(err.message || err),
-          `Manual desk:  ${theme.bold}cd kit/studio-next && STUDIO_ORIGIN=http://127.0.0.1:${port} npm run dev${theme.reset}`,
+          `Manual desk:  ${theme.bold}cd kit/studio && STUDIO_ORIGIN=http://127.0.0.1:${port} npm run dev${theme.reset}`,
         ]);
         killProc(child);
         process.exit(1);
@@ -354,7 +349,7 @@ export async function launchStudio(ctx) {
         'dev',
         useVite
           ? 'watching kit/lib and kit/cli.mjs · desk hot reload via Vite'
-          : 'watching kit/studio, kit/lib, and kit/cli.mjs'
+          : 'watching kit/lib and kit/cli.mjs'
       );
     }
     if (!noOpen && openUrl) openBrowser(openUrl);

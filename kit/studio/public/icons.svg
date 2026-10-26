@@ -1,0 +1,692 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="display:none">
+  <symbol id="agents-claude" viewBox="0 0 24 24">
+    <path fill="currentColor" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/>
+  </symbol>
+  <symbol id="agents-cursor" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/>
+  </symbol>
+  <symbol id="empty-capture" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="18.67" width="48" height="32" rx="5.33"/>
+      <path d="M21.33 18.67 L25.33 10.67 L38.67 10.67 L42.67 18.67"/>
+      <circle cx="32" cy="34.67" r="9.33"/>
+      <circle cx="32" cy="34.67" r="4.67"/>
+      <circle cx="45.87" cy="24.8" r="1.6" fill="currentColor" stroke="none"/>
+      <path d="M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52" opacity=".45"/>
+  </symbol>
+  <symbol id="empty-play" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="13.33" width="48" height="37.33" rx="5.33"/>
+      <path d="M26.67 24 L40 32 L26.67 40 Z" fill="currentColor"/>
+      <path d="M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52" opacity=".45"/>
+  </symbol>
+  <symbol id="empty-stale" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 32 A20 20 0 1 0 18.67 17.07 L12 22.67"/>
+      <path d="M12 10.67 L12 22.67 L24 22.67"/>
+      <path d="M29.33 25.07 L29.33 41.6 L43.33 33.33 Z" fill="currentColor"/>
+      <path d="M5 12V5H12M52 5H59V12M5 52V59H12M52 59H59V52" opacity=".45"/>
+  </symbol>
+  <symbol id="focus-guided" viewBox="0 0 44 34" fill="none">
+    <rect class="fg-ui" x="2" y="3" width="40" height="28" rx="3"/>
+      <rect class="fg-chip" x="5" y="6" width="7" height="3.5" rx="1.5"/>
+      <rect class="fg-chip" x="14" y="6" width="9" height="3.5" rx="1.5"/>
+      <rect class="fg-chip" x="5" y="16" width="8" height="7" rx="1.5"/>
+      <rect class="fg-chip" x="15.5" y="16" width="8" height="7" rx="1.5"/>
+      <rect class="fg-target" x="26" y="15" width="12" height="9" rx="2"/>
+      <path class="fg-path" d="M13 13.5Q18.5 8 25 16"/>
+      <circle class="fg-lens" cx="32" cy="19.5" r="7"/>
+      <circle class="fg-lens-glass" cx="32" cy="19.5" r="3.5"/>
+      <path class="fg-cursor" d="M7 11L13.1 13.5 10.5 14.4 9.4 17.1Z"/>
+  </symbol>
+  <symbol id="focus-ring" viewBox="0 0 44 34" fill="none">
+    <rect class="fg-ui" x="2" y="3" width="40" height="28" rx="3"/>
+      <rect class="fg-chip" x="5" y="6" width="7" height="3.5" rx="1.5"/>
+      <rect class="fg-chip" x="14" y="6" width="9" height="3.5" rx="1.5"/>
+      <rect class="fg-chip" x="26" y="6" width="7" height="3.5" rx="1.5"/>
+      <rect class="fg-chip" x="5" y="13" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="13.5" y="13" width="7" height="5" rx="1.5"/>
+      <rect class="fg-target" x="22" y="13" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="30.5" y="13" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="5" y="20" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="13.5" y="20" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="22" y="20" width="7" height="5" rx="1.5"/>
+      <rect class="fg-chip" x="30.5" y="20" width="7" height="5" rx="1.5"/>
+      <rect class="fg-ring" x="18.5" y="9.5" width="14" height="12" rx="3" opacity=".28"/>
+      <rect class="fg-ring" x="20.5" y="11.5" width="10" height="8" rx="2"/>
+  </symbol>
+  <symbol id="focus-spotlight" viewBox="0 0 44 34" fill="none">
+    <defs>
+        <mask id="focusGlyphSpotMask">
+          <rect x="2" y="3" width="40" height="28" rx="3" fill="#fff"/>
+          <ellipse cx="24" cy="19" rx="12" ry="8" fill="#000"/>
+        </mask>
+      </defs>
+      <rect class="fg-ui" x="2" y="3" width="40" height="28" rx="3"/>
+      <rect class="fg-chip muted" x="5" y="6" width="7" height="3.5" rx="1.5"/>
+      <rect class="fg-chip muted" x="14" y="6" width="9" height="3.5" rx="1.5"/>
+      <rect class="fg-chip muted" x="5" y="15" width="8" height="10" rx="1.5"/>
+      <rect class="fg-chip muted" x="33.5" y="15" width="6" height="10" rx="1.5"/>
+      <rect class="fg-proof" x="16" y="15" width="16" height="8" rx="2"/>
+      <rect class="fg-hot" x="18.5" y="17.5" width="8" height="1.5" rx=".75"/>
+      <rect class="fg-hot" x="18.5" y="20" width="5" height="1.5" rx=".75"/>
+      <rect class="fg-dim" x="2" y="3" width="40" height="28" rx="3" mask="url(#focusGlyphSpotMask)"/>
+      <path class="fg-cone" d="M15 3 24 19 33 3Z"/>
+      <ellipse class="fg-beam" cx="24" cy="19" rx="12" ry="8"/>
+  </symbol>
+  <symbol id="ui-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12h4l3-7 4 14 3-7h4"/>
+  </symbol>
+  <symbol id="ui-ask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+      <path d="M9.6 9.4a2.4 2.4 0 0 1 4.8.4c0 1.6-2.4 2.1-2.4 3.7"/>
+      <path d="M12 17h.01"/>
+  </symbol>
+  <symbol id="ui-audio-queue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>
+  </symbol>
+  <symbol id="ui-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.5 21H7a2.5 2.5 0 0 1 0-5h12.5V3H7a2.5 2.5 0 0 0-2.5 2.5v13"/>
+  </symbol>
+  <symbol id="ui-bookmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 4.5h12v15.5l-6-3.8-6 3.8Z"/>
+  </symbol>
+  <symbol id="ui-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3 20.5 7.75 12 12.5 3.5 7.75Z"/>
+      <path d="M3.5 7.75v8.5L12 21l8.5-4.75v-8.5"/>
+      <path d="M3.5 7.75 12 12.5l8.5-4.75"/>
+      <path d="M12 12.5V21"/>
+      <path d="m7.75 5.4 8.5 4.7"/>
+  </symbol>
+  <symbol id="ui-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="7" cy="5.5" r="2.5"/>
+      <circle cx="17" cy="5.5" r="2.5"/>
+      <circle cx="12" cy="18.5" r="2.5"/>
+      <path d="M7 8v1a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V8M12 12v4"/>
+  </symbol>
+  <symbol id="ui-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.75 15.1a6.5 6.5 0 1 1 6.5 0c-.8.7-1.25 1.6-1.25 2.65v.75h-4v-.75c0-1.05-.45-1.95-1.25-2.65Z"/>
+      <path d="M9.5 21.5h5"/>
+  </symbol>
+  <symbol id="ui-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="6.5" width="12.5" height="11" rx="2"/>
+      <path d="m15.5 10.5 5-3v9l-5-3"/>
+  </symbol>
+  <symbol id="ui-captions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M7 11.5h4M14 11.5h3M7 15h7"/>
+  </symbol>
+  <symbol id="ui-chapters" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="8" width="5" height="8" rx="1.25" fill="currentColor" fill-opacity=".25"/>
+      <rect x="9.5" y="8" width="5" height="8" rx="1.25"/>
+      <rect x="16" y="8" width="5" height="8" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-check-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3.5"/>
+      <path d="m8 12 3 3 5.5-6.5"/>
+  </symbol>
+  <symbol id="ui-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m5 12.5 4.5 4.5L19 7"/>
+  </symbol>
+  <symbol id="ui-checklist-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6.5h16M4 12h9M4 17.5h7"/>
+      <path d="m14 16.5 2.25 2.25L21 13.5"/>
+  </symbol>
+  <symbol id="ui-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m15 6-6 6 6 6"/>
+  </symbol>
+  <symbol id="ui-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6 9 6 6 6-6"/>
+  </symbol>
+  <symbol id="ui-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+      <path d="m9 9 6 6M15 9l-6 6"/>
+  </symbol>
+  <symbol id="ui-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <path d="M12 4v16"/>
+      <path d="M5 4h7v16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor" fill-opacity=".25" stroke="none"/>
+  </symbol>
+  <symbol id="ui-cursor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 4.5 19.5 10.5l-6.2 2.2-2.6 6.3Z"/>
+  </symbol>
+  <symbol id="ui-cut" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="6" cy="6.5" r="2.35"/>
+      <circle cx="6" cy="17.5" r="2.35"/>
+      <path d="m8.1 8.2 12.4 9.2M8.1 15.8 20.5 6.5"/>
+  </symbol>
+  <symbol id="ui-depth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 3 8.5 4.75L12 12.5 3.5 7.75Z"/>
+      <path d="m3.5 12 8.5 4.75L20.5 12"/>
+      <path d="m3.5 16.25 8.5 4.75 8.5-4.75"/>
+  </symbol>
+  <symbol id="ui-download-fill" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round">
+    <path d="M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z"/>
+      <path d="M4.5 20h15" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="ui-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4v11"/>
+      <path d="m7.5 10.5 4.5 4.5 4.5-4.5"/>
+      <path d="M4.5 20h15"/>
+  </symbol>
+  <symbol id="ui-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.5 12c2.3-4.3 5.5-6.5 9.5-6.5s7.2 2.2 9.5 6.5c-2.3 4.3-5.5 6.5-9.5 6.5S4.8 16.3 2.5 12Z"/>
+      <circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="ui-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <path d="M7.5 4v16M16.5 4v16"/>
+      <path d="M3 9.5h4.5M3 14.5h4.5M16.5 9.5H21M16.5 14.5H21"/>
+  </symbol>
+  <symbol id="ui-fit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 8.5v-3a2 2 0 0 1 2-2h3M15.5 3.5h3a2 2 0 0 1 2 2v3M20.5 15.5v3a2 2 0 0 1-2 2h-3M8.5 20.5h-3a2 2 0 0 1-2-2v-3"/>
+      <rect x="8" y="9" width="8" height="6" rx="1"/>
+  </symbol>
+  <symbol id="ui-focus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3.25"/>
+      <path d="M3.5 8.5v-3a2 2 0 0 1 2-2h3M15.5 3.5h3a2 2 0 0 1 2 2v3M20.5 15.5v3a2 2 0 0 1-2 2h-3M8.5 20.5h-3a2 2 0 0 1-2-2v-3"/>
+  </symbol>
+  <symbol id="ui-formats" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="12" height="7.5" rx="1.5"/>
+      <rect x="17" y="4" width="4" height="16" rx="1.5"/>
+      <rect x="3" y="13.5" width="6.5" height="6.5" rx="1.5"/>
+  </symbol>
+  <symbol id="ui-fullscreen-fill" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3.5 9.5v-4a2 2 0 0 1 2-2h4V6H6v3.5Z"/>
+      <path d="M14.5 3.5h4a2 2 0 0 1 2 2v4H18V6h-3.5Z"/>
+      <path d="M20.5 14.5v4a2 2 0 0 1-2 2h-4V18H18v-3.5Z"/>
+      <path d="M9.5 20.5h-4a2 2 0 0 1-2-2v-4H6V18h3.5Z"/>
+  </symbol>
+  <symbol id="ui-fullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 9.5v-4a2 2 0 0 1 2-2h4M14.5 3.5h4a2 2 0 0 1 2 2v4M20.5 14.5v4a2 2 0 0 1-2 2h-4M9.5 20.5h-4a2 2 0 0 1-2-2v-4"/>
+  </symbol>
+  <symbol id="ui-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7.5" height="7.5" rx="1.75"/>
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.75"/>
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.75"/>
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.75"/>
+  </symbol>
+  <symbol id="ui-grip" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="9" cy="6" r="1.25"/>
+      <circle cx="15" cy="6" r="1.25"/>
+      <circle cx="9" cy="12" r="1.25"/>
+      <circle cx="15" cy="12" r="1.25"/>
+      <circle cx="9" cy="18" r="1.25"/>
+      <circle cx="15" cy="18" r="1.25"/>
+  </symbol>
+  <symbol id="ui-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5"/>
+      <path d="M4.5 4v4.5H9"/>
+      <path d="M12 8.5V12l2.5 1.5"/>
+  </symbol>
+  <symbol id="ui-keep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="m8 12 3 3 5-6"/>
+  </symbol>
+  <symbol id="ui-lens-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="7.5"/>
+      <circle cx="11" cy="11" r="3.75"/>
+      <path d="m20.5 20.5-4.2-4.2"/>
+      <path d="M19.5 4.5 4.5 19.5"/>
+  </symbol>
+  <symbol id="ui-lens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="7.5"/>
+      <circle cx="11" cy="11" r="3.75"/>
+      <path d="m20.5 20.5-4.2-4.2"/>
+  </symbol>
+  <symbol id="ui-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6.5h12M4 12h12M4 17.5h7"/>
+      <path d="M15.5 14v6l4.5-3Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5"/>
+      <path d="M8 10.5v-3a4 4 0 0 1 8 0v3"/>
+      <path d="M12 15.75h.01"/>
+  </symbol>
+  <symbol id="ui-lockup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="7" width="8" height="10" rx="2"/>
+      <path d="M14.5 9.5H21M14.5 14.5h4.5"/>
+  </symbol>
+  <symbol id="ui-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3 20.5 7.75 12 12.5 3.5 7.75Z"/>
+      <path d="M3.5 7.75v8.5L12 21l8.5-4.75v-8.5"/>
+      <path d="M3.5 7.75 12 12.5l8.5-4.75"/>
+      <path d="M12 12.5V21"/>
+      <path d="M5 10.1 10.5 13.15v4L5 14.1Z" fill="currentColor" fill-opacity=".5" stroke="none"/>
+  </symbol>
+  <symbol id="ui-loop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m17 3.5 3 3-3 3"/>
+      <path d="M4 11.5v-2a3 3 0 0 1 3-3h13"/>
+      <path d="m7 20.5-3-3 3-3"/>
+      <path d="M20 12.5v2a3 3 0 0 1-3 3H4"/>
+  </symbol>
+  <symbol id="ui-loupe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.5" cy="10.5" r="7"/>
+      <path d="m20.5 20.5-5-5"/>
+  </symbol>
+  <symbol id="ui-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="3" width="6" height="11" rx="3"/>
+      <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M8.5 21h7"/>
+  </symbol>
+  <symbol id="ui-motion-sec" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="15" cy="12" r="4.5"/>
+      <path d="M3 8.5h5M3 12h4M3 15.5h5" opacity=".55"/>
+  </symbol>
+  <symbol id="ui-motion" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12c3-6 6-6 9 0s6 6 9 0"/>
+  </symbol>
+  <symbol id="ui-music-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18V5.5l11-2.5v12.5"/>
+      <circle cx="6.25" cy="18" r="2.75"/>
+      <circle cx="17.25" cy="15.5" r="2.75"/>
+  </symbol>
+  <symbol id="ui-music" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18V5.5l11-2.5v12.5"/>
+      <circle cx="6.25" cy="18" r="2.75"/>
+      <circle cx="17.25" cy="15.5" r="2.75"/>
+  </symbol>
+  <symbol id="ui-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 9.5v5H7l5 4v-13l-5 4Z"/>
+      <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+  </symbol>
+  <symbol id="ui-no-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.5" cy="10.5" r="7"/>
+      <path d="m20.5 20.5-5-5"/>
+      <path d="M19.5 4.5 4.5 19.5"/>
+  </symbol>
+  <symbol id="ui-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 20.5h8"/>
+      <path d="M16.75 3.75a2.3 2.3 0 0 1 3.5 3.5L8 19.5 3.5 20.5l1-4.5Z"/>
+  </symbol>
+  <symbol id="ui-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 3.5h6.5V10"/>
+      <path d="M20.5 3.5 11.5 12.5"/>
+      <path d="M18.5 14v4.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2H10"/>
+  </symbol>
+  <symbol id="ui-pace" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.5 3.5h5l3.5 17H6Z"/>
+      <path d="m12 15.5 3-8"/>
+      <path d="M7 15.5h10"/>
+  </symbol>
+  <symbol id="ui-palette-sec" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.5" y="4.5" width="4.5" height="15" rx="1.25"/>
+      <rect x="9.75" y="4.5" width="4.5" height="15" rx="1.25"/>
+      <rect x="16" y="4.5" width="4.5" height="15" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6a2 2 0 0 1 2-2h4v16H5a2 2 0 0 1-2-2Z" fill="currentColor" fill-opacity=".15"/>
+      <path d="M9 4h6v16H9Z" fill="currentColor" fill-opacity=".35"/>
+      <path d="M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4Z" fill="currentColor" fill-opacity=".6"/>
+  </symbol>
+  <symbol id="ui-pause-fill" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6.5" y="5" width="3.5" height="14" rx="1.25"/>
+      <rect x="14" y="5" width="3.5" height="14" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-pause" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6.5" y="5" width="3.5" height="14" rx="1.25"/>
+      <rect x="14" y="5" width="3.5" height="14" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16.75 3.75a2.3 2.3 0 0 1 3.5 3.5L7.5 20 3 21l1-4.5Z"/>
+      <path d="m14.5 6 3.5 3.5"/>
+  </symbol>
+  <symbol id="ui-pip-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6 12.5 4 4 8-9"/>
+  </symbol>
+  <symbol id="ui-pip-fail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m7 7 10 10M17 7 7 17"/>
+  </symbol>
+  <symbol id="ui-pip-run" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+    <circle class="pip-track" cx="12" cy="12" r="8.5"/>
+      <circle class="pip-arc" cx="12" cy="12" r="8.5" stroke-dasharray="14 39.4" transform="rotate(-90 12 12)"/>
+  </symbol>
+  <symbol id="ui-pip-todo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.5" stroke-dasharray="2.9 2.9"/>
+  </symbol>
+  <symbol id="ui-pipeline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="5" cy="12" r="2"/>
+      <circle cx="12" cy="12" r="2"/>
+      <circle cx="19" cy="12" r="2"/>
+      <path d="M7 12h3M14 12h3"/>
+  </symbol>
+  <symbol id="ui-plate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M7 10h10M7 14h6"/>
+  </symbol>
+  <symbol id="ui-plates-queue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M3 10h18M9 10v9"/>
+  </symbol>
+  <symbol id="ui-play-fill" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round">
+    <path d="M8 5.75v12.5L18.5 12Z"/>
+  </symbol>
+  <symbol id="ui-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 5.75v12.5L18.5 12Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-plus-fill" viewBox="0 0 24 24" fill="currentColor">
+    <path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-1.1 4.5h2.2v3.4h3.4v2.2h-3.4v3.4h-2.2v-3.4H7.5v-2.2h3.4Z"/>
+  </symbol>
+  <symbol id="ui-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 5v14M5 12h14"/>
+  </symbol>
+  <symbol id="ui-poster" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <circle cx="8.5" cy="9" r="1.75"/>
+      <path d="m21 15.5-5-5L6.5 20"/>
+  </symbol>
+  <symbol id="ui-preview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.5 12c2.3-4.3 5.5-6.5 9.5-6.5s7.2 2.2 9.5 6.5c-2.3 4.3-5.5 6.5-9.5 6.5S4.8 16.3 2.5 12Z"/>
+      <circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="ui-produce-queue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="m10 9 5 3-5 3Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-queue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 6.5h12M9 12h12M9 17.5h12"/>
+      <circle cx="4.5" cy="6.5" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="17.5" r="1.1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="ui-record" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="5.5"/>
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75" opacity=".4"/>
+  </symbol>
+  <symbol id="ui-redo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m15.5 14 4.5-4.5L15.5 5"/>
+      <path d="M20 9.5H9.5a5 5 0 0 0 0 10H13"/>
+  </symbol>
+  <symbol id="ui-render" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.5 6Q11.9 11.6 17.5 13Q11.9 14.4 10.5 20Q9.1 14.4 3.5 13Q9.1 11.6 10.5 6Z"/>
+      <path d="M18.5 2.75Q19.05 4.95 21.25 5.5Q19.05 6.05 18.5 8.25Q17.95 6.05 15.75 5.5Q17.95 4.95 18.5 2.75Z"/>
+  </symbol>
+  <symbol id="ui-replay" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5"/>
+      <path d="M4.5 4v4.5H9"/>
+      <path d="M10.5 9.5v5l4.5-2.5Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5"/>
+      <path d="M4.5 4v4.5H9"/>
+  </symbol>
+  <symbol id="ui-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.5-5.6L4.5 8.5"/>
+      <path d="M4.5 4v4.5H9"/>
+      <path d="m8.75 12.75 2.25 2.25L15.5 10.25"/>
+  </symbol>
+  <symbol id="ui-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.5" cy="10.5" r="7"/>
+      <path d="m20.5 20.5-5-5"/>
+  </symbol>
+  <symbol id="ui-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 7h8M16 7h4M14 4.5v5"/>
+      <path d="M4 12h3M11 12h9M9 9.5v5"/>
+      <path d="M4 17h10M18 17h2M16 14.5v5"/>
+  </symbol>
+  <symbol id="ui-skip-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 6.5v11L3.5 12Z" fill="currentColor"/>
+      <path d="M20.5 6.5v11L13 12Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-skip-fwd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 6.5v11L11 12Z" fill="currentColor"/>
+      <path d="M13 6.5v11l7.5-5.5Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 15.5a8 8 0 1 1 16 0"/>
+      <path d="m12 15.5-4-5.5"/>
+      <circle cx="12" cy="15.5" r="1.5" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="ui-sound" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 9.5v5H7l5 4v-13l-5 4Z"/>
+      <path d="M15.5 9a4.5 4.5 0 0 1 0 6"/>
+  </symbol>
+  <symbol id="ui-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.5Q13.7 10.3 20.5 12Q13.7 13.7 12 20.5Q10.3 13.7 3.5 12Q10.3 10.3 12 3.5Z"/>
+  </symbol>
+  <symbol id="ui-speed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 15.5a8 8 0 1 1 16 0"/>
+      <path d="m12 15.5 4-5.5"/>
+      <circle cx="12" cy="15.5" r="1.5" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="ui-step-audio" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="2.75" y="9" width="2.5" height="6" rx="1.25"/>
+      <rect x="6.75" y="6" width="2.5" height="12" rx="1.25"/>
+      <rect x="10.75" y="3" width="2.5" height="18" rx="1.25"/>
+      <rect x="14.75" y="7" width="2.5" height="10" rx="1.25"/>
+      <rect x="18.75" y="10" width="2.5" height="4" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-step-deliver" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round">
+    <path d="M9.5 3.5h5v7h4L12 17 5.5 10.5h4Z"/>
+      <path d="M4.5 20h15" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="ui-step-plates" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="4" y="5" width="16" height="3" rx="1"/>
+      <rect x="4" y="10.5" width="16" height="3" rx="1"/>
+      <rect x="4" y="16" width="10" height="3" rx="1"/>
+  </symbol>
+  <symbol id="ui-step-produce" viewBox="0 0 24 24" fill="currentColor">
+    <path fill-rule="evenodd" d="M5 4.5a2.5 2.5 0 0 0-2.5 2.5v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5Zm.25 2.25h13.5v10.5H5.25Z"/>
+      <path d="M10.25 9.25v5.5l4.5-2.75Z"/>
+  </symbol>
+  <symbol id="ui-step-record" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="6"/>
+  </symbol>
+  <symbol id="ui-stop" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="5.5" y="5.5" width="13" height="13" rx="2.5"/>
+  </symbol>
+  <symbol id="ui-story" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 3h8.5l5 5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4.5A1.5 1.5 0 0 1 6 3Z"/>
+      <path d="M14.5 3v5h5"/>
+      <path d="M8.5 12.5h7M8.5 16.5h4.5"/>
+  </symbol>
+  <symbol id="ui-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 3.5h7.6l9.4 9.4a1.5 1.5 0 0 1 0 2.1l-5.5 5.5a1.5 1.5 0 0 1-2.1 0L3.5 11.1Z"/>
+      <path d="M7.75 7.75h.01"/>
+  </symbol>
+  <symbol id="ui-target-sec" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+      <circle cx="12" cy="12" r="5.25"/>
+      <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="ui-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="7.5"/>
+      <circle cx="12" cy="12" r="2.75"/>
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2"/>
+  </symbol>
+  <symbol id="ui-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 7.5v-3h14v3M12 4.5v15M9 19.5h6"/>
+  </symbol>
+  <symbol id="ui-to-start" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 5.5v13"/>
+      <path d="M18 6.5v11L9.5 12Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-tr-blur" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2" opacity=".35"/>
+      <rect x="6" y="7.5" width="12" height="9" rx="1.5" opacity=".65"/>
+      <rect x="9" y="10" width="6" height="4" rx="1"/>
+  </symbol>
+  <symbol id="ui-tr-continue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M3 15c3-2.4 6 2.4 9 0s6-2.4 9 0"/>
+      <rect x="8" y="8.25" width="8" height="3.5" rx="1" fill="currentColor" fill-opacity=".25" stroke="none"/>
+  </symbol>
+  <symbol id="ui-tr-diagonal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M5 5h16L3 17V7a2 2 0 0 1 2-2Z" fill="currentColor" fill-opacity=".25" stroke="none"/>
+  </symbol>
+  <symbol id="ui-tr-dip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M3 12h18v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="ui-tr-directed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m3.5 20.5 9.5-9.5"/>
+      <path d="M16.5 3Q17.4 6.6 21 7.5Q17.4 8.4 16.5 12Q15.6 8.4 12 7.5Q15.6 6.6 16.5 3Z"/>
+  </symbol>
+  <symbol id="ui-tr-dissolve" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4.5" width="12.5" height="11" rx="1.5" stroke-dasharray="2.2 2"/>
+      <rect x="8.5" y="8.5" width="12.5" height="11" rx="1.5"/>
+  </symbol>
+  <symbol id="ui-tr-iris" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <circle cx="12" cy="12" r="4.25" fill="currentColor" fill-opacity=".25"/>
+  </symbol>
+  <symbol id="ui-tr-push" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="6" width="9" height="12" rx="1.5"/>
+      <rect x="12.5" y="6" width="9" height="12" rx="1.5" fill="currentColor" fill-opacity=".25"/>
+  </symbol>
+  <symbol id="ui-tr-radial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.5"/>
+      <path d="M12 12V3.5a8.5 8.5 0 0 1 8.5 8.5Z" fill="currentColor" fill-opacity=".25"/>
+  </symbol>
+  <symbol id="ui-tr-slice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M3 9.67h18M3 14.33h18"/>
+      <path d="M3 9.67h11v4.66H3Z" fill="currentColor" fill-opacity=".25" stroke="none"/>
+  </symbol>
+  <symbol id="ui-tr-wipe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="M12 5v14"/>
+      <path d="M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7Z" fill="currentColor" fill-opacity=".25" stroke="none"/>
+  </symbol>
+  <symbol id="ui-tr-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <rect x="8" y="8.75" width="8" height="6.5" rx="1" fill="currentColor" fill-opacity=".25"/>
+  </symbol>
+  <symbol id="ui-transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5.5" width="11" height="11" rx="1.5"/>
+      <rect x="10" y="8.5" width="11" height="11" rx="1.5" fill="currentColor" fill-opacity=".2"/>
+  </symbol>
+  <symbol id="ui-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6.5h16"/>
+      <path d="M9.5 6.5v-2h5v2"/>
+      <path d="m6 6.5.9 12.6a1.5 1.5 0 0 0 1.5 1.4h7.2a1.5 1.5 0 0 0 1.5-1.4L18 6.5"/>
+      <path d="M10 10.5v6M14 10.5v6"/>
+  </symbol>
+  <symbol id="ui-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 14 4 9.5 8.5 5"/>
+      <path d="M4 9.5h10.5a5 5 0 0 1 0 10H11"/>
+  </symbol>
+  <symbol id="ui-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 15.5v-11"/>
+      <path d="m7.5 9 4.5-4.5L16.5 9"/>
+      <path d="M4.5 20h15"/>
+  </symbol>
+  <symbol id="ui-version" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 3.5h10.5L20.5 8.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5.5A2 2 0 0 1 5 3.5Z"/>
+      <path d="M8 3.5v4.75h6.25V3.5"/>
+      <rect x="7" y="13" width="10" height="5.5" rx="1.25"/>
+  </symbol>
+  <symbol id="ui-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <path d="m10 9 5 3-5 3Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ui-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 9.5v5H7l5 4v-13l-5 4Z"/>
+      <path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>
+  </symbol>
+  <symbol id="ui-walk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12.5" cy="4.5" r="2" fill="currentColor" stroke="none"/>
+      <path d="M11.75 8.5 10.25 14"/>
+      <path d="m8 12 3.75-3.5 3.5 2.75 2.5-1.25"/>
+      <path d="m10.25 14-3.5 7.5M10.25 14l3.25 3.25.75 4.25"/>
+  </symbol>
+  <symbol id="ui-warn-tri" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.3 4.2 2.9 17.2a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/>
+      <path d="M12 9.5v4M12 17h.01"/>
+  </symbol>
+  <symbol id="ui-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+      <path d="M12 7.5v5M12 16.5h.01"/>
+  </symbol>
+  <symbol id="ui-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>
+  </symbol>
+  <symbol id="ui-zoom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.5" cy="10.5" r="7"/>
+      <path d="m20.5 20.5-5-5"/>
+      <path d="M10.5 7.5v6M7.5 10.5h6"/>
+  </symbol>
+  <symbol id="zen-box" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="26.67" y="29.33" width="42.67" height="24" rx="5.33"/>
+      <g class="z-lid">
+        <path d="M26.67 29.33 L21.33 17.33 L74.67 17.33 L69.33 29.33"/>
+      </g>
+      <path d="M48 29.33 V53.33" opacity=".45"/>
+      <path d="M38.67 41.33 H57.33" opacity=".45"/>
+  </symbol>
+  <symbol id="zen-checklist" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="25.33" y="4" width="45.33" height="56" rx="5.33"/>
+      <g class="z-tick">
+        <rect x="32" y="9.33" width="10.67" height="10.67" rx="2.67"/>
+        <path d="M34.13 14.93 L37.07 18.4 L43.2 12.27"/>
+      </g>
+      <path d="M46.67 14.67 H64" opacity=".45"/>
+      <g class="z-tick">
+        <rect x="32" y="25.33" width="10.67" height="10.67" rx="2.67"/>
+        <path d="M34.13 30.93 L37.07 34.4 L43.2 28.27"/>
+      </g>
+      <path d="M46.67 30.67 H60" opacity=".45"/>
+      <g class="z-tick">
+        <rect x="32" y="41.33" width="10.67" height="10.67" rx="2.67"/>
+        <path d="M34.13 46.93 L37.07 50.4 L43.2 44.27"/>
+      </g>
+      <path d="M46.67 46.67 H56" opacity=".45"/>
+  </symbol>
+  <symbol id="zen-clapper" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="24" y="29.33" width="48" height="24" rx="5.33"/>
+      <path d="M34.67 40 H50.67" opacity=".45"/>
+      <path d="M34.67 46.67 H58.67" opacity=".45"/>
+      <g class="z-flap">
+        <path d="M24 29.33 L72 29.33 L67.2 16 L19.2 16 Z"/>
+        <path d="M32.53 16 L37.33 29.33 M45.87 16 L50.67 29.33 M59.2 16 L64 29.33" opacity=".7"/>
+      </g>
+  </symbol>
+  <symbol id="zen-dashes" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <g class="z-dash">
+        <path d="M26.67 21.33 H69.33" opacity=".3"/>
+        <path d="M26.67 32 H50.67" opacity=".5"/>
+        <path d="M26.67 42.67 H61.33" opacity=".3"/>
+      </g>
+  </symbol>
+  <symbol id="zen-film" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="24" y="10.67" width="48" height="42.67" rx="5.33"/>
+      <path d="M36 10.67 V53.33 M60 10.67 V53.33"/>
+      <path d="M24 25.33 H36 M24 38.67 H36 M60 25.33 H72 M60 38.67 H72"/>
+      <circle cx="48" cy="32" r="5.33" class="z-reel"/>
+  </symbol>
+  <symbol id="zen-frame" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="24" y="10.67" width="48" height="42.67" rx="5.33"/>
+      <path d="M24 42.67 L38.67 32 L49.33 38.67 L58.67 33.33 L72 42.67"/>
+      <circle cx="59.2" cy="19.2" r="4" class="z-sun"/>
+  </symbol>
+  <symbol id="zen-loupe" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <g class="z-loupe">
+        <circle cx="46" cy="26.67" r="17.33"/>
+        <circle cx="46" cy="26.67" r="8.67" opacity=".45"/>
+        <path d="M58.53 39.2 L72.67 53.33"/>
+      </g>
+  </symbol>
+  <symbol id="zen-pointer" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="19.33" y="21.33" width="32" height="21.33" rx="5.33"/>
+      <path d="M27.33 21.33 V42.67 M35.33 21.33 V42.67 M43.33 21.33 V42.67" opacity=".45"/>
+      <g class="z-pointer">
+        <path d="M51.33 21.33 L72.67 30.13 L63.6 33.33 L59.6 42.67 Z"/>
+      </g>
+  </symbol>
+  <symbol id="zen-sleep" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 8 L56.67 20.67 L34 33.33 L11.33 20.67 Z"/>
+      <path d="M11.33 20.67 L11.33 43.33 L34 56 L56.67 43.33 L56.67 20.67"/>
+      <path d="M11.33 20.67 L34 33.33 L56.67 20.67"/>
+      <path d="M34 33.33 L34 56"/>
+      <path d="M15.33 26.93 L30 35.07 L30 45.73 L15.33 37.6 Z" fill="currentColor" fill-opacity=".5" stroke="none"/>
+      <g class="z-zz"><path d="M64 42H76L64 54H76"/><path d="M74 24H88L74 36H88"/><path d="M84 6H94L84 18H94"/></g>
+  </symbol>
+  <symbol id="zen-tumbleweed" viewBox="0 0 96 64" fill="none" stroke="currentColor" stroke-width="4.67" stroke-linecap="round" stroke-linejoin="round">
+    <path class="z-ground" d="M6 56H90" stroke-dasharray="0.01 7.99"/>
+      <ellipse cx="52" cy="55.5" rx="14" ry="1.6" fill="currentColor" stroke="none" opacity=".16"/>
+      <g class="z-weed">
+        <circle cx="52" cy="32.53" r="16"/>
+        <ellipse cx="52" cy="32.53" rx="16" ry="6.4" opacity=".45"/>
+        <ellipse cx="52" cy="32.53" rx="6.93" ry="16" opacity=".45"/>
+      </g>
+      <g class="z-dust" fill="currentColor" stroke="none"><circle cx="28" cy="50" r="1.5"/><circle cx="21" cy="46" r="1.15"/><circle cx="33" cy="44.5" r=".9"/><circle cx="16" cy="52" r=".75"/></g>
+  </symbol>
+</svg>

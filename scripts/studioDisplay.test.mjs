@@ -121,9 +121,10 @@ test('boot parsing reads which desk the server chose', () => {
       `  desk: ${desk}`,
       '  videos: one · out: /tmp/videos',
     ].join('\n');
-  assert.equal(parseStudioBoot(lines('new')).desk, 'next');
+  assert.equal(parseStudioBoot(lines('studio')).desk, 'studio');
+  assert.equal(parseStudioBoot(lines('new')).desk, 'studio');
   assert.equal(parseStudioBoot(lines('classic (retiring — the new desk is the default)')).desk, 'legacy');
-  assert.equal(parseStudioBoot(lines('new')).videoCount, 1);
+  assert.equal(parseStudioBoot(lines('studio')).videoCount, 1);
 });
 
 test('vite boot parsing and desk URLs', () => {

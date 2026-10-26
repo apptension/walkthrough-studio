@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { shortHoldWarning } from '../studio/voiceHold.js';
+import { shortHoldWarning } from './shared/voiceHold.js';
 import { PLATE_CATALOG, PLATE_TYPE_SET } from './plateTypes.mjs';
 import { cardCopyFixes, copyContext, copyCorpus, plateCopyFixes } from './copyCase.mjs';
 

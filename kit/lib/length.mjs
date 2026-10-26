@@ -1,7 +1,7 @@
 /**
  * Target length is a hint for the script, not a render format. Any length in range is kept;
  * a longer video just takes longer to record and render. Keep the bounds in step with
- * `kit/studio-next/src/logic/length.ts`.
+ * `kit/studio/src/logic/length.ts`.
  */
 export const LENGTH_MIN_SEC = 30;
 export const LENGTH_MAX_SEC = 60 * 60;

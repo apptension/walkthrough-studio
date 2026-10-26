@@ -1,7 +1,7 @@
 /**
  * ./studio flags, and keeping the desk build current.
  *
- * The desk is the React app in kit/studio-next. ./studio installs its packages
+ * The desk is the React app in kit/studio. ./studio installs its packages
  * when package-lock.json changes and rebuilds dist/ when its sources change, so
  * a `git pull` never leaves anyone on a stale desk. Both are stamped with a
  * content hash, so a checkout that touches files without changing them does not
@@ -138,7 +138,7 @@ export function installDesk(appDir, { run = spawnSync, env = process.env } = {})
 /** `vite build` into dist/. The typecheck is a contributor gate (npm run verify), not a launch step. */
 export function buildDesk(appDir, { run = spawnSync, nodePath = process.execPath, env = process.env } = {}) {
   const bin = viteBin(appDir);
-  if (!bin) return { ok: false, step: 'build', detail: 'vite is not installed in kit/studio-next' };
+  if (!bin) return { ok: false, step: 'build', detail: 'vite is not installed in kit/studio' };
   const fingerprint = buildFingerprint(appDir);
   const r = run(nodePath, [bin, 'build', '--logLevel', 'warn'], { cwd: appDir, encoding: 'utf8', env });
   if (r.status !== 0) return failure('build', r);

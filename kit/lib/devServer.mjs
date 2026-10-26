@@ -1,8 +1,8 @@
 /**
  * Dev mode for Walkthrough Studio.
  *
- * The server watches kit/studio and tells open browsers to restyle or reload.
  * The ./studio launcher watches kit/lib and kit/cli.mjs and restarts this process.
+ * The desk itself hot-reloads through Vite. This hub still accepts browser logs.
  * Browser warnings and errors are posted back and printed on the server stdout
  * with a __WTDEV__ marker the launcher renders in its log.
  */
@@ -100,10 +100,8 @@ export function devWatchKind(file, { kitDir }) {
   if (/\.test\.(mjs|js)$/.test(rel)) return 'ignore';
   if (rel === 'cli.mjs') return 'restart';
   if (rel.startsWith('lib/') && rel.endsWith('.mjs')) return 'restart';
-  if (rel.startsWith('studio/')) {
-    if (rel.endsWith('.css')) return 'css';
-    return 'reload';
-  }
+  // The desk hot-reloads through Vite. Saving it must not restart the API.
+  if (rel.startsWith('studio/')) return 'ignore';
   return 'ignore';
 }
 
@@ -249,18 +247,22 @@ export function createDevHub({ studioDir, kitDir, log = (line) => console.log(li
     }
   };
 
-  const stopWatch = watchPaths(studioDir, (file) => {
+  const stopWatch = studioDir
+    ? watchPaths(studioDir, (file) => {
     try {
       if (existsSync(file) && statSync(file).isDirectory()) return;
     } catch {
       return;
     }
-    const kind = devWatchKind(file, { kitDir });
-    if (kind !== 'css' && kind !== 'reload') return;
+    const rel = relative(studioDir, file);
+    if (rel.startsWith('..') || /(^|\/)(node_modules|dist)\//.test(rel)) return;
+    if (/\.(test|spec)\./.test(rel)) return;
+    const kind = rel.endsWith('.css') ? 'css' : 'reload';
     pending.set(file, kind);
     clearTimeout(timer);
     timer = setTimeout(flush, 80);
-  });
+  })
+    : () => {};
 
   async function handle(req, res, url) {
     if (!url.pathname.startsWith('/__dev/')) return false;

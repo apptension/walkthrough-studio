@@ -20,7 +20,7 @@ import { plateBackdrops, platePaths } from './plates.mjs';
 import { CARRY_STYLE, carryCheck, markCarryRuns } from './plateCarry.mjs';
 import { chapterCoverage } from './chapterPlates.mjs';
 import { takeSpace } from './stage.mjs';
-import { extendCloseForVoice, narrationSeconds, outroFromNarrationSource } from '../studio/voiceHold.js';
+import { extendCloseForVoice, narrationSeconds, outroFromNarrationSource } from './shared/voiceHold.js';
 import {
   applyCardEdits,
   applyPlateTimes,

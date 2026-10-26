@@ -10,7 +10,7 @@
  * Absent keys mean "the brand mix, untouched". `compactAudio` drops those so a video
  * that was never mastered stores nothing.
  */
-import { dbToLin, musicVolumeExpr } from '../../studio/mixMath.js';
+import { dbToLin, musicVolumeExpr } from '../shared/mixMath.js';
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const r1 = (v) => Math.round(v * 10) / 10;

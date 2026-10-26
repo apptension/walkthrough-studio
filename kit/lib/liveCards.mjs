@@ -26,7 +26,7 @@ import {
   chapterMotionTiming,
   clampCardHoldMs,
   defaultCardHoldMs,
-} from '../studio/cardMotion.js';
+} from './shared/cardMotion.js';
 import { loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
 import { atmosphereSnippet } from './atmosphere.mjs';
 import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, resolveMotion } from './plateMotion.mjs';

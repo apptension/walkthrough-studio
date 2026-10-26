@@ -13,8 +13,8 @@
 | `kit/lib/project.mjs`          | Paths, `loadVideo(slug)` (config defaults, `$ENV` resolution, output folder, `audio` = brand ⊕ video), `loadBrand`, `loadDotEnv` (`kit/.env`), staleness                            |
 | `kit/lib/audio/elevenlabs.mjs` | ElevenLabs REST (`/v1/text-to-speech/{voice}/with-timestamps`, `/v1/music`), stub implementations, `audioMode()`                                                                    |
 | `kit/lib/audio/voice.mjs`      | `narration.mjs` → per-line clips (cached by hash), fitted to `timeline.json` windows → `voice/voice.json`                                                                           |
-| `kit/studio/voicePlace.js`     | The voice placement rules (lead, gap, overrun, intro / outro windows) shared by `voice.mjs` and the Editor, which re-places every line on the current cut                           |
-| `kit/studio/copyEdit.js`       | Plate copy as chars with an accent flag: `*source*` ↔ chars ↔ edit markup, selection offsets, accent toggle — the Editor's in-place text editing                                      |
+| `kit/lib/shared/voicePlace.js` | The voice placement rules (lead, gap, overrun, intro / outro windows) shared by `voice.mjs` and the Editor, which re-places every line on the current cut                           |
+| `kit/lib/shared/copyEdit.js`   | Plate copy as chars with an accent flag: `*source*` ↔ chars ↔ edit markup, selection offsets, accent toggle — the Editor's in-place text editing                                      |
 | `kit/lib/audio/music.mjs`      | Composition plan from the segment lengths (intro / bed sections / outro) → `music/music.mp3` + `plan.json`                                                                          |
 | `kit/lib/audio/mix.mjs`        | Place clips, duck the bed, two-pass loudnorm, mux onto `<slug>.mp4` (video copied) → `audio-meta.json`                                                                              |
 | `kit/lib/plates.mjs`           | Fills `templates/*.html` (open, close, ten interstitial types) from config + brand → deterministic frame render                                                                      |
@@ -33,7 +33,7 @@
 | `kit/lib/deflash.mjs`          | Finds blank/white frames in `live.mp4` (cached in `flashes.json`) and the filter that dissolves across them                                                                         |
 | `kit/lib/lens.mjs`             | Magnifier lens geometry + `geq` graph for `magnify` marks                                                                                                                           |
 | `kit/lib/editDeck.mjs`         | The edit deck (`video.config.json → edit`: speed ramps, manual zooms, zoom-free windows, pinned joins) and plate `style` variables — validation, the recording→clean time map, the `setpts` speed graph, the `STYLE_GROUPS` catalog and the `<style data-plate-style>` injection |
-| `kit/studio/editor.js`         | Studio Editor mode: one playback engine over the whole cut (plates stepped on their own clock, `live.mp4` with simulated speed/zoom, transitions drawn between layers), the unified timeline (clips, join markers, speed and zoom rows, drag to select / move / retime, undo), text mode, and the Inspector (plate text / look / style variables / joins; recording speed / zoom / joins / cursor & pace) |
+| `kit/studio/`                  | The desk (React + TypeScript). Editor mode: one playback engine over the whole cut, the timeline, text mode, and the Inspector. Served from `dist/` by `./studio` |
 | `kit/lib/camera.mjs`           | Auto zoom planner (`planZooms`) and its per-frame scale/crop graph, inset frame geometry, background and rounded mask (cached in `out/camera/`)                                       |
 | `kit/lib/layout.mjs`           | Per-section stage layouts (`edit.layouts`): placement and size between chapter marks, optional side text, shared `templates/stage-backdrop.html` for the Editor and the master     |
 | `kit/lib/cursor.mjs`           | Presentation cursor (arrow / dot, sizes, eased arc glide played in-page, arrow → pointing-hand morph with a push-down on clicks) and keystroke keycaps                                |
@@ -247,7 +247,7 @@ mid-flow and leaves a `pace` mark. Narration holds are tallied into `live-meta.j
 `POST /plates/:id/motion` and `cli.mjs motion` (enums, 0–1 presence, 0.3–3 speed, `null` clears a key);
 `motionOverrides(m)` lists the accent keys a plate overrides.
 
-**Studio + versions:** `node cli.mjs studio [slug]` serves the desk from `kit/studio-next/dist` with APIs in `lib/studio.mjs` (`lib/deskAssets.mjs` picks the desk). `--legacy`, or a checkout without a desk build, serves the classic `kit/studio/`.
+**Studio + versions:** `node cli.mjs studio [slug]` serves the desk from `kit/studio/dist` with APIs in `lib/studio.mjs` (`lib/deskAssets.mjs` resolves each file). `./studio` installs and builds that desk. `--legacy` exits: the classic desk is gone.
 Timeline seek, chapter strip, live captions overlay, QC panel, A/B compare, and handoff controls.
 `lib/versions.mjs` keeps a numbered history (`v1`, `v2`…) with human titles. **Releases** (Render
 finish, Save version, CLI) show by default; **checkpoints** (auto after produce / mix) are optional.

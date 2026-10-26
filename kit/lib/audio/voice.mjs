@@ -27,7 +27,7 @@ import { audioMode, ensureDir, synthesize } from './elevenlabs.mjs';
 import { normalizeTo } from './mix.mjs';
 import { normalizeAudio, voiceLineSpec, voiceShape } from './desk.mjs';
 // Window and spacing rules live with the Editor's projection so both lay lines out the same way.
-import { INTRO_WINDOW, OUTRO_WINDOW, PLATE_TAIL, VOICE_GAP as GAP, VOICE_LEAD as LEAD, slotRoom, slotStart } from '../../studio/voicePlace.js';
+import { INTRO_WINDOW, OUTRO_WINDOW, PLATE_TAIL, VOICE_GAP as GAP, VOICE_LEAD as LEAD, slotRoom, slotStart } from '../shared/voicePlace.js';
 // TTS clips carry ~0.3 s of silence at each end; keep 40 ms of attack and 120 ms of tail so words aren't clipped
 const TRIM =
   'silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.04,' +

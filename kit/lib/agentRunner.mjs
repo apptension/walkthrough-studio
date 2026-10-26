@@ -16,7 +16,7 @@ import { readOverlayReport } from './overlayRetry.mjs';
 import { readSelectorReport, usesStallRepair } from './selectorRetry.mjs';
 import { checkFlow, flowContractBlock, flowGateDecision, flowRepairLimit, flowRepairPrompt, formatIssue, recordingBaseline } from './flowCheck.mjs';
 import { captureRepairDecision, captureRepairLimit } from './captureRepairLoop.mjs';
-import { applyJobAnswer, parseJobQuestion } from '../studio/jobQuestion.js';
+import { applyJobAnswer, parseJobQuestion } from './shared/jobQuestion.js';
 import { promptLanguageLine } from './languages.mjs';
 import { captureProfile, describeCapture } from './capturePresets.mjs';
 import { outputFrame } from './format.mjs';
@@ -29,7 +29,7 @@ import { BEAT_GUIDE } from './journeyBeats.mjs';
 import { COPY_STYLE_GUIDE } from './copyCase.mjs';
 import { draftCraftGuide, enrichDraft } from './draftRhythm.mjs';
 import { VOICE_CATALOG, enrichSound, soundGuide, toneBlock, toneProfile } from './soundCraft.mjs';
-import { describeJob } from '../studio/progress.js';
+import { describeJob } from './shared/progress.js';
 import { DEFAULT_BRAND_AUDIO, harvestBrandFromUrls, slugifyBrand } from './discoverBrand.mjs';
 import { agentModel, agentModels, listAgentModels, modelArgs, setAgentModel } from './agentModels.mjs';
 

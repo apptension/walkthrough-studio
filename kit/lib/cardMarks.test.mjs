@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { cardMarkKey as libKey } from './editDeck.mjs';
-import { cardMarkKey as studioKey, cardMarkDuration as studioDur } from '../studio/liveCardStage.js';
+import { cardMarkKey as studioKey, cardMarkDuration as studioDur } from './shared/liveCardStage.js';
 import { cardMarkDuration as bakeDur } from './liveCardBake.mjs';
 import { isCardMark, loadCardMarks, pairCallsToMarks } from './cardMarks.mjs';
 

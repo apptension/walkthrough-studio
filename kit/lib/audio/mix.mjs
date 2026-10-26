@@ -15,7 +15,7 @@ import { duration, finalPath, run } from '../produce.mjs';
 import { snapshotVersion } from '../versions.mjs';
 import { compactAudio, musicGainExpr, normalizeAudio, resolveMix, resolveVoice } from './desk.mjs';
 import { musicBarSec, OUTRO_LEAD_SEC, planOutroAtSec } from './music.mjs';
-import { deliveryMuxFlags, mixEndSec } from '../../studio/voiceHold.js';
+import { deliveryMuxFlags, mixEndSec } from '../shared/voiceHold.js';
 
 const RAMP = 1.0; // seconds for the music to move between plate level and bed level
 const TRIM_XFADE = 2.0; // crossfade for a music edit that shortens the track to a new take

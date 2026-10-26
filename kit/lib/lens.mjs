@@ -11,8 +11,8 @@
  * its own diameter; the canvas is then cropped back to the loupe plus shadow room.
  */
 import { BT709_SCALE_OPTS } from './encode.mjs';
-import { curveOf, minJerkExpr, unitExpr } from '../studio/easing.js';
-import { GLASS, LENS_TIMING, glassCanvas, lensTiming, rimWidth } from '../studio/lensGlass.js';
+import { curveOf, minJerkExpr, unitExpr } from './shared/easing.js';
+import { GLASS, LENS_TIMING, glassCanvas, lensTiming, rimWidth } from './shared/lensGlass.js';
 
 export { LENS_TIMING, lensTiming };
 

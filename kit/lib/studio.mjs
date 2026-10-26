@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { previewCacheControl } from './livePreviewFeed.mjs';
-import { deskFile, resolveDesk } from './deskAssets.mjs';
+import { deskFile } from './deskAssets.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   agentAuthStatus,
@@ -49,14 +49,14 @@ import { PLACEMENT_META, SIZE_IDS, takeCapture, videoLayout } from './layout.mjs
 import { applyCaptureSettings, captureOptions, captureSettings, parseScreen } from './captureSettings.mjs';
 import { outputFrame } from './format.mjs';
 import { lensGeometry, lensTiming } from './lens.mjs';
-import { CURVES, MOTION_SPEEDS } from '../studio/easing.js';
+import { CURVES, MOTION_SPEEDS } from './shared/easing.js';
 
 /** Curve / motion presets for the Studio UI (labels, hints, CSS equivalents — no functions). */
 const CURVES_META = Object.fromEntries(Object.entries(CURVES).map(([id, c]) => [id, { label: c.label, hint: c.hint, css: c.css }]));
 const MOTIONS_META = Object.fromEntries(Object.entries(MOTION_SPEEDS).map(([id, m]) => [id, { label: m.label, hint: m.hint, scale: m.scale }]));
 import { recordNeedsRerecord, recordRerecordReason } from './recordFreshness.mjs';
 import { recordFailureView } from './recordFailure.mjs';
-import { nextBrief, revisePlan } from '../studio/briefRevise.js';
+import { nextBrief, revisePlan } from './shared/briefRevise.js';
 import { applyBriefRevision, saveSourceRevision, storeCredential } from './briefRevise.mjs';
 import { waitFiles } from './signInPause.mjs';
 import { applyCleanup, formatBytes, planCleanup } from './cleanup.mjs';
@@ -177,7 +177,7 @@ import { createProject, draftNote } from './newProject.mjs';
 import { readGuidedTake, takeFiles } from './guideTake.mjs';
 import { readGuideStatus, readGuidedTour, requestGuideControl, requestGuideFinish } from './guidedTour.mjs';
 import { resolveVideoLanguage } from './languages.mjs';
-import { createDevHub, injectDevClient } from './devServer.mjs';
+import { createDevHub } from './devServer.mjs';
 import { brandReadiness, listBrands, listVideos, loadVideo, OUT_ROOT } from './project.mjs';
 import { suggestPlates, applyPlateSuggestions } from './suggestPlates.mjs';
 import {
@@ -189,8 +189,8 @@ import {
   versionMediaPath,
 } from './versions.mjs';
 
-const STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio');
-const NEXT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio-next', 'dist');
+const DESK_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio', 'dist');
+const DESK_PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'studio', 'public');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -3458,8 +3458,8 @@ function serveMedia(req, res, url) {
   return true;
 }
 
-function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
-  const { bad, file, immutable } = deskFile(url.pathname, desk, { nextDist: NEXT_DIST, legacyDir: STUDIO_DIR });
+function serveStatic(req, res, url, { dev = false } = {}) {
+  const { bad, file, immutable } = deskFile(url.pathname, { distDir: DESK_DIST, publicDir: DESK_PUBLIC });
   if (bad) {
     res.writeHead(400);
     res.end('bad');
@@ -3467,10 +3467,7 @@ function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
   }
   if (!file) return false;
   const mime = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
-  const raw = readFileSync(file);
-  // The dev hub reloads the classic desk; the new desk reloads through Vite.
-  const inject = dev && desk === 'legacy' && /\.html?$/i.test(file);
-  const payload = inject ? Buffer.from(injectDevClient(raw.toString('utf8'))) : raw;
+  const payload = readFileSync(file);
   const fresh = dev || /\.(html|js|css|mjs|svg)$/i.test(file);
   res.writeHead(200, {
     'Content-Type': mime,
@@ -3481,8 +3478,7 @@ function serveStatic(req, res, url, { dev = false, desk = 'legacy' } = {}) {
   return true;
 }
 
-export async function startStudio({ port = 4747, openSlug = null, dev = false, desk: requestedDesk = process.env.WALKTHROUGH_DESK } = {}) {
-  const desk = resolveDesk(requestedDesk, { nextDist: NEXT_DIST });
+export async function startStudio({ port = 4747, openSlug = null, dev = false } = {}) {
   // Surface fatal async failures — otherwise a rejected promise can kill the process with no log.
   if (!globalThis.__wtStudioHandlers) {
     globalThis.__wtStudioHandlers = true;
@@ -3490,7 +3486,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
     process.on('unhandledRejection', (err) => console.error('Studio unhandledRejection', err));
   }
 
-  const devHub = dev ? createDevHub({ studioDir: STUDIO_DIR, kitDir: join(STUDIO_DIR, '..') }) : null;
+  const devHub = dev ? createDevHub({ kitDir: join(dirname(fileURLToPath(import.meta.url)), '..') }) : null;
 
   const server = createServer(async (req, res) => {
     try {
@@ -3503,7 +3499,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
       if (url.pathname.startsWith('/media/') || url.pathname.startsWith('/version-media/')) {
         if (serveMedia(req, res, url)) return;
       }
-      if (serveStatic(req, res, url, { dev: Boolean(devHub), desk })) return;
+      if (serveStatic(req, res, url, { dev: Boolean(devHub) })) return;
       res.writeHead(404);
       res.end('Not found');
     } catch (err) {
@@ -3517,7 +3513,7 @@ export async function startStudio({ port = 4747, openSlug = null, dev = false, d
   const agent = agentAuthStatus();
   console.log(`✓ Walkthrough Studio → ${url}`);
   console.log(`  agent CLI: ${formatAgentBanner(agent)}`);
-  console.log(`  desk: ${desk === 'next' ? 'new' : 'classic (retiring — the new desk is the default)'}`);
+  console.log('  desk: studio');
   console.log(`  videos: ${listVideos().join(', ') || '(none)'} · out: ${OUT_ROOT}`);
-  return { server, url, desk };
+  return { server, url, desk: 'studio' };
 }

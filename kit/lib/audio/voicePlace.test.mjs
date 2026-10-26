@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { INTRO_WINDOW, OUTRO_WINDOW, PLATE_TAIL, VOICE_GAP, VOICE_LEAD, VOICE_OVERRUN, placeVoice, voiceSlots } from '../../studio/voicePlace.js';
+import { INTRO_WINDOW, OUTRO_WINDOW, PLATE_TAIL, VOICE_GAP, VOICE_LEAD, VOICE_OVERRUN, placeVoice, voiceSlots } from '../shared/voicePlace.js';
 
 const cut = ({ liveDur = 30, plateAt = 14 } = {}) => ({
   open: { at: 0, dur: 6 },

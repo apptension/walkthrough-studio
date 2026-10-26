@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { suggestPlates } from './suggestPlates.mjs';
 import { PURPOSES, critiqueStory } from './narrative.mjs';
-import { beatsForCritic, critiqueSpokenFrames, formatSampleList } from '../studio/frameCheck.js';
+import { beatsForCritic, critiqueSpokenFrames, formatSampleList } from './shared/frameCheck.js';
 
 const PERSONAS = [
   {

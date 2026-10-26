@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.0-beta.7 — 2026-10-26
+
+The desk is `kit/studio`. The classic desk is gone. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.7 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio
+```
+
+Upgrade from 1.0.0-beta.6:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.7
+./studio
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio` rebuilds the desk when its sources change. `./studio --v2` still starts the same desk.
+
+### Desk
+
+- **One desk.** `./studio` serves the React desk from `kit/studio`. `--legacy` and `WALKTHROUGH_DESK=legacy` exit with a short note. A desk that cannot be installed or built stops the launcher instead of opening another UI.
+- **Shared modules** the engine still imports (`easing`, voice placement, copy editing, icons, the mark, and the rest) live in `kit/lib/shared/`.
+
+### Plates
+
+- **Content.** Each plate type has a content schema in the inspector: records, reorder, assets, icons. Showcase and bento are new. Logos, KPI, stats, testimonials, and journey have more layouts. Timeline captions sit on the Cards row.
+- **Fit.** A frame-fit pass scales a composition into the safe area on 1920×1080 and 1080×1920, and a layout pass retunes type, spacing, and motion so plates hold together in both frames.
+
 ## 1.0.0-beta.6 — 2026-10-24
 
 The v2 desk stays responsive with many neon primary buttons and during Program playback. Pin this tag. `main` is the development line.

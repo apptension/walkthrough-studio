@@ -59,7 +59,7 @@ import {
   installOverlayRetry,
   writeOverlayReport,
 } from "./overlayRetry.mjs";
-import { describeRecordFailure } from "../studio/recordFailure.js";
+import { describeRecordFailure } from "./shared/recordFailure.js";
 import {
   collectPersonSignals,
   contextUsesSession,
