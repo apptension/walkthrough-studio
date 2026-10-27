@@ -115,6 +115,8 @@ const platePath = (id: string, tail: string) => `${base()}/plates/${encodeURICom
 const bakeRetry = new Map<string, ReturnType<typeof setTimeout>>();
 const bakeAttempts = new Map<string, number>();
 const bakeInflight = new Map<string, Promise<void>>();
+/** Content fetch or shelf/icon chrome updated while a field still has focus. */
+let contentRepaintQueued = false;
 
 /** Toggle open records without remounting the inspector (caret-safe). */
 function patchContentRecordOpenState(): void {
@@ -124,6 +126,42 @@ function patchContentRecordOpenState(): void {
     el.classList.toggle('is-open', open);
     el.querySelector<HTMLElement>('.pcnt-rec-open')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
+}
+
+/** Shelf / icon affordances that can toggle without rebuilding the whole Content pane. */
+function patchContentAuxChrome(): void {
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-asset').forEach((wrap) => {
+    const btn = wrap.querySelector<HTMLElement>('[data-cnt-shelf-open]');
+    const path = btn?.dataset['cntShelfOpen'] || '';
+    const open = Boolean(path && shelfFor === path);
+    wrap.classList.toggle('is-open', open);
+    btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-icon-btn').forEach((btn) => {
+    const path = btn.dataset['cntIconOpen'] || '';
+    btn.classList.toggle('on', iconFor === path);
+    btn.setAttribute('aria-expanded', iconFor === path ? 'true' : 'false');
+  });
+}
+
+function flushQueuedContentRepaint(): void {
+  if (!contentRepaintQueued || contentFieldFocused()) return;
+  contentRepaintQueued = false;
+  renderInspector();
+}
+
+/** Remount when safe; while typing, patch chrome or queue for after blur. */
+function repaintContentInspector(): void {
+  if (contentFieldFocused()) {
+    patchContentAuxChrome();
+    const needsFull =
+      (iconFor && !document.querySelector('#inspectorRoot .pcnt-icon-grid')) ||
+      (shelfFor && !document.querySelector('#inspectorRoot [data-cnt-shelf]'));
+    if (needsFull) contentRepaintQueued = true;
+    return;
+  }
+  contentRepaintQueued = false;
+  renderInspector();
 }
 
 /**
@@ -216,7 +254,10 @@ function loadPlateContent(plateId: string, { force = false } = {}): void {
     .then((r) => {
       cache.set(plateId, r);
       if (r.assets) assetsCache = r.assets;
-      if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) renderInspector();
+      if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) {
+        if (contentFieldFocused()) contentRepaintQueued = true;
+        else renderInspector();
+      }
     })
     .catch((err) => toast('Content not loaded', errMessage(err), 'err'))
     .finally(() => loading.delete(plateId));
@@ -241,6 +282,7 @@ export function resetPlateContentPane(): void {
   iconFor = null;
   hoverSlot = null;
   saveGen += 1;
+  contentRepaintQueued = false;
 }
 
 // ─── Paths ─────────────────────────────────────────────────────────────────────────────────
@@ -681,7 +723,7 @@ export function openContentSlot(plateId: string, slot: string): void {
     });
     return;
   }
-  renderInspector();
+  repaintContentInspector();
   requestAnimationFrame(() => {
     const el = document.querySelector<HTMLElement>(isList ? `#inspectorRoot [data-cnt-slot="${CSS.escape(target)}"]` : `#inspectorRoot [data-cnt-asset-field="${CSS.escape(target)}"]`);
     if (!el) return;
@@ -749,7 +791,7 @@ export function syncContentToField(plateId: string, path: string | null, source:
   }
   if (!plan.remount) return;
   openSlot = target;
-  if (document.querySelector('#inspectorRoot .pcnt-list')) renderInspector();
+  if (document.querySelector('#inspectorRoot .pcnt-list')) repaintContentInspector();
 }
 
 // ─── Wire ──────────────────────────────────────────────────────────────────────────────────
@@ -758,6 +800,12 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
   if (!id || c.kind !== 'plate') return;
   const box = root.querySelector<HTMLElement>('.pcnt-scalars, .pcnt-list')?.closest<HTMLElement>('.ins-sec');
   if (!box) return;
+  if (!root.dataset['cntRepaintWire']) {
+    root.dataset['cntRepaintWire'] = '1';
+    root.addEventListener('focusout', () => {
+      queueMicrotask(() => flushQueuedContentRepaint());
+    });
+  }
   const data = cache.get(id);
   const on = <E extends HTMLElement>(sel: string, ev: string, fn: (el: E, e: Event) => void | Promise<void>) =>
     box.querySelectorAll<E>(sel).forEach((el) =>
@@ -823,7 +871,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const path = el.dataset['cntIconOpen'] || '';
     iconFor = iconFor === path ? null : path;
     shelfFor = null;
-    renderInspector();
+    repaintContentInspector();
   });
   on('[data-cnt-icon]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
@@ -837,10 +885,10 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     if (shelfFor && !assetsCache.length) {
       void api<{ assets: PlateAsset[] }>(`${base()}/plate-assets`).then((r) => {
         assetsCache = r.assets || [];
-        renderInspector();
+        repaintContentInspector();
       });
     }
-    renderInspector();
+    repaintContentInspector();
   });
   on('[data-cnt-pick]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
@@ -880,7 +928,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     if (contentFieldFocused()) {
       patchContentRecordOpenState();
     } else {
-      renderInspector();
+      repaintContentInspector();
     }
     if (openSlot) requestAnimationFrame(() => document.querySelector<HTMLElement>(`#inspectorRoot [data-cnt-slot="${CSS.escape(slot)}"] input, #inspectorRoot [data-cnt-slot="${CSS.escape(slot)}"] textarea`)?.focus({ preventScroll: true }));
   });

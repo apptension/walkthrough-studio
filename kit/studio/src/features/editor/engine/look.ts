@@ -8,6 +8,7 @@ import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
 import { reloadPlate } from './lifecycle';
 import { dropPreloadedPlates, retargetTitleReveal } from './plate';
+import { contentFieldFocused } from './plateContentSave';
 import { P } from './plateCtl';
 import { curClip } from './seq';
 import { plateReady, renderFrame } from './stage';
@@ -431,7 +432,9 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
     markPlateResync(id);
   }
   if (gen !== lookGen) return;
-  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id && !contentFieldFocused()) {
+    renderInspector();
+  }
 }
 
 /** Every plate's HTML changed (Direction, palette, Apply motion) — drop the ready cache and reload the one on stage. */
