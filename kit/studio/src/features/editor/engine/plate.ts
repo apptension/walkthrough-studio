@@ -37,7 +37,8 @@ import {
   pinLiveAnimationFrames,
   plateEditPeakSec,
 } from './plateCss';
-import { contentFieldFocused } from './plateContentSave';
+import { contentSaveProjectEpoch } from './plateContentPane';
+import { contentFieldFocused, isContentSaveResponseValid } from './plateContentSave';
 import { ed } from './state';
 import { paintTextMode } from './text';
 import type { FieldDetail, PlateField } from './types';
@@ -1617,7 +1618,6 @@ export function collectPlateEdits(): Record<string, string> {
 }
 
 async function flushEditorContent(): Promise<void> {
-  if (!ed.active) return;
   const { flushEditorContentPending } = await import('./plateContentPane');
   await flushEditorContentPending();
 }
@@ -1840,10 +1840,15 @@ export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = nu
   setThinkStep('html');
   const activity = 'Rebuilding plate HTML…';
   setStatus('run', activity);
+  const wantSlug = desk.get().slug ?? '';
+  const wantEpoch = contentSaveProjectEpoch();
   let r: RebuildResponse;
   try {
     await flushEditorContent();
-    r = await api<RebuildResponse>(`/api/video/${desk.get().slug}/plates/rebuild-html`, { method: 'POST', body: {} });
+    r = await api<RebuildResponse>(`/api/video/${wantSlug}/plates/rebuild-html`, { method: 'POST', body: {} });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, desk.get().slug ?? '', contentSaveProjectEpoch())) {
+      r = { plates: desk.get().htmlPlates || [] };
+    }
   } finally {
     clearRunStatus(activity);
   }

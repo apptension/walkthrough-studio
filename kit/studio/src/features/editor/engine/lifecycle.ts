@@ -138,6 +138,7 @@ function frameElMotion(): boolean {
 // ─── Entry points ────────────────────────────────────────────────────────────────────────
 export async function onEnter({ programT }: { programT?: number | null } = {}): Promise<void> {
   ed.active = true;
+  await flushEditorContentPending();
   document.body.classList.add('is-editor');
   undressOverview();
   const focus = ed.focus;

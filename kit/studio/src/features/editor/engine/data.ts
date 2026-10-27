@@ -5,7 +5,11 @@ import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
 import { flushEditorContentPending, contentSaveProjectEpoch } from './plateContentPane';
-import { isContentSaveResponseValid, isDeckMutationStillValid, paintInspectorUnlessContentTyping } from './plateContentSave';
+import {
+  isContentSaveResponseValid,
+  isDeckMutationStillValid,
+  paintInspectorUnlessContentTyping,
+} from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
@@ -113,11 +117,13 @@ const serializeDeck = (deck: Deck): string => {
 async function fetchDeck(): Promise<Deck | null> {
   if (!slug()) return null;
   const want = slug();
+  const wantEpoch = contentSaveProjectEpoch();
   const gen = deckGen;
   try {
     const deck = await api<Deck>(`/api/video/${encodeURIComponent(want || '')}/edit`);
     // Sequence may have changed while the request was in flight.
     if (slug() !== want) return null;
+    if (!isContentSaveResponseValid(want || '', wantEpoch, slug() || '', contentSaveProjectEpoch())) return ed.deck;
     // An edit saved meanwhile returned a newer deck than this read.
     if (gen !== deckGen) return ed.deck;
     // Nothing moved on disk: keep the drawn timeline (and any morph playing across it) as it is.
