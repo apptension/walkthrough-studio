@@ -1,41 +1,78 @@
 #!/usr/bin/env node
 /**
- * Capture README screenshots from a running Studio (http://127.0.0.1:4747).
- * Usage: node scripts/capture-readme-shots.mjs
+ * Capture README / marketing stills from a running Studio (http://127.0.0.1:4747).
+ *
+ * Writes JPEGs under docs/assets/ (desk, brief, plates) plus optional feature PNGs.
+ * Then run: node scripts/render-readme-art.mjs
+ *
+ * Usage: ./studio --dev   # or ./studio
+ *        node scripts/capture-readme-shots.mjs
  */
 import { chromium } from '../kit/node_modules/playwright/index.mjs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'docs/assets');
-const SLUG = 'walkthrough-studio';
-const BASE = 'http://127.0.0.1:4747';
+const BASE = process.env.STUDIO_URL || 'http://127.0.0.1:4747';
+
+/** Live product walkthrough — frames in the Program monitor and plates. */
+const PRODUCT_SLUG = process.env.PRODUCT_SLUG || 'teamdeck-dla-agencji-designu';
+/** Studio self-demo — New video brief only (English UI). */
+const STUDIO_SLUG = process.env.STUDIO_SLUG || 'walkthrough-studio';
+
+/** Seek times (seconds) on the product master (`tmp/videos/<slug>/*.mp4`). */
+const PRODUCT_SEEK = {
+  openPlate: 2.8,
+  featuresPlate: 7.5,
+  programLive: 36,
+  deskHero: 38,
+  editorLive: 46,
+  closePlate: 152,
+};
+
+const PLATE_HTML = {
+  open: 'open.html',
+  features: 'pillars.html',
+  close: 'close.html',
+};
+
+let platesDir = path.join(ROOT, 'tmp/videos', PRODUCT_SLUG, 'plates');
 
 await mkdir(OUT, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
-const page = await (
-  await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 })
-).newPage();
+const context = await browser.newContext({
+  viewport: { width: 1600, height: 1000 },
+  deviceScaleFactor: 2,
+});
+const page = await context.newPage();
 
 const settle = (ms = 700) => page.waitForTimeout(ms);
+const join = (...p) => path.join(OUT, ...p);
 
-async function open() {
-  await page.goto(`${BASE}/?slug=${SLUG}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForFunction(() => {
-    const boot = document.getElementById('bootLoader');
-    if (!boot) return true;
-    const s = getComputedStyle(boot);
-    return s.display === 'none' || s.visibility === 'hidden' || boot.getAttribute('aria-busy') === 'false';
-  }, { timeout: 25000 }).catch(() => {});
-  await settle(1200);
+async function open(slug = PRODUCT_SLUG) {
+  platesDir = path.join(ROOT, 'tmp/videos', slug, 'plates');
+  console.log('→ slug', slug);
+  await page.goto(`${BASE}/?slug=${slug}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page
+    .waitForFunction(
+      () => {
+        const boot = document.getElementById('bootLoader');
+        if (!boot) return true;
+        const s = getComputedStyle(boot);
+        return s.display === 'none' || s.visibility === 'hidden' || boot.getAttribute('aria-busy') === 'false';
+      },
+      { timeout: 25000 },
+    )
+    .catch(() => {});
+  await settle(1400);
 }
 
 async function dismiss() {
   await page.keyboard.press('Escape').catch(() => {});
-  await settle(150);
+  await settle(120);
   await page.keyboard.press('Escape').catch(() => {});
   await page.evaluate(() => {
     document.querySelectorAll('dialog[open]').forEach((d) => {
@@ -52,14 +89,15 @@ async function dismiss() {
 async function seekProgram(t) {
   await dismiss();
   await page.evaluate(() => document.querySelector('#modeProgram')?.click());
-  await settle(400);
+  await settle(500);
   await page.evaluate(async (sec) => {
     const v = document.getElementById('player');
     if (!v) return;
     await new Promise((r) => {
-      if (v.readyState >= 2) return r();
+      if (v.readyState >= 2 && Number.isFinite(v.duration)) return r();
       v.addEventListener('loadeddata', r, { once: true });
-      setTimeout(r, 2500);
+      v.addEventListener('loadedmetadata', r, { once: true });
+      setTimeout(r, 8000);
     });
     await new Promise((r) => {
       v.addEventListener('seeked', r, { once: true });
@@ -68,7 +106,7 @@ async function seekProgram(t) {
       } catch {
         r();
       }
-      setTimeout(r, 2000);
+      setTimeout(r, 3000);
     });
     try {
       v.pause();
@@ -76,18 +114,26 @@ async function seekProgram(t) {
       /* ignore */
     }
   }, t);
-  await settle(700);
+  await settle(900);
 }
 
-async function seekEditor(hint, frac = 0.35) {
+async function seekEditor(hint, frac = 0.4) {
   await dismiss();
   await page.evaluate(() => document.querySelector('#modePlate')?.click());
-  await settle(1400);
+  await settle(1600);
+  const hints = String(hint)
+    .split('|')
+    .map((h) => h.trim())
+    .filter(Boolean);
   const info = await page.evaluate(
-    ({ hint, frac }) => {
+    ({ hints, frac }) => {
       const clips = [...document.querySelectorAll('#etlClips .etl-clip')];
+      const text = (c) => `${c.title || ''} ${c.textContent || ''}`;
+      const live = clips.filter((c) => c.classList.contains('live'));
       const pick =
-        clips.find((c) => new RegExp(hint, 'i').test(`${c.title || ''} ${c.textContent || ''}`)) ||
+        live.find((c) => hints.some((h) => new RegExp(h, 'i').test(text(c)))) ||
+        live[0] ||
+        clips.find((c) => hints.some((h) => new RegExp(h, 'i').test(text(c)))) ||
         clips.find((c) => !c.classList.contains('live')) ||
         clips[0];
       if (!pick) return null;
@@ -98,38 +144,121 @@ async function seekEditor(hint, frac = 0.35) {
       const ruler = document.getElementById('etlRuler');
       if (ruler) {
         const y = ruler.getBoundingClientRect().top + 6;
-        ruler.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, pointerId: 1, buttons: 1 }));
+        ruler.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, pointerId: 1, buttons: 1 }),
+        );
         ruler.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
       }
-      return { title: pick.title };
+      return { title: pick.title || pick.textContent?.slice(0, 40) };
     },
-    { hint, frac }
+    { hints, frac },
   );
-  await settle(1500);
+  await settle(1400);
   return info;
 }
 
-async function shotEl(sel, name, pad = 10) {
+async function openDirectionMotion() {
+  await page.evaluate(() => document.querySelector('.ptab[data-right="motion"]')?.click());
+  await settle(500);
+  await page.evaluate(() => document.getElementById('dir-tab-motion')?.click());
+  await settle(450);
+}
+
+async function openDirectionCamera() {
+  await page.evaluate(() => document.querySelector('.ptab[data-right="motion"]')?.click());
+  await settle(400);
+  await page.evaluate(() => document.getElementById('dir-tab-camera')?.click());
+  await settle(450);
+}
+
+async function shotJpg(name, clip) {
+  await page.screenshot({
+    path: join(name),
+    type: 'jpeg',
+    quality: 90,
+    clip,
+  });
+  console.log('ok', name);
+}
+
+async function shotDeskJpg(name, { includeTimeline = false } = {}) {
+  const box = await page.evaluate((inc) => {
+    const chrome = document.querySelector('header.chrome');
+    const ws = document.getElementById('workspace');
+    const tl = document.querySelector('.timeline-shell');
+    if (!chrome || !ws) return null;
+    const y = chrome.getBoundingClientRect().top;
+    let bottom = ws.getBoundingClientRect().bottom;
+    if (inc && tl && !document.body.classList.contains('tl-collapsed')) {
+      bottom = Math.max(bottom, tl.getBoundingClientRect().bottom);
+    }
+    const h = bottom - y;
+    if (h < 200) return null;
+    return { x: 0, y, width: window.innerWidth, height: h };
+  }, includeTimeline);
+  if (!box) {
+    console.log('MISS desk', name);
+    return false;
+  }
+  await shotJpg(name, box);
+  return true;
+}
+
+async function shotStagePlateJpg(name) {
+  const box = await page.evaluate(() => {
+    const stage = document.querySelector('.stage-wrap') || document.getElementById('stage')?.parentElement;
+    const el = stage || document.getElementById('stage');
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 80 || r.height < 80) return null;
+    const ratio = 16 / 9;
+    let w = r.width;
+    let h = r.height;
+    if (w / h > ratio) w = h * ratio;
+    else h = w / ratio;
+    const x = r.left + (r.width - w) / 2;
+    const y = r.top + (r.height - h) / 2;
+    return { x, y, width: w, height: h };
+  });
+  if (!box) {
+    console.log('MISS stage', name);
+    return false;
+  }
+  await shotJpg(name, box);
+  return true;
+}
+
+async function shotEl(name, sel) {
   const el = await page.$(sel);
   if (!el) {
     console.log('MISS', name, sel);
     return false;
   }
-  await el.scrollIntoViewIfNeeded().catch(() => {});
-  await settle(200);
-  await el.screenshot({ path: path.join(OUT, name) });
-  console.log('ok', name);
-  return true;
+  const vis = await el.isVisible().catch(() => false);
+  if (!vis) {
+    console.log('SKIP hidden', name, sel);
+    return false;
+  }
+  try {
+    await el.scrollIntoViewIfNeeded().catch(() => {});
+    await settle(180);
+    await el.screenshot({ path: join(name), timeout: 10000 });
+    console.log('ok', name);
+    return true;
+  } catch (e) {
+    console.log('FAIL', name, e.message?.slice(0, 80));
+    return false;
+  }
 }
 
-async function shotClip(name, getBox) {
+async function shotClipPng(name, getBox) {
   const box = await page.evaluate(getBox);
   if (!box || box.width < 40 || box.height < 40) {
     console.log('MISS clip', name, box);
     return false;
   }
   await page.screenshot({
-    path: path.join(OUT, name),
+    path: join(name),
     clip: {
       x: Math.max(0, box.x),
       y: Math.max(0, box.y),
@@ -141,26 +270,104 @@ async function shotClip(name, getBox) {
   return true;
 }
 
-async function openDirection() {
-  await page.evaluate(() => document.querySelector('.ptab[data-right="motion"]')?.click());
-  await settle(600);
-  await page.evaluate(() => {
-    const adv = document.querySelector('.direction-advanced');
-    if (adv) adv.open = true;
-  });
-  await settle(300);
+/** Baked plate HTML at 1920×1080 (2×) when Program seek is unavailable. */
+async function shotPlateFromHtml(htmlFile, outJpg) {
+  let ok = false;
+  try {
+    await access(path.join(platesDir, htmlFile));
+  } catch {
+    console.log('MISS plate html', htmlFile, platesDir);
+    return false;
+  }
+  const platePage = await context.newPage();
+  try {
+    await platePage.goto(`file://${path.join(platesDir, htmlFile)}`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await platePage.waitForTimeout(2800);
+    await platePage.screenshot({
+      path: join(outJpg),
+      type: 'jpeg',
+      quality: 90,
+    });
+    console.log('ok', outJpg, `(from ${htmlFile})`);
+    ok = true;
+  } catch (e) {
+    console.log('FAIL plate html', htmlFile, e.message?.slice(0, 80));
+  } finally {
+    await platePage.close();
+  }
+  return ok;
 }
 
-console.log('→ open');
-await open();
+async function captureProgramPlate(seekSec, outJpg, htmlFallback) {
+  await seekProgram(seekSec);
+  if (await shotStagePlateJpg(outJpg)) return true;
+  return shotPlateFromHtml(htmlFallback, outJpg);
+}
 
-// ── Hero + stages on bright Program frame ──
-await seekProgram(12);
+console.log('→ open', BASE, 'product', PRODUCT_SLUG);
+await open(PRODUCT_SLUG);
+
+// ── README: product frames (Teamdeck) ──
+console.log('→ readme desk (product)');
+
+await seekProgram(PRODUCT_SEEK.programLive);
+await page.evaluate(() => document.querySelector('.ptab[data-right="feedback"]')?.click());
+await settle(400);
+await shotDeskJpg('desk-program.jpg');
+
+await seekProgram(PRODUCT_SEEK.deskHero);
 await dismiss();
-await page.screenshot({ path: path.join(OUT, 'studio-hero.png'), fullPage: false });
+await shotDeskJpg('desk-plate.jpg');
+
+await openDirectionMotion();
+await page.evaluate(() => {
+  document.getElementById('transitionGrid')?.scrollIntoView({ block: 'center' });
+  document.querySelector('#rightMotion .dir-ins')?.scrollTo?.(0, 200);
+});
+await settle(350);
+await shotDeskJpg('desk-direction.jpg');
+
+await seekProgram(PRODUCT_SEEK.editorLive);
+console.log('editor', await seekEditor('projekt|obciąż|Plan|live|Teamdeck', 0.38));
+await shotDeskJpg('desk-editor.jpg', { includeTimeline: true });
+
+console.log('→ readme plates (product)');
+if (!(await captureProgramPlate(PRODUCT_SEEK.openPlate, 'plate-open.jpg', PLATE_HTML.open))) {
+  await shotPlateFromHtml(PLATE_HTML.open, 'plate-open.jpg');
+}
+if (!(await captureProgramPlate(PRODUCT_SEEK.featuresPlate, 'plate-features.jpg', PLATE_HTML.features))) {
+  await shotPlateFromHtml(PLATE_HTML.features, 'plate-features.jpg');
+}
+if (!(await captureProgramPlate(PRODUCT_SEEK.closePlate, 'plate-close.jpg', PLATE_HTML.close))) {
+  await shotPlateFromHtml(PLATE_HTML.close, 'plate-close.jpg');
+}
+
+// Brief wizard: English Studio chrome
+console.log('→ readme brief (studio slug)');
+await open(STUDIO_SLUG);
+await dismiss();
+await page.evaluate(() => document.querySelector('#modeProgram')?.click());
+await settle(300);
+await page.click('#btnNewVideo');
+await settle(1100);
+const dialog = (await page.$('#projectDialog[open]')) || (await page.$('dialog[open]'));
+if (dialog) {
+  await dialog.screenshot({ path: join('brief.jpg'), type: 'jpeg', quality: 90 });
+  console.log('ok brief.jpg');
+} else {
+  console.log('MISS brief.jpg');
+}
+await dismiss();
+
+// ── Optional feature PNGs (docs / future use) ──
+console.log('→ feature pngs (product)');
+await open(PRODUCT_SLUG);
+await seekProgram(PRODUCT_SEEK.programLive);
+await dismiss();
+await page.screenshot({ path: join('studio-hero.png'), fullPage: false });
 console.log('ok studio-hero.png');
 
-await shotClip('feature-stages.png', () => {
+await shotClipPng('feature-stages.png', () => {
   const bar = document.querySelector('#stageBar, .stage-bar');
   const wrap = document.querySelector('.stage-wrap');
   if (!bar || !wrap) return null;
@@ -174,164 +381,66 @@ await shotClip('feature-stages.png', () => {
   };
 });
 
-// ── Director ──
-await seekProgram(12);
+await seekProgram(PRODUCT_SEEK.programLive);
 await page.evaluate(() => document.querySelector('.ptab[data-right="feedback"]')?.click());
 await settle(400);
-await shotEl('#rightFeedback', 'feature-director.png');
+await shotEl('feature-director.png', '#rightFeedback');
 
-// ── Direction panel features ──
-await openDirection();
-await shotEl('.field:has(#energyGrid)', 'feature-motion-energy.png');
-await page.evaluate(() => document.querySelector('#atmosphereGrid')?.scrollIntoView({ block: 'center' }));
+await openDirectionMotion();
+await shotEl('feature-motion-energy.png', '#rightMotion .ins-sec:has(#energyGrid)');
+await page.evaluate(() => document.getElementById('atmosphereGrid')?.scrollIntoView({ block: 'center' }));
 await settle(250);
-await shotEl('.field:has(#atmosphereGrid)', 'feature-atmosphere.png');
-await page.evaluate(() => document.querySelector('.effects-field')?.scrollIntoView({ block: 'center' }));
+await shotEl('feature-atmosphere.png', '#rightMotion .ins-sec:has(#atmosphereGrid)');
+await page.evaluate(() => document.getElementById('transitionGrid')?.scrollIntoView({ block: 'center' }));
 await settle(250);
-await shotEl('.effects-field', 'feature-effects.png');
+await shotEl('feature-transitions.png', '#rightMotion .ins-sec:has(#transitionGrid)');
 await page.evaluate(() => document.querySelector('.live-cards-field')?.scrollIntoView({ block: 'center' }));
 await settle(250);
-await shotEl('.live-cards-field', 'feature-live-cards.png');
-await page.evaluate(() => document.querySelector('.transitions-field, #transitionGrid')?.scrollIntoView({ block: 'center' }));
-await settle(250);
-await shotEl('.field:has(#transitionGrid), .transitions-field', 'feature-transitions.png');
+await shotEl('feature-live-cards.png', '#rightMotion .ins-sec.live-cards-field');
 
-await page.evaluate(() => {
-  document.querySelector('[data-cursor="style"]')?.scrollIntoView({ block: 'center' });
-});
-await settle(350);
-await shotClip('feature-camera-cursor.png', () => {
-  const rows = [...document.querySelectorAll('#rightMotion .seg-row, #rightMotion .switch-row')].filter((el) =>
-    /auto zoom|frame|background|padding|corners|shadow|cursor|size|glide|idle|loop|keystroke|live pace|focus ring/i.test(
-      el.textContent || ''
-    )
-  );
-  if (!rows.length) return null;
-  const rects = rows.map((el) => el.getBoundingClientRect()).filter((r) => r.top < innerHeight && r.bottom > 0 && r.height > 0);
-  if (!rects.length) return null;
-  const x = Math.min(...rects.map((r) => r.left));
-  const y = Math.min(...rects.map((r) => r.top));
-  const right = Math.max(...rects.map((r) => r.right));
-  const bottom = Math.max(...rects.map((r) => r.bottom));
-  return {
-    x: Math.max(0, x - 12),
-    y: Math.max(0, y - 12),
-    width: Math.min(480, right - x + 24),
-    height: Math.min(720, bottom - y + 24),
-  };
+await openDirectionCamera();
+await shotClipPng('feature-camera-cursor.png', () => {
+  const pane = document.getElementById('rightMotion');
+  if (!pane) return null;
+  const r = pane.getBoundingClientRect();
+  return { x: r.left, y: r.top, width: r.width, height: Math.min(r.height, 720) };
 });
 
-// ── Editor mid-cut ──
-console.log('editor', await seekEditor('What Studio automates', 0.45));
-await shotClip('feature-editor-stage.png', () => {
+await seekEditor('projekt|obciąż|Plan|live', 0.45);
+await shotClipPng('feature-editor-stage.png', () => {
   const wrap = document.querySelector('.stage-wrap');
   if (!wrap) return null;
   const r = wrap.getBoundingClientRect();
   return { x: r.left, y: r.top, width: r.width, height: Math.min(r.height, 500) };
 });
-await shotEl('#edTimeline', 'feature-editor-timeline.png');
+await shotEl('feature-editor-timeline.png', '#edTimeline');
 await page.evaluate(() => document.querySelector('.ptab[data-right="inspector"]')?.click());
 await settle(450);
-await shotEl('#rightInspector', 'feature-inspector.png');
+await shotEl('feature-inspector.png', '#rightInspector');
 
-// ── New video wizard ──
+await open(STUDIO_SLUG);
 await dismiss();
 await page.evaluate(() => document.querySelector('#modeProgram')?.click());
 await settle(300);
 await page.click('#btnNewVideo');
 await settle(1000);
-const dialog = (await page.$('#projectDialog[open]')) || (await page.$('dialog[open]'));
-if (dialog) {
-  await dialog.screenshot({ path: path.join(OUT, 'feature-new-video.png') });
+const wiz = (await page.$('#projectDialog[open]')) || (await page.$('dialog[open]'));
+if (wiz) {
+  await wiz.screenshot({ path: join('feature-new-video.png') });
   console.log('ok feature-new-video.png');
-} else {
-  console.log('MISS feature-new-video.png');
 }
 await dismiss();
 
-// ── Live render bay (forced plates) ──
-await seekProgram(12);
+// Render bay (best-effort; may skip if no encode running)
+await open(PRODUCT_SLUG);
+await seekProgram(PRODUCT_SEEK.programLive);
 await page.evaluate(() => {
   document.body.classList.add('is-rendering');
   document.querySelector('.ptab[data-left="render"]')?.click();
-  const pill = document.getElementById('renderStatusPill');
-  if (pill) {
-    pill.className = 'render-pill run';
-    pill.textContent = 'Rendering';
-  }
-  const elapsed = document.getElementById('renderElapsed');
-  if (elapsed) {
-    elapsed.hidden = false;
-    elapsed.textContent = '00:00:05';
-  }
-  const headline = document.getElementById('renderHeadline');
-  if (headline) headline.textContent = 'Rendering sequence';
-  const reason = document.getElementById('renderReason');
-  if (reason) reason.textContent = 'Live log and pipeline update here. Program refreshes when the last step finishes.';
-  const primary = document.getElementById('btnActionPrimary');
-  if (primary) primary.hidden = true;
-  const icons = {
-    plates: `<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>`,
-    produce: `<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`,
-    audio: `<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg>`,
-    deliver: `<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>`,
-    preview: `<svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></svg>`,
-  };
-  const steps = [
-    { id: 'plates', label: 'Render brand plates', status: 'run' },
-    { id: 'produce', label: 'Produce master video', status: 'todo' },
-    { id: 'audio', label: 'Add voice & music', status: 'todo' },
-    { id: 'deliver', label: 'Export handoff pack', status: 'todo' },
-    { id: 'preview', label: 'Show in player', status: 'todo' },
-  ];
-  const ol = document.getElementById('actionSteps');
-  const idle = document.getElementById('pipelineIdle');
-  if (ol) {
-    ol.hidden = false;
-    if (idle) idle.hidden = true;
-    ol.innerHTML = steps
-      .map(
-        (s) => `<li class="${s.status}" data-step-id="${s.id}">
-      <span class="pip-ico">${icons[s.id]}</span>
-      <span class="pip-label">${s.label}</span>
-      <span class="pip-mark">${s.status === 'run' ? '…' : '○'}</span>
-    </li>`
-      )
-      .join('');
-  }
 });
-
-await page.click('[data-enqueue="plates"]');
-await page
-  .waitForFunction(() => {
-    const stages = document.getElementById('renderStages');
-    if (!stages || stages.hidden) return false;
-    return [...stages.querySelectorAll('li')].some((li) => {
-      const m = (li.textContent || '').match(/frame (\d+) of (\d+)/i);
-      return m && Number(m[1]) >= 15;
-    });
-  }, { timeout: 120000 })
-  .catch(() => console.log('warn: frame wait timed out — capturing current bay'));
-
-await settle(250);
-await shotEl('#leftRender', 'feature-render-bay.png');
-await shotEl('#renderLiveCard', 'feature-render-progress.png');
-await shotClip('feature-render-context.png', () => {
-  const left = document.querySelector('#projectPanel');
-  const stage = document.querySelector('.stage-wrap');
-  if (!left || !stage) return null;
-  const a = left.getBoundingClientRect();
-  const b = stage.getBoundingClientRect();
-  return {
-    x: a.left,
-    y: Math.min(a.top, b.top),
-    width: Math.min(1280, b.right - a.left),
-    height: Math.min(620, Math.max(540, b.height + 48)),
-  };
-});
-
-await page.click('#btnStopRender').catch(() => {});
-await settle(800);
+await settle(400);
+await shotEl('feature-render-bay.png', '#leftRender');
+await page.evaluate(() => document.body.classList.remove('is-rendering'));
 
 await browser.close();
-console.log('DONE');
+console.log('DONE — run: node scripts/render-readme-art.mjs');

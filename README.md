@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.svg?v=3" alt="Walkthrough Studio" width="88" height="88" />
+  <img src="docs/assets/logo.svg?v=5" alt="Walkthrough Studio" width="88" height="88" />
 </p>
 
 <h1 align="center">Walkthrough Studio</h1>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/hero.jpg?v=3" alt="Walkthrough Studio: trailers, walkthroughs, help videos from your live app" width="100%" />
+  <img src="docs/assets/hero.jpg?v=5" alt="Walkthrough Studio: trailers, walkthroughs, help videos from your live app" width="100%" />
 </p>
 
 <p align="center">
@@ -80,7 +80,7 @@ Coming from an earlier beta? Check out this tag the same way, then run `./studio
 
 ## What you can make
 
-<img src="docs/assets/video-kinds.jpg?v=3" alt="Trailer, feature walkthrough, and help video" width="100%" />
+<img src="docs/assets/video-kinds.jpg?v=5" alt="Trailer, feature walkthrough, and help video" width="100%" />
 
 | Video | Length | Use it for | Story structure |
 | --- | --- | --- | --- |
@@ -94,7 +94,7 @@ Pick a purpose in the brief (`overview`, `feature`, `onboarding`, `launch`, `sal
 
 ## Agent Ready
 
-<img src="docs/assets/agent-ready.jpg?v=3" alt="Tell Cursor or Claude. It makes the video." width="100%" />
+<img src="docs/assets/agent-ready.jpg?v=5" alt="Tell Cursor or Claude. It makes the video." width="100%" />
 
 **New video → Create & draft**, **Improve**, **Branch**, and **Fix with AI** call a local agent. Both are supported. When both are installed, the header shows an **Agent Ready** switch.
 
@@ -119,7 +119,7 @@ Everything lands as plain files in `videos/<slug>/`. Every change is a diff you 
 
 ## 84 languages, one recording
 
-<img src="docs/assets/languages.jpg?v=3" alt="84 languages: record once, speak to every market" width="100%" />
+<img src="docs/assets/languages.jpg?v=5" alt="84 languages: record once, speak to every market" width="100%" />
 
 Choose the video language in the brief. Script, on-screen plate copy, captions, chapters, and the voice are created in that language. Numbers and must-say lines stay exactly as you wrote them. The recording of your product is reused, so the second language costs minutes, not a reshoot.
 
@@ -138,14 +138,14 @@ The desk is a React and TypeScript app (`kit/studio`). Fold either side panel, o
 Describe the video in one paragraph, or fill five short steps: basics, app access, story, proof, review. Choose how capture learns the product: let the agent explore, or show the tour yourself. Demo logins go to `kit/.env`, never into the project file.
 
 <p align="center">
-  <img src="docs/assets/brief.jpg?v=3" alt="New video brief: describe the video, start URL, video language" width="760" />
+  <img src="docs/assets/brief.jpg?v=5" alt="New video brief: describe the video, start URL, video language" width="760" />
 </p>
 
 ### Program
 
 The rendered master, playing. Brand plates are live compositions, not frame grabs, so they re-time with the motion energy you pick (Calm, Clear, Punchy).
 
-<img src="docs/assets/desk-program.jpg?v=3" alt="Program monitor on a live chapter with the feedback panel" width="100%" />
+<img src="docs/assets/desk-program.jpg?v=5" alt="Program monitor on a live chapter with the feedback panel" width="100%" />
 
 ### Direction
 
@@ -153,7 +153,7 @@ Your brand, not a template. The agent pulls logo, colors, and type from your sit
 
 Title reveals come in nine templates. Rise, Cascade, and Wipe move the type. Focus and Veil settle the line out of blur or haze. Ink, Slit, Iris, and Embers are WebGL masks in your brand colors. The type stays crisp and editable, and every reveal is stepped on the plate clock, so the Editor preview matches the render.
 
-<img src="docs/assets/desk-direction.jpg?v=3" alt="Direction panel with transitions, effects, and plate previews" width="100%" />
+<img src="docs/assets/desk-direction.jpg?v=5" alt="Direction panel with transitions, effects, and plate previews" width="100%" />
 
 ### Editor
 
@@ -163,7 +163,7 @@ One playhead over plates and live takes. Speed, zoom, magnify, cut, voice, and m
 
 **Run critic** reviews the cut as four viewers: the skeptic, the implementer, the buyer, and the onboarder. A quick rule pass runs first. With an agent signed in, the agent then watches the cut (narration, timeline, frame stills) and writes a scored review with concrete fixes, each tied to a line, a plate, or a chapter. Its findings lead the list, and the rule findings stay where the agent did not cover the same target. The critic only reviews: it never edits your sources.
 
-<img src="docs/assets/desk-editor.jpg?v=3" alt="Editor timeline with speed, zoom, and mix rows" width="100%" />
+<img src="docs/assets/desk-editor.jpg?v=5" alt="Editor timeline with speed, zoom, and mix rows" width="100%" />
 
 ### Plates
 
@@ -171,7 +171,7 @@ Open, proof, and close plates carry what the screencast alone cannot: capability
 
 | Open | Features | Close |
 | :---: | :---: | :---: |
-| <img src="docs/assets/plate-open.jpg?v=3" alt="Open plate" width="100%" /> | <img src="docs/assets/plate-features.jpg?v=3" alt="Features plate" width="100%" /> | <img src="docs/assets/plate-close.jpg?v=3" alt="Close plate" width="100%" /> |
+| <img src="docs/assets/plate-open.jpg?v=5" alt="Open plate" width="100%" /> | <img src="docs/assets/plate-features.jpg?v=5" alt="Features plate" width="100%" /> | <img src="docs/assets/plate-close.jpg?v=5" alt="Close plate" width="100%" /> |
 
 ### Deliver
 
@@ -189,7 +189,7 @@ One recording, every channel. The handoff pack includes the master, poster, capt
 
 ## Browser, terminal, or your agent
 
-<img src="docs/assets/ways-in.jpg?v=3" alt="Three ways in: browser, terminal, agent skill" width="100%" />
+<img src="docs/assets/ways-in.jpg?v=5" alt="Three ways in: browser, terminal, agent skill" width="100%" />
 
 ### In the browser
 
@@ -324,7 +324,7 @@ No. Studio signs in off camera and restores the session before the screencast. G
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on Studio |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
 
-Marketing graphics in `docs/assets/` are rendered by `scripts/render-readme-art.mjs` from the desk screenshots in the same folder. `docs/assets/social-preview.jpg` (1280×640) is the GitHub social preview.
+Marketing graphics in `docs/assets/`: `node scripts/capture-readme-shots.mjs` (Studio on `:4747`; defaults to Teamdeck frames for the monitor and `walkthrough-studio` for the brief wizard), then `node scripts/render-readme-art.mjs`. Override with `PRODUCT_SLUG=…`. `docs/assets/social-preview.jpg` (1280×640) is the GitHub social preview.
 
 ---
 
