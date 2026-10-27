@@ -15,7 +15,7 @@ import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { flushAllContentPending, hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
-import { beginEditOrigin, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
+import { beginEditOrigin, contentFieldFocused, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -53,6 +53,11 @@ export async function reloadPlate(id: string, { paint = true }: { paint?: boolea
   const clip = plateClipFor(ed.seq, id, c);
   const onPlate = playheadOnPlate(c, id);
   const ms = onPlate && clip ? Math.max(0, Math.round((ed.t - clip.at) * 1000)) : 0;
+  if (contentFieldFocused()) {
+    ed.stalePlates.add(id);
+    markPlateResync(id);
+    return;
+  }
   if (
     !canReloadPlateFrame({
       dirty: P.dirty(),
@@ -136,7 +141,7 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
     paintFrame();
     renderTimeline();
     renderFrame();
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     paintStatus();
     paintTransport();
     paintTextMode();

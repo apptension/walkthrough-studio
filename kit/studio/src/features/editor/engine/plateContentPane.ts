@@ -499,7 +499,7 @@ async function sendAfterFlush(
   hint: string | null,
   opts: { repaint?: boolean; paintLive?: boolean } = {},
 ): Promise<boolean> {
-  await flushPlate(id);
+  await flushAllContentPending();
   return send(id, ops, hint, opts);
 }
 
@@ -634,35 +634,49 @@ function drainPendingOps(id?: string | null) {
   return ops;
 }
 
+function enqueueContentSends(ops: ReturnType<typeof drainPendingOps>): void {
+  if (!ops.length) return;
+  contentSerial = contentSerial
+    .then(async () => {
+      await Promise.all(
+        ops.map((p) =>
+          send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
+            repaint: false,
+            paintLive: isLiveSetKind(p.kind),
+          }),
+        ),
+      );
+    })
+    .catch(() => {
+      /* keep the queue alive if a save failed */
+    });
+}
+
 /**
  * Post debounced Content fields immediately without awaiting HTTP — timeline pointerdown must
- * arm drag synchronously; `afterContentSaved` deferral left `ed.drag` unset until after flush.
+ * arm drag synchronously. Saves chain on `contentSerial` so `flushAllContentPending` can await them.
  */
 export function kickContentPending(): void {
-  for (const p of drainPendingOps()) {
-    void send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
-      repaint: false,
-      paintLive: isLiveSetKind(p.kind),
-    });
-  }
+  enqueueContentSends(drainPendingOps());
+}
+
+/** Await every in-flight Content POST (including kicks). Useful in tests. */
+export function contentSaveIdle(): Promise<void> {
+  return contentSerial;
 }
 
 /** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
 export async function flushAllContentPending(): Promise<void> {
-  for (const id of [...new Set([...pending.values()].map((p) => p.id))]) await flushPlate(id);
+  for (let i = 0; i < 6; i++) {
+    kickContentPending();
+    await contentSerial;
+    if (!hasContentPending()) return;
+  }
 }
 
 async function flushPlate(id?: string | null): Promise<void> {
-  const ops = drainPendingOps(id);
-  if (!ops.length) return;
-  await Promise.all(
-    ops.map((p) =>
-      send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
-        repaint: false,
-        paintLive: isLiveSetKind(p.kind),
-      }),
-    ),
-  );
+  enqueueContentSends(drainPendingOps(id));
+  await contentSerial;
 }
 
 
