@@ -22,6 +22,8 @@ export interface EditorBridge {
   onEnter(opts: { programT: number }): void;
   onLeave(): void;
   refresh(): Promise<void>;
+  /** Post debounced Content fields before sequence switch or other teardown. */
+  flushPendingContent?(): Promise<void>;
   resetForProject(): void;
   renderClips(): void;
   onPlateDirty(): void;

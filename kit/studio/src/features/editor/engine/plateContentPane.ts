@@ -193,8 +193,8 @@ async function bakeStalePlateContentOnce(id: string): Promise<void> {
     return;
   }
   clearBakeRetry(id);
-  // Drain debounced keystrokes first — otherwise rebuild-html bakes pre-type config.
-  await flushPlate(id);
+  // Drain every debounced field — rebuild-html uses saved config for all plates.
+  await flushAllContentPending();
   try {
     const r = await api<{ plates?: PlateRow[] }>(`${base()}/plates/rebuild-html`, { method: 'POST', body: {} });
     if (r.plates) setHtmlPlates(r.plates, { video: false });

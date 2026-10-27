@@ -4,7 +4,7 @@ import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
-import { afterContentSaved, hasContentPending } from './plateContentPane';
+import { afterContentSaved, flushAllContentPending, hasContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { setScale } from './lifecycle';
 import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
@@ -17,6 +17,11 @@ import type { CardTiming, Clip, Deck, MusicDesk } from './types';
 import { $, clamp, r3 } from './util';
 
 /** Timeline pointer gestures (scrub, reorder, trim, retime) from `kit/studio/editor.js`. */
+
+function whenContentReady(run: () => void): void {
+  if (hasContentPending()) afterContentSaved(run);
+  else run();
+}
 
 export function edFromEvent(e: { clientX: number }): number {
   const rect = $('etlCanvas')!.getBoundingClientRect();
@@ -225,8 +230,11 @@ export function wireTimeline(signal: AbortSignal): void {
       const edgeClip = edgeClipEl ? ed.seq[Number(edgeClipEl.dataset['i'])] : null;
       if (edgeEl && edgeClip) {
         if (ed.playing) pause();
-        setSelection({ type: 'clip', id: edgeClip.id });
-        ed.drag = startClipEdge(edgeClip, edgeEl.dataset['clipEdge'] === 'l' ? 'l' : 'r', edgeClipEl ?? null, e.clientX, e.altKey);
+        const clipId = edgeClip.id;
+        whenContentReady(() => {
+          setSelection({ type: 'clip', id: clipId });
+          ed.drag = startClipEdge(edgeClip, edgeEl.dataset['clipEdge'] === 'l' ? 'l' : 'r', edgeClipEl ?? null, e.clientX, e.altKey);
+        });
         return;
       }
       const clipEl = target.closest<HTMLElement>('.etl-clip');
@@ -422,6 +430,8 @@ export async function dropClip(g: Drag): Promise<void> {
   const host = $('etlClips');
   const id = ed.seq[g.from ?? -1]?.id;
   if (g.at !== g.from && id) {
+    await flushAllContentPending();
+    await leavePlateContentIfNeeded(curClip(), { type: 'clip', id });
     ed.flipFrom = clipRects();
     setSelection({ type: 'clip', id });
     const r = await commitOrder(g.ids || [], 'Sequence reordered');
@@ -553,6 +563,8 @@ export async function moveClip(id: string, dir: number): Promise<void> {
   const ids = ed.seq.map((c) => c.id);
   const [item] = ids.splice(i, 1);
   if (item != null) ids.splice(j, 0, item);
+  await flushAllContentPending();
+  await leavePlateContentIfNeeded(curClip(), { type: 'clip', id });
   ed.flipFrom = clipRects();
   setSelection({ type: 'clip', id });
   const r = await commitOrder(ids, dir < 0 ? 'Moved earlier' : 'Moved later');

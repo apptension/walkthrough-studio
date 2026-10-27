@@ -158,6 +158,7 @@ export async function loadVideo(slug: string, { play = false } = {}): Promise<vo
     if (switched) {
       // Drop plate-edit / compare leftovers from the previous sequence before the new payload lands.
       desk.set({ plateDirty: false, previewingPlate: null, lastChapter: null, ytText: '', compare: false });
+      await bridges.editor?.flushPendingContent?.();
       bridges.editor?.resetForProject();
     }
 

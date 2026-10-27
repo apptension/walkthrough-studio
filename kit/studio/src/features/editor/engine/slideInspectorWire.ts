@@ -4,6 +4,7 @@ import { paintAtmosphereThumbs } from '@/ui/look/atmosphereThumbs';
 import { postDeck } from './data';
 import { select, toolSpeed } from './edits';
 import { renderInspector } from './inspector';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { changeLook, commitHoverLook, endHoverLook, hoverLook, plateApi, previewRange } from './look';
 import { timingBar } from '@/ui/look/previews';
 import { wirePlateColors } from './plateColorsPane';
@@ -146,7 +147,7 @@ function wirePlate(root: HTMLElement, on: (sel: string, ev: string, fn: (el: El,
     void plateApi(id, 'layout', { layout }, 'Layout updated').then((r) => {
       const info = plateInfo(id);
       if (info && r) info.swap = (r as { swap?: DeckPlate['swap'] }).swap ?? null;
-      renderInspector();
+      paintInspectorUnlessContentTyping(renderInspector);
     });
   });
 
@@ -171,7 +172,7 @@ function wirePlate(root: HTMLElement, on: (sel: string, ev: string, fn: (el: El,
 
   on('[data-pace-mode]', 'click', (el) => {
     setPaceMode(el.dataset['paceMode'] === 'stretch' ? 'stretch' : 'hold');
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     renderTimeline();
     refreshPacePop();
   });
