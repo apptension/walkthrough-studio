@@ -24,7 +24,13 @@ import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
-import { bakeStalePlateContent, flushAllContentPending, hasContentPending, settlePlateContent } from './plateContentPane';
+import {
+  bakeStalePlateContent,
+  contentSaveIdle,
+  flushAllContentPending,
+  hasContentPending,
+  settlePlateContent,
+} from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
 import { refitPlateCompositionDeferred } from './plate';
@@ -207,6 +213,8 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
     const activeId = desk.get().activePlateId;
     if (hasContentPending() || ed.stalePlates.has(String(id)) || (activeId && activeId !== id)) {
       await flushAllContentPending();
+    } else {
+      await contentSaveIdle();
     }
     if (P.dirty() && activeId && activeId !== id) await P.save();
     if (gen !== ed.plateReqGen) return;

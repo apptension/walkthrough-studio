@@ -12,6 +12,7 @@ import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
 import { afterContentSaved, hasContentPending, settlePlateContent } from './plateContentPane';
+import { plateContentSettleTarget } from './plateContentSave';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -384,11 +385,10 @@ function commitSelect(sel: Selection | null, _prev: ReturnType<typeof curClip>):
 
 /** Flush live copy and bake HTML when selection leaves a plate clip (card/fx picks use `select()` too). */
 export function leavePlateContentIfNeeded(prev: ReturnType<typeof curClip>, sel: Selection | null): Promise<void> {
-  const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
-  if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
-    return settlePlateContent(prev.plateId);
-  }
-  return Promise.resolve();
+  const nextPlateId =
+    sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id)?.plateId ?? null : null;
+  const target = plateContentSettleTarget(prev?.kind, prev?.plateId ?? null, nextPlateId);
+  return target ? settlePlateContent(target) : Promise.resolve();
 }
 
 export function selectFx(item: FxItem): void {

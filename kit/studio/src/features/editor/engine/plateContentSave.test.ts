@@ -10,6 +10,7 @@ import {
   planContentSave,
   flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
+  plateContentSettleTarget,
   shouldHoldInspectorForContentFocus,
 } from './plateContentSave';
 
@@ -116,6 +117,16 @@ describe('paintInspectorUnlessContentTyping', () => {
       painted += 1;
     });
     expect(painted).toBe(1);
+  });
+});
+
+describe('plateContentSettleTarget', () => {
+  it('settles when leaving a plate for a card, another plate, or null selection', () => {
+    expect(plateContentSettleTarget('plate', 'intro', null)).toBe('intro');
+    expect(plateContentSettleTarget('plate', 'intro', 'features')).toBe('intro');
+    expect(plateContentSettleTarget('plate', 'intro', 'intro')).toBeNull();
+    expect(plateContentSettleTarget('live', 'live-0', null)).toBeNull();
+    expect(plateContentSettleTarget(undefined, 'intro', null)).toBeNull();
   });
 });
 

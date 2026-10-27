@@ -139,6 +139,19 @@ export function paintInspectorUnlessContentTyping(render: () => void): void {
   render();
 }
 
+/**
+ * When selection leaves a plate clip (another clip, card, fx, etc.), return that plate id
+ * so callers can drain live copy and bake HTML. Same plate clip → null.
+ */
+export function plateContentSettleTarget(
+  prevKind: string | undefined,
+  prevPlateId: string | null | undefined,
+  nextClipPlateId: string | null | undefined,
+): string | null {
+  if (prevKind !== 'plate' || !prevPlateId) return null;
+  return prevPlateId !== nextClipPlateId ? prevPlateId : null;
+}
+
 export function shouldHoldInspectorForContentFocus({
   focused,
   prevKey,
