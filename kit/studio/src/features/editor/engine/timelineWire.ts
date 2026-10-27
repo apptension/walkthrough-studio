@@ -4,8 +4,9 @@ import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
-import { afterContentSaved, flushAllContentPending, hasContentPending } from './plateContentPane';
+import { flushAllContentPending, hasContentPending, kickContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { setScale } from './lifecycle';
 import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
 import { ensureLiveCards, requestPlate } from './stage';
@@ -19,8 +20,8 @@ import { $, clamp, r3 } from './util';
 /** Timeline pointer gestures (scrub, reorder, trim, retime) from `kit/studio/editor.js`. */
 
 function whenContentReady(run: () => void): void {
-  if (hasContentPending()) afterContentSaved(run);
-  else run();
+  if (hasContentPending()) kickContentPending();
+  run();
 }
 
 export function edFromEvent(e: { clientX: number }): number {
@@ -121,15 +122,10 @@ export function wireTimeline(signal: AbortSignal): void {
             moved: false,
           };
         };
-        if (hasContentPending()) {
-          afterContentSaved(async () => {
-            await leavePlateContentIfNeeded(prev, cardSel);
-            armCardDrag();
-          });
-        } else {
+        whenContentReady(() => {
           void leavePlateContentIfNeeded(prev, cardSel);
           armCardDrag();
-        }
+        });
         return;
       }
       const markHit = target.closest<HTMLElement>('.ec-mark');
@@ -305,7 +301,7 @@ export function wireTimeline(signal: AbortSignal): void {
         seek(g.t0 ?? 0);
         if (g.clip) select({ type: 'clip', id: g.clip.id });
       } else {
-        renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
         paintTools();
       }
     } else if (g.type === 'cut') {
@@ -810,5 +806,5 @@ export async function commitFx(g: Drag): Promise<void> {
     else await postDeck({ zooms: d.zooms.map((z) => (z.id === shot.id ? { ...z, t: from, dur: r3(to - from) } : z)) });
   }
   renderTimeline();
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
 }

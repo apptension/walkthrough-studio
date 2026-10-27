@@ -625,17 +625,35 @@ export function afterContentSaved(task: () => void | Promise<void>): void {
     });
 }
 
+function drainPendingOps(id?: string | null) {
+  const ops = [...pending.values()].filter((p) => !id || p.id === id);
+  for (const p of ops) {
+    clearTimeout(p.timer);
+    pending.delete(pendingKey(p.id, p.path));
+  }
+  return ops;
+}
+
+/**
+ * Post debounced Content fields immediately without awaiting HTTP — timeline pointerdown must
+ * arm drag synchronously; `afterContentSaved` deferral left `ed.drag` unset until after flush.
+ */
+export function kickContentPending(): void {
+  for (const p of drainPendingOps()) {
+    void send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
+      repaint: false,
+      paintLive: isLiveSetKind(p.kind),
+    });
+  }
+}
+
 /** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
 export async function flushAllContentPending(): Promise<void> {
   for (const id of [...new Set([...pending.values()].map((p) => p.id))]) await flushPlate(id);
 }
 
 async function flushPlate(id?: string | null): Promise<void> {
-  const ops = [...pending.values()].filter((p) => !id || p.id === id);
-  for (const p of ops) {
-    clearTimeout(p.timer);
-    pending.delete(pendingKey(p.id, p.path));
-  }
+  const ops = drainPendingOps(id);
   if (!ops.length) return;
   await Promise.all(
     ops.map((p) =>

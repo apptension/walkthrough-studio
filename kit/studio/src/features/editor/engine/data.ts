@@ -4,6 +4,7 @@ import { toast } from '@/desk/toast';
 import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
+import { flushAllContentPending } from './plateContentPane';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
@@ -182,6 +183,7 @@ export const snapshotDeck = (): DeckEdit => {
 };
 
 export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown>, { undoable = true, hint }: { undoable?: boolean; hint?: string | undefined } = {}): Promise<Deck | null> {
+  await flushAllContentPending();
   const before = snapshotDeck();
   try {
     const r = await api<Deck>(`/api/video/${encodeURIComponent(slug() || '')}/edit`, { method: 'POST', body: patch });
