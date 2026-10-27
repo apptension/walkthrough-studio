@@ -8,7 +8,7 @@ import { select, showInspectorTab } from './edits';
 import { renderInspector, section } from './inspector';
 import { refreshPlatePreview } from './look';
 import { P } from './plateCtl';
-import { contentFieldFocused, editOrigin } from './plateContentSave';
+import { contentFieldFocused, editOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { plateEditPeakSec } from './plateCss';
 import { curClip, recToEd } from './seq';
 import { ensureLiveCards, liveCardAtPlayhead, liveHitAtPlayhead, paintClipChip, plateReady, renderFrame, requestPlate, resolveLiveCard } from './stage';
@@ -225,7 +225,7 @@ export function exitText(): void {
   }
   renderFrame();
   paintClipChip();
-  if (ed.sel?.type === 'clip') renderInspector();
+  if (ed.sel?.type === 'clip') paintInspectorUnlessContentTyping(renderInspector);
 }
 
 type AccentInput = FieldDetail | PlateFieldState | string | null | undefined;
@@ -277,7 +277,7 @@ export function syncPlateField(detail: FieldDetail | null | undefined): void {
   }
   const copyHost = curClip()?.kind === 'plate' || Boolean(ed.liveCardId);
   if ((ed.plateField?.path || null) !== prev && ed.sel?.type === 'clip' && copyHost) {
-    if (document.activeElement !== ta) renderInspector();
+    if (document.activeElement !== ta) paintInspectorUnlessContentTyping(renderInspector);
     else paintFieldPanelLive();
   } else if (ed.plateField && document.querySelector('#inspectorRoot [data-field-src]')) {
     paintFieldPanelLive();

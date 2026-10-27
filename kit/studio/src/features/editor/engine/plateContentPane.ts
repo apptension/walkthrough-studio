@@ -530,15 +530,17 @@ async function send(
     ed.dirtyRender = true;
     paintStatus();
     // Live typing: mark stale for a later bake when the author leaves. Structural: server already rebuilt.
+    const typing = contentFieldFocused();
     if (plan.live) ed.stalePlates.add(id);
     else {
-      ed.stalePlates.delete(id);
       clearBakeRetry(id);
+      if (typing) ed.stalePlates.add(id);
+      else ed.stalePlates.delete(id);
     }
-    if (plan.reload) await reloadPlate(id, { paint: false });
+    if (plan.reload && !typing) await reloadPlate(id, { paint: false });
+    else if (plan.reload && typing) ed.stalePlates.add(id);
     if (hint) flashHint(hint);
-    // Copy saves must not remount the Content pane — that wipes the caret mid-type.
-    if (plan.repaint && gen === saveGen && !contentFieldFocused()) renderInspector();
+    if (plan.repaint && gen === saveGen) paintInspectorUnlessContentTyping(renderInspector);
     return true;
   } catch (err) {
     toast('Content not saved', errMessage(err), 'err');

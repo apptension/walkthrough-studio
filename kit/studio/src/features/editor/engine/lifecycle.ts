@@ -15,7 +15,7 @@ import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
-import { beginEditOrigin, contentFieldFocused, endEditOrigin } from './plateContentSave';
+import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -99,13 +99,8 @@ export async function reloadPlate(id: string, { paint = true }: { paint?: boolea
     if (ed.needsPlateResync === id) ed.needsPlateResync = null;
   }
   if (playheadOnPlate(curClip(), id)) renderFrame();
-  if (
-    paint &&
-    !contentFieldFocused() &&
-    ed.sel?.type === 'clip' &&
-    ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id
-  ) {
-    renderInspector();
+  if (paint && ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) {
+    paintInspectorUnlessContentTyping(renderInspector);
   }
 }
 

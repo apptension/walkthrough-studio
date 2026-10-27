@@ -23,7 +23,7 @@ import { zoomPreviewStyle } from '@/logic/zoomAim';
 import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
-import { contentFieldFocused } from './plateContentSave';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { bakeStalePlateContent } from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
@@ -253,12 +253,8 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   }
   paintLoading();
   if (gen === ed.plateReqGen) renderFrame();
-  if (
-    !contentFieldFocused() &&
-    ed.sel?.type === 'clip' &&
-    ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id
-  ) {
-    renderInspector();
+  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id) {
+    paintInspectorUnlessContentTyping(renderInspector);
   }
 }
 
