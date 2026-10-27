@@ -11,7 +11,7 @@ import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
-import { afterContentSaved, bakeStalePlateContent, flushAllContentPending, hasContentPending } from './plateContentPane';
+import { afterContentSaved, hasContentPending, settlePlateContent } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -352,15 +352,12 @@ export function setSelection(sel: Selection | null): void {
 
 export function select(sel: Selection | null): void {
   const prev = curClip();
-  const bakeAfterLeave = () => {
-    void (async () => {
-      await flushAllContentPending();
-      await leavePlateContentIfNeeded(prev, sel);
-    })();
+  const settleAfterLeave = () => {
+    void leavePlateContentIfNeeded(prev, sel);
   };
   if (!hasContentPending()) {
     commitSelect(sel, prev);
-    bakeAfterLeave();
+    settleAfterLeave();
     return;
   }
   afterContentSaved(async () => {
@@ -385,11 +382,11 @@ function commitSelect(sel: Selection | null, _prev: ReturnType<typeof curClip>):
   showInspectorTab();
 }
 
-/** Bake live Content HTML when selection leaves a plate clip (card/fx picks use `select()` too). */
+/** Flush live copy and bake HTML when selection leaves a plate clip (card/fx picks use `select()` too). */
 export function leavePlateContentIfNeeded(prev: ReturnType<typeof curClip>, sel: Selection | null): Promise<void> {
   const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
   if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
-    return bakeStalePlateContent(prev.plateId);
+    return settlePlateContent(prev.plateId);
   }
   return Promise.resolve();
 }

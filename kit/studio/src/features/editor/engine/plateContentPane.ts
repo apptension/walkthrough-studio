@@ -539,7 +539,8 @@ async function send(
     return true;
   } catch (err) {
     toast('Content not saved', errMessage(err), 'err');
-    loadPlateContent(id, { force: true });
+    if (!contentFieldFocused()) loadPlateContent(id, { force: true });
+    else queueContentInspectorRepaint();
     return false;
   }
 }

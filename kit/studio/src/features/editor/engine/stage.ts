@@ -24,7 +24,7 @@ import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
-import { bakeStalePlateContent, flushAllContentPending } from './plateContentPane';
+import { bakeStalePlateContent, flushAllContentPending, hasContentPending, settlePlateContent } from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
 import { refitPlateCompositionDeferred } from './plate';
@@ -204,8 +204,11 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   ed.loadingPlate = id;
   paintLoading();
   try {
-    await flushAllContentPending();
-    if (P.dirty() && desk.get().activePlateId && desk.get().activePlateId !== id) await P.save();
+    const activeId = desk.get().activePlateId;
+    if (hasContentPending() || ed.stalePlates.has(String(id)) || (activeId && activeId !== id)) {
+      await flushAllContentPending();
+    }
+    if (P.dirty() && activeId && activeId !== id) await P.save();
     if (gen !== ed.plateReqGen) return;
     // Stale = config ahead of baked HTML (Content live typing). Bake before load so a force
     // refetch does not resurrect pre-type copy. Look/palette stale also gets a clean rebuild.
@@ -795,11 +798,7 @@ export function renderFrame(): void {
     // Scrub/play leave a plate without select() — bake live Content edits so the next visit
     // (and Produce) see rebuilt HTML, not only in-memory paint.
     if (leftClip?.kind === 'plate' && leftClip.plateId && leftClip.plateId !== c.plateId) {
-      const plateId = leftClip.plateId;
-      void (async () => {
-        await flushAllContentPending();
-        await bakeStalePlateContent(plateId);
-      })();
+      void settlePlateContent(leftClip.plateId);
     }
   }
   ed.hud = null;
