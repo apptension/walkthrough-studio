@@ -22,6 +22,7 @@ import {
   planContentSave,
   isContentSaveResponseValid,
   stageContentSyncPath,
+  coerceContentLocalValue,
 } from './plateContentSave';
 import { curClip } from './seq';
 import { ed, setHtmlPlates, slug } from './state';
@@ -617,20 +618,21 @@ function patchContentField(path: string, value: string): void {
 function setLocal(data: PlateContentData, path: string, value: unknown): void {
   const schema = data.schema;
   if (!schema) return;
+  const normalized = coerceContentLocalValue(schema, path, value);
   const slot = listOfSlot(schema, path) ? path : null;
   for (const list of schema.lists) {
     const m = path.match(new RegExp(`^${list.key.replace(/\./g, '\\.')}\\.(\\d+)(?:\\.(.+))?$`));
     if (!m) continue;
     const rows = data.lists[list.key] || (data.lists[list.key] = []);
     const i = Number(m[1]);
-    if (list.strings || !m[2]) rows[i] = value as string;
+    if (list.strings || !m[2]) rows[i] = normalized as string;
     else {
       const row = (rows[i] as Row) || (rows[i] = {});
-      row[m[2]] = value;
+      row[m[2]] = normalized;
     }
     return;
   }
-  if (!slot) data.fields[path] = value;
+  if (!slot) data.fields[path] = normalized;
 }
 
 export function hasContentPending(): boolean {
@@ -860,7 +862,7 @@ export function syncContentToField(plateId: string, path: string | null, source:
   const contentPath = stageContentSyncPath(data.schema, path, data.type);
   if (!contentPath) return;
   const scalar = data.schema.fields.some((f) => f.key === contentPath);
-  const listSlot = scalar ? null : slotOfPath(data.schema, path);
+  const listSlot = scalar ? null : slotOfPath(data.schema, contentPath);
   const targetSlot = scalar ? contentPath : listSlot;
   if (!targetSlot) return;
   if (contentFieldFocused()) {

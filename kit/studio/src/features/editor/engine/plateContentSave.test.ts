@@ -9,6 +9,8 @@ import {
   planBakeStaleContent,
   planContentFieldSync,
   stageContentSyncPath,
+  coerceContentLocalValue,
+  contentFieldForPath,
   planContentSave,
   flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
@@ -65,6 +67,35 @@ describe('stageContentSyncPath', () => {
   it('ignores stage-only copy (title, eyebrow)', () => {
     expect(stageContentSyncPath(showcase, 'title', 'showcase')).toBeNull();
     expect(stageContentSyncPath(showcase, 'eyebrow', 'showcase')).toBeNull();
+  });
+});
+
+describe('coerceContentLocalValue', () => {
+  const pricing = {
+    fields: [],
+    lists: [
+      {
+        key: 'tiers',
+        fields: [
+          { key: 'name', kind: 'text' },
+          { key: 'items', kind: 'lines', max: 4 },
+        ],
+      },
+    ],
+  };
+
+  it('stores lines fields as trimmed string arrays like the server', () => {
+    expect(contentFieldForPath(pricing, 'tiers.0.items')?.kind).toBe('lines');
+    expect(coerceContentLocalValue(pricing, 'tiers.0.items', 'One\n\nTwo  \n')).toEqual(['One', 'Two']);
+    expect(coerceContentLocalValue(pricing, 'tiers.0.items', ['a', 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('respects lines max when coercing stage sync strings', () => {
+    expect(coerceContentLocalValue(pricing, 'tiers.0.items', 'a\nb\nc\nd\ne')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('passes through non-lines values unchanged', () => {
+    expect(coerceContentLocalValue(pricing, 'tiers.0.name', 'Pro: $99')).toBe('Pro: $99');
   });
 });
 

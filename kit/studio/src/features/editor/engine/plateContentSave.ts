@@ -11,10 +11,63 @@ import { contentPathForEditPath } from '@/logic/plateFieldPaths';
 
 type EditOrigin = 'pane' | 'stage';
 
+export type ContentFieldDef = {
+  key: string;
+  kind?: string;
+  max?: number;
+};
+
 export type ContentSchemaLite = {
-  fields: Array<{ key: string }>;
+  fields: Array<ContentFieldDef>;
   lists: Array<{ key: string }>;
 };
+
+export type ContentSchemaForLocal = ContentSchemaLite & {
+  lists: Array<{
+    key: string;
+    strings?: boolean;
+    fields: ContentFieldDef[];
+  }>;
+};
+
+/** Field definition for a Content path (mirrors `fieldFor` in `plateSchema.mjs`). */
+export function contentFieldForPath(
+  schema: ContentSchemaForLocal | null | undefined,
+  path: string,
+): ContentFieldDef | null {
+  if (!schema || !path) return null;
+  const scalar = schema.fields.find((x) => x.key === path);
+  if (scalar) return scalar;
+  for (const list of schema.lists) {
+    const prefix = `${list.key}.`;
+    if (!path.startsWith(prefix)) continue;
+    const rest = path.slice(prefix.length).split('.');
+    if (!/^\d+$/.test(rest[0] ?? '')) continue;
+    if (list.strings) return rest.length === 1 ? list.fields[0] ?? null : null;
+    return list.fields.find((x) => x.key === rest.slice(1).join('.')) ?? null;
+  }
+  return null;
+}
+
+/** Keep in-memory Content cache aligned with server `coerceValue` (especially `lines` arrays). */
+export function coerceContentLocalValue(
+  schema: ContentSchemaForLocal | null | undefined,
+  path: string,
+  value: unknown,
+): unknown {
+  const field = contentFieldForPath(schema, path);
+  if (!field || field.kind !== 'lines') return value;
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split('\n')
+      : value == null
+        ? []
+        : [value];
+  const lines = raw.map((l) => String(l).trim()).filter(Boolean);
+  const max = field.max;
+  return Number.isFinite(max) ? lines.slice(0, max) : lines;
+}
 
 type ContentSavePlan = {
   /** Tear down and reload the plate iframe. */
