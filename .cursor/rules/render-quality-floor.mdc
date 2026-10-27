@@ -1,0 +1,44 @@
+---
+description: Render pipeline performance — hard quality floor and log contracts
+globs: kit/lib/encode.mjs,kit/lib/produce.mjs,kit/lib/plates.mjs,kit/lib/liveCardBake.mjs,kit/lib/validate.mjs,kit/lib/record.mjs,kit/studio/src/desk/jobs.ts
+alwaysApply: false
+---
+
+# Render pipeline — quality floor
+
+Before **any** optimization to plates, bake, clean, or encode, read **`pipeline.md`** and this floor.
+
+## Do not soften
+
+- **`QUALITY_ID`** `wt-q2` in `encode.mjs`; **`assertX264Args`**, **`plateJpegQ()`** throw if softer.
+- Recorder/clean: x264 **ultrafast -qp 0** (lossless intermediates).
+- Plates: **veryfast CRF 4**, JPEG **q95**, 1920×1080, **BT.709** via `toBt709()` (Chromium JPEG is BT.601 — green if untagged).
+- Delivery: **medium CRF 12**; variant CRF 16 — **no VideoToolbox** shortcut that changes quality model.
+- **Version snapshots** are user-facing — prefer APFS **clone** (`COPYFILE_FICLONE`) over deleting history.
+
+## Log shape (UI parses these)
+
+Keep progress lines stable, e.g.:
+
+- `» plate · <label> · frame N of M`
+- `» plates · …`
+- `» live · N%`
+- `» encode · N%`
+- `» cards · Bake …`
+
+## Safe optimization targets (examples from issue #26 work)
+
+- Plate cache keys: **htmlHash + cssHash + pipeline + qc**, not naive mtime-only.
+- Reduce redundant **double rAF** only with **PSNR ≥ 60 dB** vs golden frames.
+- Bake: prefer **Metal** on darwin where documented; overlay graph **x/y** for cropped captions.
+- **`validate.mjs`**: output-side **`-ss` after `-i`** for QC grabs — changing order breaks byte-identical grabs.
+
+## Studio Render button path
+
+`decideAction` → optional **record** → plates → produce (plates again, bakes, clean, encode) → audio → deliver → version snapshot. **Quick render** skips capture; pace/camera changes may still need **re-record** for take truth.
+
+## When user asks for speed
+
+1. Measure on fixture slug **`walkthrough-studio`** (or named project).
+2. Document in issue/PR: wall time, plate ms/frame, bake, encode.
+3. Run **`node --test kit/lib/*.test.mjs`** + real produce smoke if touching encode/plates/bake.

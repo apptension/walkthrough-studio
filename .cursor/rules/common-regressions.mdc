@@ -1,0 +1,53 @@
+---
+description: Recurring bugs and false fixes from recent sessions — check before closing work
+alwaysApply: true
+---
+
+# Common regressions (do not repeat)
+
+Use this as a **pre-ship checklist** when touching editor, timeline, direction, jobs, or CSS.
+
+## Editor / preview
+
+| Symptom | Likely cause | Verify |
+|--------|----------------|--------|
+| Inner content **shrinks** after scrub away and back | Stale zoom/lens layer, bad `fitFhdPreview`, `backReady`/`backArmedSrc` mismatch | Scrub forward/back on same plate; check `#fhdFit` / lens canvas hidden |
+| **Black/transparent circle** under magnifier | Dead loupe pixels not cleared on slide change | Scrub with manual + auto zoom |
+| **Line height jump** on “Edit text” (multi-line titles) | Using CSS `line-height` instead of **measured** row boxes | Open slide e.g. “Find the right stories…” before/after edit |
+| **White flash** opening chapter/caption copy edit | Entering edit before plate composed / blank iframe swap | Edit chapter + caption copy; must show fully rendered frame |
+| **Flash at chapter transition** (pointer on cut) | Double paint, plate/live handoff, seek dip | Pause on Intro → Meet boundary; scrub slowly |
+| Magnifier panel **doesn’t live-update** | Inspector remount or stage not repainted on param change | Drag zoom while watching stage |
+| **Resolution / device boxes** wrong in editor | Output size not wired to stage letterboxing | Change render size; boxes match produce |
+| Caption **timing wrong** in editor | Overlay not tied to timeline `--hold` / card timing | Compare program time vs visible caption |
+
+## Direction / look
+
+| Symptom | Likely cause |
+|--------|----------------|
+| Background **reverts** when entering plate edit | Stale same-plate back cache; look reload without `dropPreloadedPlates` |
+| Whole **lists reload** on one Look field change | Unnecessary full panel remount — narrow store updates |
+| Chapter vs **All chapters** confusing | Per-chapter look must persist separately; UI must say scope |
+
+## Jobs / live / render bay
+
+| Symptom | Likely cause |
+|--------|----------------|
+| **Record already running** after Stop | Child process not killed on queue cancel |
+| **Frozen LIVE** after abort | UI state not cleared; preview card left up |
+| **Pipeline / Produce UI** still visible after stop | `jobBusy` / overlay teardown incomplete |
+| Live preview **stops updating** | CDP screenshot loop hung — needs timeout + session restart |
+| **`sign-in-wait.json` 404** in console | Usually **benign** (no overlay file); don’t “fix” with error spam |
+| Script change → **`Unexpected token`** on record | Broken `flow.mjs` — validate after Script edits |
+
+## UI / porting
+
+| Symptom | Likely cause |
+|--------|----------------|
+| Icons/buttons **misaligned** after refactor | Legacy id/class drift — compare `kit/studio/README.md` DOM contract |
+| Scrubbers **inconsistent** | Duplicate markup instead of shared component |
+| Panel **overlap** (agent +/− hidden) | z-index / collapsed title strip |
+| User says **“still”** or **“doesn’t work”** | Treat as **failed fix** — new repro steps, don’t patch blindly |
+
+## Slugs used in recent repros
+
+`browse-hacker-news-like-a-pro`, `walkthrough-studio`, `teamdeck-dla-agencji-designu`, Apptension site walkthrough — use the slug the user named first.

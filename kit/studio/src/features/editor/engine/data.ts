@@ -4,6 +4,12 @@ import { toast } from '@/desk/toast';
 import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
+import { flushEditorContentPending, contentSaveProjectEpoch } from './plateContentPane';
+import {
+  isContentSaveResponseValid,
+  isDeckMutationStillValid,
+  paintInspectorUnlessContentTyping,
+} from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
@@ -22,6 +28,7 @@ import { clamp, errMessage } from './util';
  * cannot leak into the next.
  */
 export function resetForProject(): void {
+  deckGen += 1;
   pause();
   preview.pause();
   clearPlatePreviewTimers();
@@ -110,11 +117,13 @@ const serializeDeck = (deck: Deck): string => {
 async function fetchDeck(): Promise<Deck | null> {
   if (!slug()) return null;
   const want = slug();
+  const wantEpoch = contentSaveProjectEpoch();
   const gen = deckGen;
   try {
     const deck = await api<Deck>(`/api/video/${encodeURIComponent(want || '')}/edit`);
     // Sequence may have changed while the request was in flight.
     if (slug() !== want) return null;
+    if (!isContentSaveResponseValid(want || '', wantEpoch, slug() || '', contentSaveProjectEpoch())) return ed.deck;
     // An edit saved meanwhile returned a newer deck than this read.
     if (gen !== deckGen) return ed.deck;
     // Nothing moved on disk: keep the drawn timeline (and any morph playing across it) as it is.
@@ -123,7 +132,7 @@ async function fetchDeck(): Promise<Deck | null> {
         syncLiveSource();
         paintFrame();
         renderFrame();
-        renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
         paintStatus();
         paintTransport();
       }
@@ -150,7 +159,7 @@ async function fetchDeck(): Promise<Deck | null> {
   validateSelection();
   renderTimeline();
   renderFrame();
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
   refreshPacePop();
   paintStatus();
   paintTransport();
@@ -181,9 +190,18 @@ export const snapshotDeck = (): DeckEdit => {
 };
 
 export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown>, { undoable = true, hint }: { undoable?: boolean; hint?: string | undefined } = {}): Promise<Deck | null> {
+  await flushEditorContentPending();
+  const wantSlug = slug() || '';
+  const wantEpoch = contentSaveProjectEpoch();
+  const startedDeckGen = deckGen;
   const before = snapshotDeck();
   try {
-    const r = await api<Deck>(`/api/video/${encodeURIComponent(slug() || '')}/edit`, { method: 'POST', body: patch });
+    const r = await api<Deck>(`/api/video/${encodeURIComponent(wantSlug)}/edit`, { method: 'POST', body: patch });
+    if (
+      !isDeckMutationStillValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch(), startedDeckGen, deckGen)
+    ) {
+      return ed.deck;
+    }
     if (undoable) {
       ed.undo.push(before);
       if (ed.undo.length > 60) ed.undo.shift();
@@ -204,7 +222,12 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
       // stage paints, or Edit copy looks up a card the editor has never heard of.
       try {
         const listed = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates`);
-        if (listed?.plates?.length) setHtmlPlates(listed.plates);
+        if (
+          isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch()) &&
+          listed?.plates?.length
+        ) {
+          setHtmlPlates(listed.plates);
+        }
       } catch {
         /* Edit copy fetches again if the new card is still missing */
       }
@@ -229,7 +252,7 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
       renderFrame();
     }
     paintHead();
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     refreshPacePop();
     paintStatus();
     if (hint) flashHint(hint);

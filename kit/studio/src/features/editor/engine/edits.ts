@@ -11,6 +11,13 @@ import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
+import {
+  afterContentSaved,
+  flushAllContentPending,
+  hasContentPending,
+  settlePlateContent,
+} from './plateContentPane';
+import { beforeSelectionCommit, plateContentContextClip, plateContentSettleTarget } from './plateContentSave';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -341,6 +348,13 @@ export async function toolVoice(): Promise<Deck | null> {
 }
 
 // ─── Selection ───────────────────────────────────────────────────────────────────────────
+let selectApplySerial = Promise.resolve();
+
+/** Await gated `select()` commits (settle-then-remount). Used by integration tests. */
+export function selectApplyIdle(): Promise<void> {
+  return selectApplySerial;
+}
+
 /** Change what is selected without painting — for callers whose next deck paint draws it. */
 export function setSelection(sel: Selection | null): void {
   ed.sel = sel;
@@ -350,6 +364,40 @@ export function setSelection(sel: Selection | null): void {
 }
 
 export function select(sel: Selection | null): void {
+  const prev = plateContentContextClip(ed.sel, ed.seq, curClip());
+  const nextPlateId =
+    sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id)?.plateId ?? null : null;
+  const settleTarget = plateContentSettleTarget(prev?.kind, prev?.plateId ?? null, nextPlateId);
+  const pending = hasContentPending();
+
+  const apply = () => commitSelect(sel, prev);
+
+  const gate = async (alreadyDrained: boolean) => {
+    await beforeSelectionCommit({
+      hasPending: pending && !alreadyDrained,
+      settlePlateId: settleTarget,
+      drainPending: flushAllContentPending,
+      settlePlate: settlePlateContent,
+    });
+    apply();
+  };
+
+  if (!pending && !settleTarget) {
+    apply();
+    return;
+  }
+  const runGated = (alreadyDrained: boolean) => {
+    selectApplySerial = selectApplySerial.then(() => gate(alreadyDrained)).catch(() => {});
+    return selectApplySerial;
+  };
+  if (pending) {
+    afterContentSaved(() => runGated(true));
+    return;
+  }
+  void runGated(false);
+}
+
+function commitSelect(sel: Selection | null, _prev: ReturnType<typeof curClip>): void {
   setSelection(sel);
   renderClipsTrack();
   renderCardTracks();
@@ -363,6 +411,14 @@ export function select(sel: Selection | null): void {
   paintTextMode();
   renderInspector();
   showInspectorTab();
+}
+
+/** Flush live copy and bake HTML when selection leaves a plate clip (card/fx picks use `select()` too). */
+export function leavePlateContentIfNeeded(prev: ReturnType<typeof curClip>, sel: Selection | null): Promise<void> {
+  const nextPlateId =
+    sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id)?.plateId ?? null : null;
+  const target = plateContentSettleTarget(prev?.kind, prev?.plateId ?? null, nextPlateId);
+  return target ? settlePlateContent(target) : Promise.resolve();
 }
 
 export function selectFx(item: FxItem): void {

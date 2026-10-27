@@ -13,6 +13,7 @@ import {
 } from '@/logic/plateTiming';
 
 import { postDeck } from './data';
+import { joinBeforeScene, sceneSegmentIndex, timelineScenes } from './seq';
 import { timingBar } from '@/ui/look/previews';
 import { deckEdit, ed } from './state';
 import type { Clip, Deck } from './types';
@@ -77,10 +78,11 @@ export function timingForLength(c: Clip, want: number, mode: PaceMode = paceMode
 
 /** The transition out of a plate as the server sizes its pad — unclamped, unlike the stage overlap. */
 function transitionOut(c: Clip): number {
-  const scenes = (ed.deck?.scenes || []).filter((s) => s.dur > 0);
+  const scenes = timelineScenes(ed.deck);
   const next = scenes[c.i + 1];
   if (!next || next.hardCut) return 0;
-  const want = Number(ed.deck?.joins?.[c.i]?.pinned?.duration ?? next.transitionIn?.dur) || 0;
+  const join = joinBeforeScene(ed.deck, sceneSegmentIndex(next, c.i + 1));
+  const want = Number(join?.pinned?.duration ?? next.transitionIn?.dur) || 0;
   return Math.round(want * 30) / 30;
 }
 

@@ -14,7 +14,25 @@ import { postDeck, redo, refresh, resetForProject, undo, validateSelection } fro
 import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
-import { hoverContentSlot, moveContentSlot, openContentSlot, syncContentToField } from './plateContentPane';
+import {
+  flushEditorContentPending,
+  hoverContentSlot,
+  kickContentPending,
+  moveContentSlot,
+  openContentSlot,
+  resetPlateContentPane,
+  settlePlateContent,
+  syncContentToField,
+} from './plateContentPane';
+import {
+  beginEditOrigin,
+  contentFieldFocused,
+  endEditOrigin,
+  flushQueuedInspectorRepaint,
+  maySeekProgramAfterEditorLeave,
+  paintInspectorUnlessContentTyping,
+  plateContentContextClip,
+} from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -52,6 +70,11 @@ export async function reloadPlate(id: string, { paint = true }: { paint?: boolea
   const clip = plateClipFor(ed.seq, id, c);
   const onPlate = playheadOnPlate(c, id);
   const ms = onPlate && clip ? Math.max(0, Math.round((ed.t - clip.at) * 1000)) : 0;
+  if (contentFieldFocused()) {
+    ed.stalePlates.add(id);
+    markPlateResync(id);
+    return;
+  }
   if (
     !canReloadPlateFrame({
       dirty: P.dirty(),
@@ -98,7 +121,9 @@ export async function reloadPlate(id: string, { paint = true }: { paint?: boolea
     if (ed.needsPlateResync === id) ed.needsPlateResync = null;
   }
   if (playheadOnPlate(curClip(), id)) renderFrame();
-  if (paint && ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (paint && ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) {
+    paintInspectorUnlessContentTyping(renderInspector);
+  }
 }
 
 function frameElMotion(): boolean {
@@ -113,6 +138,7 @@ function frameElMotion(): boolean {
 // ─── Entry points ────────────────────────────────────────────────────────────────────────
 export async function onEnter({ programT }: { programT?: number | null } = {}): Promise<void> {
   ed.active = true;
+  await flushEditorContentPending();
   document.body.classList.add('is-editor');
   undressOverview();
   const focus = ed.focus;
@@ -133,7 +159,7 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
     paintFrame();
     renderTimeline();
     renderFrame();
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     paintStatus();
     paintTransport();
     paintTextMode();
@@ -159,8 +185,15 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
 
 export function onLeave(): void {
   if (!ed.active) return;
-  // Program picks up where the Editor was looking.
+  const ctx = plateContentContextClip(ed.sel, ed.seq, curClip());
+  const leavingPlate = ctx?.kind === 'plate' ? ctx.plateId : null;
   const programT = ed.seq.length ? toProgram(ed.t) : null;
+  const seekProgram = maySeekProgramAfterEditorLeave(
+    programT,
+    desk.get().monitorMode,
+    desk.get().previewingPlate,
+  );
+  kickContentPending();
   captureMorph();
   pause();
   preview.pause();
@@ -172,9 +205,12 @@ export function onLeave(): void {
   ed.active = false;
   document.body.classList.remove('is-editor');
   if (desk.get().rightTab === 'inspector') showRightTab('feedback');
-  if (programT != null && desk.get().monitorMode === 'program' && !desk.get().previewingPlate) seekTo(programT);
   renderTimeline();
   playMorph();
+  // Program seek after flush/bake — otherwise Program can show pre-type HTML for one frame.
+  void settlePlateContent(leavingPlate).finally(() => {
+    if (seekProgram && programT != null) seekTo(programT);
+  });
 }
 
 export async function openClip(match: (c: Clip) => boolean): Promise<boolean> {
@@ -255,9 +291,18 @@ export function wireStage(signal: AbortSignal): void {
     'plate-selection',
     (e) => {
       const detail = (e as CustomEvent<FieldDetail>).detail;
-      syncPlateField(detail);
-      const c = curClip();
-      if (c?.kind === 'plate' && c.plateId) syncContentToField(c.plateId, detail?.path || null);
+      // Stage → pane. beginEditOrigin('stage') so sync patches Content inputs instead of remounting
+      // when the same record is already open (and pane→stage echoes are ignored via origin 'pane').
+      beginEditOrigin('stage');
+      try {
+        syncPlateField(detail);
+        const c = curClip();
+        if (c?.kind === 'plate' && c.plateId) {
+          syncContentToField(c.plateId, detail?.path || null, detail?.source ?? null);
+        }
+      } finally {
+        endEditOrigin();
+      }
     },
     { signal },
   );
@@ -271,7 +316,7 @@ export function wireStage(signal: AbortSignal): void {
       showInspectorTab();
       if (ed.insTab !== 'design') {
         ed.insTab = 'design';
-        renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
       }
       openContentSlot(c.plateId, slot);
     },
@@ -325,6 +370,16 @@ export function wireStage(signal: AbortSignal): void {
   );
   wireZoomBox(signal);
   wireLensBox(signal);
+  document.addEventListener(
+    'focusout',
+    () => {
+      queueMicrotask(() => {
+        if (!ed.active) return;
+        flushQueuedInspectorRepaint(renderInspector);
+      });
+    },
+    { signal, capture: true },
+  );
 }
 
 async function textBarAction(act: string): Promise<void> {
@@ -482,7 +537,7 @@ export function wireTimelineBar(signal: AbortSignal): void {
   wireTimeline(signal);
   onPaceModeChange(() => {
     renderTimeline();
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   signal.addEventListener('abort', () => closePacePop());
   wireOverview(signal);
@@ -593,7 +648,11 @@ export const editorApi = {
   refresh: async (): Promise<void> => {
     await refresh();
   },
-  resetForProject,
+  resetForProject: (): void => {
+    resetForProject();
+    resetPlateContentPane();
+  },
+  flushPendingContent: (): Promise<void> => flushEditorContentPending(),
   onEnter: (opts: { programT?: number | null } = {}): void => void onEnter(opts),
   onLeave,
   openPlate,

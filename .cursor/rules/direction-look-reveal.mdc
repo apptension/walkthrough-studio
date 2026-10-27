@@ -1,0 +1,37 @@
+---
+description: Direction tab, look & reveal, chapter-scoped styling vs all chapters
+globs: kit/studio/src/features/direction/**/*,kit/studio/src/features/tools-panel/**/*,kit/studio/src/ui/look/**/*
+alwaysApply: false
+---
+
+# Direction & look & reveal
+
+## Scope: chapter vs video
+
+- **Chapter 1 follows video look** — changing Background/Backdrop on a chapter saves **for that chapter**; “All chapters” applies globally. UI must state scope plainly (user asked for better copy than legacy wall of text).
+- **Look & reveal** on chapter/caption cards: WebGL/plate backgrounds apply here too — not only full HTML plates.
+- Renderer must respect **per-chapter** vs **global** background when user picks “apply to all” for look changes.
+
+## Live preview in direction
+
+- Fields should **live-update** stage (optimistic paint where legacy did) — scrubbers and motion fields wired to engine, not static placeholders.
+- Avoid **full panel remount** when one subfield changes (lists reloading) — update narrow store slices / bridge callbacks.
+
+## Inspector coherence
+
+- Copy edit, magnifier, scaling, motion panels share **panel chrome** (radius, toolbar, collapsible sections, dividers).
+- Hide internal debug strings (e.g. `clear · enter 860ms · stagger…`) from author-facing UI.
+
+## Plate templates & backgrounds
+
+- Template tiles: **static still** of background + label (no heavy animation in picker).
+- Branded colors must flow into WebGL fields — templates agent-facing in `kit/templates/`.
+
+## Critic / story
+
+- **Run critic** → agent with critic skill, report output — not a no-op button.
+- Story purpose radios: saving must use **`withPurpose`** ordering so purpose isn’t overwritten when rebuilding config (`narrative.mjs`).
+
+## QC → Review → Feedback
+
+- QC warnings button opens **Review**; selectable findings; **Apply selected / Apply all** via AI in Feedback — triage then execute (user chose this journey).

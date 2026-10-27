@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { clearPlateRevealOverrides, pinLiveAnimationFrames } from './plateCss';
+import { clearPlateRevealOverrides, composePlateForEdit, pinLiveAnimationFrames } from './plateCss';
 
 /**
  * Fakes a running CSS animation the way `document.getAnimations()` would report it, without
@@ -77,6 +77,43 @@ describe('pinLiveAnimationFrames', () => {
 
     expect(() => pinLiveAnimationFrames(document)).not.toThrow();
     expect(el.getAttribute('style')).toBeNull();
+  });
+});
+
+describe('composePlateForEdit features carousel', () => {
+  it('lays carousel cards into a readable grid instead of stacking them at one seat', () => {
+    // Carousel cards share one absolute seat and are only separated by rotateY. Forcing
+    // transform:none (the generic .card finish) piles every card on top of the first — the
+    // other blocks "turn off" and click focus lands on the wrong item.
+    document.body.setAttribute('data-layout', 'carousel');
+    document.body.innerHTML = `
+      <div class="compose" style="perspective: 2200px">
+        <div class="cards" data-n="3" style="transform: rotateY(-8deg)">
+          <div class="card" style="--i: 0; position: absolute; left: 50%; margin-left: -180px; transform: rotateY(-21deg)">
+            <div class="label" data-edit="items.0.label">One</div>
+          </div>
+          <div class="card" style="--i: 1; position: absolute; left: 50%; margin-left: -180px; transform: rotateY(0deg)">
+            <div class="label" data-edit="items.1.label">Two</div>
+          </div>
+          <div class="card" style="--i: 2; position: absolute; left: 50%; margin-left: -180px; transform: rotateY(21deg)">
+            <div class="label" data-edit="items.2.label">Three</div>
+          </div>
+        </div>
+      </div>`;
+    (document as unknown as { getAnimations: () => unknown[] }).getAnimations = () => [];
+
+    composePlateForEdit(document);
+
+    const cards = document.querySelector('.cards') as HTMLElement;
+    const card = document.querySelectorAll<HTMLElement>('.card');
+    expect(cards.style.getPropertyValue('display')).toBe('grid');
+    expect(cards.style.getPropertyValue('transform')).toBe('none');
+    for (const el of card) {
+      expect(el.style.getPropertyValue('position')).toBe('relative');
+      expect(el.style.getPropertyValue('left')).toBe('auto');
+      expect(el.style.getPropertyValue('transform')).toBe('none');
+      expect(el.style.getPropertyValue('opacity')).toBe('1');
+    }
   });
 });
 

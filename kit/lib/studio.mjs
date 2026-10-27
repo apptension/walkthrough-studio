@@ -1204,7 +1204,7 @@ function listScenes(video) {
       type: seg.type || (plateId === 'open' || plateId === 'close' ? plateId : null),
       start,
       end,
-      dur: seg.dur || 0,
+      dur: isPlate ? Math.max(0.5, Number(seg.dur) || 0) : Math.max(0.2, Number(seg.dur) || 0),
       transitionIn: seg.transitionIn || null,
       join: seg.join || null,
       cleanFrom: isPlate ? null : (seg.start ?? null),
@@ -1237,7 +1237,10 @@ function timePlateScenes(video, scenes, plateTimes, pinnedJoins = {}) {
     const file = s.plateId === 'open' ? paths.open : s.plateId === 'close' ? paths.close : paths.interstitial[s.plateId];
     const meta = file?.mp4 ? readPlateRenderMeta(file.mp4) : null;
     const planPad = Number(s.padOut) || 0;
-    const natural = Number(meta?.durationSec) || Number(s.naturalDur) || Math.max(0.5, Number(s.dur) - planPad);
+    const natural = Math.max(
+      0.5,
+      Number(meta?.durationSec) || Number(s.naturalDur) || Math.max(0, Number(s.dur) - planPad) || 0,
+    );
     const holdAt = plateHoldAt(file?.html, natural);
     const pb = platePlayback(byId.get(s.id), natural, holdAt);
     // The last render's pad was sized for its own timing; a plate retimed then or now re-derives it
@@ -2339,6 +2342,9 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const ops = Array.isArray(body.ops) ? body.ops : body.op ? [body] : [];
     if (!ops.length) return json(res, 400, { error: 'No content ops' });
+    // `live: true` = Studio is painting the stage itself while the author types. Write the
+    // config only — a full HTML rebuild + plate-list push remounts the Content boxes mid-keystroke.
+    const live = body.live === true && ops.every((op) => op && op.op === 'set');
     const pathCfg = join(video.dir, 'video.config.json');
     const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
     const target = plateTarget(current, plateId, { create: true, derived: derivedPlateRow(video, plateId) });
@@ -2352,6 +2358,10 @@ async function handleApi(req, res, url) {
     }
     snapshotSources(video);
     writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    if (live) {
+      const row = plateTarget(current, plateId);
+      return json(res, 200, { ok: true, plateId, changed, live: true, ...(plateContent(row) || {}) });
+    }
     let rebuilt;
     try {
       rebuilt = rebuildAround(slug, plateId);

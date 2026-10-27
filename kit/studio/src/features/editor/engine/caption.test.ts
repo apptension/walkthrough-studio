@@ -67,6 +67,7 @@ beforeEach(() => {
 describe('a caption written in the Editor', () => {
   it('lands on the recording at the playhead, with copy of its own to edit', async () => {
     const posts = captureEdits();
+    ed.t = 16; // live section — playhead must not sit on the opening plate when the card is selected
     await addCaptionAt(12);
     expect(posts[0]!['cards']).toEqual([{ key: 'add:caption:12000', kind: 'caption', t: 12, dur: 2, label: 'New caption' }]);
     expect(ed.sel).toEqual({ type: 'card', key: 'add:caption:12000' });
@@ -95,6 +96,7 @@ describe('a caption written in the Editor', () => {
         }),
       ),
     );
+    ed.t = 16;
     await addCaptionAt(12);
     expect(ed.sel).toMatchObject({ type: 'card', key, cardId: 'overlay:caption:100000', markT: 12 });
   });

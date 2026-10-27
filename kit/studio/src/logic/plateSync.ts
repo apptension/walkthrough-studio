@@ -46,6 +46,26 @@ export function playheadOnPlate(playheadClip: JoinClip | null | undefined, plate
 }
 
 /**
+ * Can the stage paint this plate without kicking a reload?
+ *
+ * A held iframe is always paint-ready. Content-pane live typing writes config and paints
+ * in place, then marks the plate `stale` (disk HTML lags) without setting stage `dirty`.
+ * Treating stale+!dirty as "not ready" used to force-reload every frame and wipe the typed
+ * copy. Bake / force-reload belongs on the next *visit* after the frame no longer holds.
+ */
+export function plateStageReady({ holds }: { holds: boolean }): boolean {
+  return holds;
+}
+
+/**
+ * When returning to a plate whose disk HTML lags config, rebuild before loading the iframe.
+ * Force loads alone only refetch the last baked file and would show pre-type copy.
+ */
+export function shouldBakeBeforePlateLoad({ stale }: { stale: boolean }): boolean {
+  return stale;
+}
+
+/**
  * After a look/style paint, where should the plate clock land?
  * - Default: playhead offset into the clip — live edits keep your place in the plate
  * - fromStart (or playhead elsewhere): 0 — only when an explicit reset-from-start is requested

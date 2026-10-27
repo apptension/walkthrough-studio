@@ -108,7 +108,13 @@ export function toSource(chars: CopyChar[]): string {
  */
 export function toHtml(
   chars: CopyChar[],
-  { tag = 'span', lines = false, sep = false }: { tag?: 'span' | 'b'; lines?: boolean; sep?: boolean } = {},
+  {
+    tag = 'span',
+    lines = false,
+    sep = false,
+    /** When `lines` is true, each row gets this class so plate CSS (`.title-line`) keeps the same rhythm in edit mode. */
+    lineClass = lines ? 'title-line' : '',
+  }: { tag?: 'span' | 'b'; lines?: boolean; sep?: boolean; lineClass?: string } = {},
 ): string {
   const open = tag === 'b' ? '<b>' : '<span class="accent">';
   const close = tag === 'b' ? '</b>' : '</span>';
@@ -135,7 +141,8 @@ export function toHtml(
   }
   runs.push(cur);
   if (!lines) return runs.map(line).join(' ');
-  return runs.map((run) => `<div>${run.length ? line(run) : '<br>'}</div>`).join('');
+  const rowTag = (inner: string) => (lineClass ? `<div class="${lineClass}">${inner}</div>` : `<div>${inner}</div>`);
+  return runs.map((run) => rowTag(run.length ? line(run) : '<br>')).join('');
 }
 
 /**

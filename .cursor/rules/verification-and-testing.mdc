@@ -1,0 +1,59 @@
+---
+description: Verification gates before claiming work is complete
+alwaysApply: true
+---
+
+# Verification
+
+## Desk (`kit/studio/`)
+
+Before merging or saying a desk change is ready:
+
+```bash
+cd kit/studio && npm run verify   # typecheck → lint → test → build
+```
+
+Node **20.19+** for the test toolchain. Dev loop: repo root `./studio --dev` (server `:4747`, Vite `:4748`).
+
+## Kit / CLI (repo root)
+
+```bash
+node --test kit/lib/*.test.mjs kit/lib/shared/*.test.js scripts/*.test.mjs
+```
+
+Touch shared modules in **`kit/lib/shared/`** when logic is used by both engine and desk; keep **`kit/lib/shared/*.js`** and TS ports in sync.
+
+## When to add or extend tests
+
+- Timeline, plate editor, copy edit, magnifier, scrub, parity with render → extend **`kit/studio/src/features/editor/**`** tests or **`kit/studio/src/logic/*.test.ts`**.
+- Narration/script/flow/agent/critic → **`kit/lib/*.test.mjs`**, **`narrationQc`**, etc.
+
+## Visual / interaction bugs
+
+- Reproduce on a **named slug** the user gave (or a standard demo project).
+- Scrub **forward and back** across slides; toggle **Program ↔ Editor**; toggle **edit text / magnifier**—many bugs only appear after navigation.
+- After engine changes, hard-reload or confirm Vite HMR picked up **`plate.ts`** / engine modules (stale bundle mimics unfixed bugs).
+- See **`common-regressions.mdc`** for the symptom → cause matrix (shrink-on-scrub-back, white flash on edit, transition flash, frozen LIVE).
+
+## Standard repro slugs
+
+- `browse-hacker-news-like-a-pro` — live capture, streaming, timeline
+- `walkthrough-studio` — full Render / produce path, pipeline perf
+- `teamdeck-dla-agencji-designu` — project-specific perf / re-record issues
+- Apptension marketing walkthrough — transition flash at chapter boundaries
+
+## Browser / desk
+
+- Prefer **`./studio --dev`** and **4748** for editor work; server API on **4747**.
+- Optional: Playwright **`kit/studio/e2e`** against stub studio for regressions on ids/shortcuts.
+- **`npm run test:coverage`** when changing shared UI with thresholds.
+
+## Debugging discipline
+
+- On “**still** broken”: restate repro, identify **first wrong frame/event**, fix root cause (often cache/lifecycle), add test if pure logic.
+- Systematic-debugging skill applies for non-obvious desk bugs — hypothesis → instrument → confirm before large refactors.
+
+## Performance work
+
+- Profile or measure before large changes; **no intentional behavior change** unless fixing a bug.
+- Prefer fewer DOM rebuilds, narrower store subscriptions, and debounced preview updates over micro-optimizations that risk parity bugs.

@@ -3,8 +3,15 @@ import { clipPlayback } from '@/logic/plateTiming';
 import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
-import { addCut, adoptLens, adoptShot, select, selectFx, setSelection, showInspectorTab } from './edits';
+import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
+import {
+  afterContentSaved,
+  flushEditorContentPending,
+  hasContentPending,
+  kickContentPending,
+} from './plateContentPane';
 import { renderInspector } from './inspector';
+import { paintInspectorUnlessContentTyping, plateContentContextClip } from './plateContentSave';
 import { setScale } from './lifecycle';
 import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
 import { ensureLiveCards, requestPlate } from './stage';
@@ -16,6 +23,16 @@ import type { CardTiming, Clip, Deck, MusicDesk } from './types';
 import { $, clamp, r3 } from './util';
 
 /** Timeline pointer gestures (scrub, reorder, trim, retime) from `kit/studio/editor.js`. */
+
+function whenContentReady(run: () => void | Promise<void>): void {
+  const go = () => void Promise.resolve(run());
+  if (!hasContentPending()) {
+    go();
+    return;
+  }
+  kickContentPending();
+  afterContentSaved(go);
+}
 
 export function edFromEvent(e: { clientX: number }): number {
   const rect = $('etlCanvas')!.getBoundingClientRect();
@@ -85,25 +102,40 @@ export function wireTimeline(signal: AbortSignal): void {
         const markT = Number(cardHit.dataset['markT']);
         const markDur = Number(cardHit.dataset['markDur']);
         const clip = cardOwnerAt(markT) || liveClipAtEd(t) || curClip();
-        // Soft-select without re-rendering (keeps the node alive for drag).
-        setSelection({ type: 'card', ...(key != null ? { key } : {}), cardId: cardHit.dataset['cardId'] || null, markT, markDur, clipId: clip?.id });
-        document.querySelectorAll('.ec-card.is-on').forEach((n) => n.classList.toggle('is-on', n === cardHit));
-        showInspectorTab();
-        renderInspector();
-        canvas.setPointerCapture(e.pointerId);
-        ed.drag = {
-          type: 'card',
-          edge: edge || 'move',
+        const prev = plateContentContextClip(ed.sel, ed.seq, curClip());
+        const cardSel = {
+          type: 'card' as const,
           ...(key != null ? { key } : {}),
           cardId: cardHit.dataset['cardId'] || null,
-          clip,
-          start: markT,
-          dur: markDur,
-          x0: e.clientX,
-          t0: t,
-          el: cardHit,
-          moved: false,
+          markT,
+          markDur,
+          clipId: clip?.id,
         };
+        const armCardDrag = () => {
+          // Soft-select without re-rendering the timeline (keeps the node alive for drag).
+          setSelection(cardSel);
+          document.querySelectorAll('.ec-card.is-on').forEach((n) => n.classList.toggle('is-on', n === cardHit));
+          showInspectorTab();
+          renderInspector();
+          canvas.setPointerCapture(e.pointerId);
+          ed.drag = {
+            type: 'card',
+            edge: edge || 'move',
+            ...(key != null ? { key } : {}),
+            cardId: cardHit.dataset['cardId'] || null,
+            clip,
+            start: markT,
+            dur: markDur,
+            x0: e.clientX,
+            t0: t,
+            el: cardHit,
+            moved: false,
+          };
+        };
+        whenContentReady(async () => {
+          await leavePlateContentIfNeeded(prev, cardSel);
+          armCardDrag();
+        });
         return;
       }
       const markHit = target.closest<HTMLElement>('.ec-mark');
@@ -195,8 +227,7 @@ export function wireTimeline(signal: AbortSignal): void {
       if (lane?.id === 'etlVoice' && !voiceHit) {
         if (ed.playing) pause();
         seek(t);
-        ed.sel = null;
-        renderInspector();
+        select(null);
         flashHint('Add voice at the playhead');
         return;
       }
@@ -205,12 +236,16 @@ export function wireTimeline(signal: AbortSignal): void {
       const edgeClip = edgeClipEl ? ed.seq[Number(edgeClipEl.dataset['i'])] : null;
       if (edgeEl && edgeClip) {
         if (ed.playing) pause();
-        setSelection({ type: 'clip', id: edgeClip.id });
-        ed.drag = startClipEdge(edgeClip, edgeEl.dataset['clipEdge'] === 'l' ? 'l' : 'r', edgeClipEl ?? null, e.clientX, e.altKey);
+        const clipId = edgeClip.id;
+        whenContentReady(() => {
+          setSelection({ type: 'clip', id: clipId });
+          ed.drag = startClipEdge(edgeClip, edgeEl.dataset['clipEdge'] === 'l' ? 'l' : 'r', edgeClipEl ?? null, e.clientX, e.altKey);
+        });
         return;
       }
       const clipEl = target.closest<HTMLElement>('.etl-clip');
       if (ed.playing) pause();
+      if (hasContentPending()) kickContentPending();
       ed.drag = { type: 'scrub', clipI: clipEl ? Number(clipEl.dataset['i']) : null, x0: e.clientX, moved: false };
       seek(t);
     },
@@ -277,7 +312,7 @@ export function wireTimeline(signal: AbortSignal): void {
         seek(g.t0 ?? 0);
         if (g.clip) select({ type: 'clip', id: g.clip.id });
       } else {
-        renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
         paintTools();
       }
     } else if (g.type === 'cut') {
@@ -402,6 +437,8 @@ export async function dropClip(g: Drag): Promise<void> {
   const host = $('etlClips');
   const id = ed.seq[g.from ?? -1]?.id;
   if (g.at !== g.from && id) {
+    await flushEditorContentPending();
+    await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
     ed.flipFrom = clipRects();
     setSelection({ type: 'clip', id });
     const r = await commitOrder(g.ids || [], 'Sequence reordered');
@@ -533,6 +570,8 @@ export async function moveClip(id: string, dir: number): Promise<void> {
   const ids = ed.seq.map((c) => c.id);
   const [item] = ids.splice(i, 1);
   if (item != null) ids.splice(j, 0, item);
+  await flushEditorContentPending();
+  await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
   ed.flipFrom = clipRects();
   setSelection({ type: 'clip', id });
   const r = await commitOrder(ids, dir < 0 ? 'Moved earlier' : 'Moved later');
@@ -778,5 +817,5 @@ export async function commitFx(g: Drag): Promise<void> {
     else await postDeck({ zooms: d.zooms.map((z) => (z.id === shot.id ? { ...z, t: from, dur: r3(to - from) } : z)) });
   }
   renderTimeline();
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
 }

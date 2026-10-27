@@ -7,6 +7,8 @@ import { selectedShot } from './aim';
 import { applyVoiceDeck, withMusic } from './audio';
 import { postDeck, refresh } from './data';
 import { select } from './edits';
+import { contentSaveProjectEpoch, flushEditorContentPending } from './plateContentPane';
+import { isContentSaveResponseValid } from './plateContentSave';
 import { lensByKey, recToEd, selectedLens, shotKey } from './seq';
 import { joinStyle } from './stage';
 import { audioDesk, deckEdit, ed, live, liveH, liveW, setHtmlPlates, slug } from './state';
@@ -224,10 +226,19 @@ export async function detachPlate(c: Clip): Promise<Deck | null> {
   const id = repeatIdOf(c);
   if (!id || c.kind !== 'plate') return null;
   try {
-    const base = `/api/video/${encodeURIComponent(slug() || '')}`;
+    await flushEditorContentPending();
+    const wantSlug = slug() || '';
+    const wantEpoch = contentSaveProjectEpoch();
+    const base = `/api/video/${encodeURIComponent(wantSlug)}`;
     const r = await api<Deck & { id: string }>(`${base}/plates/${encodeURIComponent(id)}/detach`, { method: 'POST' });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch())) return null;
     const listed = await api<{ plates?: PlateRow[] }>(`${base}/plates`).catch(() => null);
-    if (listed?.plates) setHtmlPlates(listed.plates);
+    if (
+      isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch()) &&
+      listed?.plates
+    ) {
+      setHtmlPlates(listed.plates);
+    }
     await refresh();
     const own = ed.seq.find((x) => x.plateId === r.id);
     if (own) select({ type: 'clip', id: own.id });

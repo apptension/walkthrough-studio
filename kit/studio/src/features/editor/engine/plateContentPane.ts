@@ -1,11 +1,33 @@
 import { api } from '@/desk/api';
+import { desk } from '@/desk/store';
 import { toast } from '@/desk/toast';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
+import { editPathForContentPath } from '@/logic/plateFieldPaths';
+import { playheadOnPlate } from '@/logic/plateSync';
 import { reloadPlate } from './lifecycle';
 import { plateDoc } from './look';
-import { paintPlateFieldValue } from './plate';
+import { dropPreloadedPlates, paintPlateFieldValue, paintSlotPosition } from './plate';
+import {
+  beginEditOrigin,
+  contentFieldFocused,
+  editOrigin,
+  endEditOrigin,
+  clearContentInspectorRepaintQueue,
+  paintInspectorUnlessContentTyping,
+  queueContentInspectorRepaint,
+  planBakeStaleContent,
+  planContentFieldSync,
+  planContentSave,
+  isContentSaveResponseValid,
+  stageContentSyncPath,
+  coerceContentLocalValue,
+  contentValueForLivePaint,
+  batchPlateContentSetOps,
+  isLiveContentSetKind,
+} from './plateContentSave';
+import { curClip } from './seq';
 import { ed, setHtmlPlates, slug } from './state';
 import { flashHint, plateInfo } from './timeline';
 import type { Clip, PlateRow } from './types';
@@ -86,25 +108,164 @@ let shelfFor: string | null = null;
 let iconFor: string | null = null;
 let hoverSlot: string | null = null;
 let saveGen = 0;
-const pending = new Map<string, ReturnType<typeof setTimeout>>();
-
+/** Bumped on `resetPlateContentPane` so late Content POSTs cannot repopulate cache on the next video. */
+let contentProjectEpoch = 0;
+/** Debounced Content keystrokes — keyed by plate+path so two plates never cancel each other. */
+type PendingCopy = {
+  id: string;
+  path: string;
+  value: unknown;
+  kind: string;
+  timer: ReturnType<typeof setTimeout>;
+};
+const pending = new Map<string, PendingCopy>();
+const pendingKey = (id: string, path: string) => `${id}\0${path}`;
 const base = () => `/api/video/${encodeURIComponent(slug() || '')}`;
 const platePath = (id: string, tail: string) => `${base()}/plates/${encodeURIComponent(id)}/${tail}`;
 
-export const contentFor = (plateId: string | null | undefined): PlateContentData | null => (plateId ? cache.get(plateId) || null : null);
+/** Retry bake after leave-plate while a Content field still had focus. */
+const bakeRetry = new Map<string, ReturnType<typeof setTimeout>>();
+const bakeAttempts = new Map<string, number>();
+const bakeInflight = new Map<string, Promise<void>>();
+/** Toggle open records without remounting the inspector (caret-safe). */
+function patchContentRecordOpenState(): void {
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-rec').forEach((el) => {
+    const slot = el.dataset['cntSlot'];
+    const open = slot === openSlot;
+    el.classList.toggle('is-open', open);
+    el.querySelector<HTMLElement>('.pcnt-rec-open')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+}
+
+/** Shelf / icon affordances that can toggle without rebuilding the whole Content pane. */
+function patchContentAuxChrome(): void {
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-asset').forEach((wrap) => {
+    const btn = wrap.querySelector<HTMLElement>('[data-cnt-shelf-open]');
+    const path = btn?.dataset['cntShelfOpen'] || '';
+    const open = Boolean(path && shelfFor === path);
+    wrap.classList.toggle('is-open', open);
+    btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-icon-btn').forEach((btn) => {
+    const path = btn.dataset['cntIconOpen'] || '';
+    btn.classList.toggle('on', iconFor === path);
+    btn.setAttribute('aria-expanded', iconFor === path ? 'true' : 'false');
+  });
+}
+
+/** Remount when safe; while typing, patch chrome or queue for after blur. */
+function repaintContentInspector(): void {
+  if (contentFieldFocused()) {
+    patchContentAuxChrome();
+    const needsFull =
+      (iconFor && !document.querySelector('#inspectorRoot .pcnt-icon-grid')) ||
+      (shelfFor && !document.querySelector('#inspectorRoot [data-cnt-shelf]'));
+    if (needsFull) queueContentInspectorRepaint();
+    return;
+  }
+  paintInspectorUnlessContentTyping(renderInspector);
+}
+
+/**
+ * Bake plate HTML after the author leaves (or a structural edit). Not called from keystrokes —
+ * that path is live config + in-place paint only.
+ */
+export async function bakeStalePlateContent(id: string | null | undefined): Promise<void> {
+  if (!id || !ed.stalePlates.has(id)) {
+    clearBakeRetry(id);
+    return;
+  }
+  const running = bakeInflight.get(id);
+  if (running) return running;
+  const job = bakeStalePlateContentOnce(id).finally(() => bakeInflight.delete(id));
+  bakeInflight.set(id, job);
+  return job;
+}
+
+async function bakeStalePlateContentOnce(id: string): Promise<void> {
+  if (!ed.stalePlates.has(id)) {
+    clearBakeRetry(id);
+    return;
+  }
+  const attempts = bakeAttempts.get(id) || 0;
+  const focused = contentFieldFocused();
+  if (planBakeStaleContent({ focused, attempts }) === 'defer') {
+    bakeAttempts.set(id, attempts + 1);
+    clearTimeout(bakeRetry.get(id));
+    bakeRetry.set(
+      id,
+      setTimeout(() => {
+        bakeRetry.delete(id);
+        void bakeStalePlateContent(id);
+      }, 400),
+    );
+    return;
+  }
+  clearBakeRetry(id);
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
+  // Drain every debounced field — rebuild-html uses saved config for all plates.
+  await flushAllContentPending();
+  if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
+  try {
+    const r = await api<{ plates?: PlateRow[] }>(`${base()}/plates/rebuild-html`, { method: 'POST', body: {} });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
+    if (r.plates) setHtmlPlates(r.plates, { video: false });
+    ed.stalePlates.delete(id);
+    dropPreloadedPlates(id);
+    // Reload only when this plate is still on stage and the caret is free. Force-bake after
+    // deferrals must not swap the iframe under a live Content field.
+    if (
+      !contentFieldFocused() &&
+      desk.get().activePlateId === id &&
+      playheadOnPlate(curClip(), id)
+    ) {
+      await reloadPlate(id, { paint: false });
+    }
+  } catch {
+    /* Produce rebuilds from config — leave stale so the next visit retries. */
+  }
+}
+
+function clearBakeRetry(id: string | null | undefined): void {
+  if (!id) return;
+  clearTimeout(bakeRetry.get(id));
+  bakeRetry.delete(id);
+  bakeAttempts.delete(id);
+}
+
+/** Soft-merge content values from a live save — never replace the cache with a full edit deck. */
+function mergeLiveContent(id: string, r: Partial<PlateContentData>): void {
+  const prev = cache.get(id);
+  if (!prev) {
+    if (r.schema) cache.set(id, r as PlateContentData);
+    return;
+  }
+  cache.set(id, {
+    ...prev,
+    fields: r.fields ? { ...prev.fields, ...r.fields } : prev.fields,
+    lists: r.lists ? { ...prev.lists, ...r.lists } : prev.lists,
+    assets: r.assets || prev.assets,
+  });
+}
 
 /** Fetch the schema and values for a plate; repaints the inspector when they land. */
-export function loadPlateContent(plateId: string, { force = false } = {}): void {
+function loadPlateContent(plateId: string, { force = false } = {}): void {
   if (!plateId || loading.has(plateId)) return;
   const info = plateInfo(plateId);
   const have = cache.get(plateId);
   if (!force && have && have.type === (info?.type || have.type)) return;
   loading.add(plateId);
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
   void api<PlateContentData>(platePath(plateId, 'content'))
     .then((r) => {
+      if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
       cache.set(plateId, r);
       if (r.assets) assetsCache = r.assets;
-      if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) renderInspector();
+      if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) {
+        paintInspectorUnlessContentTyping(renderInspector);
+      }
     })
     .catch((err) => toast('Content not loaded', errMessage(err), 'err'))
     .finally(() => loading.delete(plateId));
@@ -116,9 +277,32 @@ export function dropPlateContent(plateId?: string | null): void {
   else cache.clear();
 }
 
+/** Sequence switch — drop cached schemas, debounced saves, and UI-only open/hover state. */
+export function resetPlateContentPane(): void {
+  contentSerial = Promise.resolve();
+  for (const p of pending.values()) clearTimeout(p.timer);
+  pending.clear();
+  for (const id of [...bakeRetry.keys()]) clearBakeRetry(id);
+  cache.clear();
+  loading.clear();
+  assetsCache = [];
+  openSlot = null;
+  shelfFor = null;
+  iconFor = null;
+  hoverSlot = null;
+  saveGen += 1;
+  contentProjectEpoch += 1;
+  clearContentInspectorRepaintQueue();
+}
+
+/** Tests and diagnostics — monotonic epoch for stale Content POST guards. */
+export function contentSaveProjectEpoch(): number {
+  return contentProjectEpoch;
+}
+
 // ─── Paths ─────────────────────────────────────────────────────────────────────────────────
 /** `items.2.label` → `items.2`; `logo` → `logo`; `left.items.1` → `left.items.1`. */
-export function slotOfPath(schema: ContentSchema | null, path: string): string | null {
+function slotOfPath(schema: ContentSchema | null, path: string): string | null {
   if (!schema) return null;
   for (const list of schema.lists) {
     const m = path.match(new RegExp(`^${list.key.replace(/\./g, '\\.')}\\.(\\d+)`));
@@ -316,83 +500,251 @@ export function renderPlateContent(c: Clip): string {
 /** Field kinds whose saved value the live plate can paint itself, no document reload needed. */
 const COPY_KINDS = new Set(['text', 'long', 'lines']);
 
+function paintCopyOps(id: string, ops: ContentOp[]): boolean {
+  const data = cache.get(id);
+  const schema = data?.schema ?? null;
+  const plateType = data?.type ?? null;
+  return ops.every((op) => {
+    if (op.op !== 'set' || typeof op.path !== 'string') return false;
+    const painted = contentValueForLivePaint(schema, op.path, op.value);
+    if (painted != null && typeof painted !== 'string' && typeof painted !== 'number') return false;
+    return paintPlateFieldValue(
+      op.path,
+      painted,
+      id,
+      editPathForContentPath(op.path, schema, plateType),
+    );
+  });
+}
+
 // ─── Save ──────────────────────────────────────────────────────────────────────────────────
-async function send(
+/** Structural saves must not race debounced copy — flush keystrokes for this plate first. */
+async function sendAfterFlush(
+  id: string,
+  ops: ContentOp[],
+  hint: string | null,
+  opts: { repaint?: boolean; paintLive?: boolean } = {},
+): Promise<boolean> {
+  await flushEditorContentPending();
+  return enqueueContentSend(id, ops, hint, opts);
+}
+
+/** Chain every Content POST — concurrent writes read the same config and drop each other's ops. */
+function enqueueContentSend(
+  id: string,
+  ops: ContentOp[],
+  hint: string | null,
+  opts: { repaint?: boolean; paintLive?: boolean } = {},
+): Promise<boolean> {
+  const run = contentSerial.then(() => postContentOps(id, ops, hint, opts));
+  contentSerial = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function postContentOps(
   id: string,
   ops: ContentOp[],
   hint: string | null,
   { repaint = true, paintLive = false }: { repaint?: boolean; paintLive?: boolean } = {},
 ): Promise<boolean> {
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
   const gen = ++saveGen;
+  if (paintLive) paintCopyOps(id, ops);
+  const plan = planContentSave({ paintLive, repaint });
   try {
-    const r = await api<PlateContentData>(platePath(id, 'content'), { method: 'POST', body: { ops } });
-    const prev = cache.get(id);
-    cache.set(id, { ...(prev || ({} as PlateContentData)), ...r, assets: r.assets || prev?.assets });
-    if (r.plates) setHtmlPlates(r.plates, { video: false });
+    const r = await api<PlateContentData>(platePath(id, 'content'), {
+      method: 'POST',
+      body: { ops, live: plan.live },
+    });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return false;
+    if (plan.live) mergeLiveContent(id, r);
+    else {
+      const prev = cache.get(id);
+      cache.set(id, { ...(prev || ({} as PlateContentData)), ...r, assets: r.assets || prev?.assets });
+    }
+    if (plan.applyPlates && r.plates) setHtmlPlates(r.plates, { video: false });
     ed.dirtyRender = true;
     paintStatus();
-    // Copy the stage can show itself does not need the document reloaded under it. Anything
-    // structural (a row added, an asset swapped, a number that drives layout) still does.
-    const shown =
-      paintLive &&
-      ops.every(
-        (op) =>
-          op.op === 'set' &&
-          typeof op.path === 'string' &&
-          (op.value == null || typeof op.value === 'string' || typeof op.value === 'number') &&
-          paintPlateFieldValue(op.path, op.value),
-      );
-    if (!shown) await reloadPlate(id);
+    // Live typing: mark stale for a later bake when the author leaves. Structural: server already rebuilt.
+    const typing = contentFieldFocused();
+    if (plan.live) ed.stalePlates.add(id);
+    else {
+      clearBakeRetry(id);
+      if (typing) ed.stalePlates.add(id);
+      else ed.stalePlates.delete(id);
+    }
+    if (plan.reload && !typing) await reloadPlate(id, { paint: false });
     if (hint) flashHint(hint);
-    if (repaint && gen === saveGen) renderInspector();
+    if (plan.repaint && gen === saveGen) paintInspectorUnlessContentTyping(renderInspector);
     return true;
   } catch (err) {
     toast('Content not saved', errMessage(err), 'err');
-    loadPlateContent(id, { force: true });
+    if (!contentFieldFocused()) loadPlateContent(id, { force: true });
+    else queueContentInspectorRepaint();
     return false;
   }
 }
 
-/** Typed edits land locally at once and post after a short pause, so typing never fights the stage. */
+/** Typed edits land locally + on stage at once and post after a short pause. */
 function setSoon(id: string, path: string, value: unknown, kind: string): void {
   const data = cache.get(id);
   if (data) setLocal(data, path, value);
-  clearTimeout(pending.get(path));
-  pending.set(
+  if (COPY_KINDS.has(kind)) {
+    // Pane → stage only. Mark origin so stage selection echoes do not remount this pane.
+    beginEditOrigin('pane');
+    try {
+      const data = cache.get(id);
+      const painted = contentValueForLivePaint(data?.schema ?? null, path, value);
+      paintPlateFieldValue(
+        path,
+        painted,
+        id,
+        editPathForContentPath(path, data?.schema ?? null, data?.type ?? null),
+      );
+    } finally {
+      queueMicrotask(() => endEditOrigin());
+    }
+  }
+  const key = pendingKey(id, path);
+  clearTimeout(pending.get(key)?.timer);
+  pending.set(key, {
+    id,
     path,
-    setTimeout(() => {
-      pending.delete(path);
-      void send(id, [{ op: 'set', path, value }], null, { repaint: kind === 'lines', paintLive: COPY_KINDS.has(kind) });
+    value,
+    kind,
+    timer: setTimeout(() => {
+      pending.delete(key);
+      // Never remount for copy — even `lines`. The textarea already shows what was typed.
+      void enqueueContentSend(id, [{ op: 'set', path, value }], null, {
+        repaint: false,
+        paintLive: isLiveContentSetKind(kind),
+      });
     }, 420),
+  });
+}
+
+/** Write a stage edit into the matching Content input without remounting the pane. */
+function patchContentField(path: string, value: string): void {
+  const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `#inspectorRoot [data-cnt-path="${CSS.escape(path)}"]`,
   );
+  if (!el || document.activeElement === el) return;
+  if (el.value === value) return;
+  el.value = value;
+  const rec = el.closest<HTMLElement>('.pcnt-rec');
+  const b = rec?.querySelector<HTMLElement>('.pcnt-rec-open b');
+  const data = cache.get(desk.get().activePlateId || '');
+  const list = data?.schema?.lists.find((l) => rec?.dataset['cntSlot']?.startsWith(`${l.key}.`));
+  const first = list?.strings ? '' : list?.fields.find((f) => f.kind === 'text')?.key;
+  if (b && list && (list.strings || path.endsWith(`.${first}`))) b.textContent = value || b.textContent;
 }
 
 function setLocal(data: PlateContentData, path: string, value: unknown): void {
   const schema = data.schema;
   if (!schema) return;
+  const normalized = coerceContentLocalValue(schema, path, value);
   const slot = listOfSlot(schema, path) ? path : null;
   for (const list of schema.lists) {
     const m = path.match(new RegExp(`^${list.key.replace(/\./g, '\\.')}\\.(\\d+)(?:\\.(.+))?$`));
     if (!m) continue;
     const rows = data.lists[list.key] || (data.lists[list.key] = []);
     const i = Number(m[1]);
-    if (list.strings || !m[2]) rows[i] = value as string;
+    if (list.strings || !m[2]) rows[i] = normalized as string;
     else {
       const row = (rows[i] as Row) || (rows[i] = {});
-      row[m[2]] = value;
+      row[m[2]] = normalized;
     }
     return;
   }
-  if (!slot) data.fields[path] = value;
+  if (!slot) data.fields[path] = normalized;
 }
 
-/** Flush a pending typed edit before a structural op so order never races. */
-async function flush(): Promise<void> {
-  const timers = [...pending.values()];
-  pending.clear();
-  for (const t of timers) clearTimeout(t);
-  if (!timers.length) return;
-  await new Promise((r) => setTimeout(r, 0));
+export function hasContentPending(): boolean {
+  return pending.size > 0;
+}
+
+let contentSerial = Promise.resolve();
+
+/** Flush debounced Content fields, then run `task` (serialized with other flush gates). */
+export function afterContentSaved(task: () => void | Promise<void>): void {
+  contentSerial = contentSerial
+    .then(async () => {
+      await drainPendingContentSaves();
+      await task();
+    })
+    .catch(() => {
+      /* keep the queue alive if a save failed */
+    });
+}
+
+function drainPendingOps(id?: string | null) {
+  const ops = [...pending.values()].filter((p) => !id || p.id === id);
+  for (const p of ops) {
+    clearTimeout(p.timer);
+    pending.delete(pendingKey(p.id, p.path));
+  }
+  return ops;
+}
+
+function enqueueContentSends(ops: ReturnType<typeof drainPendingOps>): void {
+  if (!ops.length) return;
+  const batches = batchPlateContentSetOps(
+    ops.map((p) => ({ plateId: p.id, path: p.path, value: p.value, kind: p.kind })),
+  );
+  contentSerial = contentSerial
+    .then(async () => {
+      for (const batch of batches) {
+        await postContentOps(batch.plateId, batch.ops, null, {
+          repaint: false,
+          paintLive: batch.paintLive,
+        });
+      }
+    })
+    .catch(() => {
+      /* keep the queue alive if a save failed */
+    });
+}
+
+/**
+ * Post debounced Content fields immediately without awaiting HTTP — timeline pointerdown must
+ * arm drag synchronously. Saves chain on `contentSerial` so `flushAllContentPending` can await them.
+ */
+export function kickContentPending(): void {
+  enqueueContentSends(drainPendingOps());
+}
+
+/** Await every in-flight Content POST (including kicks). Useful in tests. */
+export function contentSaveIdle(): Promise<void> {
+  return contentSerial;
+}
+
+async function drainPendingContentSaves(): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    kickContentPending();
+    await contentSerial;
+    if (!hasContentPending()) return;
+  }
+}
+
+/** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
+export async function flushAllContentPending(): Promise<void> {
+  await drainPendingContentSaves();
+}
+
+/** Flush debounced fields and await in-flight Content POSTs (deck save, enter text, etc.). */
+export async function flushEditorContentPending(): Promise<void> {
+  await flushAllContentPending();
+  await contentSaveIdle();
+}
+
+/** Flush live copy and bake HTML when leaving a plate or the editor. */
+export async function settlePlateContent(plateId?: string | null): Promise<void> {
+  await drainPendingContentSaves();
+  if (plateId) await bakeStalePlateContent(plateId);
 }
 
 /** A field value as the text an input shows — objects never leak as "[object Object]". */
@@ -422,7 +774,7 @@ async function uploadAsset(id: string, path: string, file: File): Promise<void> 
     const r = await api<{ asset: string; assets?: PlateAsset[] }>(platePath(id, 'asset'), { method: 'POST', body: { name: file.name, mime: file.type, data } });
     if (r.assets) assetsCache = r.assets;
     shelfFor = null;
-    await send(id, [{ op: 'set', path, value: r.asset }], `${file.name} on the plate`);
+    await sendAfterFlush(id, [{ op: 'set', path, value: r.asset }], `${file.name} on the plate`);
   } catch (err) {
     toast('Upload failed', errMessage(err), 'err');
   }
@@ -449,7 +801,7 @@ async function grabFrame(id: string, path: string, btn: HTMLElement): Promise<vo
     const r = await api<{ asset: string; t: number; assets?: PlateAsset[] }>(platePath(id, 'grab'), { method: 'POST', body: { t } });
     if (r.assets) assetsCache = r.assets;
     shelfFor = null;
-    await send(id, [{ op: 'set', path, value: r.asset }], `Frame at ${r.t.toFixed(1)}s on the plate`);
+    await sendAfterFlush(id, [{ op: 'set', path, value: r.asset }], `Frame at ${r.t.toFixed(1)}s on the plate`);
   } catch (err) {
     toast('Grab failed', errMessage(err), 'err');
   } finally {
@@ -476,7 +828,17 @@ export function openContentSlot(plateId: string, slot: string): void {
   const isList = Boolean(data?.schema && listOfSlot(data.schema, target));
   openSlot = isList ? target : openSlot;
   if (!isList && data?.schema?.fields.find((f) => f.key === target)?.kind === 'asset') shelfFor = target;
-  renderInspector();
+  if (contentFieldFocused()) {
+    patchContentRecordOpenState();
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(
+        isList ? `#inspectorRoot [data-cnt-slot="${CSS.escape(target)}"]` : `#inspectorRoot [data-cnt-asset-field="${CSS.escape(target)}"]`,
+      );
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return;
+  }
+  repaintContentInspector();
   requestAnimationFrame(() => {
     const el = document.querySelector<HTMLElement>(isList ? `#inspectorRoot [data-cnt-slot="${CSS.escape(target)}"]` : `#inspectorRoot [data-cnt-asset-field="${CSS.escape(target)}"]`);
     if (!el) return;
@@ -497,13 +859,15 @@ export function moveContentSlot(plateId: string, slot: string, at: { x: number; 
   const y = Math.round(at.y);
   setLocal(data, `${slot}.x`, x);
   setLocal(data, `${slot}.y`, y);
-  void send(
+  paintSlotPosition(slot, { x, y }, plateId);
+  void sendAfterFlush(
     plateId,
     [
       { op: 'set', path: `${slot}.x`, value: x },
       { op: 'set', path: `${slot}.y`, value: y },
     ],
     `Pin at ${x}%, ${y}%`,
+    { repaint: false, paintLive: true },
   );
 }
 
@@ -516,15 +880,40 @@ export function hoverContentSlot(plateId: string, slot: string | null): void {
   if (target) document.querySelector<HTMLElement>(`#inspectorRoot .pcnt-rec[data-cnt-slot="${CSS.escape(target)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-/** Text edit landed on a field: keep the matching record open. */
-export function syncContentToField(plateId: string, path: string | null): void {
+/**
+ * Stage selection → Content pane. Remount only when opening a *different* record; same-record
+ * edits patch the input. Echoes from the Content pane itself are ignored.
+ */
+export function syncContentToField(plateId: string, path: string | null, source: string | null = null): void {
   if (!path) return;
   const data = cache.get(plateId);
-  const target = data?.schema ? slotOfPath(data.schema, path) : null;
-  if (!target || !data?.schema || !listOfSlot(data.schema, target) || openSlot === target) return;
-  openSlot = target;
-  const root = document.querySelector('#inspectorRoot .pcnt-list');
-  if (root) renderInspector();
+  if (!data?.schema) return;
+  const contentPath = stageContentSyncPath(data.schema, path, data.type);
+  if (!contentPath) return;
+  const scalar = data.schema.fields.some((f) => f.key === contentPath);
+  const listSlot = scalar ? null : slotOfPath(data.schema, contentPath);
+  const targetSlot = scalar ? contentPath : listSlot;
+  if (!targetSlot) return;
+  if (contentFieldFocused()) {
+    if (listSlot) {
+      openSlot = listSlot;
+      patchContentRecordOpenState();
+    }
+    return;
+  }
+  const plan = planContentFieldSync({
+    origin: editOrigin() === 'pane' ? 'pane' : 'stage',
+    openSlot,
+    targetSlot,
+    path: contentPath,
+  });
+  if (plan.patchPath && source != null) {
+    setLocal(data, plan.patchPath, source);
+    patchContentField(plan.patchPath, source);
+  }
+  if (!plan.remount) return;
+  openSlot = targetSlot;
+  if (document.querySelector('#inspectorRoot .pcnt-list')) repaintContentInspector();
 }
 
 // ─── Wire ──────────────────────────────────────────────────────────────────────────────────
@@ -567,42 +956,43 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
   });
   on<HTMLInputElement | HTMLTextAreaElement>('[data-cnt-path][data-cnt-kind]', 'change', (el) => {
     const path = el.dataset['cntPath'] || '';
-    const t = pending.get(path);
+    const key = pendingKey(id, path);
+    const t = pending.get(key);
     if (!t) return;
-    clearTimeout(t);
-    pending.delete(path);
+    clearTimeout(t.timer);
+    pending.delete(key);
     const kind = el.dataset['cntKind'] || 'text';
-    void send(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
-      repaint: kind === 'lines',
-      paintLive: COPY_KINDS.has(kind),
+    void sendAfterFlush(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
+      repaint: false,
+      paintLive: isLiveContentSetKind(kind),
     });
   });
   on('[data-cnt-star]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
     const n = Number(el.dataset['cntStar']);
-    void send(id, [{ op: 'set', path, value: n }], n ? `${n} star${n > 1 ? 's' : ''}` : 'Stars off');
+    void sendAfterFlush(id, [{ op: 'set', path, value: n }], n ? `${n} star${n > 1 ? 's' : ''}` : 'Stars off');
   });
   on('[data-cnt-toggle]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
     const next = el.getAttribute('aria-checked') !== 'true';
     el.setAttribute('aria-checked', String(next));
     el.classList.toggle('on', next);
-    void send(id, [{ op: 'set', path, value: next }], null);
+    void sendAfterFlush(id, [{ op: 'set', path, value: next }], null);
   });
   on('[data-cnt-choice]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
-    void send(id, [{ op: 'set', path, value: el.dataset['cntChoice'] }], null);
+    void sendAfterFlush(id, [{ op: 'set', path, value: el.dataset['cntChoice'] }], null);
   });
   on('[data-cnt-icon-open]', 'click', (el) => {
     const path = el.dataset['cntIconOpen'] || '';
     iconFor = iconFor === path ? null : path;
     shelfFor = null;
-    renderInspector();
+    repaintContentInspector();
   });
   on('[data-cnt-icon]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
     iconFor = null;
-    void send(id, [{ op: 'set', path, value: el.dataset['cntIcon'] }], `Icon · ${el.dataset['cntIcon']}`);
+    void sendAfterFlush(id, [{ op: 'set', path, value: el.dataset['cntIcon'] }], `Icon · ${el.dataset['cntIcon']}`);
   });
   on('[data-cnt-shelf-open]', 'click', (el) => {
     const path = el.dataset['cntShelfOpen'] || '';
@@ -611,19 +1001,19 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     if (shelfFor && !assetsCache.length) {
       void api<{ assets: PlateAsset[] }>(`${base()}/plate-assets`).then((r) => {
         assetsCache = r.assets || [];
-        renderInspector();
+        repaintContentInspector();
       });
     }
-    renderInspector();
+    repaintContentInspector();
   });
   on('[data-cnt-pick]', 'click', (el) => {
     const path = el.dataset['cntPath'] || '';
     shelfFor = null;
-    void send(id, [{ op: 'set', path, value: el.dataset['cntPick'] }], 'Image swapped');
+    void sendAfterFlush(id, [{ op: 'set', path, value: el.dataset['cntPick'] }], 'Image swapped');
   });
   on('[data-cnt-clear]', 'click', (el) => {
     const path = el.dataset['cntClear'] || '';
-    void send(id, [{ op: 'set', path, value: '' }], 'Image removed');
+    void sendAfterFlush(id, [{ op: 'set', path, value: '' }], 'Image removed');
   });
   on<HTMLInputElement>('[data-cnt-upload]', 'change', (el) => {
     const file = el.files?.[0];
@@ -651,15 +1041,18 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     openSlot = openSlot === slot ? null : slot;
     shelfFor = null;
     iconFor = null;
-    renderInspector();
+    if (contentFieldFocused()) {
+      patchContentRecordOpenState();
+    } else {
+      repaintContentInspector();
+    }
     if (openSlot) requestAnimationFrame(() => document.querySelector<HTMLElement>(`#inspectorRoot [data-cnt-slot="${CSS.escape(slot)}"] input, #inspectorRoot [data-cnt-slot="${CSS.escape(slot)}"] textarea`)?.focus({ preventScroll: true }));
   });
   on('[data-cnt-add]', 'click', async (el) => {
     const list = el.dataset['cntAdd'] || '';
     const count = (data?.lists[list] || []).length;
-    await flush();
     openSlot = `${list}.${count}`;
-    const ok = await send(id, [{ op: 'add', list }], 'Added');
+    const ok = await sendAfterFlush(id, [{ op: 'add', list }], 'Added');
     if (ok) requestAnimationFrame(() => document.querySelector<HTMLElement>(`#inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] input, #inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] textarea`)?.focus({ preventScroll: true }));
   });
   on('[data-cnt-remove]', 'click', async (el) => {
@@ -667,24 +1060,21 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const index = Number(el.dataset['index']);
     const rec = el.closest<HTMLElement>('.pcnt-rec');
     rec?.classList.add('is-leaving');
-    await flush();
     if (openSlot === `${list}.${index}`) openSlot = null;
-    await send(id, [{ op: 'remove', list, index }], 'Removed');
+    await sendAfterFlush(id, [{ op: 'remove', list, index }], 'Removed');
   });
   on('[data-cnt-dup]', 'click', async (el) => {
     const list = el.dataset['cntDup'] || '';
     const index = Number(el.dataset['index']);
-    await flush();
     openSlot = `${list}.${index + 1}`;
-    await send(id, [{ op: 'duplicate', list, index }], 'Duplicated');
+    await sendAfterFlush(id, [{ op: 'duplicate', list, index }], 'Duplicated');
   });
   on('[data-cnt-move]', 'click', async (el) => {
     const list = el.dataset['cntMove'] || '';
     const from = Number(el.dataset['from']);
     const to = Number(el.dataset['to']);
-    await flush();
     if (openSlot === `${list}.${from}`) openSlot = `${list}.${to}`;
-    await send(id, [{ op: 'move', list, from, to }], null);
+    await sendAfterFlush(id, [{ op: 'move', list, from, to }], null);
   });
 
   // Drag to reorder (records within one list).
@@ -734,9 +1124,8 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const from = dragFrom.index;
     dragFrom = null;
     if (to === from) return;
-    await flush();
     if (openSlot === `${m[1]}.${from}`) openSlot = `${m[1]}.${to}`;
-    await send(id, [{ op: 'move', list: m[1], from, to }], null);
+    await sendAfterFlush(id, [{ op: 'move', list: m[1], from, to }], null);
   });
 
   // Hover a record → peek the tile on the stage.

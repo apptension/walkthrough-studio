@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url';
 import { suggestPlates } from './suggestPlates.mjs';
 import { PURPOSES, critiqueStory } from './narrative.mjs';
 import { beatsForCritic, critiqueSpokenFrames, formatSampleList } from './shared/frameCheck.js';
+import { narrationRepeats, scriptSpokenLines } from './narrationQc.mjs';
 
 const PERSONAS = [
   {
@@ -268,6 +269,21 @@ function critiqueTimeline(video) {
   return findings;
 }
 
+/** Lines that repeat each other, read in spoken order (narrationQc.mjs). */
+export function critiqueRepeats(scenes = []) {
+  return narrationRepeats(scriptSpokenLines(scenes))
+    .filter((f) => f.severity !== 'low')
+    .map((f) => ({
+      severity: f.severity,
+      persona: 'skeptic',
+      action: 'change',
+      target: `narration:${f.key}`,
+      issue: f.message,
+      suggestion: 'Keep the line where the idea first lands; rewrite the other to add the outcome, the reason or what comes next.',
+      apply: null,
+    }));
+}
+
 /** House copy style (sentence case, closing punctuation, typography) from the script's scene lint. */
 export function critiqueCopyStyle(scenes = []) {
   const findings = [];
@@ -416,6 +432,7 @@ export async function runCritic(video, { force = false, apply = false, applyPlat
     ...critiqueStructure(video, plateSuggest),
     ...critiqueTimeline(video),
     ...critiqueSpokenFrames(beats),
+    ...critiqueRepeats(scenes),
     ...critiqueCopyStyle(scenes),
   ];
 

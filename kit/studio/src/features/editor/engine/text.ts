@@ -8,6 +8,8 @@ import { select, showInspectorTab } from './edits';
 import { renderInspector, section } from './inspector';
 import { refreshPlatePreview } from './look';
 import { P } from './plateCtl';
+import { flushEditorContentPending } from './plateContentPane';
+import { contentFieldFocused, editOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { plateEditPeakSec } from './plateCss';
 import { curClip, recToEd } from './seq';
 import { ensureLiveCards, liveCardAtPlayhead, liveHitAtPlayhead, paintClipChip, plateReady, renderFrame, requestPlate, resolveLiveCard } from './stage';
@@ -57,6 +59,7 @@ export async function enterText(
   }
   if (ed.playing) pause();
   clearPlatePreviewTimers();
+  await flushEditorContentPending();
   const gen = ++ed.textGen;
   ed.liveCardId = String(plateId).startsWith('overlay:') ? plateId : card?.id || null;
   document.body.classList.add('is-live-card');
@@ -125,7 +128,7 @@ export async function enterText(
   }
   paintTextMode();
   paintClipChip();
-  if (ed.sel?.type === 'clip' || ed.sel?.type === 'card') renderInspector();
+  if (ed.sel?.type === 'clip' || ed.sel?.type === 'card') paintInspectorUnlessContentTyping(renderInspector);
 }
 
 /** Jump to a chapter/caption mark and open its editable template (even from a plate playhead). */
@@ -224,12 +227,12 @@ export function exitText(): void {
   }
   renderFrame();
   paintClipChip();
-  if (ed.sel?.type === 'clip') renderInspector();
+  if (ed.sel?.type === 'clip') paintInspectorUnlessContentTyping(renderInspector);
 }
 
 type AccentInput = FieldDetail | PlateFieldState | string | null | undefined;
 
-export function accentOf(detail: AccentInput): string | null {
+function accentOf(detail: AccentInput): string | null {
   if (detail == null) return null;
   if (typeof detail === 'object' && 'accent' in detail) return detail.accent ?? null;
   if (typeof detail === 'object') return detail as unknown as string;
@@ -237,7 +240,7 @@ export function accentOf(detail: AccentInput): string | null {
 }
 
 /** The stage Accent button mirrors the selection in the plate: off, on, or mixed. */
-export function paintAccentButton(detail: AccentInput): void {
+function paintAccentButton(detail: AccentInput): void {
   const accent = accentOf(detail);
   const btn = $('edTextBar')?.querySelector<HTMLButtonElement>('[data-text="accent"]');
   if (!btn) return;
@@ -254,15 +257,29 @@ export function paintAccentButton(detail: AccentInput): void {
 export function syncPlateField(detail: FieldDetail | null | undefined): void {
   const d = detail && typeof detail === 'object' ? detail : null;
   const prev = ed.plateField?.path || null;
-  ed.plateField = d?.path
-    ? { path: d.path, kind: d.kind || 'text', source: d.source ?? '', dirty: Boolean(d.dirty), accent: d.accent ?? null }
-    : null;
+  const ta = document.querySelector<HTMLTextAreaElement>('#inspectorRoot [data-field-src]');
+  const copyTyping = ta && document.activeElement === ta && d?.path === (ed.plateField?.path || prev);
+  if (d?.path) {
+    ed.plateField = {
+      path: d.path,
+      kind: d.kind || 'text',
+      source: copyTyping ? ta.value : (d.source ?? ''),
+      dirty: Boolean(d.dirty),
+      accent: d.accent ?? null,
+    };
+  } else {
+    ed.plateField = null;
+  }
   paintAccentButton(d);
   paintFieldChips();
+  // Inspector typing paints the stage; echoes must not remount or overwrite the caret line.
+  if (editOrigin() === 'pane' || contentFieldFocused()) {
+    if (ed.plateField && document.querySelector('#inspectorRoot [data-field-src]')) paintFieldPanelLive();
+    return;
+  }
   const copyHost = curClip()?.kind === 'plate' || Boolean(ed.liveCardId);
   if ((ed.plateField?.path || null) !== prev && ed.sel?.type === 'clip' && copyHost) {
-    const ta = document.querySelector('#inspectorRoot [data-field-src]');
-    if (document.activeElement !== ta) renderInspector();
+    if (document.activeElement !== ta) paintInspectorUnlessContentTyping(renderInspector);
     else paintFieldPanelLive();
   } else if (ed.plateField && document.querySelector('#inspectorRoot [data-field-src]')) {
     paintFieldPanelLive();
@@ -276,7 +293,7 @@ export function paintFieldChips(): void {
   });
 }
 
-export function paintFieldPanelLive(): void {
+function paintFieldPanelLive(): void {
   const f = ed.plateField;
   const pathEl = document.querySelector('#inspectorRoot [data-field-path]');
   const labelEl = document.querySelector('#inspectorRoot [data-field-label]');
@@ -374,9 +391,9 @@ export function renderPlateFields(plateId?: string | null): string {
   );
 }
 
-export const TB_HIDE_KEY = 'wts.edTextBar.coachHidden';
+const TB_HIDE_KEY = 'wts.edTextBar.coachHidden';
 
-export function coachHidden(): boolean {
+function coachHidden(): boolean {
   try {
     return sessionStorage.getItem(TB_HIDE_KEY) === '1';
   } catch {
@@ -393,7 +410,7 @@ export function setCoachHidden(on: boolean): void {
   }
 }
 
-export function cardKindAtPlayhead(): 'chapter' | 'caption' | null {
+function cardKindAtPlayhead(): 'chapter' | 'caption' | null {
   const hit = liveHitAtPlayhead();
   if (hit?.mark?.kind === 'chapter' || hit?.mark?.kind === 'caption') return hit.mark.kind;
   if (ed.sel?.type === 'card') {

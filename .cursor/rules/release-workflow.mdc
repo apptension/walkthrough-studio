@@ -1,0 +1,24 @@
+---
+description: Branch, PR, merge, and release when the user asks to ship
+alwaysApply: false
+---
+
+# Release workflow (on request only)
+
+Trigger: user says commit, push, PR, merge, tag, or release.
+
+## Checklist
+
+1. **Verify** desk if touched: `cd kit/studio && npm run verify`.
+2. **Kit tests** if `kit/lib` or scripts changed: `node --test kit/lib/*.test.mjs …`.
+3. **Smoke** `./studio` or `./studio --dev` on flows you changed (wizard, record bay, editor, deliver).
+4. Branch from `main`, focused commits, PR summary with **why** + test notes.
+5. **Release**: update `CHANGELOG.md` / version as repo convention dictates; tag with release notes; README if operator-facing behavior changed (e.g. studio-next, ports, commands).
+
+## User expectations from recent sessions
+
+- Often wants **merge to main** and **tagged release** in one flow—still run gates first.
+- README should stay **dev-friendly** (single command, install checks, clear ports 4747/4748).
+- Migration: existing `./studio` users must not break when restructuring frontend—document any path or command changes.
+
+Do **not** force-push `main` or skip hooks unless explicitly requested.

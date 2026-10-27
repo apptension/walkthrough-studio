@@ -176,9 +176,11 @@ export async function stopAllWork({ reason = 'Stopped', silent = false } = {}): 
     /* ignore — process may already be gone */
   }
   // Don't let the queue (or a quick re-click) claim this video's output locks until the
-  // kill actually landed — see `waitForJobsToSettle`.
+  // kill actually landed — see `waitForJobsToSettle`. Keep jobBusy asserted while we wait;
+  // drainQueue's finally must not clear it under us (see drainQueue).
+  desk.set({ jobBusy: true });
   await waitForJobsToSettle(settling);
-  desk.set({ jobBusy: false, activeSurface: null, pipelineStartedAt: null });
+  desk.set({ jobBusy: false, stopRequested: false, activeSurface: null, pipelineStartedAt: null });
   // A stopped run has nothing left to show; a failed one stays for Retry / Fix.
   if (!desk.get().pipelineFailure) {
     desk.set({ pipeline: null });
@@ -275,17 +277,19 @@ export async function drainQueue(): Promise<void> {
       setFaviconMode('err');
     }
   } finally {
-    desk.set({ jobBusy: false, running: null, activeSurface: null });
     setButtonBusy('btnExport', false);
     setButtonBusy('btnMake', false);
     setButtonBusy('btnImprove', false);
-    if (!desk.get().queue.length) setRenderMode(false);
     const v = desk.get().video;
     if (v) desk.set({ action: decideAction(v) });
     clearRunStatus();
     if (desk.get().stopRequested) {
-      desk.set({ stopRequested: false, queue: [] });
+      // stopAllWork owns settle + clearing busy/stopRequested. Clearing them here let a
+      // re-Render race the dying child (OutputBusyError / "already running").
+      desk.set({ running: null, activeSurface: null, queue: [] });
     } else {
+      desk.set({ jobBusy: false, running: null, activeSurface: null });
+      if (!desk.get().queue.length) setRenderMode(false);
       void drainQueue();
     }
   }

@@ -32,6 +32,8 @@ import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSele
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
 import { P } from './plateCtl';
+import { flushEditorContentPending } from './plateContentPane';
+import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
 import { wireSlideInspector } from './slideInspectorWire';
 import { renderFrame, requestPlate } from './stage';
@@ -284,10 +286,15 @@ export function wireInspector(): void {
   on('[data-field-src]', 'input', (el) => {
     const path = ed.plateField?.path;
     if (!path || !ed.plateField) return;
-    P.setField?.(path, el.value);
-    ed.plateField = { ...ed.plateField, source: el.value, dirty: true };
-    paintTextMode();
-    paintFieldChips();
+    beginEditOrigin('pane');
+    try {
+      P.setField?.(path, el.value);
+      ed.plateField = { ...ed.plateField, source: el.value, dirty: true };
+      paintTextMode();
+      paintFieldChips();
+    } finally {
+      queueMicrotask(() => endEditOrigin());
+    }
   });
   act('add-zoom', toolZoom);
   act('adopt', () => {
@@ -544,6 +551,7 @@ export function wireInspector(): void {
     const current = slug();
     if (!current) return;
     try {
+      await flushEditorContentPending();
       const r = await api<{ plates?: PlateRow[]; overlays?: Overlays; direction?: VideoSummary['direction'] }>(
         `/api/video/${encodeURIComponent(current)}/overlays`,
         { method: 'POST', body: patch },
@@ -568,7 +576,7 @@ export function wireInspector(): void {
       ed.compositeSeekMs = null;
       if (activeId) await requestPlate(activeId, { reason: 'show' });
       toast('Live card look', hint || r.overlays?.preset || 'saved');
-      renderInspector();
+      paintInspectorUnlessContentTyping(renderInspector);
     } catch (err) {
       toast('Live cards failed', errMessage(err), 'err');
     }
@@ -584,7 +592,7 @@ export function wireInspector(): void {
 
   on('[data-look-scope]', 'click', (el) => {
     ed.lookScope = el.dataset['lookScope'] === 'video' ? 'video' : 'chapter';
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   act('look-apply-all', () => {
     if (!cardKind || !lookChapterNo) return;
@@ -816,7 +824,7 @@ export function wireInspector(): void {
   // Narrator (in the Mix panel).
   on('[data-narrator]', 'change', (el) => {
     ed.narratorPick = el.value;
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   act('narrator-listen', () => {
     const n = ed.deck?.audio?.narrator;

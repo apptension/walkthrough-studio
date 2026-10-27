@@ -1,0 +1,37 @@
+---
+description: Story, plates, critic, and CLI agent authoring constraints
+globs: authoring.md,kit/lib/narrative.mjs,kit/lib/narrationQc.mjs,kit/lib/critic.mjs,kit/lib/agentRunner.mjs,kit/lib/script.mjs,kit/cli.mjs
+alwaysApply: false
+---
+
+# Authoring & agents
+
+## Source of truth
+
+- **`authoring.md`** — story spines (`purpose`), plate types, messaging rules, explore vs guided capture.
+- **`kit/lib/narrative.mjs`** — single spine definitions; critic enforces voice rules (no “Welcome to…”, outcome before mechanism, ban category adjectives).
+
+## Plates & motion
+
+- Vary interstitial plate types; never two same type back-to-back.
+- WebGL / atmosphere backgrounds: brand colors adjustable; template picker shows **still** preview frames.
+- Agents pick templates for motion/design quality — expand **`kit/templates/`** coherently.
+
+## Narration QC
+
+- Gate repeated lines across script, flow, agent output, critic, and voice (`narrationQc.mjs` and tests).
+- Holds and pacing must match timeline — editor and produce share frame cuts (`studio.mjs` comments on retime).
+
+## Brand packs
+
+- Authoring under **`kit/brands/<name>/`**: logo-source, logo.html, palette, tokens — from discover report + candidates.
+- Default shipped packs: **Apptension**, **Walkthrough Studio** — not customer brands (e.g. Admiral) as bundled defaults.
+
+## CLI / explore
+
+- Explore agent: `node cli.mjs browse <slug> look | click …` — journey drives `brief.json` mustShow paths.
+- Guided tour: mechanical replay must fail if a shown step cannot run — no silent skips.
+
+## GitHub issues from research
+
+- Competitive/feature tickets: **descriptive enough without naming competitors** when user asks for that constraint.

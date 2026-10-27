@@ -6,9 +6,10 @@ import { layoutWire } from '@/ui/look/previews';
 import { refresh } from './data';
 import { paintStatus, select } from './edits';
 import { renderInspector } from './inspector';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { reloadPlate } from './lifecycle';
 import { plateApi } from './look';
-import { dropPlateContent } from './plateContentPane';
+import { dropPlateContent, flushEditorContentPending } from './plateContentPane';
 import { ed, setHtmlPlates, slug } from './state';
 import { clearClipFresh, flashHint, markClipFresh, plateInfo } from './timeline';
 import { seek } from './transport';
@@ -95,6 +96,7 @@ function focusClip(id: string): void {
 
 export async function addPlate(type: string, after: string | null): Promise<boolean> {
   try {
+    await flushEditorContentPending();
     const r = await api<Deck & { id: string; warning?: string | null }>(`${base()}/plates/add`, { method: 'POST', body: { type, after } });
     warnElsewhere(r);
     await landPlates();
@@ -114,6 +116,7 @@ export async function addPlate(type: string, after: string | null): Promise<bool
 async function swapCall(plateId: string, body: Record<string, unknown>, hint: string): Promise<boolean> {
   markClipFresh(plateId, 'is-swapping');
   try {
+    await flushEditorContentPending();
     const r = await api<Omit<Deck, 'plates'> & { plates?: PlateRow[]; warning?: string | null }>(`${base()}/plates/${encodeURIComponent(plateId)}/swap`, { method: 'POST', body });
     warnElsewhere(r);
     if (r.plates) setHtmlPlates(r.plates, { video: false });
@@ -123,7 +126,7 @@ async function swapCall(plateId: string, body: Record<string, unknown>, hint: st
     paintStatus();
     await reloadPlate(plateId);
     markClipFresh(plateId, 'is-swapped', 1000);
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     flashHint(hint);
     return true;
   } catch (err) {
@@ -153,7 +156,7 @@ async function recompose(plateId: string, layout: string): Promise<boolean> {
   const info = plateInfo(plateId);
   if (info) info.swap = (r as { swap?: DeckPlate['swap'] }).swap ?? null;
   markClipFresh(plateId, 'is-swapped', 1000);
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
   flashHint(`${plateId === 'open' ? 'Opening' : 'Close'} · ${layoutsOf(plateId).find((l) => l.id === layout)?.label || layout}`);
   return true;
 }

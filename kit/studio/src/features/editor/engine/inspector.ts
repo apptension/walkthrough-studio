@@ -12,6 +12,7 @@ import { aimSpace, deckLens, selectedShot } from './aim';
 import { canDuplicate } from './duplicate';
 import { sectionForClip } from './layoutPreview';
 import { wireInspector } from './inspectorWire';
+import { contentFieldFocused, shouldHoldInspectorForContentFocus } from './plateContentSave';
 import { selectedLens } from './seq';
 import { joinStyle, liveCardAtPlayhead, marksInLiveClip, plateReady, resolveLiveCard } from './stage';
 import { audioDesk, deckEdit, ed, htmlPlates, slug } from './state';
@@ -267,7 +268,7 @@ function inspectorPaintKey(): string {
   if (!ed.deck) return '';
   const s = ed.sel;
   if (!s) return 'none';
-  return [s.type, s.id ?? '', s.i ?? ''].join(':');
+  return [s.type, s.id ?? '', s.i ?? '', ed.insTab].join(':');
 }
 
 export function renderInspector(): void {
@@ -275,12 +276,23 @@ export function renderInspector(): void {
   if (!root) return;
   const panel = root.closest<HTMLElement>('#rightInspector');
   const key = inspectorPaintKey();
+  // Same selection + Content caret: keep the DOM so typing does not jump. New selection remounts
+  // (clears stuck focus that otherwise deferred bake forever and left the wrong clip on screen).
+  if (
+    shouldHoldInspectorForContentFocus({
+      focused: contentFieldFocused(),
+      prevKey: root.dataset['paint'] || '',
+      nextKey: key,
+    })
+  ) {
+    return;
+  }
   const quiet = inspectorStaysPut(root.dataset['paint'] || '', key, root.childElementCount > 0);
   const scroll = quiet ? panel?.scrollTop ?? 0 : 0;
   const open = quiet
     ? new Set([...root.querySelectorAll('details[open] summary')].map((s) => s.textContent?.trim() || ''))
     : null;
-  const focus = quiet ? focusedTile(root) : '';
+  const focus = quiet ? focusedField(root) : null;
   if (!ed.deck) {
     root.innerHTML = `<p class="panel-lede">Loading the cut…</p>`;
     return;
@@ -313,7 +325,7 @@ export function renderInspector(): void {
         if ((d.querySelector('summary')?.textContent?.trim() || '') === label) d.open = true;
       });
     });
-    if (focus) root.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true });
+    restoreFocusedField(root, focus);
   }
   // Every inspector range is the same meter the stage panels drag.
   paintRanges(root);
@@ -321,14 +333,46 @@ export function renderInspector(): void {
   wireInsHelp(root);
 }
 
-function focusedTile(root: HTMLElement): string {
+type FocusedField = {
+  sel: string;
+  value?: string;
+  start?: number | null;
+  end?: number | null;
+};
+
+/** Capture look tiles and Content inputs so a quiet remount can put the caret back. */
+function focusedField(root: HTMLElement): FocusedField | null {
   const el = document.activeElement;
-  if (!(el instanceof HTMLElement) || !root.contains(el)) return '';
+  if (!(el instanceof HTMLElement) || !root.contains(el)) return null;
   const tile = el.closest<HTMLElement>('[data-look-key]');
   if (tile?.dataset['lookKey'] != null) {
-    return `[data-look-key="${CSS.escape(tile.dataset['lookKey'])}"][data-look="${CSS.escape(tile.dataset['look'] || '')}"]`;
+    return {
+      sel: `[data-look-key="${CSS.escape(tile.dataset['lookKey'])}"][data-look="${CSS.escape(tile.dataset['look'] || '')}"]`,
+    };
   }
-  return el.id ? `#${CSS.escape(el.id)}` : '';
+  if (!el.id) return null;
+  const sel = `#${CSS.escape(el.id)}`;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    return { sel, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+  }
+  return { sel };
+}
+
+function restoreFocusedField(root: HTMLElement, focus: FocusedField | null): void {
+  if (!focus?.sel) return;
+  const next = root.querySelector<HTMLElement>(focus.sel);
+  if (!next) return;
+  if ((next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement) && focus.value != null) {
+    next.value = focus.value;
+    next.focus({ preventScroll: true });
+    try {
+      if (focus.start != null && focus.end != null) next.setSelectionRange(focus.start, focus.end);
+    } catch {
+      /* some input types reject selection */
+    }
+    return;
+  }
+  next.focus({ preventScroll: true });
 }
 
 /** Bind string-HTML `.help-tip[data-ins-help]` buttons to the shared HelpPop. */

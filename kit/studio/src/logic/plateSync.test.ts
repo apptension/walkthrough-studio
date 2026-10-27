@@ -7,9 +7,11 @@ import {
   joinFrameOwner,
   liveRecDiscontinuous,
   plateClipFor,
+  plateStageReady,
   playheadOnPlate,
   previewClockMs,
   restorePlayheadAnchor,
+  shouldBakeBeforePlateLoad,
   shouldBlacklistPlateLoad,
   shouldParkPlayheadAtClipStart,
   soloJoinFocus,
@@ -39,6 +41,26 @@ describe('playheadOnPlate', () => {
     assert.equal(playheadOnPlate(seq[0], 'open'), true);
     assert.equal(playheadOnPlate(seq[1], 'open'), false);
     assert.equal(playheadOnPlate(seq[2], 'open'), false);
+  });
+});
+
+describe('plateStageReady', () => {
+  it('keeps a held frame ready while Content live paint marked the plate stale', () => {
+    // Regression: stale + !dirty used to mean "not ready" → requestPlate force-reloaded
+    // old HTML every drawPlate frame and wiped the typed words.
+    assert.equal(plateStageReady({ holds: true }), true);
+  });
+
+  it('is not ready when the iframe no longer holds the plate', () => {
+    assert.equal(plateStageReady({ holds: false }), false);
+    assert.equal(plateStageReady({ holds: false }), false);
+  });
+});
+
+describe('shouldBakeBeforePlateLoad', () => {
+  it('bakes when disk HTML is stale so a force load does not show pre-type copy', () => {
+    assert.equal(shouldBakeBeforePlateLoad({ stale: true }), true);
+    assert.equal(shouldBakeBeforePlateLoad({ stale: false }), false);
   });
 });
 

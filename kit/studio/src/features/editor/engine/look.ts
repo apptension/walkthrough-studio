@@ -6,8 +6,10 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, sho
 
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
+import { flushEditorContentPending } from './plateContentPane';
 import { reloadPlate } from './lifecycle';
-import { retargetTitleReveal } from './plate';
+import { dropPreloadedPlates, retargetTitleReveal } from './plate';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { P } from './plateCtl';
 import { curClip } from './seq';
 import { plateReady, renderFrame } from './stage';
@@ -94,6 +96,7 @@ async function flushStyle(id: string): Promise<void> {
   const style = Object.fromEntries(ed.pendingStyle);
   ed.pendingStyle.clear();
   try {
+    await flushEditorContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};
@@ -128,6 +131,7 @@ export function markStyleRows(id: string): void {
 
 export async function resetVar(id: string, name: string): Promise<void> {
   try {
+    await flushEditorContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style: { [name]: null } } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};
@@ -155,6 +159,7 @@ export async function plateApi(
   { reload = true }: { reload?: boolean } = {},
 ): Promise<PlateApiResponse | null> {
   try {
+    await flushEditorContentPending();
     const r = await api<PlateApiResponse>(platePath(id, path), { method: 'POST', body });
     const info = plateInfo(id);
     if (info) {
@@ -422,6 +427,7 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
     })
   ) {
     // The reload parks the new frame before it is shown. A second restart would flash it.
+    dropPreloadedPlates(id);
     await reloadPlate(id, { paint: false });
   }
   // Off stage, or the HTML itself changed while the playhead sits elsewhere: the next visit shows the rebuilt plate.
@@ -430,7 +436,9 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
     markPlateResync(id);
   }
   if (gen !== lookGen) return;
-  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id) {
+    paintInspectorUnlessContentTyping(renderInspector);
+  }
 }
 
 /** Every plate's HTML changed (Direction, palette, Apply motion) — drop the ready cache and reload the one on stage. */
@@ -439,7 +447,10 @@ export function invalidatePlates(): Promise<void> | null {
   lookGen += 1;
   clearPlatePreviewTimers();
   const id = desk.get().activePlateId || curClip()?.plateId;
-  if (ed.active && id) return reloadPlate(id);
+  // Same as changeLook — drop the back buffer so a scrub-back cannot revive pre-look HTML.
+  if (id) dropPreloadedPlates(id);
+  else dropPreloadedPlates();
+  if (ed.active && id) return flushEditorContentPending().then(() => reloadPlate(id));
   return null;
 }
 

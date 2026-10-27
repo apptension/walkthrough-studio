@@ -29,7 +29,10 @@ describe('copyEdit', () => {
   test('html uses accent spans or <b>, one <div> per line, and wraps beat separators', () => {
     const chars = parseSource('A *b* <c>\n\nD · E');
     assert.equal(toHtml(chars), 'A <span class="accent">b</span> &lt;c&gt;  D · E');
-    assert.equal(toHtml(chars, { tag: 'b', lines: true, sep: true }), '<div>A <b>b</b> &lt;c&gt;</div><div><br></div><div>D <span class="sep">·</span> E</div>');
+    assert.equal(
+      toHtml(chars, { tag: 'b', lines: true, sep: true }),
+      '<div class="title-line">A <b>b</b> &lt;c&gt;</div><div class="title-line"><br></div><div class="title-line">D <span class="sep">·</span> E</div>',
+    );
   });
 
   test('a caret reads and toggles its word', () => {
@@ -48,6 +51,13 @@ describe('copyEdit', () => {
     assert.equal(fieldSource(chars), 'One two three');
     assert.equal(fieldSource(chars, { kind: 'lines' }), 'One two\nthree');
     assert.equal(fieldSource(parseSource('Plan·Ship  ·Win'), { beats: true }), 'Plan · Ship · Win');
+  });
+
+  test('colons and URL-like copy round-trip in field source', () => {
+    for (const s of ['Time: 12:30', 'https://x.com:8080/p', 'Step 1: Go', 'Plan · Ship: fast']) {
+      assert.equal(fieldSource(parseSource(s)), s.replace(/\s+/g, ' ').trim());
+      assert.equal(toSource(parseSource(s)), s);
+    }
   });
 
   test('contenteditable → chars keeps accents, lines and the selection marks', () => {
