@@ -8,6 +8,7 @@ import { select, showInspectorTab } from './edits';
 import { renderInspector, section } from './inspector';
 import { refreshPlatePreview } from './look';
 import { P } from './plateCtl';
+import { flushAllContentPending } from './plateContentPane';
 import { contentFieldFocused, editOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { plateEditPeakSec } from './plateCss';
 import { curClip, recToEd } from './seq';
@@ -58,6 +59,7 @@ export async function enterText(
   }
   if (ed.playing) pause();
   clearPlatePreviewTimers();
+  await flushAllContentPending();
   const gen = ++ed.textGen;
   ed.liveCardId = String(plateId).startsWith('overlay:') ? plateId : card?.id || null;
   document.body.classList.add('is-live-card');

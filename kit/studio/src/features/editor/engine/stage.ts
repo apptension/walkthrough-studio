@@ -204,6 +204,7 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   ed.loadingPlate = id;
   paintLoading();
   try {
+    await flushAllContentPending();
     if (P.dirty() && desk.get().activePlateId && desk.get().activePlateId !== id) await P.save();
     if (gen !== ed.plateReqGen) return;
     // Stale = config ahead of baked HTML (Content live typing). Bake before load so a force

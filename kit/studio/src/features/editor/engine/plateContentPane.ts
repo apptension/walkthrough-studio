@@ -617,7 +617,7 @@ let contentSerial = Promise.resolve();
 export function afterContentSaved(task: () => void | Promise<void>): void {
   contentSerial = contentSerial
     .then(async () => {
-      await flushAllContentPending();
+      await drainPendingContentSaves();
       await task();
     })
     .catch(() => {
@@ -665,13 +665,23 @@ export function contentSaveIdle(): Promise<void> {
   return contentSerial;
 }
 
-/** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
-export async function flushAllContentPending(): Promise<void> {
+async function drainPendingContentSaves(): Promise<void> {
   for (let i = 0; i < 6; i++) {
     kickContentPending();
     await contentSerial;
     if (!hasContentPending()) return;
   }
+}
+
+/** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
+export async function flushAllContentPending(): Promise<void> {
+  await drainPendingContentSaves();
+}
+
+/** Flush live copy and bake HTML when leaving a plate or the editor. */
+export async function settlePlateContent(plateId?: string | null): Promise<void> {
+  await drainPendingContentSaves();
+  if (plateId) await bakeStalePlateContent(plateId);
 }
 
 /** A field value as the text an input shows — objects never leak as "[object Object]". */
