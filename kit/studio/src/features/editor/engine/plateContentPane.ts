@@ -13,6 +13,10 @@ import {
   contentFieldFocused,
   editOrigin,
   endEditOrigin,
+  clearContentInspectorRepaintQueue,
+  flushQueuedInspectorRepaint,
+  paintInspectorUnlessContentTyping,
+  queueContentInspectorRepaint,
   planBakeStaleContent,
   planContentFieldSync,
   planContentSave,
@@ -115,9 +119,6 @@ const platePath = (id: string, tail: string) => `${base()}/plates/${encodeURICom
 const bakeRetry = new Map<string, ReturnType<typeof setTimeout>>();
 const bakeAttempts = new Map<string, number>();
 const bakeInflight = new Map<string, Promise<void>>();
-/** Content fetch or shelf/icon chrome updated while a field still has focus. */
-let contentRepaintQueued = false;
-
 /** Toggle open records without remounting the inspector (caret-safe). */
 function patchContentRecordOpenState(): void {
   document.querySelectorAll<HTMLElement>('#inspectorRoot .pcnt-rec').forEach((el) => {
@@ -145,9 +146,7 @@ function patchContentAuxChrome(): void {
 }
 
 function flushQueuedContentRepaint(): void {
-  if (!contentRepaintQueued || contentFieldFocused()) return;
-  contentRepaintQueued = false;
-  renderInspector();
+  flushQueuedInspectorRepaint(renderInspector);
 }
 
 /** Remount when safe; while typing, patch chrome or queue for after blur. */
@@ -157,11 +156,10 @@ function repaintContentInspector(): void {
     const needsFull =
       (iconFor && !document.querySelector('#inspectorRoot .pcnt-icon-grid')) ||
       (shelfFor && !document.querySelector('#inspectorRoot [data-cnt-shelf]'));
-    if (needsFull) contentRepaintQueued = true;
+    if (needsFull) queueContentInspectorRepaint();
     return;
   }
-  contentRepaintQueued = false;
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
 }
 
 /**
@@ -255,8 +253,7 @@ function loadPlateContent(plateId: string, { force = false } = {}): void {
       cache.set(plateId, r);
       if (r.assets) assetsCache = r.assets;
       if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) {
-        if (contentFieldFocused()) contentRepaintQueued = true;
-        else renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
       }
     })
     .catch((err) => toast('Content not loaded', errMessage(err), 'err'))
@@ -282,7 +279,7 @@ export function resetPlateContentPane(): void {
   iconFor = null;
   hoverSlot = null;
   saveGen += 1;
-  contentRepaintQueued = false;
+  clearContentInspectorRepaintQueue();
 }
 
 // ─── Paths ─────────────────────────────────────────────────────────────────────────────────
@@ -484,6 +481,9 @@ export function renderPlateContent(c: Clip): string {
 
 /** Field kinds whose saved value the live plate can paint itself, no document reload needed. */
 const COPY_KINDS = new Set(['text', 'long', 'lines']);
+/** Config-only updates — server `live` write, no HTML rebuild (sliders would flash the iframe). */
+const LIVE_SET_KINDS = new Set([...COPY_KINDS, 'number']);
+const isLiveSetKind = (kind: string) => LIVE_SET_KINDS.has(kind);
 
 function paintCopyOps(id: string, ops: ContentOp[]): boolean {
   return ops.every(
@@ -570,7 +570,7 @@ function setSoon(id: string, path: string, value: unknown, kind: string): void {
     timer: setTimeout(() => {
       pending.delete(key);
       // Never remount for copy — even `lines`. The textarea already shows what was typed.
-      void send(id, [{ op: 'set', path, value }], null, { repaint: false, paintLive: COPY_KINDS.has(kind) });
+      void send(id, [{ op: 'set', path, value }], null, { repaint: false, paintLive: isLiveSetKind(kind) });
     }, 420),
   });
 }
@@ -625,7 +625,7 @@ async function flushPlate(id?: string | null): Promise<void> {
     ops.map((p) =>
       send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
         repaint: false,
-        paintLive: COPY_KINDS.has(p.kind),
+        paintLive: isLiveSetKind(p.kind),
       }),
     ),
   );
@@ -846,9 +846,9 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     clearTimeout(t.timer);
     pending.delete(key);
     const kind = el.dataset['cntKind'] || 'text';
-    void send(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
+    void sendAfterFlush(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
       repaint: false,
-      paintLive: COPY_KINDS.has(kind),
+      paintLive: isLiveSetKind(kind),
     });
   });
   on('[data-cnt-star]', 'click', (el) => {

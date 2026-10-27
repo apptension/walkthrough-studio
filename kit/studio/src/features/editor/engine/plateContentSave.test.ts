@@ -8,6 +8,8 @@ import {
   planBakeStaleContent,
   planContentFieldSync,
   planContentSave,
+  flushQueuedInspectorRepaint,
+  paintInspectorUnlessContentTyping,
   shouldHoldInspectorForContentFocus,
 } from './plateContentSave';
 
@@ -93,6 +95,23 @@ describe('planBakeStaleContent', () => {
   it('bakes after enough deferrals so a stuck caret cannot strand stale HTML', () => {
     expect(planBakeStaleContent({ focused: true, attempts: 14 })).toBe('defer');
     expect(planBakeStaleContent({ focused: true, attempts: 15 })).toBe('bake');
+  });
+});
+
+describe('paintInspectorUnlessContentTyping', () => {
+  it('queues a repaint while a Content field is focused', () => {
+    document.body.innerHTML = `<div id="inspectorRoot"><input data-cnt-path="a" /></div>`;
+    document.querySelector('input')!.focus();
+    let painted = 0;
+    paintInspectorUnlessContentTyping(() => {
+      painted += 1;
+    });
+    expect(painted).toBe(0);
+    document.body.querySelector('input')!.blur();
+    flushQueuedInspectorRepaint(() => {
+      painted += 1;
+    });
+    expect(painted).toBe(1);
   });
 });
 

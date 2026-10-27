@@ -21,6 +21,7 @@ type ContentSavePlan = {
 };
 
 let origin: EditOrigin | null = null;
+let inspectorRepaintQueued = false;
 
 /** Mark where an edit started so the other side does not echo it back as a remount. */
 export function beginEditOrigin(next: EditOrigin): void {
@@ -113,6 +114,31 @@ export function planBakeStaleContent({
  * A new clip/card selection must remount — otherwise the caret stays on the old plate,
  * bake stays deferred forever, and the right rail shows the wrong clip.
  */
+/** Deck refresh / colour picks landed while Content still has focus — remount after blur. */
+export function queueContentInspectorRepaint(): void {
+  inspectorRepaintQueued = true;
+}
+
+export function clearContentInspectorRepaintQueue(): void {
+  inspectorRepaintQueued = false;
+}
+
+export function flushQueuedInspectorRepaint(render: () => void): void {
+  if (!inspectorRepaintQueued || contentFieldFocused()) return;
+  inspectorRepaintQueued = false;
+  render();
+}
+
+/** Run `render` now, or queue it if a Content / copy / layout field owns the caret. */
+export function paintInspectorUnlessContentTyping(render: () => void): void {
+  if (contentFieldFocused()) {
+    inspectorRepaintQueued = true;
+    return;
+  }
+  inspectorRepaintQueued = false;
+  render();
+}
+
 export function shouldHoldInspectorForContentFocus({
   focused,
   prevKey,

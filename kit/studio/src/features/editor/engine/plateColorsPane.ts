@@ -5,6 +5,7 @@ import { paintAtmosphereStill, type ThumbPalette } from '@/ui/look/atmosphereThu
 import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
 import { applyVar, lookValue, plateDoc, refreshPlatePreview } from './look';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import {
   contrast,
   contrastLabel,
@@ -235,7 +236,7 @@ async function save(id: string, body: Record<string, unknown>, hint: string): Pr
     flashHint(hint);
   } catch (err) {
     toast('Colours not saved', errMessage(err), 'err');
-    if (gen === saveGen) renderInspector();
+    if (gen === saveGen) paintInspectorUnlessContentTyping(renderInspector);
   }
 }
 
@@ -250,7 +251,7 @@ function commit(c: Clip, next: { patch?: Record<string, string | null>; preset?:
     info['colors'] = next.reset ? {} : next.preset ? presetPlateColors(next.preset.colors) : patchPlateColors(ownColors(info), next.patch || {});
   }
   paintFrame(id, preview(info));
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
   const body = next.reset ? { reset: true } : next.preset ? { preset: next.preset.id } : { colors: next.patch || {} };
   void save(id, body, hint);
 }
@@ -284,7 +285,7 @@ export function wirePlateColors(root: HTMLElement, c: Clip): void {
   box.querySelectorAll<HTMLElement>('[data-pc-scope]').forEach((el) =>
     el.addEventListener('click', () => {
       scope = el.dataset['pcScope'] === 'video' ? 'video' : 'plate';
-      renderInspector();
+      paintInspectorUnlessContentTyping(renderInspector);
     }),
   );
 

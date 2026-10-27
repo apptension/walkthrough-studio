@@ -4,7 +4,7 @@ import { toast } from '@/desk/toast';
 import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
-import { contentFieldFocused } from './plateContentSave';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
@@ -124,7 +124,7 @@ async function fetchDeck(): Promise<Deck | null> {
         syncLiveSource();
         paintFrame();
         renderFrame();
-        if (!contentFieldFocused()) renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
         paintStatus();
         paintTransport();
       }
@@ -151,7 +151,7 @@ async function fetchDeck(): Promise<Deck | null> {
   validateSelection();
   renderTimeline();
   renderFrame();
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
   refreshPacePop();
   paintStatus();
   paintTransport();
@@ -230,7 +230,7 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
       renderFrame();
     }
     paintHead();
-    if (!contentFieldFocused()) renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     refreshPacePop();
     paintStatus();
     if (hint) flashHint(hint);
