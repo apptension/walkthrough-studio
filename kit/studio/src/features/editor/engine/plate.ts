@@ -1618,8 +1618,8 @@ export function collectPlateEdits(): Record<string, string> {
 
 async function flushEditorContent(): Promise<void> {
   if (!ed.active) return;
-  const { flushAllContentPending } = await import('./plateContentPane');
-  await flushAllContentPending();
+  const { flushEditorContentPending } = await import('./plateContentPane');
+  await flushEditorContentPending();
 }
 
 export async function savePlateCopyEdits(): Promise<void> {

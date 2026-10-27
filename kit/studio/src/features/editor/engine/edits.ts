@@ -17,7 +17,7 @@ import {
   hasContentPending,
   settlePlateContent,
 } from './plateContentPane';
-import { beforeSelectionCommit, plateContentSettleTarget } from './plateContentSave';
+import { beforeSelectionCommit, plateContentContextClip, plateContentSettleTarget } from './plateContentSave';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -364,7 +364,7 @@ export function setSelection(sel: Selection | null): void {
 }
 
 export function select(sel: Selection | null): void {
-  const prev = curClip();
+  const prev = plateContentContextClip(ed.sel, ed.seq, curClip());
   const nextPlateId =
     sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id)?.plateId ?? null : null;
   const settleTarget = plateContentSettleTarget(prev?.kind, prev?.plateId ?? null, nextPlateId);

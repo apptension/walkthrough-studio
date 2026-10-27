@@ -11,6 +11,7 @@ import {
   planContentSave,
   flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
+  plateContentContextClip,
   plateContentSettleTarget,
   shouldHoldInspectorForContentFocus,
   isContentSaveResponseValid,
@@ -177,6 +178,23 @@ describe('isContentSaveResponseValid', () => {
     expect(isContentSaveResponseValid('demo', 2, 'other', 2)).toBe(false);
     expect(isContentSaveResponseValid('demo', 2, 'demo', 3)).toBe(false);
     expect(isContentSaveResponseValid('demo', 2, 'other', 3)).toBe(false);
+  });
+});
+
+describe('plateContentContextClip', () => {
+  const open = { id: 'open', kind: 'plate', plateId: 'open' };
+  const live = { id: 'live-0', kind: 'live', plateId: null };
+  const features = { id: 'features', kind: 'plate', plateId: 'features' };
+  const seq = [open, live, features];
+
+  it('uses the selected clip when the playhead sits on another section', () => {
+    expect(plateContentContextClip({ type: 'clip', id: 'features' }, seq, open)).toEqual(features);
+    expect(plateContentContextClip({ type: 'clip', id: 'features' }, seq, live)).toEqual(features);
+  });
+
+  it('falls back to the playhead clip when nothing is selected', () => {
+    expect(plateContentContextClip(null, seq, live)).toEqual(live);
+    expect(plateContentContextClip({ type: 'mix' }, seq, open)).toEqual(open);
   });
 });
 

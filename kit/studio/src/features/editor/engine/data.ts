@@ -4,8 +4,8 @@ import { toast } from '@/desk/toast';
 import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
-import { contentSaveIdle, flushAllContentPending } from './plateContentPane';
-import { paintInspectorUnlessContentTyping } from './plateContentSave';
+import { flushEditorContentPending, contentSaveProjectEpoch } from './plateContentPane';
+import { isContentSaveResponseValid, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
@@ -183,8 +183,9 @@ export const snapshotDeck = (): DeckEdit => {
 };
 
 export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown>, { undoable = true, hint }: { undoable?: boolean; hint?: string | undefined } = {}): Promise<Deck | null> {
-  await flushAllContentPending();
-  await contentSaveIdle();
+  await flushEditorContentPending();
+  const wantSlug = slug() || '';
+  const wantEpoch = contentSaveProjectEpoch();
   const before = snapshotDeck();
   try {
     const r = await api<Deck>(`/api/video/${encodeURIComponent(slug() || '')}/edit`, { method: 'POST', body: patch });
@@ -208,7 +209,12 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
       // stage paints, or Edit copy looks up a card the editor has never heard of.
       try {
         const listed = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates`);
-        if (listed?.plates?.length) setHtmlPlates(listed.plates);
+        if (
+          isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch()) &&
+          listed?.plates?.length
+        ) {
+          setHtmlPlates(listed.plates);
+        }
       } catch {
         /* Edit copy fetches again if the new card is still missing */
       }

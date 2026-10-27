@@ -698,6 +698,12 @@ export async function flushAllContentPending(): Promise<void> {
   await drainPendingContentSaves();
 }
 
+/** Flush debounced fields and await in-flight Content POSTs (deck save, enter text, etc.). */
+export async function flushEditorContentPending(): Promise<void> {
+  await flushAllContentPending();
+  await contentSaveIdle();
+}
+
 /** Flush live copy and bake HTML when leaving a plate or the editor. */
 export async function settlePlateContent(plateId?: string | null): Promise<void> {
   await drainPendingContentSaves();

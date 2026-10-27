@@ -6,7 +6,7 @@ import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
 import { afterContentSaved, flushAllContentPending, hasContentPending, kickContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
-import { paintInspectorUnlessContentTyping } from './plateContentSave';
+import { paintInspectorUnlessContentTyping, plateContentContextClip } from './plateContentSave';
 import { setScale } from './lifecycle';
 import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
 import { ensureLiveCards, requestPlate } from './stage';
@@ -97,7 +97,7 @@ export function wireTimeline(signal: AbortSignal): void {
         const markT = Number(cardHit.dataset['markT']);
         const markDur = Number(cardHit.dataset['markDur']);
         const clip = cardOwnerAt(markT) || liveClipAtEd(t) || curClip();
-        const prev = curClip();
+        const prev = plateContentContextClip(ed.sel, ed.seq, curClip());
         const cardSel = {
           type: 'card' as const,
           ...(key != null ? { key } : {}),
@@ -432,7 +432,7 @@ export async function dropClip(g: Drag): Promise<void> {
   const id = ed.seq[g.from ?? -1]?.id;
   if (g.at !== g.from && id) {
     await flushAllContentPending();
-    await leavePlateContentIfNeeded(curClip(), { type: 'clip', id });
+    await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
     ed.flipFrom = clipRects();
     setSelection({ type: 'clip', id });
     const r = await commitOrder(g.ids || [], 'Sequence reordered');
@@ -565,7 +565,7 @@ export async function moveClip(id: string, dir: number): Promise<void> {
   const [item] = ids.splice(i, 1);
   if (item != null) ids.splice(j, 0, item);
   await flushAllContentPending();
-  await leavePlateContentIfNeeded(curClip(), { type: 'clip', id });
+  await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
   ed.flipFrom = clipRects();
   setSelection({ type: 'clip', id });
   const r = await commitOrder(ids, dir < 0 ? 'Moved earlier' : 'Moved later');

@@ -6,6 +6,7 @@ import {
   hasContentPending,
   kickContentPending,
   resetPlateContentPane,
+  flushEditorContentPending,
 } from './plateContentPane';
 
 describe('content save queue (idle)', () => {
@@ -23,6 +24,11 @@ describe('content save queue (idle)', () => {
     resetPlateContentPane();
     kickContentPending();
     expect(hasContentPending()).toBe(false);
+  });
+
+  it('flushEditorContentPending resolves on an empty queue', async () => {
+    resetPlateContentPane();
+    await flushEditorContentPending();
   });
 
   it('resetPlateContentPane bumps project epoch for stale POST guards', () => {

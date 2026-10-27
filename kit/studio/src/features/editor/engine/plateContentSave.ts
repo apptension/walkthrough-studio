@@ -152,6 +152,16 @@ export function plateContentSettleTarget(
   return prevPlateId !== nextClipPlateId ? prevPlateId : null;
 }
 
+/** Content pane follows the selected clip, not necessarily the playhead clip. */
+export function plateContentContextClip<T extends { id: string }>(
+  sel: { type: string; id?: string } | null | undefined,
+  seq: T[],
+  playheadClip: T | null,
+): T | null {
+  if (sel?.type === 'clip' && sel.id) return seq.find((c) => c.id === sel.id) ?? playheadClip;
+  return playheadClip;
+}
+
 /** Drop in-flight Content responses after a sequence switch or project reset. */
 export function isContentSaveResponseValid(
   wantSlug: string,
@@ -162,7 +172,6 @@ export function isContentSaveResponseValid(
   return wantSlug === slugNow && wantEpoch === epochNow;
 }
 
-/** Drain debounced copy and bake the plate we are leaving before remounting the inspector. */
 /** Whether leaving the Editor should seek Program after Content settle (not during plate preview). */
 export function maySeekProgramAfterEditorLeave(
   programT: number | null,

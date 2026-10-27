@@ -15,8 +15,7 @@ import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import {
-  contentSaveIdle,
-  flushAllContentPending,
+  flushEditorContentPending,
   hoverContentSlot,
   kickContentPending,
   moveContentSlot,
@@ -32,6 +31,7 @@ import {
   flushQueuedInspectorRepaint,
   maySeekProgramAfterEditorLeave,
   paintInspectorUnlessContentTyping,
+  plateContentContextClip,
 } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
@@ -184,7 +184,8 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
 
 export function onLeave(): void {
   if (!ed.active) return;
-  const leavingPlate = curClip()?.kind === 'plate' ? curClip()?.plateId : null;
+  const ctx = plateContentContextClip(ed.sel, ed.seq, curClip());
+  const leavingPlate = ctx?.kind === 'plate' ? ctx.plateId : null;
   const programT = ed.seq.length ? toProgram(ed.t) : null;
   const seekProgram = maySeekProgramAfterEditorLeave(
     programT,
@@ -650,10 +651,7 @@ export const editorApi = {
     resetForProject();
     resetPlateContentPane();
   },
-  flushPendingContent: async (): Promise<void> => {
-    await flushAllContentPending();
-    await contentSaveIdle();
-  },
+  flushPendingContent: (): Promise<void> => flushEditorContentPending(),
   onEnter: (opts: { programT?: number | null } = {}): void => void onEnter(opts),
   onLeave,
   openPlate,
