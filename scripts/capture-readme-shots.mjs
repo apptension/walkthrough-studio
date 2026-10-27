@@ -3,15 +3,18 @@
  * Capture README / marketing stills from a running Studio (http://127.0.0.1:4747).
  *
  * Writes JPEGs under docs/assets/ (desk, brief, plates) plus optional feature PNGs.
- * Then run: node scripts/render-readme-art.mjs
+ * Then: node scripts/render-readme-art.mjs (composites). Both scripts round corners → PNG.
  *
  * Usage: ./studio --dev   # or ./studio
  *        node scripts/capture-readme-shots.mjs
  */
 import { chromium } from '../kit/node_modules/playwright/index.mjs';
 import { mkdir, access } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { roundInPlace } from './lib/readme-round.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'docs/assets');
@@ -483,6 +486,15 @@ await seekProgram(PRODUCT_SEEK.programLive);
 await page.evaluate(() => document.querySelector('.ptab[data-left="render"]')?.click());
 await settle(500);
 await shotRenderBayPng('feature-render-bay.png', { withStage: true });
+
+console.log('→ polish (rounded PNG)');
+await page.goto('about:blank');
+const POLISH =
+  /^(desk-|plate-|brief|feature-|studio-hero).*\.(png|jpe?g)$/i;
+for (const name of readdirSync(OUT).filter((n) => POLISH.test(n))) {
+  await roundInPlace(page, join(name));
+  console.log('rounded', name.replace(/\.jpe?g$/i, '.png'));
+}
 
 await browser.close();
 console.log('DONE — run: node scripts/render-readme-art.mjs');

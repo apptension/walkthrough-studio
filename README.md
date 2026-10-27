@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.svg?v=6" alt="Walkthrough Studio" width="88" height="88" />
+  <img src="docs/assets/logo.svg?v=8" alt="Walkthrough Studio" width="88" height="88" />
 </p>
 
 <h1 align="center">Walkthrough Studio</h1>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/hero.jpg?v=6" alt="Walkthrough Studio: trailers, walkthroughs, help videos from your live app" width="100%" />
+  <img src="docs/assets/hero.png?v=8" alt="Walkthrough Studio: trailers, walkthroughs, help videos from your live app" width="100%" />
 </p>
 
 <p align="center">
@@ -80,7 +80,7 @@ Coming from an earlier beta? Check out this tag the same way, then run `./studio
 
 ## What you can make
 
-<img src="docs/assets/video-kinds.jpg?v=6" alt="Trailer, feature walkthrough, and help video" width="100%" />
+<img src="docs/assets/video-kinds.png?v=8" alt="Trailer, feature walkthrough, and help video" width="100%" />
 
 | Video | Length | Use it for | Story structure |
 | --- | --- | --- | --- |
@@ -94,7 +94,7 @@ Pick a purpose in the brief (`overview`, `feature`, `onboarding`, `launch`, `sal
 
 ## Agent Ready
 
-<img src="docs/assets/agent-ready.jpg?v=6" alt="Tell Cursor or Claude. It makes the video." width="100%" />
+<img src="docs/assets/agent-ready.png?v=8" alt="Tell Cursor or Claude. It makes the video." width="100%" />
 
 **New video → Create & draft**, **Improve**, **Branch**, and **Fix with AI** call a local agent. Both are supported. When both are installed, the header shows an **Agent Ready** switch.
 
@@ -119,7 +119,7 @@ Everything lands as plain files in `videos/<slug>/`. Every change is a diff you 
 
 ## 84 languages, one recording
 
-<img src="docs/assets/languages.jpg?v=6" alt="84 languages: record once, speak to every market" width="100%" />
+<img src="docs/assets/languages.png?v=8" alt="84 languages: record once, speak to every market" width="100%" />
 
 Choose the video language in the brief. Script, on-screen plate copy, captions, chapters, and the voice are created in that language. Numbers and must-say lines stay exactly as you wrote them. The recording of your product is reused, so the second language costs minutes, not a reshoot.
 
@@ -133,24 +133,24 @@ One stage bar walks the approval chain: **Brief → Script → Direction → Rec
 
 The desk is a React and TypeScript app (`kit/studio`). Fold either side panel, or the timeline, by dragging its splitter past the edge, and bring it back from the edge tab. Panel sections collapse and remember how you left them. The sequence picker groups branches under their overview and flags projects that still need setup. Every popover (help tips, the queue menu, plate tools) uses the same floating card, and every on-stage editor (zoom, magnifier, copy) uses the same panel.
 
-<img src="docs/assets/feature-stages.png?v=6" alt="Stage bar over a Program frame" width="100%" />
+<img src="docs/assets/feature-stages.png?v=8" alt="Stage bar over a Program frame" width="100%" />
 
 ### Brief
 
 Describe the video in one paragraph, or fill five short steps: basics, app access, story, proof, review. Choose how capture learns the product: let the agent explore, or show the tour yourself. Demo logins go to `kit/.env`, never into the project file.
 
 <p align="center">
-  <img src="docs/assets/brief.jpg?v=6" alt="New video brief: describe the video, start URL, video language" width="760" />
+  <img src="docs/assets/brief.png?v=8" alt="New video brief: describe the video, start URL, video language" width="760" />
 </p>
 
 ### Program
 
 The rendered master, playing. Brand plates are live compositions, not frame grabs, so they re-time with the motion energy you pick (Calm, Clear, Punchy).
 
-<img src="docs/assets/desk-program.jpg?v=6" alt="Program monitor on a live chapter with the feedback panel" width="100%" />
+<img src="docs/assets/desk-program.png?v=8" alt="Program monitor on a live chapter with the feedback panel" width="100%" />
 
 <p align="center">
-  <img src="docs/assets/feature-director.png?v=6" alt="Feedback panel with session notes and smart scope" width="480" />
+  <img src="docs/assets/feature-director.png?v=8" alt="Feedback panel with session notes and smart scope" width="480" />
 </p>
 
 ### Direction
@@ -159,18 +159,18 @@ Your brand, not a template. The agent pulls logo, colors, and type from your sit
 
 Title reveals come in nine templates. Rise, Cascade, and Wipe move the type. Focus and Veil settle the line out of blur or haze. Ink, Slit, Iris, and Embers are WebGL masks in your brand colors. The type stays crisp and editable, and every reveal is stepped on the plate clock, so the Editor preview matches the render.
 
-<img src="docs/assets/desk-direction.jpg?v=6" alt="Direction panel with transitions, effects, and plate previews" width="100%" />
+<img src="docs/assets/desk-direction.png?v=8" alt="Direction panel with transitions, effects, and plate previews" width="100%" />
 
 | Atmosphere | Motion energy |
 | :---: | :---: |
-| <img src="docs/assets/feature-atmosphere.png?v=6" alt="Plate atmosphere presets" width="100%" /> | <img src="docs/assets/feature-motion-energy.png?v=6" alt="Calm, Clear, Punchy motion energy" width="100%" /> |
+| <img src="docs/assets/feature-atmosphere.png?v=8" alt="Plate atmosphere presets" width="100%" /> | <img src="docs/assets/feature-motion-energy.png?v=8" alt="Calm, Clear, Punchy motion energy" width="100%" /> |
 
 | Scene transitions | Live cards |
 | :---: | :---: |
-| <img src="docs/assets/feature-transitions.png?v=6" alt="Scene transition grid" width="100%" /> | <img src="docs/assets/feature-live-cards.png?v=6" alt="Live card presets and caption seat" width="100%" /> |
+| <img src="docs/assets/feature-transitions.png?v=8" alt="Scene transition grid" width="100%" /> | <img src="docs/assets/feature-live-cards.png?v=8" alt="Live card presets and caption seat" width="100%" /> |
 
 <p align="center">
-  <img src="docs/assets/feature-camera-cursor.png?v=6" alt="Camera, frame, and cursor controls" width="440" />
+  <img src="docs/assets/feature-camera-cursor.png?v=8" alt="Camera, frame, and cursor controls" width="440" />
 </p>
 
 ### Editor
@@ -181,14 +181,14 @@ One playhead over plates and live takes. Speed, zoom, magnify, cut, voice, and m
 
 **Run critic** reviews the cut as four viewers: the skeptic, the implementer, the buyer, and the onboarder. A quick rule pass runs first. With an agent signed in, the agent then watches the cut (narration, timeline, frame stills) and writes a scored review with concrete fixes, each tied to a line, a plate, or a chapter. Its findings lead the list, and the rule findings stay where the agent did not cover the same target. The critic only reviews: it never edits your sources.
 
-<img src="docs/assets/desk-editor.jpg?v=6" alt="Editor timeline with speed, zoom, and mix rows" width="100%" />
+<img src="docs/assets/desk-editor.png?v=8" alt="Editor timeline with speed, zoom, and mix rows" width="100%" />
 
 | Editor stage | Timeline |
 | :---: | :---: |
-| <img src="docs/assets/feature-editor-stage.png?v=6" alt="Editor stage on a live product frame" width="100%" /> | <img src="docs/assets/feature-editor-timeline.png?v=6" alt="Editor timeline with speed, zoom, and mix rows" width="100%" /> |
+| <img src="docs/assets/feature-editor-stage.png?v=8" alt="Editor stage on a live product frame" width="100%" /> | <img src="docs/assets/feature-editor-timeline.png?v=8" alt="Editor timeline with speed, zoom, and mix rows" width="100%" /> |
 
 <p align="center">
-  <img src="docs/assets/feature-inspector.png?v=6" alt="Inspector for a selected clip" width="440" />
+  <img src="docs/assets/feature-inspector.png?v=8" alt="Inspector for a selected clip" width="440" />
 </p>
 
 ### Plates
@@ -197,13 +197,13 @@ Open, proof, and close plates carry what the screencast alone cannot: capability
 
 | Open | Features | Close |
 | :---: | :---: | :---: |
-| <img src="docs/assets/plate-open.jpg?v=6" alt="Open plate" width="100%" /> | <img src="docs/assets/plate-features.jpg?v=6" alt="Features plate" width="100%" /> | <img src="docs/assets/plate-close.jpg?v=6" alt="Close plate" width="100%" /> |
+| <img src="docs/assets/plate-open.png?v=8" alt="Open plate" width="100%" /> | <img src="docs/assets/plate-features.png?v=8" alt="Features plate" width="100%" /> | <img src="docs/assets/plate-close.png?v=8" alt="Close plate" width="100%" /> |
 
 ### Deliver
 
 One recording, every channel. The handoff pack includes the master, poster, captions, chapters, QC report, and a README.
 
-<img src="docs/assets/feature-render-bay.png?v=7" alt="Render bay with pipeline steps and queue" width="100%" />
+<img src="docs/assets/feature-render-bay.png?v=8" alt="Render bay with pipeline steps and queue" width="100%" />
 
 | Export | Size | For |
 | --- | --- | --- |
@@ -217,7 +217,7 @@ One recording, every channel. The handoff pack includes the master, poster, capt
 
 ## Browser, terminal, or your agent
 
-<img src="docs/assets/ways-in.jpg?v=6" alt="Three ways in: browser, terminal, agent skill" width="100%" />
+<img src="docs/assets/ways-in.png?v=8" alt="Three ways in: browser, terminal, agent skill" width="100%" />
 
 ### In the browser
 
@@ -306,7 +306,7 @@ walkthrough-studio/
 │   └── .env               # ELEVENLABS_API_KEY, demo logins (gitignored)
 ├── videos/<slug>/         # one video: video.config.json, flow.mjs, narration.mjs
 ├── tmp/videos/<slug>/     # renders, captions, deliverables (gitignored)
-└── docs/assets/           # README JPG banners, feature PNG crops, logo
+└── docs/assets/           # README PNG banners (rounded), feature crops, logo
 ```
 
 ```bash
@@ -352,7 +352,7 @@ No. Studio signs in off camera and restores the session before the screencast. G
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to hack on Studio |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
 
-Marketing graphics in `docs/assets/`: `node scripts/capture-readme-shots.mjs` (Studio on `:4747`; defaults to Teamdeck frames for the monitor and `walkthrough-studio` for the brief wizard), then `node scripts/render-readme-art.mjs`. The script also writes `feature-*.png` detail crops and `studio-hero.png` for the README. Override with `PRODUCT_SLUG=…`. `docs/assets/social-preview.jpg` (1280×640) is the GitHub social preview.
+Marketing graphics in `docs/assets/`: `node scripts/capture-readme-shots.mjs` (Studio on `:4747`; defaults to Teamdeck frames for the monitor and `walkthrough-studio` for the brief wizard), then `node scripts/render-readme-art.mjs`. The script also writes `feature-*.png` detail crops and `studio-hero.png` for the README. Override with `PRODUCT_SLUG=…`. `docs/assets/social-preview.png` (1280×640) is the GitHub social preview.
 
 ---
 
