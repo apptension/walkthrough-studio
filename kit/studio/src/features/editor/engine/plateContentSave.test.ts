@@ -15,6 +15,7 @@ import {
   plateContentSettleTarget,
   shouldHoldInspectorForContentFocus,
   isContentSaveResponseValid,
+  isDeckMutationStillValid,
   maySeekProgramAfterEditorLeave,
 } from './plateContentSave';
 
@@ -166,6 +167,15 @@ describe('beforeSelectionCommit', () => {
       },
     });
     expect(order).toEqual(['settle:features']);
+  });
+});
+
+describe('isDeckMutationStillValid', () => {
+  it('requires slug, epoch, and deck generation to match', () => {
+    expect(isDeckMutationStillValid('demo', 1, 'demo', 1, 3, 3)).toBe(true);
+    expect(isDeckMutationStillValid('demo', 1, 'demo', 1, 3, 4)).toBe(false);
+    expect(isDeckMutationStillValid('demo', 1, 'other', 1, 3, 3)).toBe(false);
+    expect(isDeckMutationStillValid('demo', 1, 'demo', 2, 3, 3)).toBe(false);
   });
 });
 

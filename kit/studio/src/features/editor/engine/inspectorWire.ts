@@ -32,7 +32,7 @@ import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSele
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
 import { P } from './plateCtl';
-import { flushAllContentPending } from './plateContentPane';
+import { flushEditorContentPending } from './plateContentPane';
 import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
 import { wireSlideInspector } from './slideInspectorWire';
@@ -551,7 +551,7 @@ export function wireInspector(): void {
     const current = slug();
     if (!current) return;
     try {
-      await flushAllContentPending();
+      await flushEditorContentPending();
       const r = await api<{ plates?: PlateRow[]; overlays?: Overlays; direction?: VideoSummary['direction'] }>(
         `/api/video/${encodeURIComponent(current)}/overlays`,
         { method: 'POST', body: patch },

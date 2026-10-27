@@ -172,6 +172,18 @@ export function isContentSaveResponseValid(
   return wantSlug === slugNow && wantEpoch === epochNow;
 }
 
+/** Drop late deck POST/refresh when the sequence reset or another save won the race. */
+export function isDeckMutationStillValid(
+  wantSlug: string,
+  wantEpoch: number,
+  slugNow: string,
+  epochNow: number,
+  startedDeckGen: number,
+  deckGenNow: number,
+): boolean {
+  return isContentSaveResponseValid(wantSlug, wantEpoch, slugNow, epochNow) && startedDeckGen === deckGenNow;
+}
+
 /** Whether leaving the Editor should seek Program after Content settle (not during plate preview). */
 export function maySeekProgramAfterEditorLeave(
   programT: number | null,

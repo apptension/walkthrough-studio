@@ -4,7 +4,12 @@ import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
-import { afterContentSaved, flushAllContentPending, hasContentPending, kickContentPending } from './plateContentPane';
+import {
+  afterContentSaved,
+  flushEditorContentPending,
+  hasContentPending,
+  kickContentPending,
+} from './plateContentPane';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping, plateContentContextClip } from './plateContentSave';
 import { setScale } from './lifecycle';
@@ -240,6 +245,7 @@ export function wireTimeline(signal: AbortSignal): void {
       }
       const clipEl = target.closest<HTMLElement>('.etl-clip');
       if (ed.playing) pause();
+      if (hasContentPending()) kickContentPending();
       ed.drag = { type: 'scrub', clipI: clipEl ? Number(clipEl.dataset['i']) : null, x0: e.clientX, moved: false };
       seek(t);
     },
@@ -431,7 +437,7 @@ export async function dropClip(g: Drag): Promise<void> {
   const host = $('etlClips');
   const id = ed.seq[g.from ?? -1]?.id;
   if (g.at !== g.from && id) {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
     ed.flipFrom = clipRects();
     setSelection({ type: 'clip', id });
@@ -564,7 +570,7 @@ export async function moveClip(id: string, dir: number): Promise<void> {
   const ids = ed.seq.map((c) => c.id);
   const [item] = ids.splice(i, 1);
   if (item != null) ids.splice(j, 0, item);
-  await flushAllContentPending();
+  await flushEditorContentPending();
   await leavePlateContentIfNeeded(plateContentContextClip(ed.sel, ed.seq, curClip()), { type: 'clip', id });
   ed.flipFrom = clipRects();
   setSelection({ type: 'clip', id });

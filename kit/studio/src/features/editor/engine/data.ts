@@ -5,7 +5,7 @@ import { previewState } from './audio';
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
 import { flushEditorContentPending, contentSaveProjectEpoch } from './plateContentPane';
-import { isContentSaveResponseValid, paintInspectorUnlessContentTyping } from './plateContentSave';
+import { isContentSaveResponseValid, isDeckMutationStillValid, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
 import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
@@ -24,6 +24,7 @@ import { clamp, errMessage } from './util';
  * cannot leak into the next.
  */
 export function resetForProject(): void {
+  deckGen += 1;
   pause();
   preview.pause();
   clearPlatePreviewTimers();
@@ -186,9 +187,15 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
   await flushEditorContentPending();
   const wantSlug = slug() || '';
   const wantEpoch = contentSaveProjectEpoch();
+  const startedDeckGen = deckGen;
   const before = snapshotDeck();
   try {
-    const r = await api<Deck>(`/api/video/${encodeURIComponent(slug() || '')}/edit`, { method: 'POST', body: patch });
+    const r = await api<Deck>(`/api/video/${encodeURIComponent(wantSlug)}/edit`, { method: 'POST', body: patch });
+    if (
+      !isDeckMutationStillValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch(), startedDeckGen, deckGen)
+    ) {
+      return ed.deck;
+    }
     if (undoable) {
       ed.undo.push(before);
       if (ed.undo.length > 60) ed.undo.shift();

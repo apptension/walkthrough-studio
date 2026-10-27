@@ -6,7 +6,7 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, sho
 
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
-import { flushAllContentPending } from './plateContentPane';
+import { flushEditorContentPending } from './plateContentPane';
 import { reloadPlate } from './lifecycle';
 import { dropPreloadedPlates, retargetTitleReveal } from './plate';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
@@ -96,7 +96,7 @@ async function flushStyle(id: string): Promise<void> {
   const style = Object.fromEntries(ed.pendingStyle);
   ed.pendingStyle.clear();
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};
@@ -131,7 +131,7 @@ export function markStyleRows(id: string): void {
 
 export async function resetVar(id: string, name: string): Promise<void> {
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style: { [name]: null } } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};
@@ -159,7 +159,7 @@ export async function plateApi(
   { reload = true }: { reload?: boolean } = {},
 ): Promise<PlateApiResponse | null> {
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     const r = await api<PlateApiResponse>(platePath(id, path), { method: 'POST', body });
     const info = plateInfo(id);
     if (info) {
@@ -450,7 +450,7 @@ export function invalidatePlates(): Promise<void> | null {
   // Same as changeLook — drop the back buffer so a scrub-back cannot revive pre-look HTML.
   if (id) dropPreloadedPlates(id);
   else dropPreloadedPlates();
-  if (ed.active && id) return flushAllContentPending().then(() => reloadPlate(id));
+  if (ed.active && id) return flushEditorContentPending().then(() => reloadPlate(id));
   return null;
 }
 

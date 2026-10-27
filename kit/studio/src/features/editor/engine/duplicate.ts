@@ -7,7 +7,7 @@ import { selectedShot } from './aim';
 import { applyVoiceDeck, withMusic } from './audio';
 import { postDeck, refresh } from './data';
 import { select } from './edits';
-import { flushAllContentPending } from './plateContentPane';
+import { flushEditorContentPending } from './plateContentPane';
 import { lensByKey, recToEd, selectedLens, shotKey } from './seq';
 import { joinStyle } from './stage';
 import { audioDesk, deckEdit, ed, live, liveH, liveW, setHtmlPlates, slug } from './state';
@@ -225,7 +225,7 @@ export async function detachPlate(c: Clip): Promise<Deck | null> {
   const id = repeatIdOf(c);
   if (!id || c.kind !== 'plate') return null;
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     const base = `/api/video/${encodeURIComponent(slug() || '')}`;
     const r = await api<Deck & { id: string }>(`${base}/plates/${encodeURIComponent(id)}/detach`, { method: 'POST' });
     const listed = await api<{ plates?: PlateRow[] }>(`${base}/plates`).catch(() => null);

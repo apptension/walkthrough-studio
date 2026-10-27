@@ -5,7 +5,7 @@ import { paintAtmosphereStill, type ThumbPalette } from '@/ui/look/atmosphereThu
 import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
 import { applyVar, lookValue, plateDoc, refreshPlatePreview } from './look';
-import { flushAllContentPending } from './plateContentPane';
+import { flushEditorContentPending } from './plateContentPane';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import {
   contrast,
@@ -224,7 +224,7 @@ async function save(id: string, body: Record<string, unknown>, hint: string): Pr
   const at = scope;
   const path = at === 'video' ? `/api/video/${encodeURIComponent(slug() || '')}/plate-colors` : `/api/video/${encodeURIComponent(slug() || '')}/plates/${encodeURIComponent(id)}/colors`;
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     const r = await api<ColorsResponse>(path, { method: 'POST', body });
     if (r.plates) setHtmlPlates(r.plates, { video: false });
     ed.dirtyRender = true;
