@@ -23,10 +23,11 @@ import { zoomPreviewStyle } from '@/logic/zoomAim';
 import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
-import { paintInspectorUnlessContentTyping } from './plateContentSave';
+import { isContentSaveResponseValid, paintInspectorUnlessContentTyping } from './plateContentSave';
 import {
   bakeStalePlateContent,
   contentSaveIdle,
+  contentSaveProjectEpoch,
   flushAllContentPending,
   hasContentPending,
   settlePlateContent,
@@ -169,9 +170,13 @@ export async function ensureLiveCards(cardId: string | null = null): Promise<boo
     /* ignore */
   }
   if (listed()) return true;
+  const wantSlug = slug() || '';
+  const wantEpoch = contentSaveProjectEpoch();
   try {
     await flushAllContentPending();
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch())) return listed();
     const r = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates/rebuild-html`, { method: 'POST', body: {} });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch())) return listed();
     if (r?.plates) setHtmlPlates(r.plates);
   } catch {
     /* ignore */

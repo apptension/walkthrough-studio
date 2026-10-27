@@ -4,7 +4,7 @@ import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
 import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
-import { flushAllContentPending, hasContentPending, kickContentPending } from './plateContentPane';
+import { afterContentSaved, flushAllContentPending, hasContentPending, kickContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { setScale } from './lifecycle';
@@ -19,9 +19,14 @@ import { $, clamp, r3 } from './util';
 
 /** Timeline pointer gestures (scrub, reorder, trim, retime) from `kit/studio/editor.js`. */
 
-function whenContentReady(run: () => void): void {
-  if (hasContentPending()) kickContentPending();
-  run();
+function whenContentReady(run: () => void | Promise<void>): void {
+  const go = () => void Promise.resolve(run());
+  if (!hasContentPending()) {
+    go();
+    return;
+  }
+  kickContentPending();
+  afterContentSaved(go);
 }
 
 export function edFromEvent(e: { clientX: number }): number {
@@ -122,8 +127,8 @@ export function wireTimeline(signal: AbortSignal): void {
             moved: false,
           };
         };
-        whenContentReady(() => {
-          void leavePlateContentIfNeeded(prev, cardSel);
+        whenContentReady(async () => {
+          await leavePlateContentIfNeeded(prev, cardSel);
           armCardDrag();
         });
         return;

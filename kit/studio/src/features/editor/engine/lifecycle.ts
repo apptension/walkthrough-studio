@@ -25,7 +25,14 @@ import {
   settlePlateContent,
   syncContentToField,
 } from './plateContentPane';
-import { beginEditOrigin, contentFieldFocused, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
+import {
+  beginEditOrigin,
+  contentFieldFocused,
+  endEditOrigin,
+  flushQueuedInspectorRepaint,
+  maySeekProgramAfterEditorLeave,
+  paintInspectorUnlessContentTyping,
+} from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -178,10 +185,13 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
 export function onLeave(): void {
   if (!ed.active) return;
   const leavingPlate = curClip()?.kind === 'plate' ? curClip()?.plateId : null;
-  kickContentPending();
-  void settlePlateContent(leavingPlate);
-  // Program picks up where the Editor was looking.
   const programT = ed.seq.length ? toProgram(ed.t) : null;
+  const seekProgram = maySeekProgramAfterEditorLeave(
+    programT,
+    desk.get().monitorMode,
+    desk.get().previewingPlate,
+  );
+  kickContentPending();
   captureMorph();
   pause();
   preview.pause();
@@ -193,9 +203,12 @@ export function onLeave(): void {
   ed.active = false;
   document.body.classList.remove('is-editor');
   if (desk.get().rightTab === 'inspector') showRightTab('feedback');
-  if (programT != null && desk.get().monitorMode === 'program' && !desk.get().previewingPlate) seekTo(programT);
   renderTimeline();
   playMorph();
+  // Program seek after flush/bake — otherwise Program can show pre-type HTML for one frame.
+  void settlePlateContent(leavingPlate).finally(() => {
+    if (seekProgram && programT != null) seekTo(programT);
+  });
 }
 
 export async function openClip(match: (c: Clip) => boolean): Promise<boolean> {

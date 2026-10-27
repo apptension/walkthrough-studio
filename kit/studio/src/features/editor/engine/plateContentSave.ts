@@ -162,6 +162,26 @@ export function isContentSaveResponseValid(
   return wantSlug === slugNow && wantEpoch === epochNow;
 }
 
+/** Drain debounced copy and bake the plate we are leaving before remounting the inspector. */
+/** Whether leaving the Editor should seek Program after Content settle (not during plate preview). */
+export function maySeekProgramAfterEditorLeave(
+  programT: number | null,
+  monitorMode: string,
+  previewingPlate: string | null,
+): boolean {
+  return programT != null && monitorMode === 'program' && !previewingPlate;
+}
+
+export async function beforeSelectionCommit(args: {
+  hasPending: boolean;
+  settlePlateId: string | null;
+  drainPending: () => Promise<void>;
+  settlePlate: (id: string) => Promise<void>;
+}): Promise<void> {
+  if (args.hasPending) await args.drainPending();
+  if (args.settlePlateId) await args.settlePlate(args.settlePlateId);
+}
+
 export function shouldHoldInspectorForContentFocus({
   focused,
   prevKey,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   beginEditOrigin,
+  beforeSelectionCommit,
   contentFieldFocused,
   editOrigin,
   endEditOrigin,
@@ -13,6 +14,7 @@ import {
   plateContentSettleTarget,
   shouldHoldInspectorForContentFocus,
   isContentSaveResponseValid,
+  maySeekProgramAfterEditorLeave,
 } from './plateContentSave';
 
 describe('planContentSave', () => {
@@ -118,6 +120,51 @@ describe('paintInspectorUnlessContentTyping', () => {
       painted += 1;
     });
     expect(painted).toBe(1);
+  });
+});
+
+describe('maySeekProgramAfterEditorLeave', () => {
+  it('seeks Program only when not previewing a plate', () => {
+    expect(maySeekProgramAfterEditorLeave(1.2, 'program', null)).toBe(true);
+    expect(maySeekProgramAfterEditorLeave(1.2, 'plate', null)).toBe(false);
+    expect(maySeekProgramAfterEditorLeave(null, 'program', null)).toBe(false);
+    expect(maySeekProgramAfterEditorLeave(1.2, 'program', 'intro')).toBe(false);
+  });
+});
+
+describe('beforeSelectionCommit', () => {
+  it('drains pending copy, settles the leaving plate, then allows commit', async () => {
+    const order: string[] = [];
+    await beforeSelectionCommit({
+      hasPending: true,
+      settlePlateId: 'intro',
+      drainPending: () => {
+        order.push('drain');
+        return Promise.resolve();
+      },
+      settlePlate: (id) => {
+        order.push(`settle:${id}`);
+        return Promise.resolve();
+      },
+    });
+    expect(order).toEqual(['drain', 'settle:intro']);
+  });
+
+  it('settles without drain when only stale copy remains', async () => {
+    const order: string[] = [];
+    await beforeSelectionCommit({
+      hasPending: false,
+      settlePlateId: 'features',
+      drainPending: () => {
+        order.push('drain');
+        return Promise.resolve();
+      },
+      settlePlate: (id) => {
+        order.push(`settle:${id}`);
+        return Promise.resolve();
+      },
+    });
+    expect(order).toEqual(['settle:features']);
   });
 });
 
