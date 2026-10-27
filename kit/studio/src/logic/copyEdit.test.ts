@@ -53,6 +53,13 @@ describe('copyEdit', () => {
     assert.equal(fieldSource(parseSource('Plan·Ship  ·Win'), { beats: true }), 'Plan · Ship · Win');
   });
 
+  test('colons and URL-like copy round-trip in field source', () => {
+    for (const s of ['Time: 12:30', 'https://x.com:8080/p', 'Step 1: Go', 'Plan · Ship: fast']) {
+      assert.equal(fieldSource(parseSource(s)), s.replace(/\s+/g, ' ').trim());
+      assert.equal(toSource(parseSource(s)), s);
+    }
+  });
+
   test('contenteditable → chars keeps accents, lines and the selection marks', () => {
     const el = document.createElement('div');
     el.innerHTML = '<div>Plan <span class="accent">week</span></div><div>Go<br>now</div>';

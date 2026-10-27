@@ -4,6 +4,7 @@ import { toast } from '@/desk/toast';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
+import { contentPathForEditPath, editPathForContentPath } from '@/logic/plateFieldPaths';
 import { playheadOnPlate } from '@/logic/plateSync';
 import { reloadPlate } from './lifecycle';
 import { plateDoc } from './look';
@@ -498,12 +499,13 @@ const LIVE_SET_KINDS = new Set([...COPY_KINDS, 'number']);
 const isLiveSetKind = (kind: string) => LIVE_SET_KINDS.has(kind);
 
 function paintCopyOps(id: string, ops: ContentOp[]): boolean {
+  const schema = cache.get(id)?.schema ?? null;
   return ops.every(
     (op) =>
       op.op === 'set' &&
       typeof op.path === 'string' &&
       (op.value == null || typeof op.value === 'string' || typeof op.value === 'number') &&
-      paintPlateFieldValue(op.path, op.value, id),
+      paintPlateFieldValue(op.path, op.value, id, editPathForContentPath(op.path, schema)),
   );
 }
 
@@ -572,7 +574,8 @@ function setSoon(id: string, path: string, value: unknown, kind: string): void {
     // Pane → stage only. Mark origin so stage selection echoes do not remount this pane.
     beginEditOrigin('pane');
     try {
-      paintPlateFieldValue(path, value, id);
+      const schema = cache.get(id)?.schema ?? null;
+      paintPlateFieldValue(path, value, id, editPathForContentPath(path, schema));
     } finally {
       queueMicrotask(() => endEditOrigin());
     }
@@ -857,11 +860,12 @@ export function syncContentToField(plateId: string, path: string | null, source:
     patchContentRecordOpenState();
     return;
   }
+  const contentPath = contentPathForEditPath(path, data.schema);
   const plan = planContentFieldSync({
     origin: editOrigin() === 'pane' ? 'pane' : 'stage',
     openSlot,
     targetSlot: target,
-    path,
+    path: contentPath,
   });
   if (plan.patchPath && source != null) {
     setLocal(data, plan.patchPath, source);

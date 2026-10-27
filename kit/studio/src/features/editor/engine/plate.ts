@@ -652,6 +652,17 @@ const plateOriginalMarkup = new WeakMap<Document, Map<string, string>>();
 const fieldKind = (el: HTMLElement): string => el.dataset['editKind'] || 'text';
 const fieldOpts = (el: HTMLElement) => ({ kind: fieldKind(el), beats: el.dataset['editBeats'] === '1' });
 const fieldRaw = (el: HTMLElement): string => (el.getAttribute('data-edit-raw') ?? '').replace(/&#10;/g, '\n');
+
+/** Keep `data-edit-raw` aligned with canonical source so re-arming edit does not revert to stale bake attrs. */
+const writeFieldRaw = (el: HTMLElement, source: string): void => {
+  const raw = String(source ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '&#10;');
+  el.setAttribute('data-edit-raw', raw);
+};
 const blockNode = (n: Element): boolean =>
   n?.nodeType === 1 && (n.tagName === 'DIV' || n.tagName === 'P' || (n.ownerDocument.defaultView || window).getComputedStyle(n).display === 'block');
 
@@ -783,12 +794,17 @@ function renderFieldChars(el: HTMLElement, chars: CopyChar[]): void {
   });
   if (lines) applyLineLayout(el);
 }
-const renderField = (el: HTMLElement, source: string) => renderFieldChars(el, parseSource(source));
+const renderField = (el: HTMLElement, source: string) => {
+  renderFieldChars(el, parseSource(source));
+  writeFieldRaw(el, source);
+};
 
 /** The config value this field holds right now (`*accent*` markers, lines joined with \n). */
 function fieldSourceOf(el: HTMLElement): string {
   return fieldSource(fromElement(el, { isBlock: blockNode }).chars, fieldOpts(el));
 }
+
+const syncFieldRawFromDom = (el: HTMLElement): void => writeFieldRaw(el, fieldSourceOf(el));
 
 interface PlateSel {
   el: HTMLElement;
@@ -1129,12 +1145,13 @@ export function paintPlateFieldValue(
   path: string,
   source: string | number | null | undefined,
   plateId?: string | null,
+  editPath?: string | null,
 ): boolean {
   const doc = plateFrameDoc();
   if (!doc?.body || !path) return false;
   // Never paint another plate's words onto the frame currently on stage.
   if (plateId && plateFrameReady && plateFrameReady !== plateId) return false;
-  const el = fieldByPath(doc, path);
+  const el = fieldByPath(doc, editPath || path);
   if (!el) return false;
   // Cascade / wipe / rise shells block plain edit rows — replace them; bake-on-leave restores
   // builder markup. Clear host reveal props so a pinned opacity/clip does not hide the new copy.
@@ -1198,6 +1215,7 @@ export function toggleFieldAccent(): boolean {
   const r = toggleAccent(s.chars, s.start, s.end);
   if (!r) return false;
   renderFieldChars(s.el, r.chars);
+  syncFieldRawFromDom(s.el);
   s.el.focus({ preventScroll: true });
   selectFieldRange(s.el, r.start, r.end);
   markFieldDirty(s.el);
@@ -1229,6 +1247,7 @@ function absorbTypedAccents(el: HTMLElement): void {
     marked.push({ ch: c.ch, accent: on || c.accent });
   }
   renderFieldChars(el, marked);
+  syncFieldRawFromDom(el);
   const first = offsets[0] ?? 0;
   const caret = first - removed.filter((i) => i < first).length;
   selectFieldRange(el, caret, caret);
@@ -1281,6 +1300,7 @@ function bindPlateEditDelegation(doc: Document): void {
     if (!el) return;
     markFieldDirty(el);
     absorbTypedAccents(el);
+    syncFieldRawFromDom(el);
     notifyPlateSelection();
     // The encoder refits type and composition for whatever the copy ended up being. Doing the
     // same once typing settles is what keeps long copy from overflowing on stage but not in the
