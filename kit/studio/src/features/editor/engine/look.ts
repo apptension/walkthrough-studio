@@ -96,6 +96,7 @@ async function flushStyle(id: string): Promise<void> {
   const style = Object.fromEntries(ed.pendingStyle);
   ed.pendingStyle.clear();
   try {
+    await flushAllContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};

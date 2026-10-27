@@ -1834,6 +1834,10 @@ export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = nu
   setStatus('run', activity);
   let r: RebuildResponse;
   try {
+    if (ed.active) {
+      const { flushAllContentPending } = await import('./plateContentPane');
+      await flushAllContentPending();
+    }
     r = await api<RebuildResponse>(`/api/video/${desk.get().slug}/plates/rebuild-html`, { method: 'POST', body: {} });
   } finally {
     clearRunStatus(activity);

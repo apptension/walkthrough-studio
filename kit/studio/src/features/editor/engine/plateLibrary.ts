@@ -9,7 +9,7 @@ import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { reloadPlate } from './lifecycle';
 import { plateApi } from './look';
-import { dropPlateContent } from './plateContentPane';
+import { dropPlateContent, flushAllContentPending } from './plateContentPane';
 import { ed, setHtmlPlates, slug } from './state';
 import { clearClipFresh, flashHint, markClipFresh, plateInfo } from './timeline';
 import { seek } from './transport';
@@ -96,6 +96,7 @@ function focusClip(id: string): void {
 
 export async function addPlate(type: string, after: string | null): Promise<boolean> {
   try {
+    await flushAllContentPending();
     const r = await api<Deck & { id: string; warning?: string | null }>(`${base()}/plates/add`, { method: 'POST', body: { type, after } });
     warnElsewhere(r);
     await landPlates();
@@ -115,6 +116,7 @@ export async function addPlate(type: string, after: string | null): Promise<bool
 async function swapCall(plateId: string, body: Record<string, unknown>, hint: string): Promise<boolean> {
   markClipFresh(plateId, 'is-swapping');
   try {
+    await flushAllContentPending();
     const r = await api<Omit<Deck, 'plates'> & { plates?: PlateRow[]; warning?: string | null }>(`${base()}/plates/${encodeURIComponent(plateId)}/swap`, { method: 'POST', body });
     warnElsewhere(r);
     if (r.plates) setHtmlPlates(r.plates, { video: false });

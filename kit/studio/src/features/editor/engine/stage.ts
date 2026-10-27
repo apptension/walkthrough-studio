@@ -164,6 +164,7 @@ export async function ensureLiveCards(cardId: string | null = null): Promise<boo
   }
   if (listed()) return true;
   try {
+    await flushAllContentPending();
     const r = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates/rebuild-html`, { method: 'POST', body: {} });
     if (r?.plates) setHtmlPlates(r.plates);
   } catch {
