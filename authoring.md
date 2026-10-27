@@ -304,6 +304,10 @@ export default {
   that line. Use this for 1–2 s confirmations ("Approved", "Signed").
 - **Say the why, show the what.** The caption already names the step; the voice adds the outcome or the reason
   ("…so the rate is right"). Don't read the caption aloud.
+- **Never say it twice.** No two lines make the same point, and no phrase of three or more words comes back. A caption
+  that leads into a chapter (`Open show` → `Show HN`) plays seconds before that chapter's plate — give one the step and
+  the other why the section matters. The script lint, the draft gate (`narration-repeat`), the critic and the voice step
+  all check this; a high-severity repeat sends the agent back to rewrite the later line.
 - **Pauses are ellipses** (`...`); delivery hints are Eleven v4 audio tags in brackets (`[warm]`, `[slightly faster]`).
   No SSML, no emoji. A line may be `{ text, speed }` to pin a speed; otherwise the fitter picks ≤ `maxFitSpeed`.
 - **Names and products** go in `audio.voice.pronunciations` (`"Lanier": "ləˈnɪər"`) rather than respelled in the text.

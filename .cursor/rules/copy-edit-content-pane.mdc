@@ -1,0 +1,41 @@
+---
+description: Inline plate edit and Content pane — caret, bake, remount rules
+globs: kit/studio/src/features/editor/engine/text.ts,kit/studio/src/features/editor/engine/plateContentPane.ts,kit/studio/src/features/editor/engine/plateContentSave.ts,kit/studio/src/logic/copyEdit.ts,kit/lib/shared/copyEdit.js
+alwaysApply: false
+---
+
+# Copy edit & Content pane
+
+Highest-risk area for **“it works until I type”** bugs.
+
+## Invariants (from `plateContentSave.ts`, `text.ts`, `plateContentPane.ts`)
+
+- **Typing never bakes HTML** mid-keystroke. Bake on **leave plate**, structural save, or deferred schedule — not per key.
+- **Content pane saves must not remount** the pane — remount **kills the caret**.
+- **Copy saves must not remount** Content pane when stage paints from pane typing (break circular flash).
+- **Soft-merge** content from live save — never replace full edit deck cache from one field echo.
+- Pending reload queue: **never** stage-reload while a Content input is **focused**.
+- Click-in-place edit: **timeline must not move** when focusing a field on stage.
+- Deferred look/style paints: **keep playhead** — don’t jump to open on style change.
+
+## Line layout (multi-line titles)
+
+- Shared **`copyEdit.ts`** / **`copyEdit.js`**: lines → `.title-line` HTML; keep JS + TS ports aligned.
+- Before `studio-edit`: **`captureAllLineLayouts`** (measured box height/gap); **`applyLineLayout`** on rows — not raw CSS `line-height` from type-fit alone.
+- Don’t clear type-fit **`fontSize`** when applying line layout fixes.
+
+## UX expectations
+
+- **Edit text** must match what’s on screen (WYSIWYG), including motion-pinned frame.
+- Entering edit on chapter/caption: **no white flash** — show composed card/plate first.
+- Drag handles: only grip/card starts drag — **text selection in inputs must not** start card drag.
+
+## Tests
+
+- `copyEdit.test.ts`, `plateContentSave.test.ts`, shared `kit/lib/copyEdit.test.mjs` when changing serialization.
+
+## Verify manually
+
+1. Type in Content pane — caret stable, inspector doesn’t flash.
+2. Edit multi-line title on open plate — height unchanged after entering edit.
+3. Save → scrub away → back — copy and layout unchanged.

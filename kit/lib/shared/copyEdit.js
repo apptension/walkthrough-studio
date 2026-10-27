@@ -85,7 +85,7 @@ export function toSource(chars) {
  *   lines  one <div> per line (an empty line keeps its height with <br>)
  *   sep    wrap `·` in <span class="sep"> so the open sub keeps its beat colour
  */
-export function toHtml(chars, { tag = 'span', lines = false, sep = false } = {}) {
+export function toHtml(chars, { tag = 'span', lines = false, sep = false, lineClass = lines ? 'title-line' : '' } = {}) {
   const open = tag === 'b' ? '<b>' : '<span class="accent">';
   const close = tag === 'b' ? '</b>' : '</span>';
   const line = (run) => {
@@ -111,7 +111,8 @@ export function toHtml(chars, { tag = 'span', lines = false, sep = false } = {})
   }
   runs.push(cur);
   if (!lines) return runs.map(line).join(' ');
-  return runs.map((run) => `<div>${run.length ? line(run) : '<br>'}</div>`).join('');
+  const rowTag = (inner) => (lineClass ? `<div class="${lineClass}">${inner}</div>` : `<div>${inner}</div>`);
+  return runs.map((run) => rowTag(run.length ? line(run) : '<br>')).join('');
 }
 
 /**

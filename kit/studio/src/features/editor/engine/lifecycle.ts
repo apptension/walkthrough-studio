@@ -14,7 +14,8 @@ import { postDeck, redo, refresh, resetForProject, undo, validateSelection } fro
 import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
-import { hoverContentSlot, moveContentSlot, openContentSlot, syncContentToField } from './plateContentPane';
+import { hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
+import { beginEditOrigin, contentFieldFocused, endEditOrigin } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -98,7 +99,14 @@ export async function reloadPlate(id: string, { paint = true }: { paint?: boolea
     if (ed.needsPlateResync === id) ed.needsPlateResync = null;
   }
   if (playheadOnPlate(curClip(), id)) renderFrame();
-  if (paint && ed.sel?.type === 'clip' && ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (
+    paint &&
+    !contentFieldFocused() &&
+    ed.sel?.type === 'clip' &&
+    ed.seq.find((x) => x.id === ed.sel?.id)?.plateId === id
+  ) {
+    renderInspector();
+  }
 }
 
 function frameElMotion(): boolean {
@@ -255,9 +263,18 @@ export function wireStage(signal: AbortSignal): void {
     'plate-selection',
     (e) => {
       const detail = (e as CustomEvent<FieldDetail>).detail;
-      syncPlateField(detail);
-      const c = curClip();
-      if (c?.kind === 'plate' && c.plateId) syncContentToField(c.plateId, detail?.path || null);
+      // Stage → pane. beginEditOrigin('stage') so sync patches Content inputs instead of remounting
+      // when the same record is already open (and pane→stage echoes are ignored via origin 'pane').
+      beginEditOrigin('stage');
+      try {
+        syncPlateField(detail);
+        const c = curClip();
+        if (c?.kind === 'plate' && c.plateId) {
+          syncContentToField(c.plateId, detail?.path || null, detail?.source ?? null);
+        }
+      } finally {
+        endEditOrigin();
+      }
     },
     { signal },
   );
@@ -593,7 +610,10 @@ export const editorApi = {
   refresh: async (): Promise<void> => {
     await refresh();
   },
-  resetForProject,
+  resetForProject: (): void => {
+    resetForProject();
+    resetPlateContentPane();
+  },
   onEnter: (opts: { programT?: number | null } = {}): void => void onEnter(opts),
   onLeave,
   openPlate,

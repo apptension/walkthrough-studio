@@ -1,0 +1,45 @@
+---
+description: Record/capture/produce pipeline reliability and cleanup
+globs: kit/lib/**/*,kit/cli.mjs,scripts/**/*
+alwaysApply: false
+---
+
+# Recording & render pipeline
+
+## Reliability
+
+- **No hangs**: capture steps need timeouts; if an element isn’t found, fail with a clear message and next steps—not infinite wait (`networkidle` timeouts, sign-in waits, etc.).
+- **Stop must kill work**: queue stop / cancel must terminate child processes (record, produce); no stale “already running” PID locks.
+- **Script edits** must not break record (`Unexpected token` etc.)—validate or test `flow.mjs` / generated script paths after Script changes.
+- **Live preview stream**: keep fluent updates; handle 404 polling gracefully; don’t spam errors for missing transient JSON.
+
+## Quality constraints (optimization tasks)
+
+- Render pipeline optimizations: **same or higher quality**, **faster**, **no lost functionality**—document findings in issues before large changes.
+- Re-record / produce gates: respect “newer than live.mp4” and similar staleness rules; user-facing copy should say what to do next.
+
+## Narration & story
+
+- **`authoring.md`** and **`kit/lib/narrative.mjs`** are authoritative for story spines, critic rules, and plate types.
+- Narration QC: avoid repeated lines across script, flow, agent output, critic, and voice passes.
+
+## Live preview / raster
+
+- Screencast + CDP screenshot loops can **hang** (e.g. HN after click) — enforce **shot timeout**, abandon stuck CDP session, restart capture (`rasterCapture.mjs` pattern).
+- **`sign-in-wait.json` 404**: expected when no sign-in overlay — client should not treat as fatal error storm.
+
+## Agent / critic jobs
+
+- **Critic** and similar actions spawn real agent runs with skills — produce reports users can act on, not stub toasts.
+- Mid-run **stop**: offer **redo** / clear blocked UI; fix wrong brand colors on wizard when reported.
+
+## Narration & language
+
+- Viewer-facing strings **English** unless brief sets another language; keep must-say lines verbatim.
+- Video language prompts in agent sessions are **authoring constraints**, not desk UI copy changes.
+
+## Ops
+
+- Never commit **`kit/.env`**, keys, or rendered media (`tmp/`, `*.mp4`, …).
+- `./studio` is the operator entry; keep **one-command** dev story accurate in README when touching bootstrap.
+- Pipeline perf: read **`render-quality-floor.mdc`** before changing encode/plates/bake.

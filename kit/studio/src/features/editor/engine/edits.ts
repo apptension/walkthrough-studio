@@ -11,6 +11,7 @@ import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
+import { bakeStalePlateContent } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -350,7 +351,13 @@ export function setSelection(sel: Selection | null): void {
 }
 
 export function select(sel: Selection | null): void {
+  const prev = curClip();
   setSelection(sel);
+  // Leaving a plate that only had live (keystroke) copy edits: bake HTML now, not mid-type.
+  const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
+  if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
+    void bakeStalePlateContent(prev.plateId);
+  }
   renderClipsTrack();
   renderCardTracks();
   renderFxTracks();

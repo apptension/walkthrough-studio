@@ -23,7 +23,11 @@ import { zoomPreviewStyle } from '@/logic/zoomAim';
 import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
+import { contentFieldFocused } from './plateContentSave';
+import { bakeStalePlateContent } from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
+import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
+import { refitPlateCompositionDeferred } from './plate';
 import { P } from './plateCtl';
 import { onPlateGlassChange, placePlateGlass, plateGlassReady, syncPlateGlass, type GlassGeom } from './plateGlass';
 import { clipIndexAt, curClip, edToRec, rateAt, selectedLens } from './seq';
@@ -123,8 +127,9 @@ export function routeStagePointer(cardOnTop: boolean): void {
 
 /** The iframe currently shows this plate's document (even if a fresher build is pending). */
 export const plateHolds = (id: string | null | undefined): boolean => Boolean(id) && desk.get().activePlateId === id && P.ready() === id;
-// A stale frame counts as ready only while it holds unsaved copy — a forced reload would drop that.
-export const plateReady = (id: string | null | undefined): boolean => plateHolds(id) && !(ed.stalePlates.has(id || '') && !P.dirty());
+/** Held frame is paint-ready even when disk HTML is stale (Content live typing). See `plateStageReady`. */
+export const plateReady = (id: string | null | undefined): boolean =>
+  plateStageReady({ holds: plateHolds(id) });
 
 /**
  * A caption written in the Editor has a mark immediately, but its overlay HTML arrives on the
@@ -200,7 +205,22 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   try {
     if (P.dirty() && desk.get().activePlateId && desk.get().activePlateId !== id) await P.save();
     if (gen !== ed.plateReqGen) return;
-    let ok = await P.load(id, { force: force || ed.stalePlates.delete(id) });
+    // Stale = config ahead of baked HTML (Content live typing). Bake before load so a force
+    // refetch does not resurrect pre-type copy. Look/palette stale also gets a clean rebuild.
+    if (shouldBakeBeforePlateLoad({ stale: ed.stalePlates.has(id) })) {
+      await bakeStalePlateContent(id);
+      if (gen !== ed.plateReqGen) return;
+      // Still holding live paint (or bake reloaded us) — do not wipe the frame.
+      if (!force && plateReady(id)) return;
+      // Bake deferred (Content caret): keep the stale mark for the retry — never
+      // `stalePlates.delete` here or the scheduled bake becomes a no-op.
+      if (ed.stalePlates.has(id) && plateHolds(id)) return;
+    }
+    const pendingStale = ed.stalePlates.has(id);
+    const forceLoad = force || pendingStale;
+    // Keep `stalePlates` until bake succeeds — clearing here dropped the mark after a failed
+    // rebuild and the next visit loaded pre-type HTML with no retry scheduled.
+    let ok = await P.load(id, { force: forceLoad });
     if (gen !== ed.plateReqGen) return;
     // One retry — iframe onload / inline-edit arm can race the first paint.
     if (ok !== true && String(id).startsWith('overlay:') && shouldBlacklistPlateLoad(ok, { activePlateId: desk.get().activePlateId, requestedId: id })) {
@@ -233,7 +253,13 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   }
   paintLoading();
   if (gen === ed.plateReqGen) renderFrame();
-  if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id) renderInspector();
+  if (
+    !contentFieldFocused() &&
+    ed.sel?.type === 'clip' &&
+    ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === id
+  ) {
+    renderInspector();
+  }
 }
 
 export function joinStyle(c: Clip): string {
@@ -763,10 +789,16 @@ export function renderFrame(): void {
   const c = ed.seq[i]!;
   const prev = ed.seq[i - 1];
   const indexChanged = ed.cur !== i;
+  const leftClip = indexChanged ? ed.seq[ed.cur] : null;
   ed.cur = i;
   if (indexChanged) {
     ed.liveSeeked = false;
     paintFrame();
+    // Scrub/play leave a plate without select() — bake live Content edits so the next visit
+    // (and Produce) see rebuilt HTML, not only in-memory paint.
+    if (leftClip?.kind === 'plate' && leftClip.plateId && leftClip.plateId !== c.plateId) {
+      void bakeStalePlateContent(leftClip.plateId);
+    }
   }
   ed.hud = null;
   const inJoin = Boolean(ed.fx && prev && c.overlap > 0 && ed.t < c.at + c.overlap);
@@ -815,7 +847,10 @@ export function renderFrame(): void {
   );
   const plateWasHidden = plateL.hidden;
   plateL.hidden = !(showCardLayer || plateContentReady || holdSlide);
-  if (plateWasHidden && !plateL.hidden) P.fit();
+  if (plateWasHidden && !plateL.hidden) {
+    P.fit();
+    refitPlateCompositionDeferred($<HTMLIFrameElement>('plateFrame'));
+  }
   // No slide to hold (the frame had a card up): the take's last frame stands in instead of black.
   const v0 = video();
   const holdTake = Boolean(
@@ -855,6 +890,7 @@ export function renderFrame(): void {
       if (plateL.hidden) {
         plateL.hidden = false;
         P.fit();
+        refitPlateCompositionDeferred(contentFrame as HTMLIFrameElement | null);
       }
       if (contentFrame) contentFrame.style.visibility = plateContentReady ? '' : 'hidden';
       if (!ready && carry.contentMs < 350) ready = true;
@@ -965,8 +1001,9 @@ function preloadNextSurface(c: Clip, i: number): void {
   });
   if (!id || ed.missing.has(id)) return;
   const stale = ed.stalePlates.has(id);
-  // The preload fetches the current build, which settles the stale mark it was carrying.
-  if (P.preload(id, { fresh: stale }) && stale) ed.stalePlates.delete(id);
+  // Preload may bypass the back cache (`fresh`) but it only refetches the last baked HTML — it
+  // does not rebuild from config, so never clear `stalePlates` here (bake on leave / structural save).
+  P.preload(id, { fresh: stale });
 }
 
 /** What the stage is waiting on: the slide or card it needs is still loading. */

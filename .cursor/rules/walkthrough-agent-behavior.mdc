@@ -1,0 +1,50 @@
+---
+description: How to execute agent work on Walkthrough Studio (defaults from recent sessions)
+alwaysApply: true
+---
+
+# Agent behavior
+
+## Default stance
+
+- **Implement, don’t interview.** When the user says fix, polish, or ship something, make sensible product/UX choices and proceed. Ask only when blocked on irreversible scope (e.g. competitor naming in tickets) or missing secrets.
+- **Finish the thread.** “Do not stop until done”, “code only”, and release requests mean: implement → verify → fix regressions → report what was tested.
+- **English**, concise status; no engagement bait at the end.
+
+## Quality bar (user language)
+
+- **Top-notch** = production polish: spacing, motion, iconography, edge cases, coherent patterns—not one-off CSS hacks.
+- **Fix bugs you touch or discover** while doing performance or refactor work; don’t leave known breakage.
+- **Minimize diff scope**—no drive-by refactors unrelated to the request.
+- User often assigns roles explicitly — honor them: **top QA + engineer** (find root cause, refactor tangled code), **product designer + senior engineer** (UX/UI, edge cases, code only), **pipeline optimization engineer** (measure, ticket, implement without quality loss).
+
+## Disagree when warranted
+
+- User invites pushback: *“think it through, you can disagree”* — if a UI adds friction or duplicates navigation, say so briefly and propose the better path, then implement the agreed direction.
+- Prefer **best user journey** over literal request when the request was “pick the best option” or “implement best journeys.”
+
+## Secrets & environment
+
+- **`kit/.env`**: never read, print, copy into rules, or commit. Demo credentials and API keys stay local.
+- Never commit **`tmp/`**, renders, or **`*.mp4`/`*.wav`** binaries.
+
+## Parallel work / porting
+
+- Canonical desk is **`kit/studio/`** (React port of legacy `app.js`). Match **legacy DOM + `studio.css`** vocabulary; don’t introduce a second styling system (Tailwind/shadcn visuals were explicitly rejected for the port).
+- Shared engine timings and semantics are intentional — don’t “modernize” poll intervals or toast durations without a product reason.
+
+## What “done” means
+
+1. Code matches existing conventions (read surrounding files first).
+2. Relevant automated checks pass (see verification rule).
+3. For desk/editor/visual work: confirm in browser at `http://127.0.0.1:4748` (or `:4747` prod desk) on a real project slug when the change affects preview, scrub, or plates.
+4. For pipeline/recording: exercise the path the user named (record, stop, re-record, produce) and confirm processes clean up.
+
+## Brands & content
+
+- Default brand packs: **Apptension** and **Walkthrough Studio**. Do not ship **Admiral** (or other customer brands) as bundled defaults.
+- Preserve **operator-friendly** copy in README, Studio UI, and `authoring.md`.
+
+## Git
+
+- **Commit/push/merge/release only when the user asks** (see user rules). When they do, run tests first, use focused commits, and include release notes for version bumps.

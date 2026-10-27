@@ -256,6 +256,52 @@ body.studio-edit .sub[data-edit] .sep { opacity: 1 !important; animation: none !
 /* Count-up numbers sit on their final value while editing. */
 body.studio-edit [data-count] { visibility: visible !important; }
 
+/*
+  Features carousel / stack: cards share one absolute seat and fan with rotateY / translate.
+  Edit must leave the 3D ring and show every card — same idea as the testimonial flood flatten.
+*/
+body.studio-edit[data-layout='carousel'] .compose,
+body.studio-edit[data-layout='stack'] .compose {
+  perspective: none !important;
+}
+body.studio-edit[data-layout='carousel'] .cards,
+body.studio-edit[data-layout='carousel'] .cards[data-n],
+body.studio-edit[data-layout='stack'] .cards,
+body.studio-edit[data-layout='stack'] .cards[data-n] {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-auto-rows: auto !important;
+  gap: 18px !important;
+  height: auto !important;
+  max-width: 1640px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  position: relative !important;
+  transform: none !important;
+  transform-style: flat !important;
+  perspective: none !important;
+  animation: none !important;
+}
+body.studio-edit[data-layout='stack'] .cards,
+body.studio-edit[data-layout='stack'] .cards[data-n] {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+}
+body.studio-edit[data-layout='carousel'] .cards .card,
+body.studio-edit[data-layout='stack'] .cards .card {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  margin-left: 0 !important;
+  width: auto !important;
+  min-height: 260px !important;
+  transform: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  visibility: visible !important;
+  backface-visibility: visible !important;
+  animation: none !important;
+}
+
 /* Carousel / cascade: every quote visible */
 body.studio-edit .flood[data-mode="carousel"],
 body.studio-edit .flood[data-mode="cascade"] {
@@ -304,8 +350,17 @@ body.studio-edit [data-edit]:hover {
 body.studio-edit [data-edit]:focus,
 body.studio-edit [data-edit].is-focused {
   outline: 2px solid #42f272;
-  outline-offset: 3px;
+  outline-offset: 4px;
   background: rgba(66, 242, 114, 0.14);
+}
+/* Multi-line titles: one block row per line, same rhythm as the template title-line rows. */
+body.studio-edit [data-edit-kind="lines"] > .title-line,
+body.studio-edit [data-edit-kind="lines"] > div {
+  display: block;
+}
+body.studio-edit [data-edit-kind="lines"] > .title-line + .title-line,
+body.studio-edit [data-edit-kind="lines"] > div + div {
+  margin-top: 0;
 }
 body.studio-edit [data-edit].is-focused::before {
   content: attr(data-edit);
@@ -545,6 +600,50 @@ export function forceAll(doc: Document, selector: string, styles: Record<string,
 }
 
 /**
+ * Features `carousel` / `stack` park every card on one absolute seat and fan them with
+ * transform. Edit compose must not collapse those transforms to identity without also leaving
+ * the absolute stack — do both: a readable grid, every card opaque and clickable.
+ */
+export function flattenPackedFeatureCards(doc: Document, layout: string): void {
+  forceAll(doc, '.step-label, .step-note, .platform, .eyebrow, .sub, .body, .stat, .t-card, .badge', {
+    opacity: '1',
+    filter: 'none',
+    transform: 'none',
+    visibility: 'visible',
+  });
+  forceAll(doc, '.compose', { perspective: 'none' });
+  forceAll(doc, '.cards, .cards[data-n]', {
+    display: 'grid',
+    'grid-template-columns': layout === 'stack' ? 'repeat(auto-fit, minmax(260px, 1fr))' : 'repeat(3, minmax(0, 1fr))',
+    'grid-auto-rows': 'auto',
+    gap: '18px',
+    height: 'auto',
+    width: '100%',
+    'max-width': '1640px',
+    margin: '0 auto',
+    position: 'relative',
+    transform: 'none',
+    'transform-style': 'flat',
+    perspective: 'none',
+    animation: 'none',
+  });
+  forceAll(doc, '.cards .card', {
+    position: 'relative',
+    left: 'auto',
+    top: 'auto',
+    'margin-left': '0',
+    width: 'auto',
+    'min-height': '260px',
+    transform: 'none',
+    opacity: '1',
+    filter: 'none',
+    visibility: 'visible',
+    'backface-visibility': 'visible',
+    animation: 'none',
+  });
+}
+
+/**
  * Freeze every running Web Animation to exactly what's on screen right now — "edit in place
  * what he sees". Must run BEFORE `body.studio-edit` is applied: that class's blanket
  * `animation: none !important` rule (see PLATE_EDIT_CSS) stops every CSS animation the instant
@@ -660,12 +759,19 @@ export function composePlateForEdit(doc: Document | null | undefined): void {
   // 4) Scale / grow entrances that default to 0
   forceAll(doc, '.dot', { transform: 'scale(1)', opacity: '1' });
   forceAll(doc, '.track, .track-fill', { transform: 'scaleX(1)', opacity: '1' });
-  forceAll(doc, '.step-label, .step-note, .platform, .eyebrow, .sub, .body, .card, .stat, .t-card, .badge', {
-    opacity: '1',
-    filter: 'none',
-    transform: 'none',
-    visibility: 'visible',
-  });
+  // Features carousel / stack: cards share one absolute seat and only differ by transform.
+  // A blanket transform:none piles every card on the first seat — flatten to a grid instead.
+  const layout = doc.body.getAttribute('data-layout') || '';
+  if (layout === 'carousel' || layout === 'stack') {
+    flattenPackedFeatureCards(doc, layout);
+  } else {
+    forceAll(doc, '.step-label, .step-note, .platform, .eyebrow, .sub, .body, .card, .stat, .t-card, .badge', {
+      opacity: '1',
+      filter: 'none',
+      transform: 'none',
+      visibility: 'visible',
+    });
+  }
 
   // 5) Live chapter / caption overlays — parent .content/.card default opacity:0
   const isOverlay = String(doc.body.dataset['cardId'] || desk.get().activePlateId || '').startsWith('overlay:');

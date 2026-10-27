@@ -136,6 +136,22 @@ describe('stopAllWork', () => {
     expect(desk.get().jobBusy).toBe(false);
   });
 
+  it('keeps jobBusy asserted while the kill settles so a re-Render cannot race the child', async () => {
+    desk.set({ slug: 'demo', jobBusy: true, jobId: 'j9', stopRequested: false, queue: [] });
+    let busyDuringSettle = false;
+    mockedApi.mockImplementation((path: string) => {
+      if (path === '/api/jobs/j9/cancel') return Promise.resolve({ job: { id: 'j9', status: 'cancelling' } });
+      if (path === '/api/jobs/j9') {
+        busyDuringSettle = desk.get().jobBusy === true;
+        return Promise.resolve({ id: 'j9', status: 'cancelled' });
+      }
+      return Promise.resolve({});
+    });
+    await jobs.stopAllWork({ silent: true });
+    expect(busyDuringSettle).toBe(true);
+    expect(desk.get()).toMatchObject({ jobBusy: false, stopRequested: false });
+  });
+
   it('leaves the Live pane when Stop cuts off a take', async () => {
     mockedApi.mockResolvedValue({});
     const video = makeVideo({ slug: 'demo', previewUrl: '/media/demo/live-preview.jpg' });

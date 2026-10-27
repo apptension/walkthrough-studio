@@ -1,0 +1,47 @@
+---
+description: Editor, stage, and plate preview must match render output (1:1 rule)
+globs: kit/studio/src/features/editor/**/*,kit/studio/src/logic/**/*,kit/lib/shared/copyEdit.js,kit/studio/src/logic/copyEdit.ts
+alwaysApply: false
+---
+
+# Editor ↔ render parity (1:1)
+
+This is the **highest-priority** invariant from recent sessions. The user treats any visual drift as a bug.
+
+## Must match render
+
+- Plate layout, type fit, line packing, backgrounds (front/back frames), magnifier lens geometry and shader, zoom (auto + manual), caption/card timing and styling, live-card overlays, and output resolution/aspect boxes.
+- **Scrubbing** the program timeline, entering/leaving edit mode, and **returning to a previous slide** must not leave artifacts (black circles, wrong scale, stale zoom, shrunk “inner content”, wrong line-height after “Edit text”).
+
+## Implementation habits
+
+- Stage geometry comments in **`stage.ts`** / **`plate.ts`**: preview uses the same frame shape and take rect as produce.
+- Dual iframe **`#plateFrame` / `#plateFrameBack`**: respect `backReady` / cache invalidation on same-plate reload; use deferred refit when unhiding layers after scrub (`refitPlateCompositionDeferred`).
+- **Copy edit**: capture **measured** line box geometry before opening `studio-edit`; don’t rely on CSS `line-height` alone for multi-line titles (`.title-line`, `.mask.word`).
+- Magnifier UI: controls **above** clipping ancestors; tooltip **outside** the lens circle; params must **live-update** the edit preview.
+
+## Zoom / magnifier scope
+
+- **Recording segments**: lens, auto/manual zoom, and Layers edits apply to capture — preview must match produce (`stage.ts` lens marks, inset, geq).
+- **HTML plates**: animated pages — no recording camera; don’t apply recording zoom logic to plate slides.
+- **Chapter/caption cards**: baked overlays — direction look applies; distinguish from recording magnifier in UI copy.
+
+## Transitions & timing
+
+- Pointer on **chapter cut** (e.g. Intro → next): minimize flash — no double plate/live paint, no seek dip showing wrong slide.
+- **Caption visibility** in editor must follow timeline/settings duration — same wiring as render overlays.
+- Changing **output resolution / device**: letterboxing and on-stage boxes must match final render.
+
+## Related rules
+
+- Engine detail: **`plate-stage-engine.mdc`**
+- Typing/caret: **`copy-edit-content-pane.mdc`**
+- Symptom list: **`common-regressions.mdc`**
+
+## Before closing a plate/editor task
+
+1. Load plate → scrub away → scrub back → compare to first frame.
+2. Edit magnifier params while scrubbing; no ghost layers.
+3. Edit text on a multi-line title (e.g. open slide); height stable before/after edit.
+4. Edit chapter/caption copy — no white flash; fully composed frame visible.
+5. Optional: spot-check produce/preview path if timing or `--hold` overlays changed.

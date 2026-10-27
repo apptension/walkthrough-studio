@@ -7,7 +7,7 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, sho
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
 import { reloadPlate } from './lifecycle';
-import { retargetTitleReveal } from './plate';
+import { dropPreloadedPlates, retargetTitleReveal } from './plate';
 import { P } from './plateCtl';
 import { curClip } from './seq';
 import { plateReady, renderFrame } from './stage';
@@ -422,6 +422,7 @@ export async function changeLook(id: string, patch: Record<string, unknown>): Pr
     })
   ) {
     // The reload parks the new frame before it is shown. A second restart would flash it.
+    dropPreloadedPlates(id);
     await reloadPlate(id, { paint: false });
   }
   // Off stage, or the HTML itself changed while the playhead sits elsewhere: the next visit shows the rebuilt plate.
@@ -439,6 +440,9 @@ export function invalidatePlates(): Promise<void> | null {
   lookGen += 1;
   clearPlatePreviewTimers();
   const id = desk.get().activePlateId || curClip()?.plateId;
+  // Same as changeLook — drop the back buffer so a scrub-back cannot revive pre-look HTML.
+  if (id) dropPreloadedPlates(id);
+  else dropPreloadedPlates();
   if (ed.active && id) return reloadPlate(id);
   return null;
 }

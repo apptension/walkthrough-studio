@@ -1,0 +1,46 @@
+---
+description: Plate iframe, stage compositing, lens — engine invariants
+globs: kit/studio/src/features/editor/engine/plate.ts,kit/studio/src/features/editor/engine/stage.ts,kit/studio/src/features/editor/engine/plateCss.ts,kit/studio/src/features/editor/engine/lifecycle.ts,kit/studio/src/features/editor/engine/look.ts
+alwaysApply: false
+---
+
+# Plate & stage engine
+
+Read module headers in **`plate.ts`** and **`stage.ts`** before changing behavior.
+
+## Dual iframe (`#plateFrame` / `#plateFrameBack`)
+
+- Back frame **preloads** next plate; ids swap so scrub/caption changes **never blank** the visible frame.
+- **`backReady`** + **`backArmedSrc`** must match actual back `src` — otherwise same-plate scrub shows **stale HTML** (shrink/wrong zoom).
+- Preload **must not cancel** a back load the stage is waiting on (`BackLoad.shown`).
+- **`force: true`** on look/palette reload — ready-cache must not serve pre-look frames (`lifecycle.ts`).
+
+## Fit & output frame
+
+- **`fitFhdPreview`**: retry when pane is 0×0; **never crop** — whole `video.output` frame visible (`--wt-frame-w/h`).
+- **`refitPlateCompositionDeferred`**: after unhide/swap when `#fhdFit` was hidden — fixes post-scrub shrink.
+
+## Stage compositing (`stage.ts`)
+
+- **One iframe policy**: don’t steal front frame for prefetch while a **live card** is on stage.
+- **Lens/zoom on recordings only** — animated **plates** have no render camera; Layers tab should say so. **Chapter/caption cards** use card bake overlays, not recording lens.
+- Plate zoom **must not outlive** the plate slide — tuck lens layer when leaving; no **black** placeholder for transparent cards.
+- Switch of slide/lens/source is **not** a seek dip — avoid flashing previous slide pixels under loupe.
+- Cancelled preload must **not blacklist** plate (blank Opening after omit/reorder).
+
+## Copy / motion on plate
+
+- **`composePlateForEdit`** + **`pinLiveAnimationFrames`** before inline edit; peak frame from **`plateEditPeakSec`**.
+- **`invalidatePlates` / look reload**: drop preloaded plates when direction changes backgrounds.
+- Accent popover: **must not steal focus** from plate selection (`lifecycle.ts`).
+
+## Magnifier (recordings)
+
+- Lens marks on canvas (`WeakMap`); shader should read as **glass**, not flat magnified bitmap.
+- Controls/tooltip: **outside** lens circle, **above** overflow:hidden ancestors.
+
+## When editing this code
+
+1. Add or extend **unit tests** in `platePick.test.ts`, `plateCss.test.ts`, `lensScrub.test.ts`, etc.
+2. Manual: scrub across **plate → live → plate**, edit magnifier, scrub back.
+3. If changing cache keys, check **produce** still invalidates when `video.config.json` edit fields change.

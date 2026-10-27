@@ -1,0 +1,47 @@
+---
+description: Program timeline, monitor modes, render bay, and job lifecycle
+globs: kit/studio/src/features/timeline/**/*,kit/studio/src/features/monitor/**/*,kit/studio/src/features/project-panel/**/*,kit/studio/src/desk/jobs.ts,kit/studio/src/desk/monitor.ts,kit/studio/src/desk/video.ts
+alwaysApply: false
+---
+
+# Timeline, monitor & jobs
+
+## Timeline UX (repeated user requests)
+
+- Lane icons **flush left** — no extra padding on voice/zoom/warn chips.
+- **Selection highlight** on caption/chapter cards must be obvious; match other lane selection style.
+- **Shared scrubber** component across panels — same glow, size, live wiring.
+- Program timeline needs visible **scrubber** in edit mode; voice row not **stuck**/clipped when switching modes.
+- Reorder/delete clips: neighbors must not go **blank** on scrub (opening beat bug).
+- Add voice from timeline controls when user expects **new narration slice**.
+
+## Monitor modes
+
+- `program | live | plate | compare` — engine in **`monitor.ts`**; dirty-plate warning once per session when leaving editor.
+- **Live tab** should animate in when capture active (user-visible “recording now”).
+- After **stop render**: clear **Produce master** preview, hide pipeline idle/busy, don’t leave last good frame as if still running.
+- **Out of date** copy belongs in **status/stages bar** — clear CTA: Render vs Re-record first; include video icon, no weird scroll.
+
+## Render bay / empty states
+
+- “No sequence rendered” needs **clear primary action** (Render) and match styled **Render mode** bay.
+- **Opens** URL field above Re-record/Render; **project settings** cog — sleek, not generic “Change”.
+- **Stop** during render: gradient Render → red **Stop** (project button component), distinct glow.
+
+## Jobs (`jobs.ts`)
+
+- Poll **700ms**; respect **`watchJob`** cancellation.
+- **Stop / cancel-all**: kill child processes; clear `jobBusy`, LIVE card, sign-in wait polling.
+- **`sign-in-wait.json`**: 404 = no overlay — handle quietly (see `jobs.test.ts` pattern).
+- Record failure: use **`describeRecordFailure`** / Re-record CTA — actionable next step (URL timeout, server down).
+
+## Keyboard (don’t break)
+
+- **Cmd/Ctrl+S** in plate mode → save plate copy edits.
+- **Space** → play (not when `body.is-editor`).
+- **J/L** ±5s, arrows ±2s (not in plate mode).
+- **No “T”** timeline shortcut (legacy e2e was wrong).
+
+## Body classes
+
+Editor/state flags on `document.body`: `is-editor`, `is-live-card`, `is-editing-text`, `studio-edit`, `is-rendering`, `has-activity`, `tl-collapsed` — CSS depends on these; set imperatively like legacy.

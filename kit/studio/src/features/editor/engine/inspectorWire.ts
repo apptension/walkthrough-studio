@@ -32,6 +32,7 @@ import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSele
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
 import { P } from './plateCtl';
+import { beginEditOrigin, endEditOrigin } from './plateContentSave';
 import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
 import { wireSlideInspector } from './slideInspectorWire';
 import { renderFrame, requestPlate } from './stage';
@@ -284,10 +285,15 @@ export function wireInspector(): void {
   on('[data-field-src]', 'input', (el) => {
     const path = ed.plateField?.path;
     if (!path || !ed.plateField) return;
-    P.setField?.(path, el.value);
-    ed.plateField = { ...ed.plateField, source: el.value, dirty: true };
-    paintTextMode();
-    paintFieldChips();
+    beginEditOrigin('pane');
+    try {
+      P.setField?.(path, el.value);
+      ed.plateField = { ...ed.plateField, source: el.value, dirty: true };
+      paintTextMode();
+      paintFieldChips();
+    } finally {
+      queueMicrotask(() => endEditOrigin());
+    }
   });
   act('add-zoom', toolZoom);
   act('adopt', () => {

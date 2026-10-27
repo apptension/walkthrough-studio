@@ -37,7 +37,10 @@ test('normalisation keeps accent markers off the spaces', () => {
 test('html paints the accent with the field tag and keeps lines as blocks', () => {
   assert.equal(toHtml(parseSource('Plan the *week*')), 'Plan the <span class="accent">week</span>');
   assert.equal(toHtml(parseSource('fast · *simple*'), { tag: 'b', sep: true }), 'fast <span class="sep">·</span> <b>simple</b>');
-  assert.equal(toHtml(parseSource('one\n\n*two*'), { lines: true }), '<div>one</div><div><br></div><div><span class="accent">two</span></div>');
+  assert.equal(
+    toHtml(parseSource('one\n\n*two*'), { lines: true }),
+    '<div class="title-line">one</div><div class="title-line"><br></div><div class="title-line"><span class="accent">two</span></div>',
+  );
   assert.equal(toHtml(parseSource('a <b>')), 'a &lt;b&gt;', 'text is escaped');
 });
 

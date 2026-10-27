@@ -13,6 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { shortHoldWarning } from './shared/voiceHold.js';
 import { PLATE_CATALOG, PLATE_TYPE_SET } from './plateTypes.mjs';
 import { cardCopyFixes, copyContext, copyCorpus, plateCopyFixes } from './copyCase.mjs';
+import { narrationRepeats, scriptSpokenLines } from './narrationQc.mjs';
 
 /** Matches narration.mjs guidance (~2.4 spoken words per second). */
 const WORDS_PER_SEC = 2.4;
@@ -845,6 +846,13 @@ export async function buildScript(video) {
   for (const f of copyStyleFindings(video, calls)) {
     const scene = scenes.find((s) => s.key === f.key);
     if (scene) scene.issues.push({ level: 'info', message: f.message, fix: f.fix });
+  }
+
+  const spoken = scriptSpokenLines(scenes);
+  for (const f of narrationRepeats(spoken)) {
+    const line = spoken.find((l) => l.key === f.key);
+    const scene = line && scenes.find((s) => s.key === line.sceneKey);
+    if (scene) scene.issues.push({ level: f.severity === 'low' ? 'info' : 'warn', message: f.message, rule: f.rule, qc: f.severity });
   }
 
   const lint = [];

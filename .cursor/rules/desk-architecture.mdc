@@ -1,0 +1,46 @@
+---
+description: React desk layout, styling, and module boundaries
+globs: kit/studio/**/*
+alwaysApply: false
+---
+
+# Desk architecture & UI
+
+## Layout (see `kit/studio/README.md`)
+
+- **`src/features/`** — one folder per screen region; imports flow **features → desk, logic, ui, api, lib** only.
+- **`src/desk/`** — Zustand store + engine ports of legacy `app.js` (timings: 700ms job poll, 3.2s toast, 160ms busy veil).
+- **`src/logic/`** — pure, DOM-free; shared between features with tests beside.
+- **`src/api/client.ts`** — **only** place that calls `fetch` (ESLint enforced).
+
+## Styling
+
+- **`src/styles/studio.css`** is the single visual layer. Components keep **legacy tags, ids, classes** the CSS expects—no parallel design system in components.
+- New shared UI (scrubbers, inspector panels, collapsible sections) → **reusable components + variants**, not duplicated markup/CSS.
+- Icons: `<Icon />`, `<SecIcon />`, `<Zen />`; dialogs: native `<dialog showModal()>`. Toasts/status: `toast()`, `setStatus()`, `setButtonBusy()`.
+
+## UX patterns the user repeats
+
+- Panels: resizable, **collapsible** with clear dividers; agent log rail collapsible like side panels; **+ / −** with project icons and slide animation.
+- Primary actions: neon **gradient buttons** (shared component, sizes); **Stop** state on render (red/juicy glow, not star-heavy).
+- Hide debug-only chrome (verbose timing strings, redundant `[working]` labels when a loader exists).
+- Prefer **live** preview wired to store/engine—not static mocks—for scrubbers and direction fields.
+
+## Feature runtimes
+
+Editor, monitor, feedback, etc. register on **`desk/bridge.ts`** at mount; engine calls `bridges.*` like the legacy controller.
+
+## Panel layout
+
+- Sizes in CSS vars + **`localStorage`** `wt-studio-panels` — left/right/timeline heights; **`tl-collapsed`** on body.
+- Resizers: drag to min/max, **collapse** panels, reopen with animated handles — match left/right/bottom behavior.
+
+## Store & API types
+
+- **`MonitorMode`**, **`RightTab`** (feedback | inspector | motion | review | deliver), **`LeftTab`** (render | versions | media) — Deliver tab content lives under **Media** per product rename.
+- **`JobQuestion`**: `{ id, field?, prompt? }` for sign-in flows — not legacy multi-choice shape.
+- **`api()`** only — types in **`src/api/types.ts`**.
+
+## Index
+
+Full agent map: repo root **`AGENTS.md`**.

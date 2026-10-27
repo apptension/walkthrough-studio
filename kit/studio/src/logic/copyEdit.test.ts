@@ -29,7 +29,10 @@ describe('copyEdit', () => {
   test('html uses accent spans or <b>, one <div> per line, and wraps beat separators', () => {
     const chars = parseSource('A *b* <c>\n\nD · E');
     assert.equal(toHtml(chars), 'A <span class="accent">b</span> &lt;c&gt;  D · E');
-    assert.equal(toHtml(chars, { tag: 'b', lines: true, sep: true }), '<div>A <b>b</b> &lt;c&gt;</div><div><br></div><div>D <span class="sep">·</span> E</div>');
+    assert.equal(
+      toHtml(chars, { tag: 'b', lines: true, sep: true }),
+      '<div class="title-line">A <b>b</b> &lt;c&gt;</div><div class="title-line"><br></div><div class="title-line">D <span class="sep">·</span> E</div>',
+    );
   });
 
   test('a caret reads and toggles its word', () => {

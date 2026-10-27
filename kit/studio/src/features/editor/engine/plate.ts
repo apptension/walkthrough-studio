@@ -37,6 +37,7 @@ import {
   pinLiveAnimationFrames,
   plateEditPeakSec,
 } from './plateCss';
+import { contentFieldFocused } from './plateContentSave';
 import { ed } from './state';
 import { paintTextMode } from './text';
 import type { FieldDetail, PlateField } from './types';
@@ -70,8 +71,10 @@ interface BackLoad {
 }
 let backToken = 0;
 let backLoad: BackLoad | null = null;
-/** Plate armed in the back frame, ready to swap on stage. */
+/** Plate armed in the back frame, ready to swap on stage (cross-plate scrub only). */
 let backReady: string | null = null;
+/** `src` of `#plateFrameBack` when `backReady` was set — must match or the cache is stale HTML. */
+let backArmedSrc: string | null = null;
 /** `state.plateEditBound`. */
 let plateEditBound = false;
 let plateReplayTimer: ReturnType<typeof setTimeout> | null = null;
@@ -244,6 +247,7 @@ function startBackLoad(plate: HtmlPlate, shown: boolean): BackLoad {
   const frame = backEl() as HTMLIFrameElement;
   const token = (backToken += 1);
   backReady = null;
+  backArmedSrc = null;
   const armed = new Promise<PlateLoad>((resolve) => {
     frame.onload = () => {
       if (token !== backToken) return resolve('cancelled');
@@ -266,7 +270,10 @@ function startBackLoad(plate: HtmlPlate, shown: boolean): BackLoad {
     done: armed.then((r) => {
       if (token === backToken) {
         backLoad = null;
-        if (r === true) backReady = plate.id;
+        if (r === true) {
+          backReady = plate.id;
+          backArmedSrc = frame.src || null;
+        }
       }
       return r;
     }),
@@ -275,10 +282,16 @@ function startBackLoad(plate: HtmlPlate, shown: boolean): BackLoad {
   return load;
 }
 
+function backCacheHit(plate: HtmlPlate): boolean {
+  if (backReady !== plate.id || !backArmedSrc) return false;
+  const back = backEl();
+  return Boolean(back?.src && back.src === backArmedSrc);
+}
+
 async function loadViaBack(plate: HtmlPlate, force: boolean, motionAt?: number): Promise<PlateLoad> {
   const token = (plateLoadToken += 1);
   let pending: Promise<PlateLoad>;
-  if (!force && backReady === plate.id) pending = Promise.resolve(true);
+  if (!force && backCacheHit(plate)) pending = Promise.resolve(true);
   else if (!force && backLoad?.id === plate.id) {
     backLoad.shown = true;
     pending = backLoad.done;
@@ -318,18 +331,27 @@ function swapPlateFrames(plateId: string): void {
   front.tabIndex = -1;
   front.title = '';
   runtime.plateFrame = back;
-  // The document that just left stays armed off-stage: scrubbing back across the cut swaps it in again.
-  backReady = keepLeaving ? leaving : null;
+  // Only cross-plate cuts cache the outgoing doc for a fast scrub back. A same-plate reload (look,
+  // background, layout) swaps new HTML on — the frame that just left is an old build and must not
+  // sit in `backReady` or the next load will swap it back onto stage.
+  const cached = front;
+  if (keepLeaving && leaving && leaving !== plateId) {
+    backReady = leaving;
+    backArmedSrc = cached.src || null;
+  } else {
+    backReady = null;
+    backArmedSrc = null;
+  }
   backToken += 1;
   backLoad = null;
   desk.set({ activePlateId: plateId, previewingPlate: back.src, plateDirty: false });
   plateFrameReady = plateId;
   plateEditBound = true;
   updatePlateEditChrome();
-  // No refit here: the page fitted itself once it was loaded and had a frame (typeFit waits for
-  // both), and that fit rides through the motion clone as inline style. Refitting now measures the
-  // freshly cloned stage before its images decode — that is what shrank or grew a slide on swap.
+  // Refit synchronously here still races image decode; a deferred pass once the slot is sized is
+  // what realigns with the encoder after a swap from the back buffer or a hidden `#fhdFit`.
   fitFhdPreview();
+  refitPlateCompositionDeferred(back);
   if (String(plateId).startsWith('overlay:')) plateSetLiveComposite(true);
 }
 
@@ -340,9 +362,9 @@ function swapPlateFrames(plateId: string): void {
 export function preloadPlateFrame(plateId: string | null | undefined, { fresh = false }: { fresh?: boolean } = {}): boolean {
   if (!plateId || !frameEl() || !backEl() || backLoad?.shown) return false;
   if (plateFrameReady === plateId && desk.get().activePlateId === plateId) return false;
-  if (backLoad?.id === plateId || (backReady === plateId && !fresh)) return false;
   const plate = findPlate(plateId);
   if (!plate?.htmlUrl) return false;
+  if (backLoad?.id === plateId || (backCacheHit(plate) && !fresh)) return false;
   startBackLoad(plate, false);
   return true;
 }
@@ -351,6 +373,7 @@ export function preloadPlateFrame(plateId: string | null | undefined, { fresh = 
 export function dropPreloadedPlates(id?: string): void {
   if (id && backReady !== id && backLoad?.id !== id) return;
   backReady = null;
+  backArmedSrc = null;
   if (backLoad && !backLoad.shown) {
     backToken += 1;
     backLoad = null;
@@ -381,6 +404,35 @@ export function refitPlateComposition(frame: HTMLIFrameElement | null = frameEl(
   } catch {
     /* same-origin plates only */
   }
+}
+
+/** True when the iframe has the delivery frame size (not collapsed inside a hidden `#fhdFit`). */
+function plateFrameSized(frame: HTMLIFrameElement | null): boolean {
+  if (!frame) return false;
+  try {
+    return frame.clientWidth >= 32 && frame.clientHeight >= 32;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Refit once the stage slot is measurable. While the take is on screen `#fhdFit` is `hidden`, so
+ * its iframes are 0×0: `__fitType` defers or the composition fit floors at 0.6. Swapping that
+ * document back without a fresh measure is the slide that looks zoomed out after scrubbing.
+ */
+export function refitPlateCompositionDeferred(frame: HTMLIFrameElement | null = frameEl(), attempt = 0): void {
+  if (!frame) return;
+  requestAnimationFrame(() => {
+    if (!plateFrameSized(frame)) {
+      if (attempt < 45) refitPlateCompositionDeferred(frame, attempt + 1);
+      return;
+    }
+    refitPlateComposition(frame);
+    requestAnimationFrame(() => {
+      if (plateFrameSized(frame)) refitPlateComposition(frame);
+    });
+  });
 }
 
 /** Refit once the author stops typing, so sizes never move under the caret mid-word. */
@@ -483,6 +535,7 @@ function enterPlateMotion(frame: HTMLIFrameElement | null): boolean {
   const editStyle = doc.getElementById('studio-edit-style') as HTMLStyleElement | null;
   if (editStyle) editStyle.disabled = true;
   doc.querySelectorAll<HTMLElement>('[data-edit]').forEach((el) => {
+    clearLineLayout(el);
     el.removeAttribute('contenteditable');
     el.classList.remove('is-focused');
     if (el.dataset['edit']) el.title = `Click to edit “${el.dataset['edit']}”`;
@@ -623,16 +676,111 @@ function learnField(el: HTMLElement): void {
 }
 
 /**
- * Canonical edit markup: the field's own CSS on plain nodes — one <div> per title line, accents
- * as the tag the template paints them with (`data-edit-accent`), beats keeping their `·` colour.
- * What the user sees is what the plate renders after Save, gradient included.
+ * Visual packing for multi-line titles. Templates tighten lines with `.mask.word` negative
+ * margins — CSS `line-height` alone does not match what you see. Capture box geometry while the
+ * reveal markup is still in the DOM (before `studio-edit` opens the masks), then replay it on
+ * the plain edit rows.
+ */
+interface LineLayout {
+  fieldH: number;
+  fontSize: string;
+  letterSpacing: string;
+  rows: { height: number; gapAfter: number }[];
+}
+
+const lineLayouts = new WeakMap<HTMLElement, LineLayout>();
+
+function titleLineNodes(el: HTMLElement): HTMLElement[] {
+  const nested = [...el.querySelectorAll<HTMLElement>(':scope > .title-line, :scope > .line-exit.title-line, :scope > .line-wipe, :scope > .title-cascade')];
+  if (nested.length) return nested;
+  return [...el.querySelectorAll<HTMLElement>('.title-line, .line-exit.title-line')];
+}
+
+function captureLineLayout(el: HTMLElement): LineLayout | null {
+  if (fieldKind(el) !== 'lines') return null;
+  const view = el.ownerDocument.defaultView;
+  if (!view) return null;
+  const cs = view.getComputedStyle(el);
+  // Use layout boxes (offset*), not getBoundingClientRect — the stage scales the iframe, so
+  // client rects are outer CSS pixels and would shrink the title when written back as iframe px.
+  const nodes = titleLineNodes(el);
+  if (!nodes.length) {
+    const layout = { fieldH: el.offsetHeight, fontSize: cs.fontSize, letterSpacing: cs.letterSpacing, rows: [] };
+    lineLayouts.set(el, layout);
+    return layout;
+  }
+  const rows = nodes.map((n, i) => {
+    const next = nodes[i + 1];
+    return {
+      height: Math.max(1, Math.round(n.offsetHeight)),
+      gapAfter: next ? Math.round(next.offsetTop - (n.offsetTop + n.offsetHeight)) : 0,
+    };
+  });
+  const layout = {
+    fieldH: Math.round(el.offsetHeight),
+    fontSize: cs.fontSize,
+    letterSpacing: cs.letterSpacing,
+    rows,
+  };
+  lineLayouts.set(el, layout);
+  return layout;
+}
+
+function applyLineLayout(el: HTMLElement): void {
+  const layout = lineLayouts.get(el);
+  if (!layout) return;
+  // Do not write font-size: type-fit already pinned it on the field and clearing it on exit
+  // would undo the fit. Packing is height + gap only.
+  if (layout.fieldH > 0) el.style.minHeight = `${layout.fieldH}px`;
+  const rows = el.querySelectorAll<HTMLElement>(':scope > .title-line, :scope > div');
+  rows.forEach((row, i) => {
+    const m = layout.rows[i] ?? layout.rows[layout.rows.length - 1];
+    if (!m) return;
+    row.style.display = 'block';
+    row.style.boxSizing = 'border-box';
+    row.style.height = `${m.height}px`;
+    row.style.lineHeight = `${m.height}px`;
+    row.style.margin = '0';
+    row.style.padding = '0';
+    if (i < rows.length - 1) row.style.marginBottom = `${m.gapAfter}px`;
+  });
+}
+
+/** Drop packing pins so motion / a rebuild can own the field again. */
+function clearLineLayout(el: HTMLElement): void {
+  lineLayouts.delete(el);
+  el.style.minHeight = '';
+  el.querySelectorAll<HTMLElement>(':scope > .title-line, :scope > div').forEach((row) => {
+    row.style.removeProperty('display');
+    row.style.removeProperty('box-sizing');
+    row.style.removeProperty('height');
+    row.style.removeProperty('line-height');
+    row.style.removeProperty('margin');
+    row.style.removeProperty('padding');
+    row.style.removeProperty('margin-bottom');
+  });
+}
+
+/** Snapshot every lines-field's on-screen packing before edit CSS opens the reveal masks. */
+function captureAllLineLayouts(doc: Document): void {
+  doc.querySelectorAll<HTMLElement>('[data-edit][data-edit-kind="lines"]').forEach((el) => captureLineLayout(el));
+}
+
+/**
+ * Canonical edit markup: the field's own CSS on plain nodes — one `.title-line` row per title line,
+ * accents as the tag the template paints them with (`data-edit-accent`), beats keeping their `·`
+ * colour. What the user sees is what the plate renders after Save, gradient included.
  */
 function renderFieldChars(el: HTMLElement, chars: CopyChar[]): void {
+  const lines = fieldKind(el) === 'lines';
+  // Prefer a layout captured before studio-edit; fall back to measuring whatever is still in the DOM.
+  if (lines && !lineLayouts.has(el)) captureLineLayout(el);
   el.innerHTML = toHtml(chars, {
     tag: el.dataset['editAccent'] === 'b' ? 'b' : 'span',
-    lines: fieldKind(el) === 'lines',
+    lines,
     sep: el.dataset['editBeats'] === '1',
   });
+  if (lines) applyLineLayout(el);
 }
 const renderField = (el: HTMLElement, source: string) => renderFieldChars(el, parseSource(source));
 
@@ -689,6 +837,9 @@ export function plateSelectionDetail(): FieldDetail {
 }
 
 function notifyPlateSelection(): void {
+  // Iframe selectionchange after painting the stage must not bounce into the inspector while
+  // the author types in Plate copy, Content, or Layout fields (Recording chapter titles, etc.).
+  if (contentFieldFocused()) return;
   window.dispatchEvent(new CustomEvent('plate-selection', { detail: plateSelectionDetail() }));
 }
 
@@ -722,6 +873,71 @@ function ensureStageRenderCss(doc: Document | null | undefined): void {
   doc.head.appendChild(el);
 }
 
+/**
+ * Carousel / stack cards overlap in projected space. Among AABB hits, prefer the card whose
+ * center is closest to the pointer — `event.target` often belongs to a card painted behind.
+ */
+function pickClosestOverlappingCard(
+  cards: HTMLElement[],
+  clientX: number,
+  clientY: number,
+): HTMLElement | null {
+  if (!cards.length) return null;
+  const hits = cards.filter((card) => {
+    const r = card.getBoundingClientRect();
+    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+  });
+  if (!hits.length) return null;
+  hits.sort((a, b) => {
+    const ra = a.getBoundingClientRect();
+    const rb = b.getBoundingClientRect();
+    const da = (ra.left + ra.width / 2 - clientX) ** 2 + (ra.top + ra.height / 2 - clientY) ** 2;
+    const db = (rb.left + rb.width / 2 - clientX) ** 2 + (rb.top + rb.height / 2 - clientY) ** 2;
+    return da - db;
+  });
+  return hits[0] || null;
+}
+
+function overlapPickLayout(doc: Document): boolean {
+  const layout = doc.body.getAttribute('data-layout') || '';
+  return layout === 'carousel' || layout === 'stack';
+}
+
+/** Same overlap rule as `pickPlateEditPath`, for `[data-slot]` tiles (icon / empty chrome). */
+export function pickPlateSlotEl(
+  doc: Document,
+  clientX: number,
+  clientY: number,
+  fallback: Element | null | undefined,
+): HTMLElement | null {
+  const fromFallback = () => fallback?.closest?.<HTMLElement>('[data-slot]') || null;
+  if (!overlapPickLayout(doc)) return fromFallback();
+  const card = pickClosestOverlappingCard([...doc.querySelectorAll<HTMLElement>('.cards .card[data-slot]')], clientX, clientY);
+  return card || fromFallback();
+}
+
+/**
+ * Features carousel / stack: pick the card under the pointer (closest center among overlaps),
+ * then the field under the point inside that card.
+ */
+export function pickPlateEditPath(
+  doc: Document,
+  clientX: number,
+  clientY: number,
+  fallback: Element | null | undefined,
+): string | null {
+  const fromFallback = () => fallback?.closest?.<HTMLElement>('[data-edit]')?.dataset?.['edit'] || null;
+  if (!overlapPickLayout(doc)) return fromFallback();
+  const card = pickClosestOverlappingCard([...doc.querySelectorAll<HTMLElement>('.cards .card')], clientX, clientY);
+  if (!card) return fromFallback();
+  const fields = [...card.querySelectorAll<HTMLElement>('[data-edit]')];
+  const fieldHit = fields.find((el) => {
+    const r = el.getBoundingClientRect();
+    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+  });
+  return (fieldHit || fields[0])?.dataset?.['edit'] || fromFallback();
+}
+
 /** Motion → text: a click on any `[data-edit]` asks the parent Studio to enter edit mode on that field. */
 function bindPlateCanvasPick(doc: Document | null | undefined): void {
   if (!doc?.body || doc.body.dataset['canvasPick'] === '1') return;
@@ -732,11 +948,10 @@ function bindPlateCanvasPick(doc: Document | null | undefined): void {
       if (doc.body.classList.contains('studio-edit')) return;
       if (doc.body.dataset['motion'] !== '1') return;
       const target = e.target as Element | null;
-      const el = target?.closest?.<HTMLElement>('[data-edit]');
-      const path = el?.dataset?.['edit'];
+      const path = pickPlateEditPath(doc, e.clientX, e.clientY, target);
       // Not on a word: a tile or an image slot opens its content record in the Inspector.
       if (!path) {
-        const slotEl = target?.closest?.<HTMLElement>('[data-slot]');
+        const slotEl = pickPlateSlotEl(doc, e.clientX, e.clientY, target);
         const slot = slotEl?.dataset?.['slot'];
         if (!slot) return;
         e.preventDefault();
@@ -859,7 +1074,7 @@ export function focusPlateField(path: string | null | undefined): boolean {
   if (!el) return false;
   doc.querySelectorAll('[data-edit].is-focused').forEach((n) => n.classList.remove('is-focused'));
   el.classList.add('is-focused');
-  el.focus({ preventScroll: false });
+  el.focus({ preventScroll: true });
   try {
     const range = doc.createRange();
     range.selectNodeContents(el);
@@ -905,20 +1120,51 @@ export function setPlateFieldSource(path: string, source: string | null | undefi
  * The Content pane used to reload the whole iframe after every typed field — a cache-busting
  * document load per keystroke pause, which is where the stage went clunky. The saved value is
  * the same copy the rebuild will bake, so writing it into the field is both faster and what the
- * author is waiting to see. Returns false when the plate cannot show it (no such field, or the
- * title still wears a previous reveal's markup), and the caller falls back to a reload.
+ * author is waiting to see. Returns false only when no field is on stage; reveal shells are
+ * replaced in place (same as `retargetTitleReveal`) so live typing never depends on a reload of
+ * still-unbaked HTML.
  */
-export function paintPlateFieldValue(path: string, source: string | number | null | undefined): boolean {
+export function paintPlateFieldValue(
+  path: string,
+  source: string | number | null | undefined,
+  plateId?: string | null,
+): boolean {
   const doc = plateFrameDoc();
   if (!doc?.body || !path) return false;
+  // Never paint another plate's words onto the frame currently on stage.
+  if (plateId && plateFrameReady && plateFrameReady !== plateId) return false;
   const el = fieldByPath(doc, path);
   if (!el) return false;
-  // A baked reveal (cascade letters, wiped lines) is markup only the builder can reproduce.
-  if (el.matches('.title[data-reveal]') && el.querySelector(REVEAL_SHELLS)) return false;
+  // Cascade / wipe / rise shells block plain edit rows — replace them; bake-on-leave restores
+  // builder markup. Clear host reveal props so a pinned opacity/clip does not hide the new copy.
+  if (el.matches('.title[data-reveal]') && el.querySelector(REVEAL_SHELLS)) {
+    for (const prop of REVEAL_HOST_PROPS) el.style.removeProperty(prop);
+  }
   learnField(el);
   renderField(el, source == null ? '' : String(source));
   el.dataset['editArmed'] = '1';
+  // Content live paint — not stage dirty (config already saved). Mark so motion restore keeps
+  // this source instead of snapping back to reveal-shell originals.
+  el.dataset['editLive'] = '1';
   delete el.dataset['dirty'];
+  refitSoon(doc);
+  return true;
+}
+
+/** Live paint for draggable callout pins — same `--x` / `--y` as canvas drag, no HTML rebuild. */
+export function paintSlotPosition(
+  slot: string,
+  at: { x: number; y: number },
+  plateId?: string | null,
+): boolean {
+  const doc = plateFrameDoc();
+  if (!doc?.body || !slot) return false;
+  if (plateId && plateFrameReady && plateFrameReady !== plateId) return false;
+  const el = doc.querySelector<HTMLElement>(`[data-slot="${CSS.escape(slot)}"]`);
+  if (!el) return false;
+  el.style.setProperty('--x', `${at.x}%`);
+  el.style.setProperty('--y', `${at.y}%`);
+  el.classList.toggle('flip', at.x > 62);
   refitSoon(doc);
   return true;
 }
@@ -1111,11 +1357,12 @@ function restorePlateEdits(doc: Document, snapshot: FieldSnapshot[] | null | und
     const s = byPath[path];
     if (!s) return;
     learnField(el);
-    if (motion && !s.dirty) {
+    if (motion && !s.dirty && el.dataset['editLive'] !== '1') {
       const orig = originals?.get(path);
       if (orig != null) el.innerHTML = orig;
       delete el.dataset['editArmed'];
       delete el.dataset['dirty'];
+      delete el.dataset['editLive'];
       return;
     }
     renderField(el, s.source);
@@ -1179,6 +1426,9 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
   // That class's blanket `animation: none !important` rule stops every CSS animation the instant
   // it's applied, so anything done after it can no longer see (or recover) the live frame.
   const peakSec = plateEditPeakSec(doc);
+  // Measure title-line packing on the frame the author sees — before pin / studio-edit open the
+  // reveal masks (those steps grow the boxes a few pixels and were the residual jump).
+  captureAllLineLayouts(doc);
   pinLiveAnimationFrames(doc);
 
   // Always refresh edit CSS (module may have updated since the iframe first loaded)
@@ -1198,6 +1448,9 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
     doc.body.dataset['composite'] = '1';
   }
 
+  // Freeze the motion frame while fields still carry reveal markup — then flatten copy once.
+  composePlateForEdit(doc);
+
   bindPlateEditDelegation(doc);
   bindPlateCanvasPick(doc);
   armPlateEditables(doc);
@@ -1205,15 +1458,11 @@ export function enablePlateInlineEdit(frame: HTMLIFrameElement | null, { attempt
     if (el.dataset['edit']) el.removeAttribute('title');
   });
   if (snapshot) restorePlateEdits(doc, snapshot);
-
-  // Composed static frame — after copy restore, so mask/rise HTML is finished open
   composePlateForEdit(doc);
-  requestAnimationFrame(() => {
-    if (snapshot) restorePlateEdits(doc, snapshot);
-    composePlateForEdit(doc);
-    if (bind) plateEditBound = true;
-    onReady?.();
-  });
+  // Re-apply packing after compose (it can touch overflow on ancestors).
+  doc.querySelectorAll<HTMLElement>('[data-edit][data-edit-kind="lines"]').forEach((el) => applyLineLayout(el));
+  if (bind) plateEditBound = true;
+  requestAnimationFrame(() => onReady?.());
 }
 
 const plateLabel = (): string => {
@@ -1748,6 +1997,7 @@ export function resetPlateForTests(): void {
   backToken = 0;
   backLoad = null;
   backReady = null;
+  backArmedSrc = null;
   if (plateReplayTimer) clearTimeout(plateReplayTimer);
   plateReplayTimer = null;
   disposeFhdFitObserver();

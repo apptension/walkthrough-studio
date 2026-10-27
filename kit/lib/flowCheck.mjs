@@ -1,8 +1,9 @@
 /**
  * Draft gate: proves flow.mjs, narration.mjs and video.config.json can be recorded before a draft
  * job reports done. Syntax + import, config shape, a static lint of the ctx API (read from the
- * real ctx in record.mjs, so it cannot drift), title/narration balance and selectors against the
- * product map. Errors send the agent back for a bounded repair; warnings ride along.
+ * real ctx in record.mjs, so it cannot drift), title/narration balance, narration that repeats
+ * itself (narrationQc.mjs) and selectors against the product map. Errors send the agent back for a
+ * bounded repair; warnings ride along.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -621,6 +622,10 @@ export async function checkFlow(video, { baseline = null, corpus } = {}) {
       const script = await buildScript({ ...video, config });
       for (const l of script.lint) {
         if (l.key === 'flow') continue;
+        if (l.qc) {
+          if (l.qc !== 'low') issues.push({ level: l.qc === 'high' ? 'error' : 'warn', rule: 'narration-repeat', file: 'narration.mjs', line: null, message: `${l.key}: ${l.message}` });
+          continue;
+        }
         const narrationKey = /^Narration "/.test(l.message) || (/^No narration/.test(l.message) && /^chapter:/.test(l.key || ''));
         if (l.level !== 'error' && !narrationKey) continue;
         const message = narrationKey && /^No narration/.test(l.message) ? 'has no narration.mjs line with this exact key' : l.message;
@@ -680,11 +685,11 @@ export function flowRepairPrompt({ video, result, round, max, skillPath, kitDir 
   const narration = join(video.dir, 'narration.mjs');
   const config = join(video.dir, 'video.config.json');
   const analysis = join(video.dir, 'flow-analysis.md');
-  return `DRAFT CHECK FAILED for "${video.slug}" (repair ${round}/${max}). The script you just wrote would not record. Fix exactly these problems, then stop:
+  return `DRAFT CHECK FAILED for "${video.slug}" (repair ${round}/${max}). The script you just wrote would not record, or its narration repeats itself. Fix exactly these problems, then stop:
 ${formatFlowCheck(result)}
 
 Read ${flow}, ${narration}, ${config}${existsSync(analysis) ? ` and ${analysis}` : ''}; ${skillPath}/authoring.md has the flow rules.
-Make the smallest change that clears every ✗ (⚠ lines are worth fixing when it is cheap). Keep the journey, titles and copy unless a ✗ is about them; when a chapter()/say() title changes, rename its narration.mjs key and any interstitials[].before to match. Do not change record.viewport, record.device or output.format. Do not record or render.
+Make the smallest change that clears every ✗ (⚠ lines are worth fixing when it is cheap). A repeated narration line or phrase is fixed by rewriting one of the lines in narration.mjs to make a new point — never by deleting the line or its key. Keep the journey, titles and copy unless a ✗ is about them; when a chapter()/say() title changes, rename its narration.mjs key and any interstitials[].before to match. Do not change record.viewport, record.device or output.format. Do not record or render.
 
 ${flowContractBlock({ kitDir, slug: video.slug })}`;
 }

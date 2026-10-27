@@ -1,7 +1,7 @@
 import { capturePlayheadAnchor, restorePlayheadAnchor } from '@/logic/plateSync';
 
 import { deckEdit, ed } from './state';
-import type { Clip, Lens, ZoomShot } from './types';
+import type { Clip, Deck, DeckScene, Join, Lens, ZoomShot } from './types';
 import { clamp, clockFromPieces, keptSpans } from './util';
 import { placeVoice, voiceSlots } from '@/logic/voicePlace';
 
@@ -14,6 +14,21 @@ export function chapterTitle(from: number, to: number): string | null {
 
 type ClipDraft = Omit<Clip, 'i' | 'at' | 'overlap' | 'join'>;
 
+/** Scenes that buildSeq lays out — clip `i` indexes this list, not raw deck.scenes. */
+export function timelineScenes(deck: Deck | null | undefined): DeckScene[] {
+  return (deck?.scenes || []).filter((s) => s.kind === 'plate' || Number(s.dur) > 0);
+}
+
+/** Join before scene `segIdx` in the server scene list (`joins[segIdx - 1]`). */
+export function joinBeforeScene(deck: Deck | null | undefined, segIdx: number): Join | null {
+  if (segIdx <= 0) return null;
+  return (deck?.joins || [])[segIdx - 1] ?? null;
+}
+
+export function sceneSegmentIndex(scene: DeckScene, fallback: number): number {
+  return Number.isFinite(scene.index) ? scene.index! : fallback;
+}
+
 export function buildSeq(): void {
   const anchor = capturePlayheadAnchor(ed.seq, ed.t);
   const prevT = ed.t;
@@ -21,15 +36,21 @@ export function buildSeq(): void {
   ed.clock = clockFromPieces(d?.live?.pieces || []);
   const { toClean } = ed.clock;
   const seq: Clip[] = [];
-  const scenes = (d?.scenes || []).filter((s) => s.dur > 0);
+  // Keep plates even when edit-plan still says dur 0 (added slide, partial render). Live slices
+  // with no length are still dropped — they are not scrubbable.
+  const scenes = timelineScenes(d);
   const liveOk = Boolean(d?.live?.exists);
   if (scenes.length) {
     scenes.forEach((s, i) => {
       const isLive = s.kind === 'live';
-      const join = i ? (d?.joins || [])[i - 1] || null : null;
+      const join = joinBeforeScene(d, sceneSegmentIndex(s, i));
       const recFrom = isLive ? (s.recFrom ?? s.cleanFrom ?? 0) : null;
       const recTo = isLive ? (s.recTo ?? s.cleanTo ?? (recFrom ?? 0) + s.dur) : null;
-      const dur = isLive && liveOk ? Math.max(0.2, toClean(recTo ?? 0) - toClean(recFrom ?? 0)) : s.dur;
+      // Plates must not land at dur 0 — a new slide before its MP4 length is known used to
+      // collapse to zero in edit-plan and the scrubber would skip through it in one frame.
+      const dur = isLive && liveOk
+        ? Math.max(0.2, toClean(recTo ?? 0) - toClean(recFrom ?? 0))
+        : Math.max(isLive ? 0.2 : 0.5, Number(s.dur) || 0);
       const prev = seq[i - 1];
       const want = !i || s.hardCut ? 0 : (join?.pinned?.duration ?? s.transitionIn?.dur ?? 0);
       const overlap = prev ? clamp(want, 0, Math.min(prev.dur, dur) / 2) : 0;

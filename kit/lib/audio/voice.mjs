@@ -26,6 +26,7 @@ import { resolveVideoLanguage } from '../languages.mjs';
 import { audioMode, ensureDir, synthesize } from './elevenlabs.mjs';
 import { normalizeTo } from './mix.mjs';
 import { normalizeAudio, voiceLineSpec, voiceShape } from './desk.mjs';
+import { narrationRepeats } from '../narrationQc.mjs';
 // Window and spacing rules live with the Editor's projection so both lay lines out the same way.
 import { INTRO_WINDOW, OUTRO_WINDOW, PLATE_TAIL, VOICE_GAP as GAP, VOICE_LEAD as LEAD, slotRoom, slotStart } from '../shared/voicePlace.js';
 // TTS clips carry ~0.3 s of silence at each end; keep 40 ms of attack and 120 ms of tail so words aren't clipped
@@ -220,6 +221,19 @@ export async function narrationDurations(video) {
   return { durations, lead: LEAD, gap: GAP, stats };
 }
 
+/** Repeats across the lines in the order the cut plays them (desk rewrites included); low-severity ones are dropped. */
+export function spokenRepeats(slots, edits = new Map()) {
+  const lines = slots.map((s) => ({
+    key: s.key,
+    kind: s.kind === 'interstitial' ? 'plate' : s.kind,
+    text: voiceLineSpec(s.line, edits.get(s.key) || {}).text || '',
+    title: s.title || (s.kind === 'caption' || s.kind === 'chapter' ? s.key : ''),
+  }));
+  return narrationRepeats(lines)
+    .filter((f) => f.severity !== 'low')
+    .map((f) => `"${f.key}": ${f.message}`);
+}
+
 export async function buildVoice(video, { force = false } = {}) {
   const narration = await loadNarration(video);
   if (!narration) {
@@ -266,6 +280,7 @@ export async function buildVoice(video, { force = false } = {}) {
         slots.push({
           key: seg.id,
           kind: 'interstitial',
+          title: seg.title,
           line: asLine(raw),
           markAt: seg.at + inDur / 2,
           windowStart: seg.at + inDur / 2 + LEAD.interstitial,
@@ -312,10 +327,14 @@ export async function buildVoice(video, { force = false } = {}) {
     ...Object.keys(plateLines).filter((k) => !used.has(k)),
   ];
   const warnings = unused.map((k) => `line "${k}" matches no caption, chapter, or interstitial plate in this take`);
+  const edits = voiceEditsOf(video);
+  for (const msg of spokenRepeats(slots, edits)) {
+    warnings.push(msg);
+    console.log(`⚠ narration repeats · ${msg}`);
+  }
 
   const clips = [];
   const stats = { synthesized: 0, reused: 0, chars: 0 };
-  const edits = voiceEditsOf(video);
   let prevEnd = 0;
   for (const slot of slots) {
     // The desk may have rewritten the line, changed its delivery speed or picked another take.

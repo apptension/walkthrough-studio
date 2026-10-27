@@ -98,6 +98,7 @@ export const PRINCIPLES = [
   'Second person and present tense: "you see who is free", not "users are able to view availability".',
   'Concrete beats clever: real nouns from the UI, real numbers from the brief, no category adjectives.',
   'One idea per line; ≤28 spoken words; on-screen titles ≤5 words, bodies ≤12.',
+  'Every line moves forward: no two lines make the same point, and no phrase of three or more words is said twice. A caption that leads into a chapter and the chapter itself play seconds apart — give them different jobs (the step, then why the section matters). Read the whole script top to bottom before you finish.',
   'Proof before the ask; one call to action; three takeaways, numbered.',
   'The close echoes the open: the problem named at the start is answered in the last line.',
 ];
