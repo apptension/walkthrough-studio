@@ -14,7 +14,17 @@ import { postDeck, redo, refresh, resetForProject, undo, validateSelection } fro
 import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
-import { flushAllContentPending, hoverContentSlot, kickContentPending, moveContentSlot, openContentSlot, resetPlateContentPane, settlePlateContent, syncContentToField } from './plateContentPane';
+import {
+  contentSaveIdle,
+  flushAllContentPending,
+  hoverContentSlot,
+  kickContentPending,
+  moveContentSlot,
+  openContentSlot,
+  resetPlateContentPane,
+  settlePlateContent,
+  syncContentToField,
+} from './plateContentPane';
 import { beginEditOrigin, contentFieldFocused, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
@@ -627,7 +637,10 @@ export const editorApi = {
     resetForProject();
     resetPlateContentPane();
   },
-  flushPendingContent: (): Promise<void> => flushAllContentPending(),
+  flushPendingContent: async (): Promise<void> => {
+    await flushAllContentPending();
+    await contentSaveIdle();
+  },
   onEnter: (opts: { programT?: number | null } = {}): void => void onEnter(opts),
   onLeave,
   openPlate,

@@ -152,6 +152,16 @@ export function plateContentSettleTarget(
   return prevPlateId !== nextClipPlateId ? prevPlateId : null;
 }
 
+/** Drop in-flight Content responses after a sequence switch or project reset. */
+export function isContentSaveResponseValid(
+  wantSlug: string,
+  wantEpoch: number,
+  slugNow: string,
+  epochNow: number,
+): boolean {
+  return wantSlug === slugNow && wantEpoch === epochNow;
+}
+
 export function shouldHoldInspectorForContentFocus({
   focused,
   prevKey,

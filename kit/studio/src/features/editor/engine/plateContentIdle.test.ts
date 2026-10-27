@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { contentSaveIdle, hasContentPending, kickContentPending, resetPlateContentPane } from './plateContentPane';
+import {
+  contentSaveIdle,
+  contentSaveProjectEpoch,
+  hasContentPending,
+  kickContentPending,
+  resetPlateContentPane,
+} from './plateContentPane';
 
 describe('content save queue (idle)', () => {
   it('starts empty after resetPlateContentPane', () => {
@@ -17,5 +23,12 @@ describe('content save queue (idle)', () => {
     resetPlateContentPane();
     kickContentPending();
     expect(hasContentPending()).toBe(false);
+  });
+
+  it('resetPlateContentPane bumps project epoch for stale POST guards', () => {
+    resetPlateContentPane();
+    const before = contentSaveProjectEpoch();
+    resetPlateContentPane();
+    expect(contentSaveProjectEpoch()).toBe(before + 1);
   });
 });

@@ -12,6 +12,7 @@ import {
   paintInspectorUnlessContentTyping,
   plateContentSettleTarget,
   shouldHoldInspectorForContentFocus,
+  isContentSaveResponseValid,
 } from './plateContentSave';
 
 describe('planContentSave', () => {
@@ -117,6 +118,18 @@ describe('paintInspectorUnlessContentTyping', () => {
       painted += 1;
     });
     expect(painted).toBe(1);
+  });
+});
+
+describe('isContentSaveResponseValid', () => {
+  it('accepts matching slug and epoch', () => {
+    expect(isContentSaveResponseValid('demo', 2, 'demo', 2)).toBe(true);
+  });
+
+  it('rejects slug or epoch drift (sequence switch / reset)', () => {
+    expect(isContentSaveResponseValid('demo', 2, 'other', 2)).toBe(false);
+    expect(isContentSaveResponseValid('demo', 2, 'demo', 3)).toBe(false);
+    expect(isContentSaveResponseValid('demo', 2, 'other', 3)).toBe(false);
   });
 });
 

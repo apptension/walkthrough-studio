@@ -19,6 +19,7 @@ import {
   planBakeStaleContent,
   planContentFieldSync,
   planContentSave,
+  isContentSaveResponseValid,
 } from './plateContentSave';
 import { curClip } from './seq';
 import { ed, setHtmlPlates, slug } from './state';
@@ -101,6 +102,8 @@ let shelfFor: string | null = null;
 let iconFor: string | null = null;
 let hoverSlot: string | null = null;
 let saveGen = 0;
+/** Bumped on `resetPlateContentPane` so late Content POSTs cannot repopulate cache on the next video. */
+let contentProjectEpoch = 0;
 /** Debounced Content keystrokes — keyed by plate+path so two plates never cancel each other. */
 type PendingCopy = {
   id: string;
@@ -193,10 +196,14 @@ async function bakeStalePlateContentOnce(id: string): Promise<void> {
     return;
   }
   clearBakeRetry(id);
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
   // Drain every debounced field — rebuild-html uses saved config for all plates.
   await flushAllContentPending();
+  if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
   try {
     const r = await api<{ plates?: PlateRow[] }>(`${base()}/plates/rebuild-html`, { method: 'POST', body: {} });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
     if (r.plates) setHtmlPlates(r.plates, { video: false });
     ed.stalePlates.delete(id);
     dropPreloadedPlates(id);
@@ -243,8 +250,11 @@ function loadPlateContent(plateId: string, { force = false } = {}): void {
   const have = cache.get(plateId);
   if (!force && have && have.type === (info?.type || have.type)) return;
   loading.add(plateId);
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
   void api<PlateContentData>(platePath(plateId, 'content'))
     .then((r) => {
+      if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return;
       cache.set(plateId, r);
       if (r.assets) assetsCache = r.assets;
       if (ed.sel?.type === 'clip' && ed.seq.find((c) => c.id === ed.sel?.id)?.plateId === plateId) {
@@ -275,7 +285,13 @@ export function resetPlateContentPane(): void {
   iconFor = null;
   hoverSlot = null;
   saveGen += 1;
+  contentProjectEpoch += 1;
   clearContentInspectorRepaintQueue();
+}
+
+/** Tests and diagnostics — monotonic epoch for stale Content POST guards. */
+export function contentSaveProjectEpoch(): number {
+  return contentProjectEpoch;
 }
 
 // ─── Paths ─────────────────────────────────────────────────────────────────────────────────
@@ -509,6 +525,8 @@ async function send(
   hint: string | null,
   { repaint = true, paintLive = false }: { repaint?: boolean; paintLive?: boolean } = {},
 ): Promise<boolean> {
+  const wantSlug = slug() || '';
+  const wantEpoch = contentProjectEpoch;
   const gen = ++saveGen;
   if (paintLive) paintCopyOps(id, ops);
   const plan = planContentSave({ paintLive, repaint });
@@ -517,6 +535,7 @@ async function send(
       method: 'POST',
       body: { ops, live: plan.live },
     });
+    if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentProjectEpoch)) return false;
     if (plan.live) mergeLiveContent(id, r);
     else {
       const prev = cache.get(id);
