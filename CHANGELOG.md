@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.0-beta.9 — 2026-10-27
+
+Editor Content pane and plate copy stay in sync through scrub, timeline moves, and live typing — without wiping punctuation or losing fields on save. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.9 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio
+```
+
+Upgrade from 1.0.0-beta.8:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.9
+./studio
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio` rebuilds the desk when its sources change.
+
+### Desk / editor
+
+- **Content live paint.** Typing in the Content pane updates config and the stage iframe in place; HTML bakes when you leave the plate or scrub away, not on every keystroke.
+- **Copy stability.** Colons and URLs stay intact across Content ↔ stage edit; `data-edit-raw` tracks live source so re-arming edit does not revert to stale bake attrs.
+- **Path mapping.** Stats and journey plates map schema paths (`stats.N`, `steps.N`) to generic `items.N` in baked HTML so live paint and inspector sync hit the right field.
+- **Save ordering.** Content POSTs serialize per plate so parallel live saves cannot clobber `video.config.json`; flush batches multiple pending fields into one request.
+- **Guards.** Deck saves and Content responses respect project epoch and sequence generation after slug/sequence switches; timeline reorder and Direction rebuilds flush pending copy first.
+
 ## 1.0.0-beta.8 — 2026-10-26
 
 Custom plate layouts, storyboard stills from the video itself, and a stage that matches the encode. Pin this tag. `main` is the development line.

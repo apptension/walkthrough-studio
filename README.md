@@ -14,7 +14,7 @@
   <a href="#agent-ready"><img src="https://img.shields.io/badge/Agent%20Ready-Cursor%20%C2%B7%20Claude%20Code-42f272?style=flat-square&labelColor=0a0a0a" alt="Agent Ready: Cursor and Claude Code" /></a>
   <a href="#84-languages-one-recording"><img src="https://img.shields.io/badge/languages-84-42f272?style=flat-square&labelColor=0a0a0a" alt="84 languages" /></a>
   <a href="kit/package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white&labelColor=0a0a0a" alt="Node.js 20+" /></a>
-  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.8"><img src="https://img.shields.io/badge/release-v1.0.0--beta.8-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.8" /></a>
+  <a href="https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.9"><img src="https://img.shields.io/badge/release-v1.0.0--beta.9-42f272?style=flat-square&labelColor=0a0a0a" alt="v1.0.0-beta.9" /></a>
   <a href="https://apptension.com/builders-toolkit/walkthrough-studio"><img src="https://img.shields.io/badge/site-apptension.com-0a0a0a?style=flat-square" alt="Product page" /></a>
 </p>
 
@@ -51,19 +51,19 @@ Walkthrough Studio is a local desk that treats your real product as the source o
 ## Quick start
 
 ```bash
-git clone --branch v1.0.0-beta.8 --depth 1 https://github.com/apptension/walkthrough-studio.git
+git clone --branch v1.0.0-beta.9 --depth 1 https://github.com/apptension/walkthrough-studio.git
 cd walkthrough-studio
 ./studio
 ```
 
-That checks out the current public beta, [v1.0.0-beta.8](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.8). `main` is the development line. Run `./studio`. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
+That checks out the current public beta, [v1.0.0-beta.9](https://github.com/apptension/walkthrough-studio/releases/tag/v1.0.0-beta.9). `main` is the development line. Run `./studio`. The launcher checks Node 20+, npm 11.17+, ffmpeg, and Chromium, installs what is missing, builds the desk, creates `kit/.env`, and opens Studio at [http://127.0.0.1:4747](http://127.0.0.1:4747). The browser tab and `./studio` both name the version you are running. Click **New video**, describe what you need, approve the script, and Studio records.
 
 Voice and music need an `ELEVENLABS_API_KEY` in `kit/.env`. Agent jobs need a signed-in Cursor CLI (`agent`) or Claude Code (`claude`). Studio opens without either.
 
-### Upgrading from 1.0.0-beta.7
+### Upgrading from 1.0.0-beta.8
 
 ```bash
-git fetch --tags && git checkout v1.0.0-beta.8    # or: git pull on main
+git fetch --tags && git checkout v1.0.0-beta.9    # or: git pull on main
 ./studio
 ```
 
