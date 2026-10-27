@@ -203,7 +203,7 @@ Open, proof, and close plates carry what the screencast alone cannot: capability
 
 One recording, every channel. The handoff pack includes the master, poster, captions, chapters, QC report, and a README.
 
-<img src="docs/assets/feature-render-bay.png?v=6" alt="Render bay with pipeline steps and queue" width="100%" />
+<img src="docs/assets/feature-render-bay.png?v=7" alt="Render bay with pipeline steps and queue" width="100%" />
 
 | Export | Size | For |
 | --- | --- | --- |

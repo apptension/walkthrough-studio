@@ -270,6 +270,52 @@ async function shotClipPng(name, getBox) {
   return true;
 }
 
+/** `#leftRender` is flex-stretched; clip to tabs + visible bay sections (no empty panel tail). */
+async function shotRenderBayPng(name, { withStage = true } = {}) {
+  const box = await page.evaluate((withStage) => {
+    const panel = document.getElementById('projectPanel');
+    const bay = document.getElementById('leftRender');
+    if (!panel || !bay || bay.hidden) return null;
+    const tabs = panel.querySelector('.panel-tabs');
+    const top = (tabs || bay).getBoundingClientRect().top;
+    const sections = [...bay.children].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.height > 10 && r.width > 10;
+    });
+    if (!sections.length) return null;
+    const bottom = Math.max(...sections.map((el) => el.getBoundingClientRect().bottom));
+    const pr = panel.getBoundingClientRect();
+    let right = pr.right;
+    if (withStage) {
+      const stage = document.querySelector('.stage-wrap');
+      if (stage) right = Math.max(right, stage.getBoundingClientRect().right);
+    }
+    const height = bottom - top + 14;
+    if (height < 80) return null;
+    return {
+      x: pr.left,
+      y: top,
+      width: right - pr.left,
+      height: Math.min(height, withStage ? 620 : height),
+    };
+  }, withStage);
+  if (!box) {
+    console.log('MISS', name);
+    return false;
+  }
+  await page.screenshot({
+    path: join(name),
+    clip: {
+      x: Math.max(0, box.x),
+      y: Math.max(0, box.y),
+      width: Math.min(1600, box.width),
+      height: Math.min(1000, box.height),
+    },
+  });
+  console.log('ok', name, `${Math.round(box.width)}×${Math.round(box.height)}`);
+  return true;
+}
+
 /** Baked plate HTML at 1920×1080 (2×) when Program seek is unavailable. */
 async function shotPlateFromHtml(htmlFile, outJpg) {
   let ok = false;
@@ -431,16 +477,12 @@ if (wiz) {
 }
 await dismiss();
 
-// Render bay (best-effort; may skip if no encode running)
+// Render bay — clip to content (full #leftRender element includes empty flex tail)
 await open(PRODUCT_SLUG);
 await seekProgram(PRODUCT_SEEK.programLive);
-await page.evaluate(() => {
-  document.body.classList.add('is-rendering');
-  document.querySelector('.ptab[data-left="render"]')?.click();
-});
-await settle(400);
-await shotEl('feature-render-bay.png', '#leftRender');
-await page.evaluate(() => document.body.classList.remove('is-rendering'));
+await page.evaluate(() => document.querySelector('.ptab[data-left="render"]')?.click());
+await settle(500);
+await shotRenderBayPng('feature-render-bay.png', { withStage: true });
 
 await browser.close();
 console.log('DONE — run: node scripts/render-readme-art.mjs');
