@@ -28,7 +28,7 @@ import {
   bakeStalePlateContent,
   contentSaveIdle,
   contentSaveProjectEpoch,
-  flushAllContentPending,
+  flushEditorContentPending,
   hasContentPending,
   settlePlateContent,
 } from './plateContentPane';
@@ -173,7 +173,7 @@ export async function ensureLiveCards(cardId: string | null = null): Promise<boo
   const wantSlug = slug() || '';
   const wantEpoch = contentSaveProjectEpoch();
   try {
-    await flushAllContentPending();
+    await flushEditorContentPending();
     if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch())) return listed();
     const r = await api<{ plates?: PlateRow[] }>(`/api/video/${encodeURIComponent(slug() || '')}/plates/rebuild-html`, { method: 'POST', body: {} });
     if (!isContentSaveResponseValid(wantSlug, wantEpoch, slug() || '', contentSaveProjectEpoch())) return listed();
@@ -217,7 +217,7 @@ export async function requestPlate(id: string | null | undefined, { reason = 'sh
   try {
     const activeId = desk.get().activePlateId;
     if (hasContentPending() || ed.stalePlates.has(String(id)) || (activeId && activeId !== id)) {
-      await flushAllContentPending();
+      await flushEditorContentPending();
     } else {
       await contentSaveIdle();
     }

@@ -515,7 +515,7 @@ async function sendAfterFlush(
   hint: string | null,
   opts: { repaint?: boolean; paintLive?: boolean } = {},
 ): Promise<boolean> {
-  await flushAllContentPending();
+  await flushEditorContentPending();
   return send(id, ops, hint, opts);
 }
 
@@ -1007,9 +1007,8 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
   on('[data-cnt-add]', 'click', async (el) => {
     const list = el.dataset['cntAdd'] || '';
     const count = (data?.lists[list] || []).length;
-    await flushAllContentPending();
     openSlot = `${list}.${count}`;
-    const ok = await send(id, [{ op: 'add', list }], 'Added');
+    const ok = await sendAfterFlush(id, [{ op: 'add', list }], 'Added');
     if (ok) requestAnimationFrame(() => document.querySelector<HTMLElement>(`#inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] input, #inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] textarea`)?.focus({ preventScroll: true }));
   });
   on('[data-cnt-remove]', 'click', async (el) => {
@@ -1017,24 +1016,21 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const index = Number(el.dataset['index']);
     const rec = el.closest<HTMLElement>('.pcnt-rec');
     rec?.classList.add('is-leaving');
-    await flushAllContentPending();
     if (openSlot === `${list}.${index}`) openSlot = null;
-    await send(id, [{ op: 'remove', list, index }], 'Removed');
+    await sendAfterFlush(id, [{ op: 'remove', list, index }], 'Removed');
   });
   on('[data-cnt-dup]', 'click', async (el) => {
     const list = el.dataset['cntDup'] || '';
     const index = Number(el.dataset['index']);
-    await flushAllContentPending();
     openSlot = `${list}.${index + 1}`;
-    await send(id, [{ op: 'duplicate', list, index }], 'Duplicated');
+    await sendAfterFlush(id, [{ op: 'duplicate', list, index }], 'Duplicated');
   });
   on('[data-cnt-move]', 'click', async (el) => {
     const list = el.dataset['cntMove'] || '';
     const from = Number(el.dataset['from']);
     const to = Number(el.dataset['to']);
-    await flushAllContentPending();
     if (openSlot === `${list}.${from}`) openSlot = `${list}.${to}`;
-    await send(id, [{ op: 'move', list, from, to }], null);
+    await sendAfterFlush(id, [{ op: 'move', list, from, to }], null);
   });
 
   // Drag to reorder (records within one list).
@@ -1084,9 +1080,8 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const from = dragFrom.index;
     dragFrom = null;
     if (to === from) return;
-    await flushAllContentPending();
     if (openSlot === `${m[1]}.${from}`) openSlot = `${m[1]}.${to}`;
-    await send(id, [{ op: 'move', list: m[1], from, to }], null);
+    await sendAfterFlush(id, [{ op: 'move', list: m[1], from, to }], null);
   });
 
   // Hover a record → peek the tile on the stage.

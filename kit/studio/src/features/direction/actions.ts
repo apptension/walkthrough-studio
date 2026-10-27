@@ -31,6 +31,11 @@ const errMessage = (err: unknown) => (err instanceof Error ? err.message : Strin
 const slug = () => desk.get().slug ?? '';
 const encSlug = () => enc(slug());
 
+/** Direction saves rebuild plate HTML — flush debounced Editor Content first. */
+export async function flushEditorBeforeDirectionMutation(): Promise<void> {
+  if (bridges.editor?.active) await bridges.editor.flushPendingContent?.();
+}
+
 function patchVideo(patch: Partial<VideoSummary>): void {
   desk.set((s) => (s.video ? { video: { ...s.video, ...patch } } : {}));
 }
@@ -122,6 +127,7 @@ export function scheduleMotionLive({ dragging = false }: { dragging?: boolean } 
 
 export async function applyMotionLive(gen = motionLiveGen): Promise<void> {
   if (!desk.get().slug) return;
+  await flushEditorBeforeDirectionMutation();
   // Energy, depth, sheen, title reveal and the field's own Presence/Speed are already live on the
   // stage from the optimistic paint above — only a genuinely new atmosphere pattern needs its
   // WebGL field (and, for open/close/statement, its title markup) rebuilt and reloaded. Comparing
@@ -161,6 +167,7 @@ export function saveTransitions(patch: Partial<Pick<Transitions, 'style' | 'dura
 
 async function flushTransitions(patch: Partial<Pick<Transitions, 'style' | 'duration'>>): Promise<void> {
   try {
+    await flushEditorBeforeDirectionMutation();
     const r = await api<{ transitions: Transitions }>(`/api/video/${encSlug()}/transitions`, { method: 'PUT', body: patch });
     renderTransitions(r.transitions);
     patchVideo({ transitions: r.transitions });
@@ -188,6 +195,7 @@ interface LayoutResponse {
 /** POST /plates/:id/layout, then show the rebuilt plate so the new composition is on screen. */
 export async function pickPlateLayout(plateId: string, layout: string): Promise<void> {
   try {
+    await flushEditorBeforeDirectionMutation();
     const r = await api<LayoutResponse>(`/api/video/${encSlug()}/plates/${enc(plateId)}/layout`, {
       method: 'POST',
       body: { layout },
@@ -228,6 +236,7 @@ export async function applyOverlaysLook(): Promise<void> {
   };
   setButtonBusy('btnOverlaysApply', true);
   try {
+    await flushEditorBeforeDirectionMutation();
     const r = await api<{ overlays: Overlays; direction?: Direction; plates?: HtmlPlate[] }>(
       `/api/video/${encSlug()}/overlays`,
       { method: 'POST', body },
@@ -272,6 +281,7 @@ export function previewLiveCard({ kind, flowIndex }: { kind: string; flowIndex: 
 
 export async function saveDirection(patch: Record<string, unknown>, { quiet = false } = {}): Promise<DirectionResponse> {
   try {
+    await flushEditorBeforeDirectionMutation();
     const r = await api<DirectionResponse>(`/api/video/${encSlug()}/direction`, { method: 'PUT', body: patch });
     patchVideo({ direction: r.direction, motion: r.motion, transitions: r.transitions });
     renderDirection(r.direction);
@@ -525,6 +535,7 @@ export async function applyMotion(): Promise<void> {
       await api(`/api/video/${encSlug()}/draft/snapshot`, { method: 'POST', body: {} });
     }
     cancelMotionLive();
+    await flushEditorBeforeDirectionMutation();
     const r = await api<MotionResponse>(`/api/video/${encSlug()}/motion`, { method: 'POST', body: collectMotionBody() });
     desk.set({ motionApplied: true });
     patchVideo({ motion: r.motion });
@@ -556,6 +567,7 @@ export async function previewPlates(): Promise<void> {
   setButtonBusy('btnPreviewPlates', true);
   try {
     if (!desk.get().motionApplied) {
+      await flushEditorBeforeDirectionMutation();
       const r = await api<MotionResponse>(`/api/video/${encSlug()}/motion`, { method: 'POST', body: collectMotionBody() });
       if (r.direction) {
         patchVideo({ direction: r.direction });
