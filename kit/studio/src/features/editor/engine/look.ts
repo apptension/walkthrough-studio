@@ -450,7 +450,7 @@ export function invalidatePlates(): Promise<void> | null {
   // Same as changeLook — drop the back buffer so a scrub-back cannot revive pre-look HTML.
   if (id) dropPreloadedPlates(id);
   else dropPreloadedPlates();
-  if (ed.active && id) return reloadPlate(id);
+  if (ed.active && id) return flushAllContentPending().then(() => reloadPlate(id));
   return null;
 }
 

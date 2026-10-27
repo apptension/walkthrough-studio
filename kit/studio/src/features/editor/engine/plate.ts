@@ -1616,6 +1616,12 @@ export function collectPlateEdits(): Record<string, string> {
   return fields;
 }
 
+async function flushEditorContent(): Promise<void> {
+  if (!ed.active) return;
+  const { flushAllContentPending } = await import('./plateContentPane');
+  await flushAllContentPending();
+}
+
 export async function savePlateCopyEdits(): Promise<void> {
   const s = desk.get();
   const plateId = s.activePlateId;
@@ -1627,6 +1633,7 @@ export async function savePlateCopyEdits(): Promise<void> {
   }
   setButtonBusy('btnPlateSaveCopy', true);
   try {
+    await flushEditorContent();
     const r = await api<{ plates?: HtmlPlate[] }>(`/api/video/${s.slug}/plates/${encodeURIComponent(plateId)}/copy`, {
       method: 'POST',
       body: { fields },
@@ -1649,6 +1656,7 @@ export async function savePlateCopyEdits(): Promise<void> {
 export async function discardPlateCopyEdits(): Promise<void> {
   const plateId = desk.get().activePlateId;
   if (!plateId) return;
+  await flushEditorContent();
   desk.set({ plateDirty: false });
   await reloadPlate(plateId);
   updatePlateEditChrome();
@@ -1834,10 +1842,7 @@ export async function rebuildPlateHtmlPreview({ selectFirst = true, plateId = nu
   setStatus('run', activity);
   let r: RebuildResponse;
   try {
-    if (ed.active) {
-      const { flushAllContentPending } = await import('./plateContentPane');
-      await flushAllContentPending();
-    }
+    await flushEditorContent();
     r = await api<RebuildResponse>(`/api/video/${desk.get().slug}/plates/rebuild-html`, { method: 'POST', body: {} });
   } finally {
     clearRunStatus(activity);
@@ -1974,6 +1979,7 @@ export async function savePlateAccent(patch: AccentPatch): Promise<void> {
       if (patch['sheen'] === 'off' || patch['sheen'] === false) next['sheen'] = false;
       paintMotionLiveOptimistic(next as unknown as Parameters<typeof paintMotionLiveOptimistic>[0]);
     }
+    await flushEditorContent();
     const r = await api<{ motion?: Record<string, unknown> }>(`/api/video/${s.slug}/plates/${encodeURIComponent(plateId)}/motion`, {
       method: 'POST',
       body: patch,

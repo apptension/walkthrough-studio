@@ -14,7 +14,7 @@ import { postDeck, redo, refresh, resetForProject, undo, validateSelection } fro
 import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
-import { flushAllContentPending, hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
+import { bakeStalePlateContent, flushAllContentPending, hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
 import { beginEditOrigin, contentFieldFocused, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
@@ -167,6 +167,11 @@ export async function onEnter({ programT }: { programT?: number | null } = {}): 
 
 export function onLeave(): void {
   if (!ed.active) return;
+  const leavingPlate = curClip()?.kind === 'plate' ? curClip()?.plateId : null;
+  void (async () => {
+    await flushAllContentPending();
+    if (leavingPlate) await bakeStalePlateContent(leavingPlate);
+  })();
   // Program picks up where the Editor was looking.
   const programT = ed.seq.length ? toProgram(ed.t) : null;
   captureMorph();

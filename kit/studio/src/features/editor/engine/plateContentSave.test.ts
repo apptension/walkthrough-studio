@@ -67,15 +67,19 @@ describe('contentFieldFocused', () => {
     document.body.innerHTML = `
       <div id="inspectorRoot">
         <input data-cnt-path="items.0.label" data-cnt-kind="text" />
+        <input type="range" data-cnt-path="opacity" data-cnt-kind="number" />
         <textarea data-field-src></textarea>
         <input data-layout-title />
       </div>
       <input id="other" />`;
-    const cnt = document.querySelector<HTMLInputElement>('[data-cnt-path]')!;
+    const cnt = document.querySelector<HTMLInputElement>('[data-cnt-path][data-cnt-kind="text"]')!;
+    const num = document.querySelector<HTMLInputElement>('[data-cnt-kind="number"]')!;
     const copy = document.querySelector<HTMLTextAreaElement>('[data-field-src]')!;
     const layout = document.querySelector<HTMLInputElement>('[data-layout-title]')!;
     const other = document.querySelector<HTMLInputElement>('#other')!;
     cnt.focus();
+    expect(contentFieldFocused(document)).toBe(true);
+    num.focus();
     expect(contentFieldFocused(document)).toBe(true);
     copy.focus();
     expect(contentFieldFocused(document)).toBe(true);
