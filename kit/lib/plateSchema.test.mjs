@@ -75,6 +75,15 @@ test('plateSchema: typed values — numbers clamp, toggles parse, lines split, c
   assert.deepEqual(coerceValue({ kind: 'lines', max: 2 }, 'a\n\nb\nc'), ['a', 'b']);
   assert.equal(coerceValue({ kind: 'choice', options: ['auto', 'light', 'dark'] }, 'dark'), 'dark');
   assert.equal(coerceValue({ kind: 'choice', options: ['auto', 'light', 'dark'] }, 'auto'), undefined, 'auto clears the key');
+  assert.equal(coerceValue({ kind: 'text' }, 'Time: 12:30'), 'Time: 12:30');
+  assert.equal(coerceValue({ kind: 'text' }, 'https://host:8443/path'), 'https://host:8443/path');
+});
+
+test('plateSchema: showcase address bar keeps colons through set', () => {
+  const row = { id: 'p', type: 'showcase', url: 'https://example.com' };
+  applyPlateContent(row, [{ op: 'set', path: 'url', value: 'https://app.io:8080/demo' }]);
+  assert.equal(row.url, 'https://app.io:8080/demo');
+  checkPlate(brand, row);
 });
 
 test('plateSchema: field lookup resolves list rows and plain-string lists', () => {
