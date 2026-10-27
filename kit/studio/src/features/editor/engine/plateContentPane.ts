@@ -263,6 +263,7 @@ export function dropPlateContent(plateId?: string | null): void {
 
 /** Sequence switch — drop cached schemas, debounced saves, and UI-only open/hover state. */
 export function resetPlateContentPane(): void {
+  contentSerial = Promise.resolve();
   for (const p of pending.values()) clearTimeout(p.timer);
   pending.clear();
   for (const id of [...bakeRetry.keys()]) clearBakeRetry(id);
@@ -608,6 +609,20 @@ function setLocal(data: PlateContentData, path: string, value: unknown): void {
 
 export function hasContentPending(): boolean {
   return pending.size > 0;
+}
+
+let contentSerial = Promise.resolve();
+
+/** Flush debounced Content fields, then run `task` (serialized with other flush gates). */
+export function afterContentSaved(task: () => void | Promise<void>): void {
+  contentSerial = contentSerial
+    .then(async () => {
+      await flushAllContentPending();
+      await task();
+    })
+    .catch(() => {
+      /* keep the queue alive if a save failed */
+    });
 }
 
 /** Post debounced Content keystrokes before structural ops, selection changes, or bake. */

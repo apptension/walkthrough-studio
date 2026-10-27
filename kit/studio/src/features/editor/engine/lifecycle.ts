@@ -504,7 +504,7 @@ export function wireTimelineBar(signal: AbortSignal): void {
   wireTimeline(signal);
   onPaceModeChange(() => {
     renderTimeline();
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   signal.addEventListener('abort', () => closePacePop());
   wireOverview(signal);

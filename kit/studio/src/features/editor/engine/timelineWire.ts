@@ -3,7 +3,8 @@ import { clipPlayback } from '@/logic/plateTiming';
 import { withMusic, withVoice } from './audio';
 import { commitClipEdge, dragClipEdge, startClipEdge } from './clipTrim';
 import { postDeck } from './data';
-import { addCut, adoptLens, adoptShot, select, selectFx, setSelection, showInspectorTab } from './edits';
+import { addCut, adoptLens, adoptShot, leavePlateContentIfNeeded, select, selectFx, setSelection, showInspectorTab } from './edits';
+import { afterContentSaved, hasContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { setScale } from './lifecycle';
 import { curClip, edToRec, fxClipId, lensByKey, recToEd, shotByKey, shotKey, visualIndexAt, visualSpan } from './seq';
@@ -85,25 +86,45 @@ export function wireTimeline(signal: AbortSignal): void {
         const markT = Number(cardHit.dataset['markT']);
         const markDur = Number(cardHit.dataset['markDur']);
         const clip = cardOwnerAt(markT) || liveClipAtEd(t) || curClip();
-        // Soft-select without re-rendering (keeps the node alive for drag).
-        setSelection({ type: 'card', ...(key != null ? { key } : {}), cardId: cardHit.dataset['cardId'] || null, markT, markDur, clipId: clip?.id });
-        document.querySelectorAll('.ec-card.is-on').forEach((n) => n.classList.toggle('is-on', n === cardHit));
-        showInspectorTab();
-        renderInspector();
-        canvas.setPointerCapture(e.pointerId);
-        ed.drag = {
-          type: 'card',
-          edge: edge || 'move',
+        const prev = curClip();
+        const cardSel = {
+          type: 'card' as const,
           ...(key != null ? { key } : {}),
           cardId: cardHit.dataset['cardId'] || null,
-          clip,
-          start: markT,
-          dur: markDur,
-          x0: e.clientX,
-          t0: t,
-          el: cardHit,
-          moved: false,
+          markT,
+          markDur,
+          clipId: clip?.id,
         };
+        const armCardDrag = () => {
+          // Soft-select without re-rendering the timeline (keeps the node alive for drag).
+          setSelection(cardSel);
+          document.querySelectorAll('.ec-card.is-on').forEach((n) => n.classList.toggle('is-on', n === cardHit));
+          showInspectorTab();
+          renderInspector();
+          canvas.setPointerCapture(e.pointerId);
+          ed.drag = {
+            type: 'card',
+            edge: edge || 'move',
+            ...(key != null ? { key } : {}),
+            cardId: cardHit.dataset['cardId'] || null,
+            clip,
+            start: markT,
+            dur: markDur,
+            x0: e.clientX,
+            t0: t,
+            el: cardHit,
+            moved: false,
+          };
+        };
+        if (hasContentPending()) {
+          afterContentSaved(async () => {
+            await leavePlateContentIfNeeded(prev, cardSel);
+            armCardDrag();
+          });
+        } else {
+          void leavePlateContentIfNeeded(prev, cardSel);
+          armCardDrag();
+        }
         return;
       }
       const markHit = target.closest<HTMLElement>('.ec-mark');
@@ -195,8 +216,7 @@ export function wireTimeline(signal: AbortSignal): void {
       if (lane?.id === 'etlVoice' && !voiceHit) {
         if (ed.playing) pause();
         seek(t);
-        ed.sel = null;
-        renderInspector();
+        select(null);
         flashHint('Add voice at the playhead');
         return;
       }

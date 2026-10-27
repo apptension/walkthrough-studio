@@ -117,8 +117,9 @@ describe('paintInspectorUnlessContentTyping', () => {
 
 describe('shouldHoldInspectorForContentFocus', () => {
   it('holds only for the same selection — a new clip must remount', () => {
-    expect(shouldHoldInspectorForContentFocus({ focused: true, prevKey: 'clip:a:', nextKey: 'clip:a:' })).toBe(true);
-    expect(shouldHoldInspectorForContentFocus({ focused: true, prevKey: 'clip:a:', nextKey: 'clip:b:' })).toBe(false);
+    expect(shouldHoldInspectorForContentFocus({ focused: true, prevKey: 'clip:a::design', nextKey: 'clip:a::design' })).toBe(true);
+    expect(shouldHoldInspectorForContentFocus({ focused: true, prevKey: 'clip:a::design', nextKey: 'clip:a::mix' })).toBe(false);
+    expect(shouldHoldInspectorForContentFocus({ focused: true, prevKey: 'clip:a::design', nextKey: 'clip:b::design' })).toBe(false);
     expect(shouldHoldInspectorForContentFocus({ focused: false, prevKey: 'clip:a:', nextKey: 'clip:a:' })).toBe(false);
   });
 });

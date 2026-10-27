@@ -126,7 +126,7 @@ export async function enterText(
   }
   paintTextMode();
   paintClipChip();
-  if (ed.sel?.type === 'clip' || ed.sel?.type === 'card') renderInspector();
+  if (ed.sel?.type === 'clip' || ed.sel?.type === 'card') paintInspectorUnlessContentTyping(renderInspector);
 }
 
 /** Jump to a chapter/caption mark and open its editable template (even from a plate playhead). */

@@ -24,7 +24,7 @@ import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
-import { bakeStalePlateContent } from './plateContentPane';
+import { afterContentSaved, bakeStalePlateContent, hasContentPending } from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
 import { refitPlateCompositionDeferred } from './plate';
@@ -793,7 +793,9 @@ export function renderFrame(): void {
     // Scrub/play leave a plate without select() — bake live Content edits so the next visit
     // (and Produce) see rebuilt HTML, not only in-memory paint.
     if (leftClip?.kind === 'plate' && leftClip.plateId && leftClip.plateId !== c.plateId) {
-      void bakeStalePlateContent(leftClip.plateId);
+      const plateId = leftClip.plateId;
+      if (hasContentPending()) afterContentSaved(() => bakeStalePlateContent(plateId));
+      else void bakeStalePlateContent(plateId);
     }
   }
   ed.hud = null;

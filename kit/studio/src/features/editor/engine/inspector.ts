@@ -268,7 +268,7 @@ function inspectorPaintKey(): string {
   if (!ed.deck) return '';
   const s = ed.sel;
   if (!s) return 'none';
-  return [s.type, s.id ?? '', s.i ?? ''].join(':');
+  return [s.type, s.id ?? '', s.i ?? '', ed.insTab].join(':');
 }
 
 export function renderInspector(): void {

@@ -6,6 +6,7 @@ import { layoutWire } from '@/ui/look/previews';
 import { refresh } from './data';
 import { paintStatus, select } from './edits';
 import { renderInspector } from './inspector';
+import { paintInspectorUnlessContentTyping } from './plateContentSave';
 import { reloadPlate } from './lifecycle';
 import { plateApi } from './look';
 import { dropPlateContent } from './plateContentPane';
@@ -123,7 +124,7 @@ async function swapCall(plateId: string, body: Record<string, unknown>, hint: st
     paintStatus();
     await reloadPlate(plateId);
     markClipFresh(plateId, 'is-swapped', 1000);
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
     flashHint(hint);
     return true;
   } catch (err) {
@@ -153,7 +154,7 @@ async function recompose(plateId: string, layout: string): Promise<boolean> {
   const info = plateInfo(plateId);
   if (info) info.swap = (r as { swap?: DeckPlate['swap'] }).swap ?? null;
   markClipFresh(plateId, 'is-swapped', 1000);
-  renderInspector();
+  paintInspectorUnlessContentTyping(renderInspector);
   flashHint(`${plateId === 'open' ? 'Opening' : 'Close'} · ${layoutsOf(plateId).find((l) => l.id === layout)?.label || layout}`);
   return true;
 }
