@@ -14,7 +14,6 @@ import {
   editOrigin,
   endEditOrigin,
   clearContentInspectorRepaintQueue,
-  flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
   queueContentInspectorRepaint,
   planBakeStaleContent,
@@ -143,10 +142,6 @@ function patchContentAuxChrome(): void {
     btn.classList.toggle('on', iconFor === path);
     btn.setAttribute('aria-expanded', iconFor === path ? 'true' : 'false');
   });
-}
-
-function flushQueuedContentRepaint(): void {
-  flushQueuedInspectorRepaint(renderInspector);
 }
 
 /** Remount when safe; while typing, patch chrome or queue for after blur. */
@@ -538,7 +533,6 @@ async function send(
       else ed.stalePlates.delete(id);
     }
     if (plan.reload && !typing) await reloadPlate(id, { paint: false });
-    else if (plan.reload && typing) ed.stalePlates.add(id);
     if (hint) flashHint(hint);
     if (plan.repaint && gen === saveGen) paintInspectorUnlessContentTyping(renderInspector);
     return true;
@@ -612,10 +606,15 @@ function setLocal(data: PlateContentData, path: string, value: unknown): void {
   if (!slot) data.fields[path] = value;
 }
 
-/**
- * Post every debounced Content keystroke before a structural op or bake.
- * The old flush only cleared timers — typed words never reached the server.
- */
+export function hasContentPending(): boolean {
+  return pending.size > 0;
+}
+
+/** Post debounced Content keystrokes before structural ops, selection changes, or bake. */
+export async function flushAllContentPending(): Promise<void> {
+  for (const id of [...new Set([...pending.values()].map((p) => p.id))]) await flushPlate(id);
+}
+
 async function flushPlate(id?: string | null): Promise<void> {
   const ops = [...pending.values()].filter((p) => !id || p.id === id);
   for (const p of ops) {
@@ -802,12 +801,6 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
   if (!id || c.kind !== 'plate') return;
   const box = root.querySelector<HTMLElement>('.pcnt-scalars, .pcnt-list')?.closest<HTMLElement>('.ins-sec');
   if (!box) return;
-  if (!root.dataset['cntRepaintWire']) {
-    root.dataset['cntRepaintWire'] = '1';
-    root.addEventListener('focusout', () => {
-      queueMicrotask(() => flushQueuedContentRepaint());
-    });
-  }
   const data = cache.get(id);
   const on = <E extends HTMLElement>(sel: string, ev: string, fn: (el: E, e: Event) => void | Promise<void>) =>
     box.querySelectorAll<E>(sel).forEach((el) =>

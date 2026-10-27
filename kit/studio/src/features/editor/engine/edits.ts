@@ -11,7 +11,7 @@ import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
-import { bakeStalePlateContent } from './plateContentPane';
+import { bakeStalePlateContent, flushAllContentPending, hasContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -350,14 +350,24 @@ export function setSelection(sel: Selection | null): void {
   ed.lensAim = null;
 }
 
+let selectSerial = Promise.resolve();
+
 export function select(sel: Selection | null): void {
   const prev = curClip();
-  setSelection(sel);
-  // Leaving a plate that only had live (keystroke) copy edits: bake HTML now, not mid-type.
-  const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
-  if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
-    void bakeStalePlateContent(prev.plateId);
+  if (!hasContentPending()) {
+    commitSelect(sel, prev);
+    maybeBakeAfterLeave(prev, sel);
+    return;
   }
+  selectSerial = selectSerial
+    .then(() => selectAfterContentFlush(sel, prev))
+    .catch(() => {
+      /* keep the queue alive if a flush/save failed */
+    });
+}
+
+function commitSelect(sel: Selection | null, _prev: ReturnType<typeof curClip>): void {
+  setSelection(sel);
   renderClipsTrack();
   renderCardTracks();
   renderFxTracks();
@@ -370,6 +380,22 @@ export function select(sel: Selection | null): void {
   paintTextMode();
   renderInspector();
   showInspectorTab();
+}
+
+function maybeBakeAfterLeave(prev: ReturnType<typeof curClip>, sel: Selection | null): void {
+  const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
+  if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
+    void bakeStalePlateContent(prev.plateId);
+  }
+}
+
+async function selectAfterContentFlush(sel: Selection | null, prev: ReturnType<typeof curClip>): Promise<void> {
+  await flushAllContentPending();
+  commitSelect(sel, prev);
+  const next = sel?.type === 'clip' ? ed.seq.find((x) => x.id === sel.id) : null;
+  if (prev?.kind === 'plate' && prev.plateId && prev.plateId !== next?.plateId) {
+    await bakeStalePlateContent(prev.plateId);
+  }
 }
 
 export function selectFx(item: FxItem): void {

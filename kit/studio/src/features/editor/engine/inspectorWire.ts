@@ -32,7 +32,7 @@ import { addCut, addLensAt, addRamp, addZoomAt, adoptLens, adoptShot, removeSele
 import { liveCardRow, loadNarrators, renderInspector } from './inspector';
 import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlatePreview, resetVar } from './look';
 import { P } from './plateCtl';
-import { beginEditOrigin, endEditOrigin } from './plateContentSave';
+import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
 import { wireSlideInspector } from './slideInspectorWire';
 import { renderFrame, requestPlate } from './stage';
@@ -574,7 +574,7 @@ export function wireInspector(): void {
       ed.compositeSeekMs = null;
       if (activeId) await requestPlate(activeId, { reason: 'show' });
       toast('Live card look', hint || r.overlays?.preset || 'saved');
-      renderInspector();
+      paintInspectorUnlessContentTyping(renderInspector);
     } catch (err) {
       toast('Live cards failed', errMessage(err), 'err');
     }
@@ -590,7 +590,7 @@ export function wireInspector(): void {
 
   on('[data-look-scope]', 'click', (el) => {
     ed.lookScope = el.dataset['lookScope'] === 'video' ? 'video' : 'chapter';
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   act('look-apply-all', () => {
     if (!cardKind || !lookChapterNo) return;
@@ -822,7 +822,7 @@ export function wireInspector(): void {
   // Narrator (in the Mix panel).
   on('[data-narrator]', 'change', (el) => {
     ed.narratorPick = el.value;
-    renderInspector();
+    paintInspectorUnlessContentTyping(renderInspector);
   });
   act('narrator-listen', () => {
     const n = ed.deck?.audio?.narrator;

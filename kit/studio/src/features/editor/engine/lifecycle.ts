@@ -15,7 +15,7 @@ import { duplicateSelected } from './duplicate';
 import { addCut, addLensAt, addRamp, addZoomAt, paintStatus, removeSelected, select, showInspectorTab, toolCaption, toolCut, toolLens, toolSpeed, toolVoice, toolZoom } from './edits';
 import { renderInspector } from './inspector';
 import { hoverContentSlot, moveContentSlot, openContentSlot, resetPlateContentPane, syncContentToField } from './plateContentPane';
-import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
+import { beginEditOrigin, endEditOrigin, flushQueuedInspectorRepaint, paintInspectorUnlessContentTyping } from './plateContentSave';
 import { frameAtmosphereOnStage, invalidatePlates, paintLookVars, tuneAtmosphereLive } from './look';
 import { updatePlateEditChrome } from './plate';
 import { P } from './plateCtl';
@@ -283,7 +283,7 @@ export function wireStage(signal: AbortSignal): void {
       showInspectorTab();
       if (ed.insTab !== 'design') {
         ed.insTab = 'design';
-        renderInspector();
+        paintInspectorUnlessContentTyping(renderInspector);
       }
       openContentSlot(c.plateId, slot);
     },
@@ -337,6 +337,16 @@ export function wireStage(signal: AbortSignal): void {
   );
   wireZoomBox(signal);
   wireLensBox(signal);
+  document.addEventListener(
+    'focusout',
+    () => {
+      queueMicrotask(() => {
+        if (!ed.active) return;
+        flushQueuedInspectorRepaint(renderInspector);
+      });
+    },
+    { signal, capture: true },
+  );
 }
 
 async function textBarAction(act: string): Promise<void> {
