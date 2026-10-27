@@ -674,12 +674,6 @@ export async function flushAllContentPending(): Promise<void> {
   }
 }
 
-async function flushPlate(id?: string | null): Promise<void> {
-  enqueueContentSends(drainPendingOps(id));
-  await contentSerial;
-}
-
-
 /** A field value as the text an input shows — objects never leak as "[object Object]". */
 const text = (v: unknown): string => {
   if (v == null) return '';
@@ -977,7 +971,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
   on('[data-cnt-add]', 'click', async (el) => {
     const list = el.dataset['cntAdd'] || '';
     const count = (data?.lists[list] || []).length;
-    await flushPlate();
+    await flushAllContentPending();
     openSlot = `${list}.${count}`;
     const ok = await send(id, [{ op: 'add', list }], 'Added');
     if (ok) requestAnimationFrame(() => document.querySelector<HTMLElement>(`#inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] input, #inspectorRoot [data-cnt-slot="${CSS.escape(openSlot || '')}"] textarea`)?.focus({ preventScroll: true }));
@@ -987,14 +981,14 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const index = Number(el.dataset['index']);
     const rec = el.closest<HTMLElement>('.pcnt-rec');
     rec?.classList.add('is-leaving');
-    await flushPlate();
+    await flushAllContentPending();
     if (openSlot === `${list}.${index}`) openSlot = null;
     await send(id, [{ op: 'remove', list, index }], 'Removed');
   });
   on('[data-cnt-dup]', 'click', async (el) => {
     const list = el.dataset['cntDup'] || '';
     const index = Number(el.dataset['index']);
-    await flushPlate();
+    await flushAllContentPending();
     openSlot = `${list}.${index + 1}`;
     await send(id, [{ op: 'duplicate', list, index }], 'Duplicated');
   });
@@ -1002,7 +996,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const list = el.dataset['cntMove'] || '';
     const from = Number(el.dataset['from']);
     const to = Number(el.dataset['to']);
-    await flushPlate();
+    await flushAllContentPending();
     if (openSlot === `${list}.${from}`) openSlot = `${list}.${to}`;
     await send(id, [{ op: 'move', list, from, to }], null);
   });
@@ -1054,7 +1048,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const from = dragFrom.index;
     dragFrom = null;
     if (to === from) return;
-    await flushPlate();
+    await flushAllContentPending();
     if (openSlot === `${m[1]}.${from}`) openSlot = `${m[1]}.${to}`;
     await send(id, [{ op: 'move', list: m[1], from, to }], null);
   });

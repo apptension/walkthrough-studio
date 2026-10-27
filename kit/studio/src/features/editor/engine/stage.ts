@@ -24,7 +24,7 @@ import { aimSpace, paintLensBox, paintZoomBox, selectedShot } from './aim';
 import { onCarryBackdropReady, syncCarry, type CarryFrame } from './carryStage';
 import { renderInspector } from './inspector';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
-import { afterContentSaved, bakeStalePlateContent, hasContentPending } from './plateContentPane';
+import { bakeStalePlateContent, flushAllContentPending } from './plateContentPane';
 import { GLASS, glassProfile, glassShade, lensOpenState, rimWidth } from '@/logic/lensGlass';
 import { plateStageReady, shouldBakeBeforePlateLoad } from '@/logic/plateSync';
 import { refitPlateCompositionDeferred } from './plate';
@@ -794,8 +794,10 @@ export function renderFrame(): void {
     // (and Produce) see rebuilt HTML, not only in-memory paint.
     if (leftClip?.kind === 'plate' && leftClip.plateId && leftClip.plateId !== c.plateId) {
       const plateId = leftClip.plateId;
-      if (hasContentPending()) afterContentSaved(() => bakeStalePlateContent(plateId));
-      else void bakeStalePlateContent(plateId);
+      void (async () => {
+        await flushAllContentPending();
+        await bakeStalePlateContent(plateId);
+      })();
     }
   }
   ed.hud = null;

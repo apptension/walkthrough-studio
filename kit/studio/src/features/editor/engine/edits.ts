@@ -11,7 +11,7 @@ import { addVoiceLine, withMusic, withVoice } from './audio';
 import { postDeck } from './data';
 import { dropRepeat } from './duplicate';
 import { openPacePop } from './platePace';
-import { afterContentSaved, bakeStalePlateContent, hasContentPending } from './plateContentPane';
+import { afterContentSaved, bakeStalePlateContent, flushAllContentPending, hasContentPending } from './plateContentPane';
 import { renderInspector } from './inspector';
 import { curClip, edToRec, fxClipId, recToEd, selectedLens } from './seq';
 import { renderFrame, resolveLiveCard } from './stage';
@@ -352,9 +352,15 @@ export function setSelection(sel: Selection | null): void {
 
 export function select(sel: Selection | null): void {
   const prev = curClip();
+  const bakeAfterLeave = () => {
+    void (async () => {
+      await flushAllContentPending();
+      await leavePlateContentIfNeeded(prev, sel);
+    })();
+  };
   if (!hasContentPending()) {
     commitSelect(sel, prev);
-    void leavePlateContentIfNeeded(prev, sel);
+    bakeAfterLeave();
     return;
   }
   afterContentSaved(async () => {

@@ -6,6 +6,7 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, previewClockMs, sho
 
 import { paintStatus } from './edits';
 import { renderInspector } from './inspector';
+import { flushAllContentPending } from './plateContentPane';
 import { reloadPlate } from './lifecycle';
 import { dropPreloadedPlates, retargetTitleReveal } from './plate';
 import { paintInspectorUnlessContentTyping } from './plateContentSave';
@@ -129,6 +130,7 @@ export function markStyleRows(id: string): void {
 
 export async function resetVar(id: string, name: string): Promise<void> {
   try {
+    await flushAllContentPending();
     const r = await api<StyleResponse>(platePath(id, 'style'), { method: 'POST', body: { style: { [name]: null } } });
     const info = plateInfo(id);
     if (info) info.style = r.style || {};
@@ -156,6 +158,7 @@ export async function plateApi(
   { reload = true }: { reload?: boolean } = {},
 ): Promise<PlateApiResponse | null> {
   try {
+    await flushAllContentPending();
     const r = await api<PlateApiResponse>(platePath(id, path), { method: 'POST', body });
     const info = plateInfo(id);
     if (info) {
