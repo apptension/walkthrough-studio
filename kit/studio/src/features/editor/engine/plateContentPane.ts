@@ -4,7 +4,7 @@ import { toast } from '@/desk/toast';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { paintStatus } from './edits';
 import { renderInspector, section } from './inspector';
-import { contentPathForEditPath, editPathForContentPath } from '@/logic/plateFieldPaths';
+import { editPathForContentPath } from '@/logic/plateFieldPaths';
 import { playheadOnPlate } from '@/logic/plateSync';
 import { reloadPlate } from './lifecycle';
 import { plateDoc } from './look';
@@ -21,6 +21,7 @@ import {
   planContentFieldSync,
   planContentSave,
   isContentSaveResponseValid,
+  stageContentSyncPath,
 } from './plateContentSave';
 import { curClip } from './seq';
 import { ed, setHtmlPlates, slug } from './state';
@@ -855,18 +856,24 @@ export function hoverContentSlot(plateId: string, slot: string | null): void {
 export function syncContentToField(plateId: string, path: string | null, source: string | null = null): void {
   if (!path) return;
   const data = cache.get(plateId);
-  const target = data?.schema ? slotOfPath(data.schema, path) : null;
-  if (!target || !data?.schema || !listOfSlot(data.schema, target)) return;
+  if (!data?.schema) return;
+  const contentPath = stageContentSyncPath(data.schema, path, data.type);
+  if (!contentPath) return;
+  const scalar = data.schema.fields.some((f) => f.key === contentPath);
+  const listSlot = scalar ? null : slotOfPath(data.schema, path);
+  const targetSlot = scalar ? contentPath : listSlot;
+  if (!targetSlot) return;
   if (contentFieldFocused()) {
-    openSlot = target;
-    patchContentRecordOpenState();
+    if (listSlot) {
+      openSlot = listSlot;
+      patchContentRecordOpenState();
+    }
     return;
   }
-  const contentPath = contentPathForEditPath(path, data.schema, data.type);
   const plan = planContentFieldSync({
     origin: editOrigin() === 'pane' ? 'pane' : 'stage',
     openSlot,
-    targetSlot: target,
+    targetSlot,
     path: contentPath,
   });
   if (plan.patchPath && source != null) {
@@ -874,7 +881,7 @@ export function syncContentToField(plateId: string, path: string | null, source:
     patchContentField(plan.patchPath, source);
   }
   if (!plan.remount) return;
-  openSlot = target;
+  openSlot = targetSlot;
   if (document.querySelector('#inspectorRoot .pcnt-list')) repaintContentInspector();
 }
 

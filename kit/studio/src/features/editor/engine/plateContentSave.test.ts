@@ -8,6 +8,7 @@ import {
   endEditOrigin,
   planBakeStaleContent,
   planContentFieldSync,
+  stageContentSyncPath,
   planContentSave,
   flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
@@ -36,6 +37,34 @@ describe('planContentSave', () => {
       applyPlates: true,
       live: false,
     });
+  });
+});
+
+describe('stageContentSyncPath', () => {
+  const showcase = {
+    fields: [
+      { key: 'url' },
+      { key: 'caption' },
+    ],
+    lists: [{ key: 'callouts' }],
+  };
+  const stats = { fields: [], lists: [{ key: 'stats' }] };
+  const features = { fields: [], lists: [{ key: 'items' }] };
+
+  it('includes scalar Content fields (showcase URL, caption)', () => {
+    expect(stageContentSyncPath(showcase, 'caption', 'showcase')).toBe('caption');
+    expect(stageContentSyncPath(showcase, 'url', 'showcase')).toBe('url');
+  });
+
+  it('includes list row paths and stats items.N stage aliases', () => {
+    expect(stageContentSyncPath(features, 'items.1.label', 'features')).toBe('items.1.label');
+    expect(stageContentSyncPath(stats, 'items.0.value', 'stats')).toBe('stats.0.value');
+    expect(stageContentSyncPath(stats, 'stats.0.label', 'stats')).toBe('stats.0.label');
+  });
+
+  it('ignores stage-only copy (title, eyebrow)', () => {
+    expect(stageContentSyncPath(showcase, 'title', 'showcase')).toBeNull();
+    expect(stageContentSyncPath(showcase, 'eyebrow', 'showcase')).toBeNull();
   });
 });
 

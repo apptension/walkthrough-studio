@@ -7,7 +7,14 @@
  * pane types → preview reloads → right side remounts → caret dies.
  */
 
+import { contentPathForEditPath } from '@/logic/plateFieldPaths';
+
 type EditOrigin = 'pane' | 'stage';
+
+export type ContentSchemaLite = {
+  fields: Array<{ key: string }>;
+  lists: Array<{ key: string }>;
+};
 
 type ContentSavePlan = {
   /** Tear down and reload the plate iframe. */
@@ -34,6 +41,25 @@ export function endEditOrigin(): void {
 
 export function editOrigin(): EditOrigin | null {
   return origin;
+}
+
+/**
+ * Whether a stage `data-edit` path has a matching Content pane field (scalar or list row).
+ * Open/close title fields and other stage-only copy return null.
+ */
+export function stageContentSyncPath(
+  schema: ContentSchemaLite | null | undefined,
+  editPath: string,
+  plateType?: string | null,
+): string | null {
+  if (!schema || !editPath) return null;
+  const contentPath = contentPathForEditPath(editPath, schema, plateType);
+  if (schema.fields.some((f) => f.key === contentPath)) return contentPath;
+  for (const list of schema.lists) {
+    const escaped = list.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`^${escaped}\\.\\d+(?:\\..+)?$`).test(contentPath)) return contentPath;
+  }
+  return null;
 }
 
 /**
