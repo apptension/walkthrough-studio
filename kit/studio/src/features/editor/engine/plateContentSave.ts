@@ -69,6 +69,56 @@ export function coerceContentLocalValue(
   return Number.isFinite(max) ? lines.slice(0, max) : lines;
 }
 
+const LIVE_SET_FIELD_KINDS = new Set(['text', 'long', 'lines', 'number']);
+
+export function isLiveContentSetKind(kind: string): boolean {
+  return LIVE_SET_FIELD_KINDS.has(kind);
+}
+
+/** String the stage can paint for a saved Content value (`lines` → newline-separated). */
+export function contentValueForLivePaint(
+  schema: ContentSchemaForLocal | null | undefined,
+  path: string,
+  value: unknown,
+): string | number | null | undefined {
+  if (value == null) return value;
+  if (typeof value === 'number') return value;
+  const field = contentFieldForPath(schema, path);
+  if (field?.kind === 'lines') {
+    const raw = Array.isArray(value)
+      ? value
+      : typeof value === 'string'
+        ? value.split('\n')
+        : [];
+    return raw
+      .map((l) => String(l).trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (typeof value === 'string') return value;
+  if (typeof value === 'boolean' || typeof value === 'bigint') return value.toString();
+  return '';
+}
+
+export type ContentSetOp = { op: 'set'; path: string; value: unknown };
+
+/** One POST per plate so parallel live saves cannot clobber `video.config.json`. */
+export function batchPlateContentSetOps(
+  entries: Array<{ plateId: string; path: string; value: unknown; kind: string }>,
+): Array<{ plateId: string; ops: ContentSetOp[]; paintLive: boolean }> {
+  const byPlate = new Map<string, typeof entries>();
+  for (const e of entries) {
+    const list = byPlate.get(e.plateId) || [];
+    list.push(e);
+    byPlate.set(e.plateId, list);
+  }
+  return [...byPlate.entries()].map(([plateId, batch]) => ({
+    plateId,
+    ops: batch.map((p) => ({ op: 'set' as const, path: p.path, value: p.value })),
+    paintLive: batch.every((p) => isLiveContentSetKind(p.kind)),
+  }));
+}
+
 type ContentSavePlan = {
   /** Tear down and reload the plate iframe. */
   reload: boolean;

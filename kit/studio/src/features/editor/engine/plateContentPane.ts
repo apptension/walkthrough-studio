@@ -23,6 +23,9 @@ import {
   isContentSaveResponseValid,
   stageContentSyncPath,
   coerceContentLocalValue,
+  contentValueForLivePaint,
+  batchPlateContentSetOps,
+  isLiveContentSetKind,
 } from './plateContentSave';
 import { curClip } from './seq';
 import { ed, setHtmlPlates, slug } from './state';
@@ -496,21 +499,22 @@ export function renderPlateContent(c: Clip): string {
 
 /** Field kinds whose saved value the live plate can paint itself, no document reload needed. */
 const COPY_KINDS = new Set(['text', 'long', 'lines']);
-/** Config-only updates — server `live` write, no HTML rebuild (sliders would flash the iframe). */
-const LIVE_SET_KINDS = new Set([...COPY_KINDS, 'number']);
-const isLiveSetKind = (kind: string) => LIVE_SET_KINDS.has(kind);
 
 function paintCopyOps(id: string, ops: ContentOp[]): boolean {
   const data = cache.get(id);
   const schema = data?.schema ?? null;
   const plateType = data?.type ?? null;
-  return ops.every(
-    (op) =>
-      op.op === 'set' &&
-      typeof op.path === 'string' &&
-      (op.value == null || typeof op.value === 'string' || typeof op.value === 'number') &&
-      paintPlateFieldValue(op.path, op.value, id, editPathForContentPath(op.path, schema, plateType)),
-  );
+  return ops.every((op) => {
+    if (op.op !== 'set' || typeof op.path !== 'string') return false;
+    const painted = contentValueForLivePaint(schema, op.path, op.value);
+    if (painted != null && typeof painted !== 'string' && typeof painted !== 'number') return false;
+    return paintPlateFieldValue(
+      op.path,
+      painted,
+      id,
+      editPathForContentPath(op.path, schema, plateType),
+    );
+  });
 }
 
 // ─── Save ──────────────────────────────────────────────────────────────────────────────────
@@ -522,10 +526,25 @@ async function sendAfterFlush(
   opts: { repaint?: boolean; paintLive?: boolean } = {},
 ): Promise<boolean> {
   await flushEditorContentPending();
-  return send(id, ops, hint, opts);
+  return enqueueContentSend(id, ops, hint, opts);
 }
 
-async function send(
+/** Chain every Content POST — concurrent writes read the same config and drop each other's ops. */
+function enqueueContentSend(
+  id: string,
+  ops: ContentOp[],
+  hint: string | null,
+  opts: { repaint?: boolean; paintLive?: boolean } = {},
+): Promise<boolean> {
+  const run = contentSerial.then(() => postContentOps(id, ops, hint, opts));
+  contentSerial = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function postContentOps(
   id: string,
   ops: ContentOp[],
   hint: string | null,
@@ -574,12 +593,18 @@ async function send(
 function setSoon(id: string, path: string, value: unknown, kind: string): void {
   const data = cache.get(id);
   if (data) setLocal(data, path, value);
-  if (COPY_KINDS.has(kind) && (typeof value === 'string' || typeof value === 'number' || value == null)) {
+  if (COPY_KINDS.has(kind)) {
     // Pane → stage only. Mark origin so stage selection echoes do not remount this pane.
     beginEditOrigin('pane');
     try {
       const data = cache.get(id);
-      paintPlateFieldValue(path, value, id, editPathForContentPath(path, data?.schema ?? null, data?.type ?? null));
+      const painted = contentValueForLivePaint(data?.schema ?? null, path, value);
+      paintPlateFieldValue(
+        path,
+        painted,
+        id,
+        editPathForContentPath(path, data?.schema ?? null, data?.type ?? null),
+      );
     } finally {
       queueMicrotask(() => endEditOrigin());
     }
@@ -594,7 +619,10 @@ function setSoon(id: string, path: string, value: unknown, kind: string): void {
     timer: setTimeout(() => {
       pending.delete(key);
       // Never remount for copy — even `lines`. The textarea already shows what was typed.
-      void send(id, [{ op: 'set', path, value }], null, { repaint: false, paintLive: isLiveSetKind(kind) });
+      void enqueueContentSend(id, [{ op: 'set', path, value }], null, {
+        repaint: false,
+        paintLive: isLiveContentSetKind(kind),
+      });
     }, 420),
   });
 }
@@ -664,16 +692,17 @@ function drainPendingOps(id?: string | null) {
 
 function enqueueContentSends(ops: ReturnType<typeof drainPendingOps>): void {
   if (!ops.length) return;
+  const batches = batchPlateContentSetOps(
+    ops.map((p) => ({ plateId: p.id, path: p.path, value: p.value, kind: p.kind })),
+  );
   contentSerial = contentSerial
     .then(async () => {
-      await Promise.all(
-        ops.map((p) =>
-          send(p.id, [{ op: 'set', path: p.path, value: p.value }], null, {
-            repaint: false,
-            paintLive: isLiveSetKind(p.kind),
-          }),
-        ),
-      );
+      for (const batch of batches) {
+        await postContentOps(batch.plateId, batch.ops, null, {
+          repaint: false,
+          paintLive: batch.paintLive,
+        });
+      }
     })
     .catch(() => {
       /* keep the queue alive if a save failed */
@@ -935,7 +964,7 @@ export function wirePlateContent(root: HTMLElement, c: Clip): void {
     const kind = el.dataset['cntKind'] || 'text';
     void sendAfterFlush(id, [{ op: 'set', path, value: kind === 'number' ? Number(el.value) : el.value }], null, {
       repaint: false,
-      paintLive: isLiveSetKind(kind),
+      paintLive: isLiveContentSetKind(kind),
     });
   });
   on('[data-cnt-star]', 'click', (el) => {

@@ -11,6 +11,9 @@ import {
   stageContentSyncPath,
   coerceContentLocalValue,
   contentFieldForPath,
+  contentValueForLivePaint,
+  batchPlateContentSetOps,
+  isLiveContentSetKind,
   planContentSave,
   flushQueuedInspectorRepaint,
   paintInspectorUnlessContentTyping,
@@ -96,6 +99,48 @@ describe('coerceContentLocalValue', () => {
 
   it('passes through non-lines values unchanged', () => {
     expect(coerceContentLocalValue(pricing, 'tiers.0.name', 'Pro: $99')).toBe('Pro: $99');
+  });
+});
+
+describe('batchPlateContentSetOps', () => {
+  it('merges pending sets on the same plate into one POST', () => {
+    const batches = batchPlateContentSetOps([
+      { plateId: 'p1', path: 'caption', value: 'Hello: world', kind: 'text' },
+      { plateId: 'p1', path: 'url', value: 'https://a.com', kind: 'text' },
+      { plateId: 'p2', path: 'items.0.label', value: 'X', kind: 'text' },
+    ]);
+    expect(batches).toHaveLength(2);
+    const p1 = batches.find((b) => b.plateId === 'p1');
+    expect(p1?.ops).toHaveLength(2);
+    expect(p1?.paintLive).toBe(true);
+  });
+});
+
+describe('contentValueForLivePaint', () => {
+  const pricing = {
+    fields: [],
+    lists: [
+      {
+        key: 'tiers',
+        fields: [{ key: 'items', kind: 'lines' }],
+      },
+    ],
+  };
+
+  it('joins lines arrays for stage paint', () => {
+    expect(contentValueForLivePaint(pricing, 'tiers.0.items', ['One', 'Two'])).toBe('One\nTwo');
+    expect(contentValueForLivePaint(pricing, 'tiers.0.items', 'a\nb')).toBe('a\nb');
+  });
+
+  it('preserves colons in scalar copy', () => {
+    expect(contentValueForLivePaint(pricing, 'tiers.0.name', 'Plan: Pro')).toBe('Plan: Pro');
+  });
+});
+
+describe('isLiveContentSetKind', () => {
+  it('marks copy and number fields as live-safe', () => {
+    expect(isLiveContentSetKind('text')).toBe(true);
+    expect(isLiveContentSetKind('toggle')).toBe(false);
   });
 });
 
