@@ -4,6 +4,8 @@
  */
 import { icon } from '@/ui/iconString';
 
+import { isVoicePictureOverrunError } from './voicePictureFix';
+
 export type StepStatus = 'todo' | 'run' | 'done' | 'fail';
 
 export interface PipelineStep {
@@ -183,18 +185,29 @@ export function pipelineFixNote(failure: PipelineFailure = {}): string {
  */
 export function stepRowHtml(
   step: Partial<PipelineStep>,
-  { icon = '', actions = false }: { icon?: string; actions?: boolean } = {},
+  {
+    icon = '',
+    actions = false,
+    failureError = '',
+  }: { icon?: string; actions?: boolean; failureError?: string } = {},
 ): string {
   const st = step.status || 'todo';
   const id = String(step.id || '');
   const label = String(step.label || id);
   const caption = statusCaption(st);
   const showActions = actions && st === 'fail';
+  const voiceOverrun = showActions && isVoicePictureOverrunError(failureError);
   const captionHtml = caption ? `<span class="pip-cap">${escapeHtml(caption)}</span>` : '';
   const actionsHtml = showActions
     ? `<div class="pip-actions">
         <button type="button" class="pip-act" data-pipe-retry="${escapeAttr(id)}" title="Retry this step and continue the pipeline">Retry</button>
-        <button type="button" class="pip-act primary" data-pipe-fix="${escapeAttr(id)}" title="Send the failure log to the Director and fix with AI">Fix</button>
+        ${
+          voiceOverrun
+            ? `<button type="button" class="pip-act" data-pipe-autofix="${escapeAttr(id)}" title="Reset voice lines that were dragged past the end of the video, then retry audio">Auto fix</button>
+        <button type="button" class="pip-act" data-pipe-manual="${escapeAttr(id)}" title="Open the voice line on the timeline to shorten or reposition it">Manual fix</button>`
+            : ''
+        }
+        <button type="button" class="pip-act primary" data-pipe-fix="${escapeAttr(id)}" title="Send the failure log to the Director and fix with AI">Fix with AI</button>
       </div>`
     : '';
   return `<li class="${st}" data-step-id="${escapeAttr(id)}">

@@ -1,7 +1,7 @@
 import { capturePlayheadAnchor, restorePlayheadAnchor } from '@/logic/plateSync';
 
 import { deckEdit, ed } from './state';
-import type { Clip, Deck, DeckScene, Join, Lens, ZoomShot } from './types';
+import type { Clip, Deck, DeckScene, Join, Lens, Span, VoiceClip, ZoomShot } from './types';
 import { clamp, clockFromPieces, keptSpans } from './util';
 import { placeVoice, voiceSlots } from '@/logic/voicePlace';
 
@@ -152,10 +152,16 @@ export function projectAudio(): void {
   const byKey = new Map(placed.map((p) => [p.key, p]));
   for (const c of clips) {
     const p = byKey.get(c.key);
+    if (c.at != null) {
+      c.start = Math.round((c.at + (c.nudge || 0)) * 1000) / 1000;
+      c.moved = false;
+      c.long = p?.long ?? 0;
+      c.late = p?.late ?? 0;
+      continue;
+    }
     if (!p) continue;
-    const base = c.at != null ? c.at : p.start;
-    c.start = Math.round((base + (c.nudge || 0)) * 1000) / 1000;
-    c.moved = c.at == null && Math.abs(p.start - c.writtenStart) > 0.05;
+    c.start = Math.round((p.start + (c.nudge || 0)) * 1000) / 1000;
+    c.moved = Math.abs(p.start - c.writtenStart) > 0.05;
     c.long = p.long;
     c.late = p.late;
   }
@@ -200,6 +206,32 @@ export const lensItems = (): Lens[] => [
     .filter((l) => l.off)
     .map((l) => ({ ...l, key: `off:${l.t}`, source: 'off' }) as unknown as Lens),
 ];
+
+/** Magnifiers on the timeline — suppressed recorded ones stay in the inspector only. */
+export const visibleLenses = (): Lens[] => lensItems().filter((l) => l.source !== 'off');
+
+export function zoomSkipCovers(from: number, to: number, skips: { from: number; to: number }[] | null | undefined): boolean {
+  return (skips || []).some((s) => s.from < to - 0.001 && s.to > from + 0.001);
+}
+
+/** Lines removed from the cut (`mute` on the desk) stay in config for undo/mix but not on the timeline. */
+export const visibleVoiceClips = (): VoiceClip[] => (ed.deck?.audio?.voiceClips || []).filter((c) => !c.mute);
+
+/** Auto zoom the deck turned off (`zoomSkips`) must not still show as a dashed pill beside “No zoom”. */
+export const visibleZoomShots = (): ZoomShot[] =>
+  (ed.deck?.zoomShots || []).filter((s) => s.source !== 'auto' || !zoomSkipCovers(s.start, s.end, deckEdit().zoomSkips));
+
+/** Whether a skip row pill should appear (suppress entries are silent; everything else is removable on the row). */
+export function zoomSkipOnTimeline(skip: Span, _autoShots: ZoomShot[] | null | undefined): boolean {
+  return !skip.suppress;
+}
+
+export function visibleZoomSkips(): { skip: Span; i: number }[] {
+  const skips = deckEdit().zoomSkips || [];
+  const autos = ed.deck?.zoomShots || [];
+  return skips.map((skip, i) => ({ skip, i })).filter(({ skip }) => zoomSkipOnTimeline(skip, autos));
+}
+
 export const lensByKey = (key: string | null | undefined): Lens | null => lensItems().find((l) => l.key === key) || null;
 
 /** A zoom by its pill key, whether the planner made it on the recording or it sits on a plate. */

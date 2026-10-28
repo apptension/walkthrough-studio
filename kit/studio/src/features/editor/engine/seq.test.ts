@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { buildSeq, joinBeforeScene, timelineScenes } from './seq';
+import {
+  buildSeq,
+  joinBeforeScene,
+  timelineScenes,
+  visibleLenses,
+  visibleVoiceClips,
+  visibleZoomShots,
+  visibleZoomSkips,
+  zoomSkipCovers,
+  zoomSkipOnTimeline,
+} from './seq';
 import { ed, resetEdForTests } from './state';
 import type { DeckEdit } from './types';
 
@@ -47,6 +57,48 @@ describe('timelineScenes', () => {
     expect(timelineScenes(deck).map((s) => s.id)).toEqual(['open', 'new-proof', 'live-0.00', 'close']);
     deck.scenes = [...(deck.scenes || []), { id: 'dead', kind: 'live', title: 'Gap', dur: 0 }];
     expect(timelineScenes(deck).some((s) => s.id === 'dead')).toBe(false);
+  });
+});
+
+describe('fx visibility', () => {
+  it('hides auto zoom shots covered by a zoom skip', () => {
+    ed.deck!.deck!.zoomSkips = [{ from: 4, to: 9 }];
+    ed.deck!.zoomShots = [
+      { start: 3, end: 10, zoom: 1.3, source: 'auto', points: [] },
+      { id: 'mine', start: 12, end: 15, zoom: 1.5, source: 'edit', points: [] },
+    ];
+    expect(zoomSkipCovers(3, 10, ed.deck!.deck!.zoomSkips)).toBe(true);
+    expect(visibleZoomShots().map((s) => s.source)).toEqual(['edit']);
+  });
+
+  it('shows no-auto-zoom zones on the row but hides suppress-only entries', () => {
+    ed.deck!.deck!.zoomSkips = [
+      { from: 4, to: 9, suppress: true },
+      { from: 12, to: 14, zone: true },
+      { from: 20, to: 25 },
+    ];
+    ed.deck!.zoomShots = [{ start: 20, end: 25, zoom: 1.3, source: 'auto', points: [] }];
+    expect(zoomSkipOnTimeline({ from: 4, to: 9, suppress: true }, [])).toBe(false);
+    expect(zoomSkipOnTimeline({ from: 12, to: 14, zone: true }, [])).toBe(true);
+    expect(zoomSkipOnTimeline({ from: 20, to: 25 }, ed.deck!.zoomShots)).toBe(true);
+    expect(visibleZoomSkips().map((x) => x.i)).toEqual([1, 2]);
+  });
+
+  it('drops muted voice lines from the timeline list', () => {
+    ed.deck!.audio = {
+      voiceClips: [
+        { key: 'a', kind: 'line', start: 1, dur: 2, full: 2, trimStart: 0, trimEnd: 0, writtenStart: 1, text: 'A' },
+        { key: 'b', kind: 'line', start: 4, dur: 2, full: 2, trimStart: 0, trimEnd: 0, writtenStart: 4, text: 'B', mute: true },
+      ],
+    };
+    expect(visibleVoiceClips().map((c) => c.key)).toEqual(['a']);
+  });
+
+  it('drops switched-off recorded magnifiers from the timeline list', () => {
+    ed.deck!.lenses = [{ id: 'l1', t: 2, dur: 2, x: 0, y: 0, w: 10, h: 10, key: 'l1', source: 'edit' } as never];
+    ed.deck!.recordedLenses = [{ t: 5, dur: 2, label: 'Loupe', rect: { x: 0, y: 0, w: 10, h: 10 }, off: true }];
+    expect(visibleLenses().every((l) => l.source !== 'off')).toBe(true);
+    expect(visibleLenses()).toHaveLength(1);
   });
 });
 

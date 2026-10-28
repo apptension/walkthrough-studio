@@ -1,6 +1,7 @@
 import type { HtmlPlate, Job } from '@/api/types';
 import { api, enc } from '@/desk/api';
 import { bridges } from '@/desk/bridge';
+import { ask } from '@/desk/ask';
 import { continuePipelineAfterFix, enqueueJob, isCancelError, showActivityDock, watchJob } from '@/desk/jobs';
 import { showRightTab } from '@/desk/panels';
 import { runtime } from '@/desk/runtime';
@@ -8,11 +9,13 @@ import { desk, IMPROVE_DEFAULT, setButtonBusy, setStatus, type QueueItem } from 
 import { toast } from '@/desk/toast';
 import { loadVideo } from '@/desk/video';
 
+import { discardDraft } from './proposal';
 import {
   hideProposal,
   markPlateHtmlFailed,
   resetThinkSteps,
   setApprovePlateVisible,
+  setSessionIdle,
   setThinkStep,
   showProposal,
 } from './session';
@@ -234,9 +237,69 @@ export async function runImproveJob(item: QueueItem, { signal }: { signal?: Abor
   } catch (err) {
     setThinkStep('html');
     const msg = errorMessage(err);
+    markPlateHtmlFailed(msg);
+    const choice = await ask({
+      kind: 'choice',
+      title: 'Plate HTML failed',
+      detail: `${msg}\n\nYour script changes are saved. Choose how to continue.`,
+      tone: 'warn',
+      options: [
+        { value: 'review', label: 'Review script anyway', hint: 'Open the changed story without a live plate preview' },
+        { value: 'retry', label: 'Retry rebuild', hint: 'Try building plate HTML again' },
+        { value: 'discard', label: 'Discard changes', hint: 'Restore the previous sources' },
+      ],
+      ok: 'Continue',
+      cancel: 'Dismiss',
+    });
+    if (choice === 'discard') {
+      await discardDraft();
+      setSessionIdle();
+      return;
+    }
+    if (choice === 'retry') {
+      try {
+        const shown = await bridges.plate?.previewPlateAfterEdit(plateId ?? '');
+        const retried = isPlate(shown) ? shown : null;
+        if (retried) {
+          showProposal({
+            title: `Review “${retried.label || retried.id}”`,
+            reason: 'Plate HTML rebuilt after retry.',
+            steps: [{ label: 'Live preview rebuilt', status: 'done' }, { label: 'Awaiting your decision', status: 'run' }],
+          });
+          setApprovePlateVisible(Boolean(plateId));
+          toast('Preview ready', retried.label || retried.id);
+          return;
+        }
+      } catch (retryErr) {
+        toast('Retry failed', errorMessage(retryErr), 'err');
+        markPlateHtmlFailed(errorMessage(retryErr));
+      }
+    }
+    if (choice === 'review' || choice === 'retry') {
+      const labels = (await api<DraftChanges>(`/api/video/${enc(target)}/draft/changes`).catch((): DraftChanges => ({}))).labels || [
+        focusLabel === 'full' ? 'Coordinated video pass' : focusLabel,
+      ];
+      showProposal({
+        title: 'Review script changes',
+        reason: scriptReviewReason(labels, msg),
+        review: 'script',
+        reviewLabel: 'Review script & voice',
+        reviewDetail: 'Plate HTML did not rebuild — fix layouts in config or retry from Feedback',
+        steps: [
+          ...labels.map((label) => ({ label, status: 'done' as const })),
+          { label: 'Plate HTML needs attention', status: 'run' as const },
+        ],
+      });
+      setApprovePlateVisible(false);
+      toast('Review script', 'Approve only after the words read right');
+      return;
+    }
     toast('HTML rebuild failed', msg, 'err');
     setStatus('warn', 'Sources changed — rebuild failed');
-    markPlateHtmlFailed(msg);
     throw err;
   }
+}
+
+function scriptReviewReason(labels: string[], err: string): string {
+  return `${labels.join(' · ')} changed, but plate HTML failed (${err}). Review the script; rebuild plates from Direction or retry here.`;
 }

@@ -25,10 +25,33 @@ import { audioDesk, deckEdit, ed, liveH, liveW, type FxItem } from './state';
 import { paintTextMode } from './text';
 import { fxSegments, paintSelection, paintTools, renderAudioTracks, renderCardTracks, renderClipsTrack, renderFxTracks } from './timeline';
 import { pause, seek } from './transport';
-import type { Clip, Deck, DeckLens, Lens, Selection, ZoomShot } from './types';
+import type { Clip, Deck, DeckLens, Lens, Selection, Span, ZoomShot } from './types';
 import { $, ICONS, clamp, fmtRate, r3 } from './util';
 
 /** Edits (add / adopt / remove), toolbar tools, selection and the status pill from `kit/studio/editor.js`. */
+
+type ZoomSkip = Span & { zone?: boolean; suppress?: boolean };
+
+function mergeZoomSkip(
+  skips: ZoomSkip[],
+  span: { from: number; to: number },
+  { zone = false, suppress = false }: { zone?: boolean; suppress?: boolean } = {},
+): ZoomSkip[] {
+  const next = [
+    ...(skips || []),
+    { from: r3(span.from), to: r3(span.to), ...(zone ? { zone: true } : {}), ...(suppress ? { suppress: true } : {}) },
+  ].sort((a, b) => a.from - b.from);
+  const merged: ZoomSkip[] = [];
+  for (const s of next) {
+    const last = merged.at(-1);
+    if (last && s.from <= last.to + 0.05) {
+      last.to = Math.max(last.to, s.to);
+      last.zone = Boolean(last.zone || s.zone);
+      last.suppress = Boolean(last.suppress || s.suppress);
+    } else merged.push({ ...s });
+  }
+  return merged;
+}
 
 export async function addRamp(from: number, to: number, rate: number): Promise<void> {
   const speed = [...deckEdit().speed.filter((r) => r.to <= from + 0.001 || r.from >= to - 0.001), { from: r3(from), to: r3(to), rate }];
@@ -203,7 +226,7 @@ export async function adoptShot(shot: ZoomShot, over: { x?: number; y?: number; 
     ...d.zooms.filter((z) => z.id !== id),
     { id, t: r3(over.t ?? shot.start), dur: r3(Math.max(minDur, over.dur ?? shot.end - shot.start)), zoom, x: aim.cx, y: aim.cy },
   ];
-  const zoomSkips = [...d.zoomSkips, { from: shot.start, to: shot.end }];
+  const zoomSkips = mergeZoomSkip(d.zoomSkips, { from: shot.start, to: shot.end }, { suppress: true });
   const r = await postDeck({ zooms, zoomSkips }, { hint: 'That zoom is yours now' });
   if (r) select({ type: 'zoom', key: id });
 }
@@ -262,22 +285,67 @@ export async function removeSelected(): Promise<void> {
     return;
   }
   if (s.type === 'ramp') await postDeck({ speed: d.speed.filter((_, i) => i !== s.i) }, { hint: 'Speed change removed' });
-  else if (s.type === 'skip') await postDeck({ zoomSkips: d.zoomSkips.filter((_, i) => i !== s.i) }, { hint: 'Auto zoom allowed again' });
+  else if (s.type === 'skip') {
+    const idx = s.i;
+    if (idx == null || !Number.isFinite(idx)) return;
+    const r = await postDeck({ zoomSkips: (d.zoomSkips || []).filter((_, i) => i !== idx) }, { hint: 'No-auto-zoom zone removed' });
+    if (r) {
+      const c = curClip();
+      select(c ? { type: 'clip', id: c.id } : null);
+    }
+  }
   else if (s.type === 'zoom') {
     const shot = selectedShot();
     if (!shot) return;
-    if (shot.source === 'auto') await postDeck({ zoomSkips: [...d.zoomSkips, { from: shot.start, to: shot.end }] }, { hint: 'Auto zoom removed' });
-    else await postDeck({ zooms: d.zooms.filter((z) => z.id !== shot.id) }, { hint: 'Zoom removed' });
+    if (shot.source === 'auto') {
+      const r = await postDeck({ zoomSkips: mergeZoomSkip(d.zoomSkips, { from: shot.start, to: shot.end }, { suppress: true }) }, { hint: 'Auto zoom removed from the cut' });
+      if (r) {
+        const c = curClip();
+        select(c ? { type: 'clip', id: c.id } : null);
+      }
+      return;
+    }
+    const zooms = d.zooms.filter((z) => {
+      if (shot.id && z.id === shot.id) return false;
+      if (
+        !z.clip &&
+        Math.abs(z.t - shot.start) < 0.1 &&
+        Math.abs(z.t + z.dur - shot.end) < 0.25
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const r = await postDeck({ zooms }, { hint: 'Zoom removed' });
+    if (r) {
+      const c = curClip();
+      select(c ? { type: 'clip', id: c.id } : null);
+    }
+    return;
   } else if (s.type === 'ride') {
     const rides = audioDesk().music.rides.filter((_, i) => i !== s.i);
     await withMusic({ rides }, 'Ride removed');
   } else if (s.type === 'voice') {
-    await withVoice(s.key ?? '', { mute: true }, 'Line muted');
+    const key = s.key ?? '';
+    if (!key) return;
+    const r = await withVoice(key, { mute: true }, 'Line removed from the cut');
+    if (r) {
+      const c = curClip();
+      select(c ? { type: 'clip', id: c.id } : null);
+    }
+    return;
   } else if (s.type === 'lens') {
     const l = selectedLens();
     if (!l || l.source === 'off') return;
-    if (l.source === 'auto') await postDeck({ lensOff: [...d.lensOff, r3(l.t)] }, { hint: 'Recorded magnifier switched off' });
-    else await postDeck({ lenses: d.lenses.filter((x) => x.id !== l.id) }, { hint: 'Magnifier removed' });
+    const r =
+      l.source === 'auto'
+        ? await postDeck({ lensOff: [...d.lensOff, r3(l.t)] }, { hint: 'Magnifier removed from the cut' })
+        : await postDeck({ lenses: d.lenses.filter((x) => x.id !== l.id) }, { hint: 'Magnifier removed' });
+    if (r) {
+      const c = curClip();
+      select(c ? { type: 'clip', id: c.id } : null);
+    }
+    return;
   } else if (s.type !== 'range') return;
   const c = curClip();
   select(c ? { type: 'clip', id: c.id } : null);

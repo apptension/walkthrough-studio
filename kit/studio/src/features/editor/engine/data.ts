@@ -12,10 +12,10 @@ import {
 } from './plateContentSave';
 import { refreshPacePop } from './platePace';
 import { clearPlatePreviewTimers, exitText } from './text';
-import { buildSeq, clipIndexAt, lensByKey, shotKey } from './seq';
+import { buildSeq, clipIndexAt, lensByKey, shotByKey } from './seq';
 import { liveCardAtPlayhead, paintFrame, plateReady, renderFrame, requestPlate, syncLiveSource } from './stage';
 import { audioDesk, deckEdit, ed, htmlPlates, preview, setHtmlPlates, slug } from './state';
-import { flashHint, renderTimeline } from './timeline';
+import { flashHint, invalidateTimeline, renderTimeline } from './timeline';
 import { paintHead, paintTransport, pause } from './transport';
 import type { Deck, DeckEdit, PlateRow } from './types';
 import { clamp, errMessage } from './util';
@@ -189,6 +189,13 @@ export const snapshotDeck = (): DeckEdit => {
   ) as DeckEdit;
 };
 
+const FX_PATCH_KEYS = ['speed', 'zooms', 'zoomSkips', 'lenses', 'lensOff', 'cuts', 'cards', 'order', 'omit', 'repeats', 'trims', 'plateTimes', 'audio'] as const;
+
+function patchTouchesFx(patch: Partial<DeckEdit> | Record<string, unknown> | null | undefined): boolean {
+  if (!patch || typeof patch !== 'object') return false;
+  return FX_PATCH_KEYS.some((k) => Object.prototype.hasOwnProperty.call(patch, k));
+}
+
 export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown>, { undoable = true, hint }: { undoable?: boolean; hint?: string | undefined } = {}): Promise<Deck | null> {
   await flushEditorContentPending();
   const wantSlug = slug() || '';
@@ -244,6 +251,7 @@ export async function postDeck(patch: Partial<DeckEdit> | Record<string, unknown
     void preview.load(previewState());
     if (ed.playing && ed.sound) preview.play(previewState(), ed.t);
     validateSelection();
+    if (patchTouchesFx(patch)) invalidateTimeline();
     renderTimeline();
     const stage = ed.seq[clipIndexAt(ed.t)];
     if (stage?.kind === 'plate' && stage.plateId && !plateReady(stage.plateId)) {
@@ -283,9 +291,12 @@ export function validateSelection(): void {
   if (!s) return;
   const d = deckEdit();
   if (s.type === 'ramp' && !d.speed[s.i ?? -1]) ed.sel = null;
-  if (s.type === 'zoom' && !(ed.deck?.zoomShots || []).some((z) => shotKey(z) === s.key)) ed.sel = null;
+  if (s.type === 'zoom' && !shotByKey(s.key)) ed.sel = null;
   if (s.type === 'skip' && !d.zoomSkips[s.i ?? -1]) ed.sel = null;
-  if (s.type === 'lens' && !lensByKey(s.key)) ed.sel = null;
+  if (s.type === 'lens') {
+    const l = lensByKey(s.key);
+    if (!l || l.source === 'off') ed.sel = null;
+  }
   if (s.type === 'voice' && !(ed.deck?.audio?.voiceClips || []).some((c) => c.key === s.key)) ed.sel = null;
   if (s.type === 'ride' && !audioDesk().music.rides[s.i ?? -1]) ed.sel = null;
   if (s.type === 'clip' && !ed.seq.some((c) => c.id === s.id)) ed.sel = null;

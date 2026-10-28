@@ -15,7 +15,7 @@
  * the agent's and the reviewer's to edit.
  */
 import { applyVariety, layoutFamily, TRANSITION_PALETTES } from './variety.mjs';
-import { layoutGuide, resolveLayout } from './plateLayouts.mjs';
+import { layoutGuide, resolveLayout, stripInvalidLayouts } from './plateLayouts.mjs';
 
 /** The rhythm by energy: seconds of live time between camera accents, and the floor between two. */
 export const RHYTHM = Object.freeze({
@@ -284,7 +284,9 @@ export function analyzeRhythm({ flowSource = '', config = {}, brand = {} } = {})
  */
 export function enrichDraft(config = {}, { slug = '', brand = {}, flowSource = '' } = {}) {
   const { config: varied, applied, pick } = applyVariety(config, { slug, brand });
-  const next = varied;
+  const stripped = stripInvalidLayouts(varied);
+  const next = stripped.config;
+  for (const path of stripped.removed) applied.push(`cleared invalid ${path}`);
   const direction = (next.direction = next.direction || {});
   if (direction.camera?.zoom == null) {
     const zoom = pick.mood === 'punchy' ? 'bold' : 'subtle';
@@ -326,7 +328,7 @@ export function rhythmGuide() {
 /** Layout + rhythm guidance for agents that write plates (draft, plates). */
 export function draftCraftGuide() {
   return [
-    'Plate layouts — set "layout" on open, close and each interstitial to stage the beat it carries (omit it to keep the classic composition):',
+    'Plate layouts — set "layout" only on open, close and interstitial types that offer variants (features, stats, statement, …). Journey, process, timeline, quote and other single-composition types must not have a layout field. Omit layout to keep the classic composition:',
     layoutGuide(),
     'Choose per story beat: a launch or bold promise → kinetic or mesh opener; a product-first story → device; a calm explainer → classic or split. A recap the viewer should act on → cards or split closer; a brand sign-off → finale. A capability set with one lead feature → bento; a sequence → stack; a tour of equals → carousel; one hard number set → burst; a line that must land → kinetic or marquee statement. Never repeat a layout (or the same staging, e.g. kinetic opener then kinetic statement) back to back, and let the closer answer the opener. After the draft, Studio fills any layout you leave open with a deterministic pick for this video — choose deliberately where the beat calls for it.',
     rhythmGuide(),

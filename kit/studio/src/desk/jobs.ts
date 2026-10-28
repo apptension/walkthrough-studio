@@ -289,6 +289,7 @@ export async function drainQueue(): Promise<void> {
       desk.set({ running: null, activeSurface: null, queue: [] });
     } else {
       desk.set({ jobBusy: false, running: null, activeSurface: null });
+      runtime.activityJobId = null;
       if (!desk.get().queue.length) setRenderMode(false);
       void drainQueue();
     }
@@ -492,7 +493,12 @@ export function showActivityDock(job: Job, { surface }: { surface?: Surface } = 
     showLeftTab('render');
     setRenderMode(running || desk.get().jobBusy);
   }
-  if (resolved === 'session' || isImprove) showRightTab('feedback');
+  if (resolved === 'session' || isImprove) {
+    if (runtime.activityJobId !== job.id) {
+      runtime.activityJobId = job.id;
+      showRightTab('feedback');
+    }
+  }
   if (resolved !== 'session' && !isImprove) return;
   desk.set({ hasActivity: true, sessionJob: job });
 }
@@ -610,6 +616,60 @@ export function fixPipelineStep(stepId?: string): void {
     resumePipeline: { mode: fail.mode || 'quick', fromStep: from, slug: fail.slug || s.slug, label: fail.label || from },
   });
   toast('Fixing with AI', `${fail.label || from} · then continue the pipeline`);
+}
+
+/** Reset voice lines dragged past the master, then resume the pipeline from the failed step. */
+export async function autoFixPipelineVoice(stepId?: string): Promise<void> {
+  const s = desk.get();
+  const fail = s.pipelineFailure;
+  if (!fail || s.jobBusy) {
+    toast(s.jobBusy ? 'Busy' : 'Nothing to fix', s.jobBusy ? 'Wait for the current job' : 'Run a render first', 'warn');
+    return;
+  }
+  const slug = fail.slug || s.slug;
+  if (!slug) return;
+  const from = stepId || fail.stepId || 'audio';
+  try {
+    const r = await api<{ cleared?: string[] }>(`/api/video/${enc(slug)}/voice/refit-picture`, { method: 'POST', body: {} });
+    const n = r.cleared?.length || 0;
+    toast(
+      n ? 'Voice refitted' : 'Voice checked',
+      n ? `Reset ${n} line${n === 1 ? '' : 's'} to fit the cut · retrying from ${fail.label || from}` : `Retrying from ${fail.label || from}`,
+    );
+    if (slug === s.slug) await loadVideo(slug).catch(() => {});
+    retryPipelineFrom(from);
+  } catch (err) {
+    toast('Auto fix failed', errorMessage(err), 'err');
+  }
+}
+
+/** Open the worst voice line on the timeline (or seed the Director note) for a hand fix. */
+export async function manualFixPipelineVoice(_stepId?: string): Promise<void> {
+  const s = desk.get();
+  const fail = s.pipelineFailure;
+  if (!fail) {
+    toast('Nothing to fix', 'No failed pipeline step', 'warn');
+    return;
+  }
+  const slug = fail.slug || s.slug;
+  if (!slug) return;
+  try {
+    const r = await api<{ gap?: { offenders?: { key: string }[] }; manualNote?: string }>(`/api/video/${enc(slug)}/voice/picture-gap`);
+    const key = r.gap?.offenders?.[0]?.key;
+    if (r.manualNote) desk.set((st) => ({ improve: { ...st.improve, note: r.manualNote! } }));
+    setRenderMode(false);
+    if (slug !== s.slug) await loadVideo(slug);
+    if (key && bridges.editor?.focusVoiceLine) {
+      bridges.editor.focusVoiceLine(key);
+      showRightTab('inspector');
+      toast('Manual fix', `Editing “${key}” — shorten or move the line, then Retry the failed step`);
+    } else {
+      showRightTab('feedback');
+      toast('Manual fix', 'See the Director note for lines to shorten or reposition');
+    }
+  } catch (err) {
+    toast('Could not open voice fix', errorMessage(err), 'err');
+  }
 }
 
 export async function continuePipelineAfterFix(resume: QueueItem['resumePipeline']): Promise<void> {

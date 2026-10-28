@@ -125,6 +125,11 @@ import {
   narrationLineFor,
   regenerateLine,
 } from './audio/voice.mjs';
+import {
+  analyzeVoicePictureGap,
+  autoRefitVoiceEdits,
+  voicePictureManualFixNote,
+} from './audio/voicePictureFix.mjs';
 import { duration as mediaDuration } from './media.mjs';
 import { EXPORT_PRESETS, listExports } from './exports.mjs';
 import {
@@ -139,7 +144,7 @@ import {
   setNarrationLine,
 } from './script.mjs';
 import { ATMOSPHERE_IDS, ATMOSPHERE_LABELS, DEPTHS, ENERGIES, TITLE_REVEALS, TITLE_REVEAL_LABELS, lookVarTable, motionOverrides, patchMotion, plateLook, resolveMotion } from './plateMotion.mjs';
-import { layoutOptions, normalizeLayout, plateKind, resolveLayout } from './plateLayouts.mjs';
+import { layoutOptions, normalizeLayout, plateKind, resolveLayout, stripInvalidLayouts } from './plateLayouts.mjs';
 import { PURPOSES, PURPOSE_IDS, critiqueStory, resolvePurpose, withPurpose } from './narrative.mjs';
 import {
   buildLiveCards,
@@ -928,7 +933,12 @@ export function discardDraft(video) {
 }
 
 function rebuildPlateHtml(slug) {
-  const video = loadVideo(slug);
+  let video = loadVideo(slug);
+  const { config: fixed, removed } = stripInvalidLayouts(video.config || {});
+  if (removed.length) {
+    writeFileSync(join(video.dir, 'video.config.json'), `${JSON.stringify(fixed, null, 2)}\n`);
+    video = loadVideo(slug);
+  }
   buildPlates(video);
   let overlays = null;
   try {
@@ -1503,7 +1513,11 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
   });
   const recordedLenses = timeline
     .filter((m) => m.kind === 'magnify' && m.rect && m.dur)
-    .map((m) => ({ t: m.t, dur: m.dur, label: m.label || 'Magnifier', rect: m.rect, off: deck.lensOff.includes(Math.round(m.t * 1000) / 1000) }));
+    .map((m) => ({ t: m.t, dur: m.dur, label: m.label || 'Magnifier', rect: m.rect, off: deck.lensOff.includes(Math.round(m.t * 1000) / 1000) }))
+    .filter((m) => !m.off);
+  const zoomSkipCovers = (from, to) =>
+    (deck.zoomSkips || []).some((s) => s.from < to - 0.001 && s.to > from + 0.001);
+  const zoomShots = zoomPlan.shots.filter((s) => s.source !== 'auto' || !zoomSkipCovers(s.start, s.end));
   const audioMeta = readJsonSafe(join(video.out, 'audio-meta.json'));
   const audioWant = compactAudio(deck.audio) || null;
   const audioGot = audioMeta && Object.prototype.hasOwnProperty.call(audioMeta, 'desk') ? audioMeta.desk || null : null;
@@ -1522,7 +1536,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       // The desk's rewrite, when the line was regenerated from one; the mix speaks `text`.
       textOverride: edit.text || null,
       written: voiceWritten.get(c.key) || null,
-      start: Math.round((c.start + (edit.nudge || 0)) * 1000) / 1000,
+      start: Math.round(((edit.at != null ? edit.at : c.start) + (edit.nudge || 0)) * 1000) / 1000,
       writtenStart: c.start,
       nudge: edit.nudge || 0,
       at: edit.at != null ? edit.at : null,
@@ -1546,7 +1560,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       notes: c.notes || [],
       url: `/media/${slug}/voice-file/${i}?t=${encodeURIComponent(c.file ? basename(c.file) : i)}`,
     };
-  });
+  }).filter((c) => !c.mute);
   const narratorWant = video.audio?.voice || {};
   const narratorBuilt = voiceMeta?.voice || null;
   const narrator = {
@@ -1629,7 +1643,7 @@ function editDeck(video, { written = new Map(), narration = null } = {}) {
       })(),
     },
     marks,
-    zoomShots: zoomPlan.shots,
+    zoomShots,
     zoomPlan: { skipped: zoomPlan.skipped, targets: zoomPlan.targets, manual: zoomPlan.manual },
     zoomTiming: timing,
     lensTiming: lensTiming(camera),
@@ -2543,6 +2557,62 @@ async function handleApi(req, res, url) {
       ...created,
       job: job ? jobPayload(job) : null,
       video: videoSummary(created.slug),
+    });
+  }
+
+  if (rest === '/voice/picture-gap' && req.method === 'GET') {
+    try {
+      const gap = analyzeVoicePictureGap(video);
+      return json(res, 200, { ok: true, gap, manualNote: voicePictureManualFixNote(gap) });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+  }
+
+  if (rest === '/voice/refit-picture' && req.method === 'POST') {
+    const pathCfg = join(video.dir, 'video.config.json');
+    const current = JSON.parse(readFileSync(pathCfg, 'utf8'));
+    const desk = normalizeAudio(current.edit?.audio || {});
+    const metaPath = join(video.out, 'voice', 'voice.json');
+    if (!existsSync(metaPath)) return json(res, 400, { error: 'Build the voice first (Mix) before refitting lines' });
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    let gap;
+    try {
+      gap = analyzeVoicePictureGap(video, { voiceMeta: meta, voiceEdits: desk.voice });
+    } catch (err) {
+      return json(res, 400, { error: err.message || String(err) });
+    }
+    if (!(gap.overrunSec > 0.05)) {
+      return json(res, 200, { ok: true, gap, cleared: [], unchanged: true, ...(await editDeckFull(loadVideo(slug))) });
+    }
+    const { voice, cleared, changed } = autoRefitVoiceEdits(desk.voice, meta.clips || [], gap.pictureSec);
+    if (!changed) {
+      return json(res, 400, {
+        error:
+          'Voice still runs past the picture after clearing timeline moves — shorten the long line(s) or re-run produce so the hold matches the read.',
+        gap,
+        manualNote: voicePictureManualFixNote(gap),
+      });
+    }
+    let nextAudio;
+    try {
+      nextAudio = patchEdit(current.edit || {}, { audio: { ...desk, voice } }).audio;
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+    const compact = compactEdit({ ...(current.edit || {}), audio: nextAudio });
+    if (compact) current.edit = compact;
+    else delete current.edit;
+    snapshotSources(video);
+    writeFileSync(pathCfg, JSON.stringify(current, null, 2) + '\n');
+    const fresh = loadVideo(slug);
+    const after = analyzeVoicePictureGap(fresh);
+    return json(res, 200, {
+      ok: true,
+      cleared,
+      gap: after,
+      manualNote: voicePictureManualFixNote(after),
+      ...(await editDeckFull(fresh)),
     });
   }
 

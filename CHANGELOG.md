@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.0.0-beta.10 — 2026-10-28
+
+Agents and the desk keep narration aligned with what is on screen, and the pipeline can recover when voice lines outlive a shorter cut. Pin this tag. `main` is the development line.
+
+Install:
+
+```bash
+git clone --branch v1.0.0-beta.10 --depth 1 https://github.com/apptension/walkthrough-studio.git
+cd walkthrough-studio
+./studio
+```
+
+Upgrade from 1.0.0-beta.9:
+
+```bash
+git fetch --tags && git checkout v1.0.0-beta.10
+./studio
+```
+
+Your projects, brands, and `kit/.env` stay where they are. `./studio` rebuilds the desk when its sources change.
+
+### Agents & narration
+
+- **Screen–voice craft.** `kit/lib/narrativeCraft.mjs` teaches draft, script, narration, take-recraft, and repair passes how to split jobs across titles, captions, plates, and VO — word budgets per beat, no reading on-screen copy aloud, tone from `video.config.json`.
+- **Draft hygiene.** Invalid `layout` fields on single-composition plate types are stripped during draft enrichment so plate HTML always builds; agent layout guidance names which types may carry a layout.
+- **Improve & pipeline fixes.** Failed audio steps that fail because narration runs past the picture offer **Auto fix** (reset stale desk voice positions) and **Fix with AI** notes that steer the agent at `narrativeCraft` and alignment.
+
+### Desk / editor
+
+- **Voice vs picture.** Shared voice placement respects a shorter delivery master; the Editor voice row re-places lines with the same rules as produce. Suppressed auto-zoom skips no longer show as duplicate dashed pills beside **No zoom** zones.
+- **Zoom skip semantics.** Operator-drawn no-auto-zoom zones and suppressed auto zoom are stored separately (`zone` / `suppress`) so the timeline and inspector stay honest.
+
+### Pipeline
+
+- **Poster pick.** One helper chooses the delivery poster frame (open plate offset, first live chapter, or safe fallback) for deliver, validate, and produce.
+
 ## 1.0.0-beta.9 — 2026-10-27
 
 Editor Content pane and plate copy stay in sync through scrub, timeline moves, and live typing — without wiping punctuation or losing fields on save. Pin this tag. `main` is the development line.

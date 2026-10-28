@@ -34,6 +34,8 @@ export interface EditorBridge {
   tuneAtmosphere?(opacity: number | undefined, speed: number | undefined): void;
   /** The atmosphere pattern id baked into the plate frame on stage right now, or `null` off-stage. */
   frameAtmosphere?(): string | null;
+  /** Select a voice line on the timeline and seek the playhead to it. */
+  focusVoiceLine?(key: string): void;
 }
 
 export interface PlateBridge {

@@ -21,10 +21,13 @@ export interface PipelineRow {
 }
 
 /** The rows `renderSteps` paints: busy runs disable the Retry / Fix buttons. */
-export function pipelineRows(steps: readonly PipelineStep[], { busy, failure }: { busy: boolean; failure: boolean }): PipelineRow[] {
+export function pipelineRows(
+  steps: readonly PipelineStep[],
+  { busy, failure, failureError = '' }: { busy: boolean; failure: boolean; failureError?: string },
+): PipelineRow[] {
   return steps.map((s) => {
     const ico = PIPE_ICONS[s.id] || PIPE_ICONS['produce'] || '';
-    const row = stepRowHtml(s, { icon: ico, actions: failure });
+    const row = stepRowHtml(s, { icon: ico, actions: failure, failureError });
     return { key: s.id, html: busy ? row.replace(/<button\b/g, '<button disabled') : row };
   });
 }

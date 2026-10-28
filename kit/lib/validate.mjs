@@ -11,6 +11,7 @@ import { scanFlashes } from './deflash.mjs';
 import { buildEditPlan } from './edit.mjs';
 import { masterQualityError } from './encode.mjs';
 import { STILL_JPEG_ARGS } from './media.mjs';
+import { pickPosterTime } from './posterPick.mjs';
 import { finalPath } from './produce.mjs';
 import { platePaths } from './plates.mjs';
 import { esc } from './text.mjs';
@@ -33,9 +34,10 @@ export function validate(video) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 
+  const openHold = pickPosterTime({ edit: segments, chapters: [] }, total);
   const shots = [
-    ['00-open-build', 1.6],
-    ['01-open-hold', 4.6],
+    ['00-open-build', Math.min(1.6, Math.max(0.8, openHold * 0.45))],
+    ['01-open-hold', openHold],
     ['02-join-open-live', dOpen + 0.3],
     ['03-live-first', dOpen + 1.6],
   ];

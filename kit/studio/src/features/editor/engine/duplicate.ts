@@ -297,7 +297,12 @@ async function duplicateSkip(i: number): Promise<Deck | null> {
   if (!src) return null;
   const t = recSlot('no-zoom stretch', src.from, src.to, d.zoomSkips);
   if (t == null) return null;
-  const copy = { from: t, to: r3(t + src.to - src.from) };
+  const copy = {
+    from: t,
+    to: r3(t + src.to - src.from),
+    ...(src.zone ? { zone: true } : {}),
+    ...(src.suppress ? { suppress: true } : {}),
+  };
   const r = await postDeck({ zoomSkips: [...d.zoomSkips, copy] }, { hint: 'No-zoom stretch duplicated' });
   if (r) {
     const j = deckEdit().zoomSkips.findIndex((x) => Math.abs(x.from - copy.from) < 0.01);

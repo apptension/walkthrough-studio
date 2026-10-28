@@ -17,6 +17,8 @@
  *   - Second person, concrete nouns, real numbers; no category adjectives.
  */
 
+import { narrativeCraftGuide } from './narrativeCraft.mjs';
+
 export const PURPOSES = {
   overview: {
     label: 'Product overview',
@@ -127,9 +129,9 @@ export function resolvePurpose(config = {}, brief = null) {
 }
 
 /** Prompt block for draft / script agents: the spine plus the messaging rules. */
-export function storyBrief(purposeId) {
+export function storyBrief(purposeId, { craft = true, craftTiming = 'script' } = {}) {
   const p = PURPOSES[purposeId] || PURPOSES.overview;
-  return [
+  const parts = [
     `## Story spine — ${p.label} (${p.framework})`,
     p.hint,
     ...p.beats.map((b, i) => `${i + 1}. ${b.id.toUpperCase()} · ${b.where} — ${b.job}${b.plates ? ` Plates: ${b.plates.join('/')}.` : ''}`),
@@ -137,7 +139,9 @@ export function storyBrief(purposeId) {
     '## Messaging rules',
     ...PRINCIPLES.map((s) => `- ${s}`),
     `- Never use: ${EMPTY_WORDS.slice(0, 12).join(', ')}…`,
-  ].join('\n');
+  ];
+  if (craft) parts.push('', narrativeCraftGuide({ timing: craftTiming === 'recorded' ? 'recorded' : 'script' }));
+  return parts.join('\n');
 }
 
 function words(s) {

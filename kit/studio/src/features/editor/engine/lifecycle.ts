@@ -8,7 +8,7 @@ import { canReloadPlateFrame, playheadOnPlate, plateClipFor, shouldBlacklistPlat
 import { paintRange } from '@/ui/rangeFill';
 
 import { stageAimKey, wireLensBox, wireZoomBox } from './aim';
-import { previewState } from './audio';
+import { previewState, voiceClip } from './audio';
 import { requestAudio, requestMake } from './ctx';
 import { postDeck, redo, refresh, resetForProject, undo, validateSelection } from './data';
 import { duplicateSelected } from './duplicate';
@@ -528,7 +528,7 @@ export function wireTimelineBar(signal: AbortSignal): void {
       else if (b.dataset['rangeLens'] != null) void addLensAt(from, to - from);
       else if (b.dataset['rangeCut'] != null) void addCut(from, to);
       else if (b.dataset['rangeSkip'] != null)
-        void postDeck({ zoomSkips: [...deckEdit().zoomSkips, { from, to }] }, { hint: 'No auto zoom in that stretch' }).then((r) => r && select(null));
+        void postDeck({ zoomSkips: [...deckEdit().zoomSkips, { from, to, zone: true }] }, { hint: 'No auto zoom in that stretch' }).then((r) => r && select(null));
       else if (b.dataset['rangeDup'] != null) void duplicateSelected();
       else if (b.dataset['rangeClear'] != null) select(null);
     },
@@ -644,6 +644,17 @@ export function wireKeys(signal: AbortSignal): void {
 
 const selection = (): EditorSelection | null => (ed.sel ? { kind: ed.sel.type } : null);
 
+export function focusVoiceLine(key: string): void {
+  if (!key) return;
+  if (!ed.active) void onEnter({ programT: voiceClip(key)?.start ?? null });
+  setMonitorMode('program', { keepPreview: true });
+  showRightTab('inspector');
+  const clip = voiceClip(key);
+  if (clip && clip.start != null) seek(clip.start, { follow: true });
+  select({ type: 'voice', key });
+  renderInspector();
+}
+
 export const editorApi = {
   refresh: async (): Promise<void> => {
     await refresh();
@@ -666,6 +677,7 @@ export const editorApi = {
   frameAtmosphere: () => frameAtmosphereOnStage(),
   /** The desk calls this where the legacy called `updatePlateEditChrome()`. */
   onPlateDirty: (): void => updatePlateEditChrome(),
+  focusVoiceLine,
   get active(): boolean {
     return ed.active;
   },

@@ -28,7 +28,7 @@ import {
   ENERGY_HINT,
   zoomPreview,
 } from '@/ui/look/previews';
-import { fxClipId, lensItems, shotKey } from './seq';
+import { fxClipId, shotKey, visibleLenses, visibleVoiceClips, visibleZoomShots } from './seq';
 import { joinStyle, plateReady } from './stage';
 import { deckEdit, ed, type InspectorTab } from './state';
 import { lengthRange, paceLabel, paceMode, rateFrac, voiceFit, type PaceMode } from './platePace';
@@ -442,7 +442,7 @@ function timingPane(c: Clip): string {
 
 // ─── Layers ────────────────────────────────────────────────────────────────────────────────
 function voiceRows(c: Clip): string {
-  const clips = (ed.deck?.audio?.voiceClips || []).filter((v) => v.start < c.at + c.dur && v.start + v.dur > c.at);
+  const clips = visibleVoiceClips().filter((v) => v.start < c.at + c.dur && v.start + v.dur > c.at);
   return clips
     .map(
       (v) =>
@@ -462,7 +462,7 @@ function layersPane(c: Clip): string {
     // "into the slide" — no recording offset to subtract.
     const clip = fxClipId(c);
     const zooms = (ed.deck?.plateZooms || []).filter((z) => z.clip === clip);
-    const lenses = lensItems().filter((l) => l.clip === clip);
+    const lenses = visibleLenses().filter((l) => l.clip === clip);
     return (
       section(
         'zoom',
@@ -485,7 +485,7 @@ function layersPane(c: Clip): string {
               (l) =>
                 `<button type="button" class="ins-item" data-goto-lens="${escapeHtml(l.key)}">${ICONS['lens']}<span><b>${escapeHtml(l.label || 'Magnifier')}</b><em>at ${fmtT(l.t)} for ${l.dur.toFixed(1)}s</em></span><i>›</i></button>`,
             )
-            .join('') || '<p class="ins-note subtle">A loupe that blows up one detail without moving the camera.</p>'
+            .join('') || '<p class="ins-note subtle">A magnifier that blows up one detail without moving the camera.</p>'
         }<button type="button" class="ins-btn wide" data-act="add-lens">${ICONS['plus']}Magnify at the playhead</button>`,
       ) +
       section(
@@ -499,8 +499,8 @@ function layersPane(c: Clip): string {
   const deck = ed.deck!;
   const d = deckEdit();
   const ramps = d.speed.map((r, i) => ({ r, i })).filter(({ r }) => r.to > c.recFrom && r.from < c.recTo);
-  const shots = (deck.zoomShots || []).filter((s) => s.end > c.recFrom && s.start < c.recTo);
-  const lenses = lensItems().filter((l) => l.t < c.recTo && l.t + l.dur > c.recFrom);
+  const shots = visibleZoomShots().filter((s) => s.end > c.recFrom && s.start < c.recTo);
+  const lenses = visibleLenses().filter((l) => l.t < c.recTo && l.t + l.dur > c.recFrom);
   const cam = deck.camera || {};
   const rows = {
     speed: ramps
@@ -531,7 +531,7 @@ function layersPane(c: Clip): string {
     section(
       'lens',
       'Magnifiers',
-      `${rows.lens || '<p class="ins-note subtle">A loupe that blows up a small detail without moving the camera.</p>'}<button type="button" class="ins-btn wide" data-act="add-lens">${ICONS['plus']}Magnify at the playhead</button>`,
+      `${rows.lens || '<p class="ins-note subtle">A magnifier that blows up a small detail without moving the camera.</p>'}<button type="button" class="ins-btn wide" data-act="add-lens">${ICONS['plus']}Magnify at the playhead</button>`,
     ) +
     section(
       'speed',
