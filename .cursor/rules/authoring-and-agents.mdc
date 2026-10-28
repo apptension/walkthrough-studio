@@ -10,6 +10,7 @@ alwaysApply: false
 
 - **`authoring.md`** — story spines (`purpose`), plate types, messaging rules, explore vs guided capture.
 - **`kit/lib/narrative.mjs`** — single spine definitions; critic enforces voice rules (no “Welcome to…”, outcome before mechanism, ban category adjectives).
+- **`kit/lib/narrativeCraft.mjs`** — screen–voice–slide alignment (cognitive load, time budgets, tone); injected into agent `storyBrief` and narration repair prompts.
 
 ## Plates & motion
 

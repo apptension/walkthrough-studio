@@ -25,6 +25,7 @@ describe('voicePlace', () => {
       { key: 'Ship', kind: 'caption', duration: 2 },
       { key: 'outro', kind: 'outro', duration: 2 },
       { key: 'missing', kind: 'caption', duration: 1 },
+      { key: 'adlib-1', kind: 'adlib', duration: 2 },
     ]);
     assert.deepEqual(
       slots.map((s) => [s.key, s.kind, s.markAt, s.windowStart, s.windowEnd]),
@@ -34,6 +35,7 @@ describe('voicePlace', () => {
         ['p1', 'interstitial', 10.3, 11, 12.65],
         ['Ship', 'caption', 14, 14.3, 19],
         ['outro', 'outro', null, 20.9, 23.6],
+        ['adlib-1', 'adlib', null, 0, 24],
       ],
     );
   });

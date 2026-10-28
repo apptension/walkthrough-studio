@@ -34,7 +34,7 @@ import { applyVar, changeLook, plateApi, previewRange, queueStyle, refreshPlateP
 import { P } from './plateCtl';
 import { flushEditorContentPending } from './plateContentPane';
 import { beginEditOrigin, endEditOrigin, paintInspectorUnlessContentTyping } from './plateContentSave';
-import { edToRec, lensByKey, selectedLens, shotKey } from './seq';
+import { curClip, edToRec, lensByKey, selectedLens, shotKey } from './seq';
 import { wireSlideInspector } from './slideInspectorWire';
 import { renderFrame, requestPlate } from './stage';
 import { audioDesk, deckEdit, ed, preview, setHtmlPlates, slug, type LensAim } from './state';
@@ -198,7 +198,13 @@ export function wireInspector(): void {
   on('[data-act="restore-omit"]', 'click', (el) => void restoreOmitted(el.dataset['omitId'] || ''));
   act('voice-mute', () => {
     const clip = (ed.deck?.audio?.voiceClips || []).find((c) => c.key === s?.key);
-    if (clip) void withVoice(clip.key, { mute: !clip.mute }, clip.mute ? 'Line back in' : 'Line muted');
+    if (!clip || clip.mute) return;
+    void withVoice(clip.key, { mute: true }, 'Line removed from the cut').then((r) => {
+      if (r) {
+        const c = curClip();
+        select(c ? { type: 'clip', id: c.id } : null);
+      }
+    });
   });
   act('voice-reset', () => s?.key && withVoice(s.key, { nudge: 0, at: null }, 'Back to where the line belongs'));
   act('clip-earlier', () => ed.sel?.type === 'clip' && moveClip(ed.sel.id ?? '', -1));
@@ -675,7 +681,7 @@ export function wireInspector(): void {
   on('[data-range-lens]', 'click', () => void (rangeC && addLensAt(rFrom, rTo - rFrom)));
   on('[data-range-skip]', 'click', () => {
     if (!rangeC) return;
-    void postDeck({ zoomSkips: [...d.zoomSkips, { from: rFrom, to: rTo }] }, { hint: 'No auto zoom in that stretch' }).then((r) => {
+    void postDeck({ zoomSkips: [...d.zoomSkips, { from: rFrom, to: rTo, zone: true }] }, { hint: 'No auto zoom in that stretch' }).then((r) => {
       if (r) select(null);
     });
   });

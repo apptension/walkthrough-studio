@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 
-import { fixPipelineStep, retryPipelineFrom } from '@/desk/jobs';
+import { autoFixPipelineVoice, fixPipelineStep, manualFixPipelineVoice, retryPipelineFrom } from '@/desk/jobs';
 import { useDesk } from '@/desk/store';
 import { HelpTip } from '@/ui/HelpTip';
 import { SecIcon } from '@/ui/icons';
@@ -16,7 +16,7 @@ const HELP =
  */
 export function PipelineSection() {
   const pipeline = useDesk((s) => s.pipeline);
-  const failure = useDesk((s) => s.pipelineFailure != null);
+  const failure = useDesk((s) => s.pipelineFailure);
   const busy = useDesk((s) => s.jobBusy);
   const olRef = useRef<HTMLOListElement>(null);
   // `#pipelineIdle` only appears once a pipeline is cleared (Stop), as `renderSteps(null)` did.
@@ -32,7 +32,7 @@ export function PipelineSection() {
       ol.innerHTML = '';
       return;
     }
-    patchRows(ol, pipelineRows(steps, { busy, failure }));
+    patchRows(ol, pipelineRows(steps, { busy, failure: failure != null, failureError: failure?.error || '' }));
   }, [steps, busy, failure]);
 
   useEffect(() => {
@@ -50,6 +50,18 @@ export function PipelineSection() {
     if (retry) {
       e.preventDefault();
       retryPipelineFrom(retry.dataset['pipeRetry']);
+      return;
+    }
+    const autofix = target?.closest<HTMLElement>('[data-pipe-autofix]');
+    if (autofix) {
+      e.preventDefault();
+      void autoFixPipelineVoice(autofix.dataset['pipeAutofix']);
+      return;
+    }
+    const manual = target?.closest<HTMLElement>('[data-pipe-manual]');
+    if (manual) {
+      e.preventDefault();
+      void manualFixPipelineVoice(manual.dataset['pipeManual']);
       return;
     }
     const fix = target?.closest<HTMLElement>('[data-pipe-fix]');

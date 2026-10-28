@@ -79,6 +79,8 @@ export function voiceSlots(cut, lines) {
       if (!plate) continue;
       const markAt = plate.at + (plate.inDur || 0) / 2;
       slots.push({ ...base, markAt, windowStart: markAt + VOICE_LEAD.interstitial, windowEnd: plate.at + plate.dur - PLATE_TAIL });
+    } else if (line.kind === 'adlib') {
+      slots.push({ ...base, windowStart: 0, windowEnd: cut.total ?? cut.liveEnd ?? 0, markAt: null });
     } else {
       const i = marks.findIndex((m) => m.label === line.key);
       if (i < 0) continue;

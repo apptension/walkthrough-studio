@@ -3,7 +3,7 @@ import { clipPlayback } from '@/logic/plateTiming';
 
 import { canDuplicate } from './duplicate';
 import { paceMode } from './platePace';
-import { fxClipId, lensItems, recToEd, shotKey, visualSpan, curClip } from './seq';
+import { fxClipId, recToEd, shotKey, visibleLenses, visibleVoiceClips, visibleZoomShots, visibleZoomSkips, visualSpan, curClip } from './seq';
 import { joinStyle, paintClipChip, resolveLiveCard } from './stage';
 import { audioDesk, deckEdit, ed, live } from './state';
 import { deferWhileMorphing } from './timelineMorph';
@@ -363,22 +363,30 @@ export function renderFxTracks(): void {
   const speedPacked = packLanes(speedItems);
   fitLane(speedEl, 'speed', speedPacked.lanes);
   setRow(speedEl, speedPacked.items.map((it) => it.render(4 + it.lane * FX_LANE_H)).join(''));
-  const shots = live().exists ? ed.deck?.zoomShots || [] : [];
+  const shots = live().exists ? visibleZoomShots() : [];
   // Zoom skips, zoom shots, and the magnifier can all land on the same stretch of time
   // (e.g. a manual zoom drawn over an auto one, or a magnifier under a "no zoom" skip),
   // so pack them into lanes the same way overlapping chapter/caption cards are, rather
   // than letting them paint on top of each other.
   const zoomItems: FxRow[] = [];
-  d.zoomSkips.forEach((s, i) => {
+  for (const { skip: s, i } of visibleZoomSkips()) {
     fxSegments(s.from, s.to).forEach((seg) => {
       zoomItems.push({
         key: `skip:${i}`,
         t: seg.a,
         end: seg.b,
-        render: (top) => pill(`skip${sel?.type === 'skip' && sel.i === i ? ' is-sel' : ''}`, seg, `data-skip="${i}" title="No auto zoom here"`, `${ICONS['noZoom']}No zoom`, true, top),
+        render: (top) =>
+          pill(
+            `skip${sel?.type === 'skip' && sel.i === i ? ' is-sel' : ''}`,
+            seg,
+            `data-skip="${i}" title="No auto zoom in this stretch — remove to allow auto zoom again"`,
+            `${ICONS['noZoom']}No auto zoom`,
+            true,
+            top,
+          ),
       });
     });
-  });
+  }
   shots.forEach((s) => {
     fxSegments(s.start, s.end).forEach((seg) => {
       zoomItems.push({
@@ -416,7 +424,7 @@ export function renderFxTracks(): void {
       });
     });
   });
-  lensItems()
+  visibleLenses()
     .filter((l) => l.clip || live().exists)
     .forEach((l) => {
     fxSegments(l.t, l.t + l.dur, l.clip).forEach((seg) => {
@@ -497,7 +505,7 @@ export function renderAudioTracks(): void {
   if (!voiceEl || !musicEl) return;
   const pps = ed.pps;
   const audio = ed.deck?.audio;
-  const clips = audio?.voiceClips || [];
+  const clips = visibleVoiceClips();
   const sel = ed.sel;
   const VOICE_LANE_H = ed.active ? 30 : OVERVIEW_LANE_H;
   const voiceItems = clips.map((c) => {

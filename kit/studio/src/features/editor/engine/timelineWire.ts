@@ -164,8 +164,8 @@ export function wireTimeline(signal: AbortSignal): void {
           // `written` is the line's place on this cut before any nudge (the projection, see projectAudio).
           // The ends trim the clip; the body moves it.
           const edge = target.classList.contains('h') ? (target.classList.contains('l') ? 'l' : 'r') : 'move';
-          if (clip)
-            ed.drag = {
+          if (!clip) return;
+          ed.drag = {
               type: 'voice',
               edge,
               key: clip.key,

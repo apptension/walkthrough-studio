@@ -29,6 +29,10 @@ export interface DeckZoom {
 export interface Span {
   from: number;
   to: number;
+  /** Operator drew a “no auto zoom” zone — shown on the timeline. */
+  zone?: boolean;
+  /** Auto zoom removed from the cut — affects render only, no timeline pill. */
+  suppress?: boolean;
 }
 
 export interface DeckLens {

@@ -265,9 +265,9 @@ describe('collapse', () => {
     act(() => desk.set({ jobBusy: true }));
     act(() => paintSession(makeJob({ kind: 'improve', status: 'running' })));
 
-    expect($('sessionRail')).not.toHaveClass('is-collapsed');
+    expect($('sessionRail')).toHaveClass('is-collapsed');
     const toggle = $('btnSessionCollapse');
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle.querySelector('svg[data-sprite="ui-chevron"]')).toBeTruthy();
     expect(toggle.textContent?.trim()).toBe('');
 
@@ -275,6 +275,10 @@ describe('collapse', () => {
     const chrome = $('sessionTitle').closest('.session-rail-chrome');
     const order = [...(chrome?.querySelectorAll('#sessionSpinner, #sessionTitle, #sessionElapsed, #btnStopSession, #btnSessionCollapse') ?? [])].map((el) => el.id);
     expect(order).toEqual(['sessionSpinner', 'sessionTitle', 'sessionElapsed', 'btnStopSession', 'btnSessionCollapse']);
+
+    fireEvent.click(toggle);
+    expect($('sessionRail')).not.toHaveClass('is-collapsed');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(toggle);
     expect($('sessionRail')).toHaveClass('is-collapsed');

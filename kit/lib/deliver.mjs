@@ -18,6 +18,7 @@ import { writeCaptions } from './captions.mjs';
 import { listExports } from './exports.mjs';
 import { STILL_JPEG_ARGS } from './media.mjs';
 import { runPacingQc } from './pacing.mjs';
+import { pickPosterTime } from './posterPick.mjs';
 import { readReview, scriptStatus } from './script.mjs';
 
 function approvalsOf(video) {
@@ -75,17 +76,6 @@ function youtubeChapters(chapters) {
 
 function extractPoster(mp4, outJpg, atSec) {
   ff('-y', '-ss', String(Math.max(0, atSec)), '-i', mp4, ...STILL_JPEG_ARGS, outJpg);
-}
-
-/**
- * Pick a representative frame: prefer ~12% into the first live chapter after open,
- * else 8% of total duration — avoids black open and end cards.
- */
-function pickPosterTime(meta, totalSec) {
-  const chapters = meta?.chapters || [];
-  const live = chapters.find((c) => c.start > 2 && !/intro|open|close|thank/i.test(c.title || ''));
-  if (live) return live.start + Math.min(4, Math.max(1.5, (totalSec - live.start) * 0.05));
-  return Math.min(totalSec * 0.12, Math.max(3, totalSec * 0.08));
 }
 
 function posterMetaPath(video) {

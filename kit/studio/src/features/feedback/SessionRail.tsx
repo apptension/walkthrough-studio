@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { cn } from '@/lib/cn';
@@ -29,6 +29,13 @@ export function SessionRail() {
     })),
   );
   const open = decisionMode ? showWork : !collapsed;
+
+  useEffect(() => {
+    if (running && !decisionMode && !failed) {
+      setCollapsed(true);
+      writeRailCollapsed(true);
+    }
+  }, [running, decisionMode, failed]);
 
   const toggle = () => {
     if (decisionMode) {

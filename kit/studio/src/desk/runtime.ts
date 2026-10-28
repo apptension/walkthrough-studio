@@ -16,6 +16,8 @@ export interface Runtime {
   /** Bumps cancel overlapping Program play() handshakes (post-render double-start). */
   programPlayGen: number;
   jobAsk: string | null;
+  /** Last job id we auto-switched to Feedback for — avoids stealing the right tab on every poll. */
+  activityJobId: string | null;
 }
 
 export const runtime: Runtime = {
@@ -29,4 +31,5 @@ export const runtime: Runtime = {
   chapterTimer: null,
   programPlayGen: 0,
   jobAsk: null,
+  activityJobId: null,
 };

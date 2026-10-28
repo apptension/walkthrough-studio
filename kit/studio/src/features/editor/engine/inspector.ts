@@ -432,7 +432,7 @@ export function renderEmpty(): string {
         <li>${ICONS['plate']}<span><b>A chapter or caption</b> — own rows under clips · look &amp; reveal on the right · double-click to edit copy</span></li>
         <li>${T_GLYPH['dissolve']}<span><b>A diamond</b> — the transition between two clips</span></li>
         <li>${ICONS['speed']}<span><b>Drag across the speed, zoom or cut row</b> to pick a stretch — a drag on Cut removes it</span></li>
-        <li>${ICONS['lens']}<span><b>Magnify</b> — a loupe over a small detail, like a total or a badge</span></li>
+        <li>${ICONS['lens']}<span><b>Magnify</b> — a magnifier over a small detail, like a total or a badge</span></li>
         <li>${ICONS['mic']}<span><b>A voice line or the music</b> — move it, set its level, shape the master</span></li>
       </ul>
       ${renderAddVoice()}
@@ -716,7 +716,7 @@ export function renderLens(): string {
       section(
         'lens',
         'Magnifier',
-        `<p class="ins-note">The recording asked for a loupe here; you switched it off, so the frame stays as it is.</p><button type="button" class="ins-btn wide primary" data-act="lens-on">${neonFxHtml()}${ICONS['lens']}Turn it back on</button>`,
+        `<p class="ins-note">This recorded magnifier is off — the frame stays wide. Turn it back on if you want it in the cut again.</p><button type="button" class="ins-btn wide primary" data-act="lens-on">${neonFxHtml()}${ICONS['lens']}Turn magnifier back on</button>`,
       )
     );
   }
@@ -726,8 +726,8 @@ export function renderLens(): string {
       section(
         'lens',
         'Magnifier',
-        `<p class="ins-note">The flow asked for this loupe while recording${(l.path?.length ?? 0) > 1 ? ' and it follows the pointer' : ''}. Take it over to aim, resize or retime it — or remove it to keep the frame clean.</p>
-          <button type="button" class="ins-btn wide primary" data-act="adopt-lens">${neonFxHtml()}${ICONS['target']}Take over this magnifier</button>`,
+        `<p class="ins-note">Recorded while capturing${(l.path?.length ?? 0) > 1 ? ' — it follows the pointer' : ''}. Take it over to aim, resize, or retime it, or remove it to keep the frame clean.</p>
+          <button type="button" class="ins-btn wide primary" data-act="adopt-lens">${neonFxHtml()}${ICONS['target']}Take over magnifier</button>`,
       ) +
       watch
     );
@@ -743,7 +743,7 @@ export function renderLens(): string {
   const loupe = lensLoupe(Math.max(w, h), own.zoom, frame);
   const z = Math.min(own.zoom ?? loupe.zoom, ceiling);
   return (
-    head(ICONS['lens'] ?? '', 'lens', escapeHtml(l.label || 'Magnifier'), `${loupe.zoom.toFixed(1)}× · ${l.dur.toFixed(1)}s · loupe ${loupe.diameter}px`, remove) +
+    head(ICONS['lens'] ?? '', 'lens', escapeHtml(l.label || 'Magnifier'), `${loupe.zoom.toFixed(1)}× · ${l.dur.toFixed(1)}s · ${loupe.diameter}px`, remove) +
     section(
       'lens',
       'Strength',
@@ -751,14 +751,14 @@ export function renderLens(): string {
         <div class="ins-seg"><button type="button" data-lens-preset="" class="${own.zoom ? '' : 'on'}">Auto</button>${LENS_PRESETS.filter((v) => v >= lo && v <= hi)
           .map((v) => `<button type="button" data-lens-preset="${v}" class="${own.zoom === v ? 'on' : ''}" ${v > ceiling + 1e-6 ? 'disabled' : ''}>${v}×</button>`)
           .join('')}</div>
-        <p class="ins-note" data-lens-cap>${ceiling < hi - 1e-6 ? `Up to ${ceiling.toFixed(2)}× for a ${Math.round(Math.max(w, h))}px area — shrink the area for a stronger loupe.` : ''}</p>`,
+        <p class="ins-note" data-lens-cap>${ceiling < hi - 1e-6 ? `Up to ${ceiling.toFixed(2)}× for a ${Math.round(Math.max(w, h))}px area — shrink the area for a stronger magnifier.` : ''}</p>`,
     ) +
     section(
       'target',
       'Area',
       `<div class="var-row"><span>Width</span><input type="range" min="16" max="800" step="2" value="${w}" data-lens-size="w" aria-label="Magnified width" /><output>${w}px</output><i class="var-reset"></i></div>
         <div class="var-row"><span>Height</span><input type="range" min="12" max="400" step="2" value="${h}" data-lens-size="h" aria-label="Magnified height" /><output>${h}px</output><i class="var-reset"></i></div>
-        <p class="ins-note">${ICONS['target']} Drag the loupe on the stage to aim it and its edge grip to resize. Scroll over it to resize, ⌥-scroll for strength; arrow keys nudge once you click it. A bigger area gets a gentler, wider loupe.</p>`,
+        <p class="ins-note">${ICONS['target']} Drag the magnifier on the stage to aim it and its edge grip to resize. Scroll over it to resize, ⌥-scroll for strength; arrow keys nudge once you click it. A bigger area gets a gentler, wider magnifier.</p>`,
     ) +
     watch
   );
@@ -825,7 +825,7 @@ export function renderVoice(): string {
       'voice',
       clip.key,
       `${escapeHtml(kindLabel)} · ${clip.dur.toFixed(1)}s${take > 1 ? ` · take ${take}` : ''}${clip.mute ? ' · muted' : ''}${curSrc === 'mic' || curSrc === 'upload' ? ` · ${curSrc}` : ''}`,
-      `<button type="button" class="ins-icon danger" data-act="voice-mute" title="${clip.mute ? 'Unmute' : 'Mute'}">${clip.mute ? ICONS['mic'] : ICONS['trash']}</button>`,
+      `<button type="button" class="ins-icon danger" data-act="voice-mute" title="Remove from cut (⌫)">${ICONS['trash']}</button>`,
     ) +
     section(
       'text',
@@ -1018,8 +1018,8 @@ export function renderSkip(i: number): string {
   const s = deckEdit().zoomSkips[i];
   if (!s) return renderEmpty();
   return (
-    head(ICONS['noZoom'] ?? '', 'skip', 'No auto zoom', `${(s.to - s.from).toFixed(1)}s keeps the whole screen`, removeBtn()) +
-    `<p class="ins-note pad">Auto zooms are skipped in this stretch. Remove it to let them back in.</p>`
+    head(ICONS['noZoom'] ?? '', 'skip', 'No auto zoom zone', `${(s.to - s.from).toFixed(1)}s keeps the whole screen`, removeBtn()) +
+    `<p class="ins-note pad">Auto zoom stays out of this stretch. Remove the zone to allow auto zoom here again.</p>`
   );
 }
 

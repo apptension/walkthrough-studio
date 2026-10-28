@@ -102,6 +102,34 @@ export function plateKind(plateId, plate = {}) {
   return plateId === 'open' || plateId === 'close' ? plateId : plate?.type || null;
 }
 
+/**
+ * Drop invalid `layout` fields (single-composition types, unknown ids) so plate HTML can build.
+ * Returns a shallow-cloned config and human paths that were cleared.
+ */
+export function stripInvalidLayouts(config = {}) {
+  const next = { ...config, open: config.open ? { ...config.open } : config.open, close: config.close ? { ...config.close } : config.close };
+  const removed = [];
+  const clear = (obj, kind, where) => {
+    if (!obj || obj.layout == null) return;
+    try {
+      normalizeLayout(kind, obj.layout);
+    } catch {
+      delete obj.layout;
+      removed.push(where);
+    }
+  };
+  if (next.open) clear(next.open, 'open', 'open.layout');
+  if (next.close) clear(next.close, 'close', 'close.layout');
+  if (config.interstitials?.length) {
+    next.interstitials = (config.interstitials || []).map((it) => {
+      const row = { ...it };
+      clear(row, it.type, `interstitial "${it.id}"`);
+      return row;
+    });
+  }
+  return { config: next, removed };
+}
+
 /** Problems with every layout in a config — `[]` when all are valid. */
 export function layoutIssues(config = {}) {
   const issues = [];

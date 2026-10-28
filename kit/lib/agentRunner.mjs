@@ -23,6 +23,7 @@ import { outputFrame } from './format.mjs';
 import { resolvePurpose, storyBrief } from './narrative.mjs';
 import { buildScript } from './script.mjs';
 import { formatRepeats, narrationRepeats, scriptSpokenLines } from './narrationQc.mjs';
+import { alignmentRepairHint } from './narrativeCraft.mjs';
 import { KIT, OUT_ROOT, SKILL, brandReadiness, listBrands, loadVideo, upsertDotEnv } from './project.mjs';
 import { readBrowseMap, stopBrowseSession } from './browseSession.mjs';
 import { briefDraftPrompt, normalizeBriefDraft, parseBriefDraft } from './briefDraft.mjs';
@@ -449,7 +450,7 @@ ${BEAT_GUIDE}
 B. ${briefPath} — fill other story fields only where they are empty or vague and you saw real material: outcome, keyMessages (what the product demonstrably does), app.notes (demo data worth using, pop-ups to dismiss, slow screens, things to avoid). Never overwrite specific reviewer wording, mustSay, avoid, stats, quotes or credentials. Never invent facts you did not see.
 C. ${journeyMd} — your scouting report: every destination with one line on what it offers and how strong it is, why this order, what you rejected and why, and per beat the exact walk (labels, where they sit, the payoff move, real data names to use).
 Edit only ${briefPath} and ${journeyMd}. Do not edit flow.mjs, narration.mjs or video.config.json, and do not record or render — the planner writes the script from your journey next.`,
-    narration: `Improve narration.mjs for "${video.slug}" so VO narrates why (not clicks), ≤28 words/line, never repeats a point or a 3+ word phrase from another line, leads the pointer, and matches chapter/caption titles. Read ${critic} if present. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration.`,
+    narration: `Improve narration.mjs for "${video.slug}" so every line fits its beat on screen, adds why (not clicks or on-screen titles), stays within the word budget, never repeats a point or a 3+ word phrase, and leads the pointer. Read ${flow}, ${config}, ${critic} if present, and ${flowAnalysis} or guided-tour screenshots when you need to see what the viewer sees. Edit only ${narration}. Follow ${skillPath}/authoring.md §Narration and the screen–voice rules in the story block below.`,
     plates: `Improve interstitial plates for "${video.slug}". Read ${config}, ${brief}, and ${critic} if present. Rewrite plate copy/structure in video.config.json (open, close.steps, interstitials[]). Do NOT edit the shared kit/templates HTML — they are filled from config, and a change there hits every video. A layout no type covers goes in videos/<slug>/templates (see the custom guide below). Keep ≤5 interstitials, real logos/assets only. Studio will rebuild plate HTML for live preview after you finish. Follow ${skillPath}/authoring.md plate table.
 ${COPY_STYLE_GUIDE}
 Plate types you can swap to or add (type — when: shape):
@@ -531,7 +532,7 @@ ${guided ? `${guidedSource}\n${guidedCraft}\n` : ''}0. The journey. ${guided ? `
 ${BEAT_GUIDE}
 1. ${config} — title, audience, open (eyebrow, 2-line title with one *accent*, sub), close (title, 3 steps), 2–4 interstitials[] (pick the type that carries the fact — ${PLATE_TYPE_LIST}; see authoring.md for each shape and the type guide below) placed with "before": <chapter title>, record.startUrl, env (credentials as "$ENV_VAR" references only — never literal secrets). Apply capture tips from the flow analysis (e.g. deviceScaleFactor: 1 for WebGL).
 2. ${flow} — the live journey: 4–7 chapter() cards and say() captions that follow the "what to show" list from step 0 in order — chapter titles are the beat titles verbatim (the part before " — "), and each beat's how-path is the click/hover/type/drag sequence to script. Author every wait()/hold at steady pace — the video's direction.pace scales them, so never pad waits to slow the tour or trim them to speed it; wrap one routine stretch in pace('brisk') … pace() if it needs to move faster than the rest. Use robust Playwright selectors from the flow analysis (getByRole/getByLabel/getByText), preferring the hop/route that matches each chapter. For pointer-reactive canvases, use the analysis recipes (mouse drag/wheel on the canvas box). If the app source is in this workspace, read it to confirm labels and routes; otherwise mark guessed selectors with // TODO(verify selector) and keep each guessed step guarded (isVisible().catch(() => false))${guided ? ' — never steps the reviewer showed, which are required' : ''}. Never fill login email/password inside flow() — the kit signs in off camera (session + saved credentials) before the screencast starts; on-camera credential typing pollutes the take.
-3. ${narration} — intro, outro, one line per chapter/say title and per plate id; why-not-clicks, ≤28 words, no line repeats another, in the voice and tone below.
+3. ${narration} — intro, outro, one line per chapter/say title and per plate id; each line grounded in what that beat shows, distinct from its on-screen title/body, within the time budget, in the voice and tone below.
 4. ${config} → tone, audio.voice and audio.music — the sound of THIS video, chosen to match the brand and the story:
    - tone: { "words": [3–4 adjectives], "persona": "who is speaking", "do": [...], "avoid": [...] } — the one voice the captions, plates and narration share.
    - audio.voice: { "name", "voiceId", "direction": "[short performance cue]", "settings": { stability, similarity_boost, style, use_speaker_boost, speed } } — a narrator from the catalog below whose character fits the tone and audience (keep the brand's own voice when the pack chose one).
@@ -558,7 +559,7 @@ Do not record or render — Studio records with the bot next.`,
     'take-recraft': `The bot just recorded the tour for "${video.slug}". Recraft the scenario around what actually happened on camera — the take is final, so this is about words, not the journey.
 Read ${timeline} (when every chapter/say landed and how long each beat ran), ${liveMeta}, ${narration}, ${flow}, ${briefPath}${guided ? `, and ${guidedMd} (the reviewer's original walk)` : ''}.
 Decide and edit:
-1. ${narration} — fit every chapter/say line to the time its beat is on screen in the take (about 2.6 spoken words per second, leave a breath before the next beat; never longer than the beat). Describe what the viewer actually sees in the take — the data, the result of each action — and why it matters. Keys stay exactly as they are.
+1. ${narration} — fit every chapter/say line to timeline.json (≈2.6 words per second of that beat; leave a breath; never longer than the beat). Describe what the viewer actually sees — real data, labels, results — and why it matters; never read the chapter/caption title or body aloud. Keys stay exactly as they are.
 2. ${briefPath} → story.mustShow — make each beat's how-path match the route the bot really took (labels, order, data), so the brief documents the recorded journey.
 Edit only ${narration} and ${briefPath}. Never edit ${flow}, chapter/say titles or ${config}: that would invalidate the take.`,
     'own-take': `The reviewer recorded the tour of "${video.slug}" themselves and chose to keep THEIR recording as the take. It is final — this is about words and plates, not the journey.
@@ -632,7 +633,8 @@ Studio will inspect exactly which sources changed, present the relevant review s
   };
 
   const storyGoals = new Set(['explore', 'draft', 'branch', 'script', 'narration', 'plates', 'critic', 'critic-review', 'full', 'guided-script', 'take-recraft', 'own-take']);
-  const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video))) : '';
+  const craftTiming = goal === 'take-recraft' || goal === 'own-take' ? 'recorded' : 'script';
+  const spine = storyGoals.has(goal) ? storyBrief(resolvePurpose(video.config, readBrief(video)), { craftTiming }) : '';
   const device = DEVICE_GOALS.has(goal) ? deviceLine(video.config) : '';
   const contract = FLOW_CONTRACT_GOALS.has(goal) ? flowContractBlock({ kitDir: KIT, slug: video.slug }) : '';
   const voiceAndTone = TONE_GOALS.has(goal) || !goals[goal] ? toneBlock(tone) : '';
@@ -1071,7 +1073,7 @@ export function narrationRepairPrompt(video, repeats, { round = 1, max = 2 } = {
   return `NARRATION CHECK FAILED for "${video.slug}" (rewrite ${round}/${max}). Read in spoken order, these lines repeat each other — the viewer hears the same thing twice:
 ${formatRepeats(repeats.filter((f) => f.severity !== 'low'))}
 
-Edit only ${narration}. For every ✗, keep the line where the idea first lands and rewrite the other so it adds something the viewer has not heard yet: the outcome on screen at that moment, the reason it matters, or what comes next. Keep every key, keep the intro/outro echo short, stay within each line's word budget (≤28 words, fit to the beat). ⚠ lines are worth fixing when it is cheap. Do not edit flow.mjs, chapter/say titles or video.config.json. Read the whole file top to bottom once more before you stop.`;
+Edit only ${narration}. For every ✗, keep the line where the idea first lands and rewrite the other so it adds something the viewer has not heard yet: the outcome on screen at that moment, the reason it matters, or what comes next. ${alignmentRepairHint()} Keep every key, keep the intro/outro echo short, stay within each line's word budget (≤28 words, fit to the beat). ⚠ lines are worth fixing when it is cheap. Do not edit flow.mjs, chapter/say titles or video.config.json. Read the whole file top to bottom once more before you stop.`;
 }
 
 const CRITIC_REVIEW_TIMEOUT_MS = Number(process.env.WALKTHROUGH_CRITIC_TIMEOUT_MS) || 10 * 60 * 1000;

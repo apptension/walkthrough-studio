@@ -4,7 +4,7 @@
  *
  *   edit.speed        [{ from, to, rate }]       live-time ranges played faster/slower (prepareLive)
  *   edit.zooms        [{ id, t, dur, zoom, x, y }] manual push-ins in live time (planZooms)
- *   edit.zoomSkips    [{ from, to }]              windows where auto zoom must leave the frame whole
+ *   edit.zoomSkips    [{ from, to, zone?, suppress? }]  zone = operator drew “no auto zoom”; suppress = auto zoom removed (no timeline pill)
  *   edit.lenses       [{ id, t, dur, x, y, w, h, zoom? }] magnifier loupes on a target (centre x,y)
  *   edit.lensOff      [t]                         recorded `magnify` marks (by start time) left out
  *   edit.transitions  { "<prev>><next>": { style, duration } } per-join overrides (buildEditPlan)
@@ -405,7 +405,10 @@ function normalizeSkips(list = [], { liveDur = Infinity } = {}) {
     const from = r3(clamp(rawFrom, 0, liveDur));
     const to = r3(clamp(rawTo, 0, liveDur));
     if (to <= from) continue;
-    out.push({ from, to });
+    const entry = { from, to };
+    if (raw.zone) entry.zone = true;
+    if (raw.suppress) entry.suppress = true;
+    out.push(entry);
   }
   return out.sort((a, b) => a.from - b.from);
 }

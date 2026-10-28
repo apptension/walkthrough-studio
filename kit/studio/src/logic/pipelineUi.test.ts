@@ -31,10 +31,18 @@ test('failed rows expose Retry and Fix actions, running rows caption Working', (
   const html = stepRowHtml({ id: 'audio', label: 'Add voice & music', status: 'fail' }, { actions: true });
   assert.match(html, /data-pipe-retry="audio"/);
   assert.match(html, /data-pipe-fix="audio"/);
+  assert.match(html, /Fix with AI/);
   assert.match(html, /pip-actions/);
   assert.match(html, /Failed/);
   assert.doesNotMatch(stepRowHtml({ id: 'audio', label: 'Add voice & music', status: 'done' }, { actions: true }), /pip-actions/);
   assert.match(stepRowHtml({ id: 'produce', label: 'Produce', status: 'run' }), /Working/);
+});
+
+test('voice picture overrun failures offer Auto fix and Manual fix', () => {
+  const err = 'narration runs 24.0s past the picture — too long to freeze automatically.';
+  const html = stepRowHtml({ id: 'audio', label: 'Add voice & music', status: 'fail' }, { actions: true, failureError: err });
+  assert.match(html, /data-pipe-autofix="audio"/);
+  assert.match(html, /data-pipe-manual="audio"/);
 });
 
 test('resume keeps earlier steps done and resets from the failure point', () => {

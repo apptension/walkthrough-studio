@@ -195,7 +195,8 @@ export function mixAudio(video, { out } = {}) {
     if (overrun > MAX_AUTO_HOLD_SEC) {
       throw new Error(
         `narration runs ${overrun.toFixed(1)}s past the picture — too long to freeze automatically. ` +
-          'Shorten the line(s) noted "long by" in the voice warnings, or re-run produce so the hold matches the read.'
+          'Shorten the line(s) noted "long by" in the voice warnings, re-run produce so the hold matches the read, ' +
+          'or use Auto fix on the failed pipeline step when voice was moved past a shorter cut.'
       );
     }
     if (overrun > 0.05) {

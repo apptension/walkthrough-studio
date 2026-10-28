@@ -558,6 +558,9 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
     ...(s.timing ? { timing: s.timing, naturalDur: s.naturalDur } : {}),
     ...(s.join ? { join: s.join } : {}),
     ...(s.carry ? { carry: s.carry } : {}),
+    ...(s.holdAt != null ? { holdAt: Number(s.holdAt.toFixed(3)) } : {}),
+    ...(s.clearAt != null ? { clearAt: Number(s.clearAt.toFixed(3)) } : {}),
+    ...(s.naturalDur != null ? { naturalDur: Number(s.naturalDur.toFixed(3)) } : {}),
     transitionIn: s.transitionIn,
   }));
   const meta = {
@@ -638,6 +641,18 @@ export async function produce(video, { forcePlates = false, live, out } = {}) {
       cleanupAfterProduce(video);
     } catch (err) {
       console.log(`· intermediate cleanup skipped: ${err.message}`);
+    }
+    try {
+      const { readPosterMeta, setPosterAt } = await import('./deliver.mjs');
+      const { pickPosterTime } = await import('./posterPick.mjs');
+      const prior = readPosterMeta(video);
+      if (prior?.source !== 'manual') {
+        const at = pickPosterTime(meta, meta.durationSec);
+        setPosterAt(video, at, { source: 'auto' });
+        console.log(`· poster.jpg @ ${at.toFixed(1)}s (opening hold)`);
+      }
+    } catch (err) {
+      console.log(`· poster skipped: ${err.message || err}`);
     }
   }
   return meta;

@@ -14,6 +14,7 @@ import {
   normalizeLayout,
   plateKind,
   resolveLayout,
+  stripInvalidLayouts,
 } from './plateLayouts.mjs';
 
 const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '../templates');
@@ -47,6 +48,14 @@ test('plateKind maps open/close ids and interstitial types', () => {
   assert.equal(plateKind('close', { type: 'features' }), 'close');
   assert.equal(plateKind('modes', { type: 'features' }), 'features');
   assert.equal(plateKind('x'), null);
+});
+
+test('stripInvalidLayouts removes layout on single-composition types', () => {
+  const { config, removed } = stripInvalidLayouts({
+    interstitials: [{ id: 'map', type: 'journey', layout: 'grid', title: 'Path' }],
+  });
+  assert.equal(config.interstitials[0].layout, undefined);
+  assert.deepEqual(removed, ['interstitial "map"']);
 });
 
 test('layoutIssues reports every invalid layout by path', () => {

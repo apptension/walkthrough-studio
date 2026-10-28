@@ -397,6 +397,14 @@ test('editCameraMarks feed planZooms: edit zooms land, skips keep auto zoom out'
   assert.equal(plan.skipped, 1);
 });
 
+test('normalizeSkips keeps zone and suppress flags', () => {
+  const deck = normalizeEdit({ zoomSkips: [{ from: 1, to: 3, zone: true }, { from: 5, to: 7, suppress: true }] }, { liveDur: 20 });
+  assert.deepEqual(deck.zoomSkips, [
+    { from: 1, to: 3, zone: true },
+    { from: 5, to: 7, suppress: true },
+  ]);
+});
+
 test('normalizeSkips drops windows that collapse past the end of a shorter reel', () => {
   const deck = normalizeEdit(
     {

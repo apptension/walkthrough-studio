@@ -304,6 +304,11 @@ export default {
   that line. Use this for 1–2 s confirmations ("Approved", "Signed").
 - **Say the why, show the what.** The caption already names the step; the voice adds the outcome or the reason
   ("…so the rate is right"). Don't read the caption aloud.
+- **Low cognitive load.** Titles and captions are for the eye; narration is for meaning. Give each layer a
+  different job: the on-screen title names the beat, the voice names the *next* control before the pointer
+  reaches it or states the outcome visible in the UI; interstitial VO interprets the plate without reading
+  headline stats aloud. Agents follow the screen–voice block in `kit/lib/narrativeCraft.mjs` (injected via
+  `storyBrief` on draft, script, narration, and post-take recraft).
 - **Never say it twice.** No two lines make the same point, and no phrase of three or more words comes back. A caption
   that leads into a chapter (`Open show` → `Show HN`) plays seconds before that chapter's plate — give one the step and
   the other why the section matters. The script lint, the draft gate (`narration-repeat`), the critic and the voice step
